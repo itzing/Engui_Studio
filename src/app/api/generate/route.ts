@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
 
             try {
                 const runpodJobId = await runpodService.submitJob(runpodInput, modelId);
-                
+
                 console.log('✅ RunPod job started:', runpodJobId);
 
                 // Update job with runpodJobId
@@ -374,10 +374,66 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Handle external APIs (future implementation)
+        // Handle external APIs (Eleven Labs)
         if (model.api.type === 'external') {
+            // Eleven Labs models
+            if (model.id.startsWith('elevenlabs-')) {
+                console.log(`🎵 Routing to Eleven Labs API for: ${model.id}`);
+
+                try {
+                    // Forward the request to Eleven Labs endpoint
+                    const elevenlabsResponse = await fetch('/api/elevenlabs/generate', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!elevenlabsResponse.ok) {
+                        const error = await elevenlabsResponse.text();
+                        throw new Error(`Eleven Labs API error: ${elevenlabsResponse.status} - ${error}`);
+                    }
+
+                    const result = await elevenlabsResponse.json();
+
+                    // Update job status to completed
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: {
+                            status: 'completed',
+                            options: JSON.stringify({
+                                ...parameters,
+                                ...inputData,
+                                ...result
+                            })
+                        }
+                    });
+
+                    return NextResponse.json({
+                        ...result,
+                        jobId: job.id,
+                    });
+                } catch (error) {
+                    console.error('❌ Eleven Labs API error:', error);
+
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: {
+                            status: 'failed',
+                            options: JSON.stringify({
+                                ...parameters,
+                                ...inputData,
+                                error: error instanceof Error ? error.message : 'Unknown error'
+                            })
+                        },
+                    });
+
+                    return NextResponse.json({
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    }, { status: 500 });
+                }
+            }
+
             return NextResponse.json({
-                error: 'External API not yet implemented',
+                error: 'External API not implemented for this model',
             }, { status: 501 });
         }
 

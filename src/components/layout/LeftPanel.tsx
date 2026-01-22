@@ -6,6 +6,8 @@ import { useStudio } from '@/lib/context/StudioContext';
 import { CogIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
+import AudioGenerationForm from '../forms/AudioGenerationForm';
+import MusicGenerationForm from '../forms/MusicGenerationForm';
 import GenerationTabs, { GenerationMode } from '../forms/GenerationTabs';
 import SettingsDialog from '../settings/SettingsDialog';
 
@@ -113,8 +115,8 @@ export default function LeftPanel() {
                     <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} />
                     {generationMode === 'image' && <ImageGenerationForm />}
                     {generationMode === 'video' && <VideoGenerationForm />}
-                    {generationMode === 'voiceover' && <div className="text-sm text-muted-foreground p-4 text-center">Voiceover generation coming soon</div>}
-                    {generationMode === 'music' && <div className="text-sm text-muted-foreground p-4 text-center">Music generation coming soon</div>}
+                    {generationMode === 'tts' && <AudioGenerationForm />}
+                    {generationMode === 'music' && <MusicGenerationForm />}
                 </div>
             </div>
 

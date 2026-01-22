@@ -1,6 +1,6 @@
 export type ModelInputType = 'text' | 'image' | 'video' | 'audio';
 export type ApiType = 'runpod' | 'external';
-export type ModelType = 'image' | 'video' | 'audio';
+export type ModelType = 'image' | 'video' | 'audio' | 'tts' | 'music';
 
 export type ModelParameterType = 'string' | 'number' | 'boolean' | 'select' | 'lora-selector';
 
@@ -64,6 +64,54 @@ export interface ModelConfig {
     // Conditional inputs - for models that accept different input types based on parameters
     conditionalInputs?: ConditionalInput[];
 }
+
+// --- Eleven Labs Models ---
+const ELEVENLABS_MODELS: ModelConfig[] = [
+    {
+        id: 'elevenlabs-tts',
+        name: 'Eleven Labs TTS',
+        provider: 'Eleven Labs',
+        type: 'tts',
+        inputs: ['text'],
+        api: {
+            type: 'external',
+            endpoint: 'https://api.elevenlabs.io/v1/text-to-speech'
+        },
+        capabilities: {
+            durations: [0, 300] // Max 5 minutes
+        },
+        parameters: [
+            { name: 'voiceId', label: 'Voice ID', type: 'string', default: 'EXAVITQu4vr4xnSDxMaL', group: 'basic' },
+            { name: 'modelId', label: 'Model', type: 'select', options: ['eleven_multilingual_v2', 'eleven_english_v2', 'eleven_turbo_v2', 'eleven_monolingual_v1'], default: 'eleven_multilingual_v2', group: 'basic' },
+            { name: 'stability', label: 'Stability', type: 'number', default: 0.8, min: 0, max: 1, step: 0.1, group: 'advanced' },
+            { name: 'similarity', label: 'Similarity', type: 'number', default: 0.8, min: 0, max: 1, step: 0.1, group: 'advanced' },
+            { name: 'style', label: 'Style', type: 'number', default: 0.0, min: 0, max: 1, step: 0.1, group: 'advanced' },
+            { name: 'useStreaming', label: 'Use Streaming', type: 'boolean', default: false, group: 'advanced' }
+        ]
+    },
+    {
+        id: 'elevenlabs-music',
+        name: 'Eleven Labs Music',
+        provider: 'Eleven Labs',
+        type: 'music',
+        inputs: ['text'],
+        api: {
+            type: 'external',
+            endpoint: 'https://api.elevenlabs.io/v1/music'
+        },
+        capabilities: {
+            durations: [30, 300] // 30 seconds to 5 minutes
+        },
+        parameters: [
+            { name: 'modelId', label: 'Model', type: 'select', options: ['music_generator', 'music_generator_v2'], default: 'music_generator_v2', group: 'basic' },
+            { name: 'prompt_genre', label: 'Genre', type: 'string', default: '', group: 'advanced' },
+            { name: 'prompt_tempo', label: 'Tempo', type: 'string', default: '', group: 'advanced' },
+            { name: 'prompt_instrumentation', label: 'Instrumentation', type: 'string', default: '', group: 'advanced' },
+            { name: 'prompt_structure', label: 'Structure', type: 'string', default: '', group: 'advanced' },
+            { name: 'duration_seconds', label: 'Duration (seconds)', type: 'number', default: 60, min: 30, max: 300, group: 'advanced' }
+        ]
+    }
+];
 
 export const MODELS: ModelConfig[] = [
     // --- Video Models ---
@@ -324,11 +372,17 @@ export const MODELS: ModelConfig[] = [
             { name: 'media_type', label: 'Media Type', type: 'select', options: ['video'], default: 'video', group: 'hidden' },
             { name: 'frame_interpolation', label: 'Frame Interpolation', type: 'boolean', default: false, group: 'advanced' }
         ]
-    }
+    },
 ];
 
-export const getModelsByType = (type: ModelType) => MODELS.filter(m => m.type === type);
-export const getModelById = (id: string) => MODELS.find(m => m.id === id);
+// --- Eleven Labs Models ---
+const ALL_MODELS: ModelConfig[] = [
+    ...MODELS,
+    ...ELEVENLABS_MODELS,
+];
+
+export const getModelsByType = (type: ModelType) => ALL_MODELS.filter(m => m.type === type);
+export const getModelById = (id: string) => ALL_MODELS.find(m => m.id === id);
 
 // Validation types and functions
 export interface ValidationResult {

@@ -30,6 +30,15 @@ interface ServiceConfig {
     };
     generateTimeout?: number; // RunPod AI 생성 작업 타임아웃 (초 단위)
   };
+  elevenlabs: {
+    apiKey: string;
+    voiceId?: string;
+    model?: string;
+    stability?: number;
+    similarity?: number;
+    style?: number;
+    useStreaming?: boolean;
+  };
   s3: {
     endpointUrl: string;
     accessKeyId: string;
@@ -43,6 +52,7 @@ interface ServiceConfig {
 
 interface ServiceStatus {
   runpod: 'configured' | 'partial' | 'missing';
+  elevenlabs: 'configured' | 'partial' | 'missing';
   s3: 'configured' | 'partial' | 'missing';
 }
 
@@ -83,6 +93,15 @@ export default function SettingsPage() {
       },
       generateTimeout: 3600 // 기본값 3600초 (1시간)
     },
+    elevenlabs: {
+      apiKey: '',
+      voiceId: 'EXAVITQu4vr4xnSDxMaL',
+      model: 'eleven_multilingual_v2',
+      stability: 0.8,
+      similarity: 0.8,
+      style: 0.0,
+      useStreaming: false
+    },
     s3: {
       endpointUrl: '',
       accessKeyId: '',
@@ -96,6 +115,7 @@ export default function SettingsPage() {
   
   const [status, setStatus] = useState<ServiceStatus>({
     runpod: 'missing',
+    elevenlabs: 'missing',
     s3: 'missing'
   });
   
@@ -142,7 +162,47 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
+  const testConnection = async (service: 'runpod' | 'elevenlabs' | 's3', endpoint?: string) => {
+    const testKey = endpoint ? `${service}-${endpoint}` : service;
 
+    try {
+      setTesting(prev => ({ ...prev, [testKey]: true }));
+      setTestResults(prev => ({ ...prev, [testKey]: { success: false, message: 'Testing...' } }));
+
+      const config = service === 'runpod'
+        ? { apiKey: settings.runpod?.apiKey }
+        : service === 'elevenlabs'
+        ? { apiKey: settings.elevenlabs?.apiKey }
+        : settings.s3;
+
+      const response = await fetch('/api/settings/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          service,
+          config,
+          endpoint
+        }),
+      });
+
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, [testKey]: result }));
+
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        [testKey]: {
+          success: false,
+          message: 'Test failed',
+          error: `${error}`
+        }
+      }));
+    } finally {
+      setTesting(prev => ({ ...prev, [testKey]: false }));
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -193,46 +253,7 @@ export default function SettingsPage() {
     }
   };
 
-  const testConnection = async (service: 'runpod' | 's3', endpoint?: string) => {
-    const testKey = endpoint ? `${service}-${endpoint}` : service;
-    
-    try {
-      setTesting(prev => ({ ...prev, [testKey]: true }));
-      setTestResults(prev => ({ ...prev, [testKey]: { success: false, message: 'Testing...' } }));
-      
-      const config = service === 'runpod' 
-        ? { apiKey: settings.runpod?.apiKey }
-        : settings.s3;
-      
-      const response = await fetch('/api/settings/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          service, 
-          config,
-          endpoint 
-        }),
-      });
-      
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, [testKey]: result }));
-      
-    } catch (error) {
-      setTestResults(prev => ({ 
-        ...prev, 
-        [testKey]: { 
-          success: false, 
-          message: 'Test failed', 
-          error: `${error}` 
-        } 
-      }));
-    } finally {
-      setTesting(prev => ({ ...prev, [testKey]: false }));
-    }
-  };
-
+  
   // Endpoint 테스트 함수
   const testEndpoint = async (endpointType: 'multitalk' | 'flux-kontext' | 'flux-krea' | 'wan22' | 'wan-animate' | 'infinite-talk' | 'video-upscale' | 'qwen-image-edit') => {
     if (!settings.runpod?.apiKey || !settings.runpod?.endpoints?.[endpointType]) {
@@ -294,7 +315,7 @@ export default function SettingsPage() {
     }
   };
 
-  const updateSetting = (service: 'runpod' | 's3', key: string, value: string | number, subKey?: string) => {
+  const updateSetting = (service: 'runpod' | 'elevenlabs' | 's3', key: string, value: string | number, subKey?: string) => {
     let finalValue = value;
 
     // S3 region을 자동으로 소문자로 변환
@@ -495,6 +516,176 @@ export default function SettingsPage() {
                 )}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Eleven Labs Configuration */}
+        <div className="mb-8 bg-secondary p-6 rounded-lg border border-border border-purple-500/30 shadow-lg shadow-purple-500/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+              <h2 className="text-xl font-semibold text-purple-300 flex items-center gap-2">
+                Eleven Labs Configuration
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {getStatusIcon(status.elevenlabs)}
+              <span className="text-sm font-normal text-foreground/70">
+                {getStatusText(status.elevenlabs)}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* API Key */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Eleven Labs API Key</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showSecrets['elevenlabs-api-key'] ? 'text' : 'password'}
+                    value={settings.elevenlabs?.apiKey || ''}
+                    onChange={(e) => updateSetting('elevenlabs', 'apiKey', e.target.value)}
+                    placeholder="Enter your Eleven Labs API key"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleSecretVisibility('elevenlabs-api-key')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-foreground/60 hover:text-foreground"
+                  >
+                    {showSecrets['elevenlabs-api-key'] ? (
+                      <EyeSlashIcon className="w-4 h-4" />
+                    ) : (
+                      <EyeIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                <button
+                  onClick={() => testConnection('elevenlabs')}
+                  disabled={!settings.elevenlabs?.apiKey || testing['elevenlabs']}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  {testing['elevenlabs'] ? 'Testing...' : 'Test Connection'}
+                </button>
+              </div>
+              {testResults['elevenlabs'] && (
+                <div className={`mt-2 p-2 rounded-md text-sm ${
+                  testResults['elevenlabs'].success
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {testResults['elevenlabs'].message}
+                  {testResults['elevenlabs'].responseTime && (
+                    <span className="ml-2">({testResults['elevenlabs'].responseTime}ms)</span>
+                  )}
+                  {testResults['elevenlabs'].statusCode && (
+                    <span className="ml-2">Status: {testResults['elevenlabs'].statusCode}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Voice Selection */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Voice ID</label>
+              <input
+                type="text"
+                value={settings.elevenlabs?.voiceId || ''}
+                onChange={(e) => updateSetting('elevenlabs', 'voiceId', e.target.value)}
+                placeholder="EXAVITQu4vr4xnSDxMaL"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                You can find voice IDs in the Eleven Labs dashboard
+              </p>
+            </div>
+
+            {/* Model Selection */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Model</label>
+              <select
+                value={settings.elevenlabs?.model || 'eleven_multilingual_v2'}
+                onChange={(e) => updateSetting('elevenlabs', 'model', e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="eleven_multilingual_v2">Multilingual V2</option>
+                <option value="eleven_english_v2">English V2</option>
+                <option value="eleven_turbo_v2">Turbo V2</option>
+                <option value="eleven_monolingual_v1">Monolingual V1</option>
+              </select>
+            </div>
+
+            {/* Voice Parameters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Stability</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={settings.elevenlabs?.stability || 0.8}
+                  onChange={(e) => updateSetting('elevenlabs', 'stability', parseFloat(e.target.value))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  How stable the voice should be (0-1)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Similarity</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={settings.elevenlabs?.similarity || 0.8}
+                  onChange={(e) => updateSetting('elevenlabs', 'similarity', parseFloat(e.target.value))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  How similar to the original voice (0-1)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Style</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={settings.elevenlabs?.style || 0.0}
+                  onChange={(e) => updateSetting('elevenlabs', 'style', parseFloat(e.target.value))}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  How much style to apply (0-1)
+                </p>
+              </div>
+            </div>
+
+            {/* Streaming Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium mb-2">Use Streaming</label>
+                <p className="text-xs text-muted-foreground">
+                  Enable streaming for real-time audio generation
+                </p>
+              </div>
+              <button
+                onClick={() => updateSetting('elevenlabs', 'useStreaming', (!settings.elevenlabs?.useStreaming) ? 1 : 0)}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  settings.elevenlabs?.useStreaming
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                }`}
+              >
+                {settings.elevenlabs?.useStreaming ? '✅ Enabled' : '🔒 Disabled'}
+              </button>
             </div>
           </div>
         </div>

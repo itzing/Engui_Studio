@@ -17,6 +17,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 interface ServiceConfig {
   runpod: RunPodConfig;
+  elevenlabs: ElevenLabsConfig;
   s3: S3Config;
   workspace?: WorkspaceConfig;
   ui?: UIConfig;
@@ -65,6 +66,16 @@ interface RunPodConfig {
   };
 }
 
+interface ElevenLabsConfig {
+  apiKey: string;
+  voiceId?: string;
+  model?: string;
+  stability?: number;
+  similarity?: number;
+  style?: number;
+  useStreaming?: boolean;
+}
+
 interface S3Config {
   endpointUrl: string;
   accessKeyId: string;
@@ -77,12 +88,14 @@ interface S3Config {
 
 interface Settings {
   runpod: RunPodConfig;
+  elevenlabs: ElevenLabsConfig;
   s3: S3Config;
 }
 
 interface ServiceStatus {
   configured: 'configured' | 'partial' | 'missing';
   runpod: 'configured' | 'partial' | 'missing';
+  elevenlabs: 'configured' | 'partial' | 'missing';
   s3: 'configured' | 'partial' | 'missing';
 }
 
@@ -145,6 +158,15 @@ class SettingsService {
           generateTimeout: 3600 // 기본값 3600초 (1시간)
         },
 
+        elevenlabs: {
+          apiKey: '',
+          voiceId: 'EXAVITQu4vr4xnSDxMaL',
+          model: 'eleven_multilingual_v2',
+          stability: 0.8,
+          similarity: 0.8,
+          style: 0.0,
+          useStreaming: false
+        },
         s3: {
           endpointUrl: '',
           accessKeyId: '',
@@ -201,6 +223,22 @@ class SettingsService {
             } else if (setting.configKey === 'generateTimeout') {
               // generateTimeout은 숫자로 변환
               settings.runpod.generateTimeout = parseInt(value) || 3600;
+            }
+          } else if (setting.serviceName === 'elevenlabs') {
+            if (setting.configKey === 'apiKey') {
+              settings.elevenlabs.apiKey = value;
+            } else if (setting.configKey === 'voiceId') {
+              settings.elevenlabs.voiceId = value;
+            } else if (setting.configKey === 'model') {
+              settings.elevenlabs.model = value;
+            } else if (setting.configKey === 'stability') {
+              settings.elevenlabs.stability = parseFloat(value) || 0.8;
+            } else if (setting.configKey === 'similarity') {
+              settings.elevenlabs.similarity = parseFloat(value) || 0.8;
+            } else if (setting.configKey === 'style') {
+              settings.elevenlabs.style = parseFloat(value) || 0.0;
+            } else if (setting.configKey === 'useStreaming') {
+              settings.elevenlabs.useStreaming = value === 'true';
             }
           } else if (setting.serviceName === 's3') {
             if (['endpointUrl', 'accessKeyId', 'secretAccessKey', 'bucketName', 'region'].includes(setting.configKey)) {
@@ -294,6 +332,79 @@ class SettingsService {
         configValue: string;
         isEncrypted: boolean;
       }> = [];
+
+      // Process ElevenLabs settings
+      if (settings.elevenlabs) {
+        // API Key
+        if (settings.elevenlabs.apiKey) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'apiKey',
+            configValue: settings.elevenlabs.apiKey,
+            isEncrypted: this.isSensitiveKey('elevenlabs', 'apiKey')
+          });
+        }
+
+        // Voice ID
+        if (settings.elevenlabs.voiceId) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'voiceId',
+            configValue: settings.elevenlabs.voiceId,
+            isEncrypted: false
+          });
+        }
+
+        // Model
+        if (settings.elevenlabs.model) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'model',
+            configValue: settings.elevenlabs.model,
+            isEncrypted: false
+          });
+        }
+
+        // Stability
+        if (settings.elevenlabs.stability !== undefined) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'stability',
+            configValue: String(settings.elevenlabs.stability),
+            isEncrypted: false
+          });
+        }
+
+        // Similarity
+        if (settings.elevenlabs.similarity !== undefined) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'similarity',
+            configValue: String(settings.elevenlabs.similarity),
+            isEncrypted: false
+          });
+        }
+
+        // Style
+        if (settings.elevenlabs.style !== undefined) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'style',
+            configValue: String(settings.elevenlabs.style),
+            isEncrypted: false
+          });
+        }
+
+        // Use Streaming
+        if (settings.elevenlabs.useStreaming !== undefined) {
+          flatSettings.push({
+            serviceName: 'elevenlabs',
+            configKey: 'useStreaming',
+            configValue: String(settings.elevenlabs.useStreaming),
+            isEncrypted: false
+          });
+        }
+      }
 
       // Process RunPod settings
       if (settings.runpod) {
@@ -474,6 +585,13 @@ class SettingsService {
       // generateTimeout은 선택적 설정이므로 상태 계산에서 제외
     ]);
 
+    const elevenlabsStatus = this.getServiceStatus(settings.elevenlabs, [
+      'apiKey',
+      'voiceId',
+      'model'
+      // stability, similarity, style, useStreaming은 선택적 설정
+    ]);
+
     const s3Status = this.getServiceStatus(settings.s3, [
       'endpointUrl',
       'accessKeyId',
@@ -486,6 +604,7 @@ class SettingsService {
     return {
       configured: 'configured', // This field is not directly used in the new ServiceStatus interface
       runpod: runpodStatus,
+      elevenlabs: elevenlabsStatus,
       s3: s3Status
     };
   }
@@ -574,17 +693,22 @@ class SettingsService {
   // Mask sensitive data for display
   maskSensitiveData(settings: Partial<ServiceConfig>): Partial<ServiceConfig> {
     const masked = { ...settings };
-    
+
     // Mask RunPod API key
     if (masked.runpod?.apiKey) {
       masked.runpod.apiKey = this.encryption.maskSensitiveData(masked.runpod.apiKey);
     }
-    
+
+    // Mask Eleven Labs API key
+    if (masked.elevenlabs?.apiKey) {
+      masked.elevenlabs.apiKey = this.encryption.maskSensitiveData(masked.elevenlabs.apiKey);
+    }
+
     // Mask S3 secret access key
     if (masked.s3?.secretAccessKey) {
       masked.s3.secretAccessKey = this.encryption.maskSensitiveData(masked.s3.secretAccessKey);
     }
-    
+
     return masked;
   }
 }

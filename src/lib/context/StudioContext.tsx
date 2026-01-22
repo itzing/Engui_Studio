@@ -21,6 +21,7 @@ export interface StudioSettings {
         google?: string;
         kling?: string;
         runpod?: string;
+        elevenlabs?: string;
     };
     runpod: {
         endpoints: Record<string, string>; // modelId -> endpointId

@@ -861,7 +861,7 @@ export const translations = {
       tabs: {
         image: '이미지',
         video: '비디오',
-        voiceover: '음성',
+        tts: 'TTS',
         music: '음악'
       }
     },
@@ -1894,7 +1894,7 @@ export const translations = {
       tabs: {
         image: 'Image',
         video: 'Video',
-        voiceover: 'Voiceover',
+        tts: 'TTS',
         music: 'Music'
       }
     },

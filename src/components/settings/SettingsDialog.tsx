@@ -466,6 +466,15 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                             disabled
                                         />
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label>Eleven Labs API Key</Label>
+                                        <Input
+                                            type="password"
+                                            value={formData.apiKeys.elevenlabs || ''}
+                                            onChange={(e) => updateApiKey('elevenlabs', e.target.value)}
+                                            placeholder="Enter your Eleven Labs API key"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -552,6 +561,122 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                             value={formData.storage.secretKey || ''}
                                             onChange={(e) => updateStorage('secretKey', e.target.value)}
                                         />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'elevenlabs' && (
+                            <div className="space-y-6">
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+                                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider text-purple-300">Eleven Labs Configuration</h3>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>API Key</Label>
+                                        <Input
+                                            type="password"
+                                            value={formData.apiKeys.elevenlabs || ''}
+                                            onChange={(e) => updateApiKey('elevenlabs', e.target.value)}
+                                            placeholder="Enter your Eleven Labs API key"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Get your API key from Eleven Labs dashboard
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Voice ID</Label>
+                                        <Input
+                                            value={formData.elevenlabs?.voiceId || ''}
+                                            onChange={(e) => setFormData(prev => ({
+                                                ...prev,
+                                                elevenlabs: {
+                                                    ...prev.elevenlabs,
+                                                    voiceId: e.target.value
+                                                }
+                                            }))}
+                                            placeholder="EXAVITQu4vr4xnSDxMaL"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Find voice IDs in Eleven Labs dashboard
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Model</Label>
+                                        <select
+                                            value={formData.elevenlabs?.model || 'eleven_multilingual_v2'}
+                                            onChange={(e) => setFormData(prev => ({
+                                                ...prev,
+                                                elevenlabs: {
+                                                    ...prev.elevenlabs,
+                                                    model: e.target.value
+                                                }
+                                            }))}
+                                            className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <option value="eleven_multilingual_v2">Multilingual V2</option>
+                                            <option value="eleven_english_v2">English V2</option>
+                                            <option value="eleven_turbo_v2">Turbo V2</option>
+                                            <option value="eleven_monolingual_v1">Monolingual V1</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <Label>Stability</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                value={formData.elevenlabs?.stability || 0.8}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    elevenlabs: {
+                                                        ...prev.elevenlabs,
+                                                        stability: parseFloat(e.target.value)
+                                                    }
+                                                }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Similarity</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                value={formData.elevenlabs?.similarity || 0.8}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    elevenlabs: {
+                                                        ...prev.elevenlabs,
+                                                        similarity: parseFloat(e.target.value)
+                                                    }
+                                                }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label>Style</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                value={formData.elevenlabs?.style || 0.0}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    elevenlabs: {
+                                                        ...prev.elevenlabs,
+                                                        style: parseFloat(e.target.value)
+                                                    }
+                                                }))}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
