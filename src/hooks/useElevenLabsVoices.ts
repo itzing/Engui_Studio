@@ -21,14 +21,52 @@ export function useElevenLabsVoices() {
     ? new ElevenLabsService({ apiKey: settings.apiKeys.elevenlabs })
     : null;
 
-  const fetchVoices = async () => {
+  const fetchVoices = async (forceRefresh = false) => {
     if (!elevenlabsService) return;
 
     setIsLoading(true);
     setError(null);
 
+    const CACHE_KEY = 'elevenlabs-voices-cache';
+    const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+    // 캐시 확인
+    if (!forceRefresh && typeof window !== 'undefined') {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        try {
+          const { timestamp, voices: cachedVoices } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            console.log('📦 Using cached ElevenLabs voices');
+
+            const favorites = voiceSamplesStorage.getFavorites();
+            const voicesWithSamples: VoiceWithSamples[] = cachedVoices.map((voice: any) => ({
+              ...voice,
+              isLoadingSamples: false,
+              isFavorite: favorites.some(f => f.voiceId === voice.voice_id),
+            }));
+
+            setVoices(voicesWithSamples);
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to parse cached voices', e);
+        }
+      }
+    }
+
     try {
+      console.log('🌐 Fetching ElevenLabs voices from API...');
       const response = await elevenlabsService.getVoices();
+
+      // 캐시 저장
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          timestamp: Date.now(),
+          voices: response.voices
+        }));
+      }
 
       // 즐겨찾기 상태 확인
       const favorites = voiceSamplesStorage.getFavorites();
@@ -61,7 +99,7 @@ export function useElevenLabsVoices() {
     stopCurrentAudio();
 
     let base64 = directBase64;
-    
+
     // If direct base64 not provided, try to find in voices
     if (!base64) {
       const voice = voices.find(v => v.voice_id === voiceId);
@@ -71,15 +109,15 @@ export function useElevenLabsVoices() {
     if (base64) {
       const dataUrl = `data:audio/mpeg;base64,${base64}`;
       const audio = new Audio(dataUrl);
-      
+
       currentAudioRef.current = audio;
-      
+
       audio.onended = () => {
         if (currentAudioRef.current === audio) {
           currentAudioRef.current = null;
         }
       };
-      
+
       audio.play().catch(error => {
         console.error('Error playing audio:', error);
         if (currentAudioRef.current === audio) {
@@ -152,7 +190,7 @@ export function useElevenLabsVoices() {
             }
 
             const blob = await previewResponse.blob();
-            
+
             // Convert blob to base64
             audioBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
@@ -182,7 +220,7 @@ export function useElevenLabsVoices() {
           audioBase64,
           sampleText
         );
-        
+
         return audioBase64;
       } else {
         setVoices(prev => prev.map(v =>
@@ -246,6 +284,6 @@ export function useElevenLabsVoices() {
     toggleFavorite,
     clearAllSamples,
     cleanupOldSamples,
-    refetch: fetchVoices
+    refetch: () => fetchVoices(true)
   };
 }

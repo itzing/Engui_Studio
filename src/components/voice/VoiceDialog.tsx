@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { XMarkIcon, SpeakerWaveIcon, StarIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, SpeakerWaveIcon, StarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useElevenLabsVoices, VoiceWithSamples } from '@/hooks/useElevenLabsVoices';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
@@ -13,7 +13,7 @@ export interface VoiceDialogProps {
 }
 
 export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoiceId }: VoiceDialogProps) {
-    const { voices, isLoading, fetchVoiceSamples, playSample, toggleFavorite } = useElevenLabsVoices();
+    const { voices, isLoading, fetchVoiceSamples, playSample, toggleFavorite, refetch } = useElevenLabsVoices();
     const [selectedVoice, setSelectedVoice] = useState<string>(initialVoiceId || '');
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
@@ -44,6 +44,13 @@ export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoi
                         <div className="flex items-center justify-between">
                             <DialogTitle>Select Voice</DialogTitle>
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => refetch()}
+                                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                                    title="Refresh Voices"
+                                >
+                                    <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                                </button>
                                 <button
                                     onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                                     className="px-3 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
@@ -99,7 +106,7 @@ export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoi
                                                     e.preventDefault();
                                                     e.stopPropagation();
                                                     if (voice.isLoadingSamples) return;
-                                                    
+
                                                     if (hasSamples) {
                                                         playSample(voice.voice_id);
                                                     } else {
@@ -109,11 +116,10 @@ export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoi
                                                         }
                                                     }
                                                 }}
-                                                className={`p-2 rounded-full transition-colors ${
-                                                    hasSamples 
-                                                        ? 'hover:bg-green-100 dark:hover:bg-green-900 text-green-600' 
+                                                className={`p-2 rounded-full transition-colors ${hasSamples
+                                                        ? 'hover:bg-green-100 dark:hover:bg-green-900 text-green-600'
                                                         : 'text-muted-foreground hover:bg-muted'
-                                                }`}
+                                                    }`}
                                                 title={hasSamples ? "Play sample" : "Load sample"}
                                             >
                                                 {voice.isLoadingSamples ? (
@@ -161,14 +167,14 @@ export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoi
                                             const voice = voices.find(v => v.voice_id === selectedVoice);
                                             if (!voice) return null;
                                             const hasSamples = !!voice.samples?.audio_base64;
-                                            
+
                                             return (
                                                 <button
                                                     onClick={async (e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         if (voice.isLoadingSamples) return;
-                                                        
+
                                                         if (hasSamples) {
                                                             playSample(voice.voice_id);
                                                         } else {
@@ -178,11 +184,10 @@ export default function VoiceDialog({ isOpen, onClose, onVoiceSelect, initialVoi
                                                             }
                                                         }
                                                     }}
-                                                    className={`p-2 rounded-md transition-colors ${
-                                                        hasSamples 
-                                                            ? 'hover:bg-green-600 bg-green-500 text-white' 
+                                                    className={`p-2 rounded-md transition-colors ${hasSamples
+                                                            ? 'hover:bg-green-600 bg-green-500 text-white'
                                                             : 'bg-secondary hover:bg-secondary/80 text-secondary-foreground'
-                                                    }`}
+                                                        }`}
                                                     title={hasSamples ? "Play selected sample" : "Load sample"}
                                                 >
                                                     {voice.isLoadingSamples ? (

@@ -12,15 +12,23 @@ import VoiceDialog from '@/components/voice/VoiceDialog';
 
 export default function AudioGenerationForm() {
     const { t } = useI18n();
-    const { settings, addJob, addCompletedJob, activeWorkspaceId } = useStudio();
+    const { settings, addJob, addCompletedJob, activeWorkspaceId, updateSettings } = useStudio();
     const [prompt, setPrompt] = useState('');
     const [selectedModel, setSelectedModel] = useState('elevenlabs-tts');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
 
     const ttsModels = getModelsByType('tts');
-    const [selectedVoice, setSelectedVoice] = useState('');
+    // Initialize with saved voice ID from settings
+    const [selectedVoice, setSelectedVoice] = useState(settings.elevenlabs?.voiceId || '');
     const { voices, isLoading, fetchVoiceSamples, playSample } = useElevenLabsVoices();
+
+    // Update local state if settings change externally (e.g. initial load)
+    React.useEffect(() => {
+        if (settings.elevenlabs?.voiceId) {
+            setSelectedVoice(settings.elevenlabs.voiceId);
+        }
+    }, [settings.elevenlabs?.voiceId]);
 
     // Listen for reuseJobInput event
     React.useEffect(() => {
@@ -174,6 +182,15 @@ export default function AudioGenerationForm() {
     const handleVoiceSelect = (voiceId: string) => {
         console.log('🎤 Voice selected:', voiceId);
         setSelectedVoice(voiceId);
+
+        // Save selected voice to settings
+        updateSettings({
+            elevenlabs: {
+                ...settings.elevenlabs,
+                voiceId: voiceId
+            }
+        });
+
         setIsVoiceDialogOpen(false);
     };
 
