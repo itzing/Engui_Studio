@@ -20,7 +20,7 @@ interface SettingsDialogProps {
     onClose: () => void;
 }
 
-type SettingsTab = 'video-project' | 'general' | 'runpod' | 'storage' | 'lora';
+type SettingsTab = 'video-project' | 'general' | 'runpod' | 'storage' | 'lora' | 'elevenlabs';
 
 export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     const { 
@@ -172,6 +172,18 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                 delete apiSettings.storage;
             }
 
+            // Map API keys to service configs for backend compatibility
+            // SettingsService expects apiKeys to be inside the service config object
+            if (apiSettings.apiKeys?.elevenlabs) {
+                if (!apiSettings.elevenlabs) apiSettings.elevenlabs = {};
+                apiSettings.elevenlabs.apiKey = apiSettings.apiKeys.elevenlabs;
+            }
+            
+            if (apiSettings.apiKeys?.runpod) {
+                if (!apiSettings.runpod) apiSettings.runpod = {};
+                apiSettings.runpod.apiKey = apiSettings.apiKeys.runpod;
+            }
+
             const response = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -264,6 +276,12 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                             className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'lora' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
                         >
                             {t('settingsDialog.tabs.lora')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('elevenlabs')}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'elevenlabs' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                        >
+                            Eleven Labs
                         </button>
                     </div>
 

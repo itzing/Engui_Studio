@@ -63,6 +63,7 @@ interface RunPodConfig {
     'z-image': string; // Z-Image endpoint 추가
     onetoall: string; // OneToAll endpoint 추가
     'video-upscale': string; // Video Upscale endpoint 추가
+    ltx2: string; // LTX2 endpoint 추가
   };
 }
 
@@ -114,7 +115,7 @@ class SettingsService {
   async getSettings(userId: string): Promise<{ settings: Partial<ServiceConfig>; status: ServiceStatus }> {
     try {
       logger.emoji.loading(`Loading settings for user: ${userId}`);
-      
+
       // Test database connection first
       logger.emoji.testing('Testing database connection...');
 
@@ -137,7 +138,7 @@ class SettingsService {
         isEncrypted: s.isEncrypted
       })));
 
-        const settings: any = {
+      const settings: any = {
         runpod: {
           apiKey: '',
           endpoints: {
@@ -153,7 +154,8 @@ class SettingsService {
             'qwen-image-edit': '', // Qwen Image Edit endpoint 추가
             'z-image': '', // Z-Image endpoint 추가
             onetoall: '', // OneToAll endpoint 추가
-            'video-upscale': '' // Video Upscale endpoint 추가
+            'video-upscale': '', // Video Upscale endpoint 추가
+            ltx2: '' // LTX2 endpoint 추가
           },
           generateTimeout: 3600 // 기본값 3600초 (1시간)
         },
@@ -205,19 +207,19 @@ class SettingsService {
       // Populate settings from database
       for (const setting of userSettings) {
         try {
-          const value = setting.isEncrypted 
+          const value = setting.isEncrypted
             ? this.encryption.decrypt(setting.configValue)
             : setting.configValue;
-          
+
           logger.emoji.testing(`Processing setting: ${setting.serviceName}.${setting.configKey} = ${value.substring(0, 20)}...`);
-          
+
           // 올바른 중첩 구조로 데이터 배치
           if (setting.serviceName === 'runpod') {
             if (setting.configKey === 'apiKey') {
               settings.runpod.apiKey = value;
-            } else             if (setting.configKey.startsWith('endpoints.')) {
+            } else if (setting.configKey.startsWith('endpoints.')) {
               const endpointType = setting.configKey.split('.')[1];
-              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'onetoall', 'video-upscale'].includes(endpointType)) {
+              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
                 settings.runpod.endpoints[endpointType as keyof typeof settings.runpod.endpoints] = value;
               }
             } else if (setting.configKey === 'generateTimeout') {
@@ -276,11 +278,11 @@ class SettingsService {
           }
 
           successfulDecryptions++;
-          
+
         } catch (decryptError) {
           decryptionErrors++;
           console.error(`❌ Failed to decrypt setting ${setting.configKey}:`, decryptError);
-          
+
           // In development, provide more context
           if (process.env.NODE_ENV === 'development') {
             console.error(`🔍 Setting details:`, {
@@ -290,7 +292,7 @@ class SettingsService {
               valuePreview: setting.configValue?.substring(0, 50)
             });
           }
-          
+
           // Skip this setting and continue with others
           continue;
         }
@@ -324,7 +326,7 @@ class SettingsService {
   async saveSettings(userId: string, settings: Partial<ServiceConfig>): Promise<void> {
     try {
       logger.info(`Saving settings for user: ${userId}`);
-      
+
       // Flatten the nested settings structure for database storage
       const flatSettings: Array<{
         serviceName: string;
@@ -503,7 +505,7 @@ class SettingsService {
 
       // Save each setting using upsert
       for (const setting of flatSettings) {
-        const configValue = setting.isEncrypted 
+        const configValue = setting.isEncrypted
           ? this.encryption.encrypt(setting.configValue)
           : setting.configValue;
 
@@ -531,7 +533,7 @@ class SettingsService {
       }
 
       logger.info(`Successfully saved ${flatSettings.length} settings`);
-      
+
     } catch (error) {
       logger.error('Failed to save settings:', error);
       throw new Error(`Failed to save settings: ${error}`);
@@ -554,7 +556,7 @@ class SettingsService {
         return null;
       }
 
-      return setting.isEncrypted 
+      return setting.isEncrypted
         ? this.encryption.decrypt(setting.configValue)
         : setting.configValue;
     } catch (error) {
@@ -566,7 +568,7 @@ class SettingsService {
   // Helper method to flatten nested settings object
 
 
-  
+
 
   // Calculate configuration status
   private calculateStatus(settings: any): ServiceStatus {
@@ -613,7 +615,7 @@ class SettingsService {
     if (!serviceConfig) return 'missing';
 
     let configuredCount = 0;
-    
+
     for (const field of requiredFields) {
       const value = this.getNestedValue(serviceConfig, field);
       // 숫자 타입이거나 문자열이면서 비어있지 않은 경우를 체크

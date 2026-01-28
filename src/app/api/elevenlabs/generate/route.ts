@@ -6,6 +6,7 @@ import S3Service from '@/lib/s3Service';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { writeFile } from 'fs/promises';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -23,7 +24,6 @@ try {
 // S3 upload helper - will be created per request with userId
 function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
     return async (file: File, fileName: string): Promise<{ s3Url: string; filePath: string }> => {
-        console.log(`📤 Starting S3 upload for file: ${fileName}`);
         const { settings } = await settingsService.getSettings(userId);
 
         if (!settings.s3?.endpointUrl || !settings.s3?.accessKeyId || !settings.s3?.secretAccessKey) {
@@ -39,9 +39,7 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
         });
 
         const fileBuffer = Buffer.from(await file.arrayBuffer());
-        console.log(`📦 File buffer size: ${fileBuffer.length} bytes`);
         const result = await s3Service.uploadFile(fileBuffer, fileName, file.type);
-        console.log(`✅ S3 upload complete:`, result);
 
         return result;
     };
@@ -63,7 +61,7 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        console.log(`🎬 Processing ${modelId} generation request...`);
+
 
         // Get settings
         const { settings } = await settingsService.getSettings(userId);
@@ -95,8 +93,6 @@ export async function POST(request: NextRequest) {
             style: settings.elevenlabs.style,
             useStreaming: settings.elevenlabs.useStreaming,
         });
-
-        console.log(`🎵 Generating audio with Eleven Labs...`);
 
         let audioBlob: Blob;
         const modelName = modelId === 'elevenlabs-tts' ? 'TTS' : 'Music';
@@ -130,8 +126,6 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        console.log(`✅ ${modelName} generation complete: ${audioBlob.size} bytes`);
-
         // Save to local storage and/or S3
         const uploadToS3 = createUploadToS3(userId, language);
         const audioFileName = `${modelId}_${uuidv4()}.mp3`;
@@ -140,16 +134,17 @@ export async function POST(request: NextRequest) {
         // Save to local storage first
         const localPath = join(LOCAL_STORAGE_DIR, audioFilePath);
         const audioBuffer = await audioBlob.arrayBuffer();
-        await Bun.write(localPath, audioBuffer);
+        await writeFile(localPath, Buffer.from(audioBuffer));
+
+        // Convert Blob to File for S3 upload
+        const audioFile = new File([audioBuffer], audioFileName, { type: 'audio/mpeg' });
 
         let s3Url: string | undefined;
         let finalFilePath = audioFilePath;
 
         // Upload to S3 if configured
         try {
-            const s3Result = await uploadToS3(audioBlob, audioFilePath);
-            s3Url = s3Result.s3Url;
-            finalFilePath = s3Result.filePath;
+            await uploadToS3(audioFile, audioFileName);
         } catch (s3Error) {
             console.warn('S3 upload failed, using local storage only:', s3Error);
         }
@@ -163,13 +158,11 @@ export async function POST(request: NextRequest) {
                 prompt,
                 status: 'completed',
                 resultUrl: finalFilePath,
-                s3Url,
                 type: 'audio',
-                parameters: modelParameters,
+                options: JSON.stringify(modelParameters),
             },
         });
 
-        console.log(`🎵 ${modelName} job saved: ${job.id}`);
 
         // Return the generated audio
         return NextResponse.json({

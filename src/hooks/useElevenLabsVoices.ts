@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ElevenLabsService, { ElevenLabsVoice } from '@/lib/elevenlabsService';
 import { useStudio } from '@/lib/context/StudioContext';
+import { voiceSamplesStorage } from '@/lib/voiceSamplesStorage';
 
 export interface VoiceWithSamples extends ElevenLabsVoice {
   samples?: { audio_base64: string; text: string };
   isLoadingSamples?: boolean;
+  isFavorite?: boolean;
 }
 
 export function useElevenLabsVoices() {
@@ -24,19 +26,20 @@ export function useElevenLabsVoices() {
 
     setIsLoading(true);
     setError(null);
-    console.log('🔄 fetchVoices called');
 
     try {
       const response = await elevenlabsService.getVoices();
-      console.log('📋 Voices API response:', response);
+
+      // 즐겨찾기 상태 확인
+      const favorites = voiceSamplesStorage.getFavorites();
       const voicesWithSamples: VoiceWithSamples[] = response.voices.map(voice => ({
         ...voice,
-        isLoadingSamples: false
+        isLoadingSamples: false,
+        isFavorite: favorites.some(f => f.voiceId === voice.voice_id),
       }));
+
       setVoices(voicesWithSamples);
-      console.log('✅ Voices loaded:', voicesWithSamples.length);
     } catch (err) {
-      console.error('❌ Failed to fetch voices:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch voices');
       setVoices([]);
     } finally {
@@ -44,24 +47,71 @@ export function useElevenLabsVoices() {
     }
   };
 
-  const fetchVoiceSamples = async (voiceId: string) => {
-    if (!elevenlabsService) {
-      console.log('❌ elevenlabsService is null');
-      return;
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopCurrentAudio = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+  };
+
+  const playSample = (voiceId: string, directBase64?: string) => {
+    stopCurrentAudio();
+
+    let base64 = directBase64;
+    
+    // If direct base64 not provided, try to find in voices
+    if (!base64) {
+      const voice = voices.find(v => v.voice_id === voiceId);
+      base64 = voice?.samples?.audio_base64;
     }
 
-    console.log('🔍 fetchVoiceSamples called with voiceId:', voiceId);
-    console.log('🔍 Current voices count:', voices.length);
+    if (base64) {
+      const dataUrl = `data:audio/mpeg;base64,${base64}`;
+      const audio = new Audio(dataUrl);
+      
+      currentAudioRef.current = audio;
+      
+      audio.onended = () => {
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null;
+        }
+      };
+      
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null;
+        }
+      });
+    }
+  };
+
+  const fetchVoiceSamples = async (voiceId: string): Promise<string | null> => {
+    if (!elevenlabsService) {
+      return null;
+    }
+
+    // 캐시에서 먼저 확인
+    const cachedSample = voiceSamplesStorage.getSample(voiceId);
+    if (cachedSample) {
+      setVoices(prev => prev.map(v =>
+        v.voice_id === voiceId
+          ? { ...v, samples: { audio_base64: cachedSample.audio_base64, text: cachedSample.text }, isLoadingSamples: false }
+          : v
+      ));
+      return cachedSample.audio_base64;
+    }
 
     // Prevent duplicate calls
     const voice = voices.find(v => v.voice_id === voiceId);
     if (voice?.isLoadingSamples) {
-      console.log('⚠️ Voice already loading samples, skipping...');
-      return;
+      return null;
     }
 
     // Force reload even if samples already exist
-    console.log('🔄 Setting voice loading state...');
     setVoices(prev => prev.map(v =>
       v.voice_id === voiceId
         ? { ...v, isLoadingSamples: true, samples: undefined }
@@ -69,126 +119,120 @@ export function useElevenLabsVoices() {
     ));
 
     try {
-      console.log('🔍 Starting to fetch voice samples for:', voiceId);
+      let audioBase64: string | null = null;
+      let sampleText = "Voice preview";
 
-      // First try to get samples using the new API format
+      // First try to get samples using new API format
       try {
-        console.log('📋 Step 1: Getting sample IDs...');
         const sampleResponse = await elevenlabsService.fetchApi(`voices/${voiceId}/samples`);
-        console.log('📋 Sample IDs response:', sampleResponse);
 
         if (sampleResponse && sampleResponse.samples && sampleResponse.samples.length > 0) {
           const sampleId = sampleResponse.samples[0];
-          console.log('🎵 Step 2: Getting sample audio for ID:', sampleId);
-
           const audioResponse = await elevenlabsService.fetchApi(`voices/${voiceId}/samples/${sampleId}/audio`);
-          console.log('🎵 Audio response:', audioResponse);
 
           if (audioResponse && audioResponse.audio_base64) {
-            console.log('✅ Successfully loaded voice sample, length:', audioResponse.audio_base64.length);
-            setVoices(prev => prev.map(v =>
-              v.voice_id === voiceId
-                ? { ...v, samples: { audio_base64: audioResponse.audio_base64, text: audioResponse.text || "Voice preview" }, isLoadingSamples: false }
-                : v
-            ));
-            console.log('✅ Successfully loaded voice sample');
-            return;
-          } else {
-            console.log('❌ No audio_base64 in response:', audioResponse);
+            audioBase64 = audioResponse.audio_base64;
+            sampleText = audioResponse.text || "Voice preview";
           }
-        } else {
-          console.log('⚠️ No samples found in response, trying fallback...');
         }
       } catch (sampleError) {
-        console.log('❌ Sample API failed, trying fallback:', sampleError);
+        // Silently fail on sample API error and try fallback
       }
 
-      // Fallback to preview URL
-      try {
-        console.log('🔄 Step 3: Trying fallback to preview URL...');
-        const voiceDetails = await elevenlabsService.getVoice(voiceId);
-        console.log('📄 Voice details:', voiceDetails);
+      // If no sample found yet, try fallback to preview URL
+      if (!audioBase64) {
+        try {
+          const voiceDetails = await elevenlabsService.getVoice(voiceId);
 
-        if (voiceDetails.preview_url) {
-          console.log('🌐 Fetching preview from:', voiceDetails.preview_url);
-          const previewResponse = await fetch(voiceDetails.preview_url);
+          if (voiceDetails.preview_url) {
+            const previewResponse = await fetch(voiceDetails.preview_url);
 
-          if (!previewResponse.ok) {
-            throw new Error(`Failed to fetch audio: ${previewResponse.status}`);
+            if (!previewResponse.ok) {
+              throw new Error(`Failed to fetch audio: ${previewResponse.status}`);
+            }
+
+            const blob = await previewResponse.blob();
+            
+            // Convert blob to base64
+            audioBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                resolve((reader.result as string).split(',')[1]);
+              };
+              reader.onerror = () => {
+                reject(new Error('Failed to read audio file'));
+              };
+              reader.readAsDataURL(blob);
+            });
           }
-
-          const blob = await previewResponse.blob();
-          console.log('📦 Got blob, size:', blob.size);
-
-          return new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = (reader.result as string).split(',')[1];
-              console.log('🔤 Converted to base64, length:', base64.length);
-              setVoices(prev => prev.map(v =>
-                v.voice_id === voiceId
-                  ? { ...v, samples: { audio_base64: base64, text: "Voice preview" }, isLoadingSamples: false }
-                  : v
-              ));
-              console.log('✅ Fallback: Successfully loaded voice sample');
-              resolve();
-            };
-            reader.onerror = () => {
-              console.error('❌ Error reading audio file');
-              setVoices(prev => prev.map(v =>
-                v.voice_id === voiceId
-                  ? { ...v, isLoadingSamples: false }
-                  : v
-              ));
-              reject(new Error('Failed to read audio file'));
-            };
-            reader.readAsDataURL(blob);
-          });
-        } else {
-          console.log('⚠️ No preview_url found');
-          setVoices(prev => prev.map(v =>
-            v.voice_id === voiceId
-              ? { ...v, isLoadingSamples: false }
-              : v
-          ));
+        } catch (fallbackError) {
+          console.error('Fallback audio fetch failed:', fallbackError);
         }
-      } catch (fallbackError) {
-        console.error('❌ Fallback also failed:', fallbackError);
+      }
+
+      if (audioBase64) {
+        setVoices(prev => prev.map(v =>
+          v.voice_id === voiceId
+            ? { ...v, samples: { audio_base64: audioBase64!, text: sampleText }, isLoadingSamples: false }
+            : v
+        ));
+
+        voiceSamplesStorage.saveSample(
+          voiceId,
+          audioBase64,
+          sampleText
+        );
+        
+        return audioBase64;
+      } else {
         setVoices(prev => prev.map(v =>
           v.voice_id === voiceId
             ? { ...v, isLoadingSamples: false }
             : v
         ));
+        return null;
       }
     } catch (error) {
-      console.error('❌ Main error in fetchVoiceSamples:', error);
       setVoices(prev => prev.map(v =>
         v.voice_id === voiceId
           ? { ...v, isLoadingSamples: false }
           : v
       ));
+      return null;
     }
   };
 
-  const playSample = (voiceId: string) => {
-    const voice = voices.find(v => v.voice_id === voiceId);
-    if (voice?.samples?.audio_base64) {
-      // Create proper data URL with base64
-      const dataUrl = `data:audio/mpeg;base64,${voice.samples.audio_base64}`;
-      const audio = new Audio(dataUrl);
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-      });
+  const toggleFavorite = (voiceId: string, voiceName: string) => {
+    const isFav = voiceSamplesStorage.isFavorite(voiceId);
+    if (isFav) {
+      voiceSamplesStorage.removeFromFavorites(voiceId);
+    } else {
+      voiceSamplesStorage.addToFavorites(voiceId, voiceName);
     }
+
+    // voices 상태 업데이트
+    setVoices(prev => prev.map(v =>
+      v.voice_id === voiceId
+        ? { ...v, isFavorite: !isFav }
+        : v
+    ));
+  };
+
+  const clearAllSamples = () => {
+    voiceSamplesStorage.clearAllSamples();
+    setVoices(prev => prev.map(v => ({ ...v, samples: undefined })));
+  };
+
+  const cleanupOldSamples = () => {
+    voiceSamplesStorage.cleanupOldSamples();
   };
 
   useEffect(() => {
-    console.log('🎵 useElevenLabsVoices useEffect triggered:', { hasApiKey: !!settings.apiKeys?.elevenlabs });
+    // 오래된 샘플 자동 정리 (최초 로드 시)
+    cleanupOldSamples();
+
     if (settings.apiKeys?.elevenlabs) {
-      console.log('🔑 API key found, fetching voices...');
       fetchVoices();
-    } else {
-      console.log('❌ No API key found for Eleven Labs');
     }
   }, [settings.apiKeys?.elevenlabs]);
 
@@ -199,6 +243,9 @@ export function useElevenLabsVoices() {
     fetchVoices,
     fetchVoiceSamples,
     playSample,
+    toggleFavorite,
+    clearAllSamples,
+    cleanupOldSamples,
     refetch: fetchVoices
   };
 }
