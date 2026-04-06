@@ -25,6 +25,7 @@ export default function ImageGenerationForm() {
     const [isLoadingMedia, setIsLoadingMedia] = useState(false);
     const [showReuseSuccess, setShowReuseSuccess] = useState(false);
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+    const [randomizeSeed, setRandomizeSeed] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const formRef = useRef<HTMLDivElement>(null);
@@ -35,6 +36,29 @@ export default function ImageGenerationForm() {
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
 
     const imageModels = getModelsByType('image');
+
+    const RANDOMIZE_SEED_STORAGE_KEY = 'engui:image:randomize-seed';
+
+    const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
+
+    useEffect(() => {
+        try {
+            const storedValue = localStorage.getItem(RANDOMIZE_SEED_STORAGE_KEY);
+            if (storedValue) {
+                setRandomizeSeed(storedValue === '1');
+            }
+        } catch (error) {
+            console.warn('Failed to restore randomize seed preference', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(RANDOMIZE_SEED_STORAGE_KEY, randomizeSeed ? '1' : '0');
+        } catch (error) {
+            console.warn('Failed to persist randomize seed preference', error);
+        }
+    }, [randomizeSeed]);
 
     // Initialize selected model if not set or if it's not an image model
     useEffect(() => {
@@ -382,6 +406,16 @@ export default function ImageGenerationForm() {
 
         setIsGenerating(true);
 
+        const shouldRandomizeSeed = randomizeSeed && currentModel.parameters.some(param => param.name === 'seed');
+        const seedForThisRun = shouldRandomizeSeed ? generateRandomSeed() : null;
+
+        if (seedForThisRun !== null) {
+            setParameterValues(prev => ({
+                ...prev,
+                seed: seedForThisRun
+            }));
+        }
+
         try {
             const formData = new FormData();
             formData.append('userId', 'user-with-settings');
@@ -410,7 +444,12 @@ export default function ImageGenerationForm() {
             // Use parameterValues state to ensure ALL parameters are included,
             // including conditional ones that may not be currently visible
             currentModel.parameters.forEach(param => {
-                const value = parameterValues[param.name] ?? param.default;
+                let value = parameterValues[param.name] ?? param.default;
+
+                if (param.name === 'seed' && seedForThisRun !== null) {
+                    value = seedForThisRun;
+                }
+
                 if (value !== undefined && value !== null) {
                     formData.append(param.name, value.toString());
                 }
@@ -470,6 +509,14 @@ export default function ImageGenerationForm() {
             console.error('Error submitting form:', error);
             setMessage({ type: 'error', text: 'An unexpected error occurred' });
         } finally {
+            if (shouldRandomizeSeed) {
+                const nextSeed = generateRandomSeed();
+                setParameterValues(prev => ({
+                    ...prev,
+                    seed: nextSeed
+                }));
+            }
+
             setIsGenerating(false);
         }
     };
@@ -823,16 +870,29 @@ export default function ImageGenerationForm() {
                                         className="h-8 text-sm"
                                     />
                                 ) : (
-                                    <Input
-                                        type="number"
-                                        name={param.name}
-                                        value={parameterValues[param.name] ?? param.default}
-                                        onChange={(e) => handleParameterChange(param.name, parseFloat(e.target.value))}
-                                        min={param.min}
-                                        max={param.max}
-                                        step={param.step}
-                                        className="h-8 text-sm"
-                                    />
+                                    <>
+                                        <Input
+                                            type="number"
+                                            name={param.name}
+                                            value={parameterValues[param.name] ?? param.default}
+                                            onChange={(e) => handleParameterChange(param.name, parseFloat(e.target.value))}
+                                            min={param.min}
+                                            max={param.max}
+                                            step={param.step}
+                                            className="h-8 text-sm"
+                                        />
+                                        {param.name === 'seed' && (
+                                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={randomizeSeed}
+                                                    onChange={(e) => setRandomizeSeed(e.target.checked)}
+                                                    className="h-3.5 w-3.5 rounded border-border"
+                                                />
+                                                Randomize
+                                            </label>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         ))}
