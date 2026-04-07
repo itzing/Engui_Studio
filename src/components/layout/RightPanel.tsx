@@ -137,7 +137,8 @@ export default function RightPanel() {
             job.workspaceId === activeWorkspaceId && jobMatchesFilter(job, filter)
         );
 
-        setLoadedJobs(prev => mergeUniqueJobs([...liveWorkspaceJobs, ...prev]));
+        // Keep live state as source of truth: it must overwrite stale paginated items.
+        setLoadedJobs(prev => mergeUniqueJobs([...prev, ...liveWorkspaceJobs]));
     }, [jobs, activeWorkspaceId, filter, jobMatchesFilter, mergeUniqueJobs]);
 
     const handleJobClick = (job: Job) => {
