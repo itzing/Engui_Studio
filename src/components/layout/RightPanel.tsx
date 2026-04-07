@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
 import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
@@ -84,6 +84,55 @@ export default function RightPanel() {
         }
         return job.type === filter;
     });
+
+    const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
+        if (!selectedJob || filteredJobs.length === 0) return;
+
+        const currentIndex = filteredJobs.findIndex(job => job.id === selectedJob.id);
+
+        if (currentIndex === -1) {
+            setSelectedJob(filteredJobs[0]);
+            return;
+        }
+
+        let nextIndex: number;
+
+        if (direction === 'previous') {
+            // ArrowRight: move to previous/older item in the list (wrap to start)
+            nextIndex = (currentIndex + 1) % filteredJobs.length;
+        } else {
+            // ArrowLeft: move to next/newer item in the list (wrap to end)
+            nextIndex = (currentIndex - 1 + filteredJobs.length) % filteredJobs.length;
+        }
+
+        setSelectedJob(filteredJobs[nextIndex]);
+    }, [selectedJob, filteredJobs]);
+
+    useEffect(() => {
+        if (!detailsOpen || !selectedJob || filteredJobs.length === 0) {
+            return;
+        }
+
+        const handleNavigationKey = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName;
+
+            if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                navigateSelectedJob('previous');
+            } else if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                navigateSelectedJob('next');
+            }
+        };
+
+        window.addEventListener('keydown', handleNavigationKey);
+        return () => window.removeEventListener('keydown', handleNavigationKey);
+    }, [detailsOpen, selectedJob, filteredJobs, navigateSelectedJob]);
 
     // Helper to format time ago
     const timeAgo = (date: number) => {
