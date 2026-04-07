@@ -49,6 +49,7 @@ interface UIConfig {
 interface RunPodConfig {
   apiKey: string;
   generateTimeout?: number;
+  encryptSensitiveZImage?: boolean;
   endpoints: {
     image: string;
     video: string;
@@ -157,7 +158,8 @@ class SettingsService {
             'video-upscale': '', // Video Upscale endpoint 추가
             ltx2: '' // LTX2 endpoint 추가
           },
-          generateTimeout: 3600 // 기본값 3600초 (1시간)
+          generateTimeout: 3600, // default: 1 hour
+          encryptSensitiveZImage: false
         },
 
         elevenlabs: {
@@ -223,8 +225,9 @@ class SettingsService {
                 settings.runpod.endpoints[endpointType as keyof typeof settings.runpod.endpoints] = value;
               }
             } else if (setting.configKey === 'generateTimeout') {
-              // generateTimeout은 숫자로 변환
               settings.runpod.generateTimeout = parseInt(value) || 3600;
+            } else if (setting.configKey === 'encryptSensitiveZImage') {
+              settings.runpod.encryptSensitiveZImage = value === 'true';
             }
           } else if (setting.serviceName === 'elevenlabs') {
             if (setting.configKey === 'apiKey') {
@@ -440,6 +443,15 @@ class SettingsService {
             serviceName: 'runpod',
             configKey: 'generateTimeout',
             configValue: String(settings.runpod.generateTimeout),
+            isEncrypted: false
+          });
+        }
+
+        if (settings.runpod.encryptSensitiveZImage !== undefined) {
+          flatSettings.push({
+            serviceName: 'runpod',
+            configKey: 'encryptSensitiveZImage',
+            configValue: String(settings.runpod.encryptSensitiveZImage),
             isEncrypted: false
           });
         }

@@ -230,7 +230,15 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
         }));
     };
 
-
+    const updateRunPodSecureMode = (enabled: boolean) => {
+        setFormData(prev => ({
+            ...prev,
+            runpod: {
+                ...prev.runpod,
+                encryptSensitiveZImage: enabled,
+            }
+        }));
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -509,6 +517,24 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                             onChange={(e) => updateApiKey('runpod', e.target.value)}
                                             placeholder={t('settingsDialog.runpod.apiKeyPlaceholder')}
                                         />
+                                    </div>
+
+                                    <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="zimage-secure-toggle"
+                                                type="checkbox"
+                                                checked={!!formData.runpod.encryptSensitiveZImage}
+                                                onChange={(e) => updateRunPodSecureMode(e.target.checked)}
+                                                className="h-4 w-4 rounded border-border"
+                                            />
+                                            <Label htmlFor="zimage-secure-toggle" className="text-sm">
+                                                Encrypt Z-Image sensitive fields
+                                            </Label>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Encrypts prompt, negative prompt, and LoRA names before sending to RunPod. Requires FIELD_ENC_KEY_B64 on Engui and endpoint secret.
+                                        </p>
                                     </div>
 
                                     <div className="pt-4 space-y-4 border-t border-border">

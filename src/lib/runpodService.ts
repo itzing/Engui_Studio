@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 // src/lib/runpodService.ts
 
 interface RunPodJobResponse {
@@ -9,6 +11,7 @@ interface RunPodJobResponse {
 
 // Generic input type - model-specific payload creation is handled by createPayload
 export interface RunPodInput {
+  __encryptSensitiveZImage?: boolean;
   [key: string]: any;
 }
 
@@ -34,6 +37,75 @@ class RunPodService {
     return {
       'Authorization': `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
+    };
+  }
+
+  private getZImageEncryptionKey(): Buffer | null {
+    const keyBase64 = process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    if (!keyBase64) {
+      return null;
+    }
+
+    try {
+      const key = Buffer.from(keyBase64, 'base64');
+      if (key.length !== 32) {
+        throw new Error(`Expected 32-byte key, got ${key.length}`);
+      }
+      return key;
+    } catch (error: any) {
+      throw new Error(`Invalid Z-Image encryption key: ${error.message}`);
+    }
+  }
+
+  private encryptZImageSensitiveFields(input: RunPodInput): {
+    secureBlock: Record<string, any>;
+    loraWeights: number[];
+  } {
+    const key = this.getZImageEncryptionKey();
+    if (!key) {
+      throw new Error('Z-Image secure mode is enabled but FIELD_ENC_KEY_B64 is missing on Engui server');
+    }
+
+    const loraEntries = Array.isArray(input.lora) ? input.lora : [];
+    const loraNames: string[] = [];
+    const loraWeights: number[] = [];
+
+    for (const entry of loraEntries) {
+      if (Array.isArray(entry) && entry.length >= 1) {
+        loraNames.push(String(entry[0] || ''));
+        const weight = entry.length >= 2 ? Number(entry[1]) : 1.0;
+        loraWeights.push(Number.isFinite(weight) ? weight : 1.0);
+      }
+    }
+
+    const sensitivePayload = {
+      prompt: String(input.prompt || ''),
+      negative_prompt: String(input.negativePrompt || input.negative_prompt || ''),
+      lora_names: loraNames,
+    };
+
+    const nonce = crypto.randomBytes(12);
+    const aad = Buffer.from('engui:zimage:v1', 'utf8');
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
+    cipher.setAAD(aad);
+
+    const plaintext = Buffer.from(JSON.stringify(sensitivePayload), 'utf8');
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    const cipherWithTag = Buffer.concat([encrypted, authTag]);
+
+    const secureBlock = {
+      v: 1,
+      alg: 'AES-256-GCM',
+      kid: process.env.ZIMAGE_FIELD_ENC_KID || 'zimage-k1',
+      ts: Math.floor(Date.now() / 1000),
+      nonce: nonce.toString('base64'),
+      ciphertext: cipherWithTag.toString('base64'),
+    };
+
+    return {
+      secureBlock,
+      loraWeights,
     };
   }
 
@@ -196,15 +268,32 @@ class RunPodService {
           steps: input.steps,
           cfg: input.cfg,
           ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
+          ...(input.negativePrompt && { negative_prompt: input.negativePrompt }),
           ...(input.condition_image && { condition_image: input.condition_image }),
           ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet })
         };
 
         // Add lora array if provided
-        // Format: lora: [["/my_volume/loras/style_lora.safetensors", 0.8]]
+        // Format: lora: [["style_lora.safetensors", 0.8]]
         if (input.lora && Array.isArray(input.lora) && input.lora.length > 0) {
           zImageInput.lora = input.lora;
           console.log(`🔍 Z-Image LoRA array:`, JSON.stringify(input.lora));
+        }
+
+        if (input.__encryptSensitiveZImage === true) {
+          const { secureBlock, loraWeights } = this.encryptZImageSensitiveFields(input);
+
+          zImageInput._secure = secureBlock;
+
+          // Keep only non-sensitive LoRA metadata in plain text.
+          if (loraWeights.length > 0) {
+            zImageInput.lora_weights = loraWeights;
+          }
+
+          delete zImageInput.prompt;
+          delete zImageInput.negativePrompt;
+          delete zImageInput.negative_prompt;
+          delete zImageInput.lora;
         }
 
         return { input: zImageInput };

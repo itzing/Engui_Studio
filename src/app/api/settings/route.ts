@@ -126,6 +126,10 @@ function validateSettings(settings: any): string | null {
         }
       }
     }
+
+    if (settings.runpod.encryptSensitiveZImage !== undefined && typeof settings.runpod.encryptSensitiveZImage !== 'boolean') {
+      return 'RunPod encryptSensitiveZImage must be a boolean';
+    }
   }
   
   // Validate S3 settings if provided

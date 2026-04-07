@@ -361,9 +361,21 @@ export async function POST(request: NextRequest) {
             const runpodInput = {
                 ...inputData,
                 ...parameters,
-            };
+            } as Record<string, any>;
 
-            console.log('📤 Sending to RunPod:', { modelId, endpointId, input: runpodInput });
+            if (modelId === 'z-image' && settings.runpod?.encryptSensitiveZImage) {
+                runpodInput.__encryptSensitiveZImage = true;
+            }
+
+            console.log('📤 Sending to RunPod:', {
+                modelId,
+                endpointId,
+                input: {
+                    ...runpodInput,
+                    prompt: runpodInput.prompt ? '[REDACTED]' : undefined,
+                    negativePrompt: runpodInput.negativePrompt ? '[REDACTED]' : undefined,
+                }
+            });
 
             try {
                 const runpodJobId = await runpodService.submitJob(runpodInput, modelId);
