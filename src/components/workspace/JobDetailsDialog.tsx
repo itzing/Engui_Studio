@@ -13,9 +13,11 @@ interface JobDetailsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onNavigate?: (direction: 'previous' | 'next') => void;
+    currentIndex?: number;
+    totalCount?: number;
 }
 
-export function JobDetailsDialog({ job, open, onOpenChange, onNavigate }: JobDetailsDialogProps) {
+export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
     const { deleteJob } = useStudio();
     const { t } = useI18n();
 
@@ -141,8 +143,13 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate }: JobDet
                             <div className="flex items-center justify-between">
                                 <DialogTitle className="text-lg font-semibold">{t('jobDetails.title')}</DialogTitle>
                             </div>
-                            <DialogDescription className="text-xs text-muted-foreground font-mono">
-                                ID: {job.id}
+                            <DialogDescription className="text-xs text-muted-foreground font-mono flex items-center justify-between gap-2">
+                                <span className="truncate">ID: {job.id}</span>
+                                {totalCount > 0 && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded bg-muted/40 border border-border whitespace-nowrap">
+                                        {currentIndex} / {totalCount}
+                                    </span>
+                                )}
                             </DialogDescription>
                         </DialogHeader>
 

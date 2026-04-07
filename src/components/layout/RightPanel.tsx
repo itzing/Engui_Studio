@@ -108,6 +108,12 @@ export default function RightPanel() {
         setSelectedJob(filteredJobs[nextIndex]);
     }, [selectedJob, filteredJobs]);
 
+
+    const selectedJobIndex = selectedJob
+        ? filteredJobs.findIndex(job => job.id === selectedJob.id)
+        : -1;
+    const selectedJobPosition = selectedJobIndex >= 0 ? selectedJobIndex + 1 : 0;
+
     // Helper to format time ago
     const timeAgo = (date: number) => {
         const seconds = Math.floor((Date.now() - date) / 1000);
@@ -436,6 +442,8 @@ export default function RightPanel() {
                 open={detailsOpen}
                 onOpenChange={setDetailsOpen}
                 onNavigate={(direction) => navigateSelectedJob(direction)}
+                currentIndex={selectedJobPosition}
+                totalCount={filteredJobs.length}
             />
         </div>
     );
