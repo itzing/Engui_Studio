@@ -19,7 +19,7 @@ import {
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
 
 export default function RightPanel() {
-    const { workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
+    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
@@ -38,6 +38,23 @@ export default function RightPanel() {
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
+
+
+    const jobMatchesFilter = useCallback((job: Job, currentFilter: 'all' | 'image' | 'video' | 'audio') => {
+        const jobType = (job.type || '').toLowerCase();
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'audio') return ['audio', 'tts', 'music'].includes(jobType);
+        return jobType === currentFilter;
+    }, []);
+
+    const mergeUniqueJobs = useCallback((items: Job[]) => {
+        const byId = new Map<string, Job>();
+        for (const item of items) {
+            const prev = byId.get(item.id);
+            byId.set(item.id, prev ? { ...prev, ...item } : item);
+        }
+        return Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
+    }, []);
 
     useEffect(() => {
         setIsMounted(true);
@@ -85,7 +102,7 @@ export default function RightPanel() {
             }
 
             const nextJobs: Job[] = data.jobs || [];
-            setLoadedJobs(prev => (append ? [...prev, ...nextJobs] : nextJobs));
+            setLoadedJobs(prev => mergeUniqueJobs(append ? [...prev, ...nextJobs] : nextJobs));
             setCurrentPage(page);
             setHasNextPage(!!data.pagination?.hasNextPage);
         } catch (error) {
@@ -97,7 +114,7 @@ export default function RightPanel() {
             setIsLoadingJobs(false);
             setIsLoadingMore(false);
         }
-    }, [activeWorkspaceId, filter]);
+    }, [activeWorkspaceId, filter, mergeUniqueJobs]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -110,6 +127,18 @@ export default function RightPanel() {
         }
         void fetchJobsPage(1, false);
     }, [filter, activeWorkspaceId, fetchJobsPage]);
+
+
+    // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
+    useEffect(() => {
+        if (!activeWorkspaceId) return;
+
+        const liveWorkspaceJobs = jobs.filter(job =>
+            job.workspaceId === activeWorkspaceId && jobMatchesFilter(job, filter)
+        );
+
+        setLoadedJobs(prev => mergeUniqueJobs([...liveWorkspaceJobs, ...prev]));
+    }, [jobs, activeWorkspaceId, filter, jobMatchesFilter, mergeUniqueJobs]);
 
     const handleJobClick = (job: Job) => {
         setSelectedJob(job);
