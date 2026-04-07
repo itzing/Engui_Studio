@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const onlyProcessing = searchParams.get('onlyProcessing') === 'true';
     const workspaceId = searchParams.get('workspaceId'); // 워크스페이스 필터 추가
+    const type = (searchParams.get('type') || '').toLowerCase(); // image | video | audio
 
     if (jobId) {
       // 특정 작업 조회
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, job });
     } else {
       // 캐시 키 생성 (워크스페이스 필터 포함)
-      const cacheKey = `jobs-${userId}-${page}-${limit}-${onlyProcessing}-${workspaceId || 'all'}`;
+      const cacheKey = `jobs-${userId}-${page}-${limit}-${onlyProcessing}-${workspaceId || 'all'}-${type || 'all'}`;
       const cached = cache.get(cacheKey);
 
       // 캐시가 유효한지 확인
@@ -123,6 +124,15 @@ export async function GET(request: NextRequest) {
         } else {
           // 특정 워크스페이스의 작업들
           whereCondition.workspaceId = workspaceId;
+        }
+      }
+
+      // 타입 필터링
+      if (type) {
+        if (type === 'audio') {
+          whereCondition.type = { in: ['audio', 'tts', 'music'] };
+        } else if (type === 'image' || type === 'video') {
+          whereCondition.type = type;
         }
       }
 
