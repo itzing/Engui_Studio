@@ -413,36 +413,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
         try {
             console.log('🔄 Fetching jobs for workspace:', activeWorkspaceId);
-
-            const pageSize = 50;
-            let page = 1;
-            let hasNextPage = true;
-            const allJobs: Job[] = [];
-
-            while (hasNextPage) {
-                const response = await fetch(`/api/jobs?userId=user-with-settings&workspaceId=${activeWorkspaceId}&limit=${pageSize}&page=${page}`);
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to fetch jobs');
-                }
-
-                allJobs.push(...(data.jobs || []));
-                hasNextPage = !!data.pagination?.hasNextPage;
-                page += 1;
-
-                // Safety guard against accidental infinite loops
-                if (page > 200) {
-                    console.warn('⚠️ fetchJobs pagination safety break at page 200');
-                    break;
-                }
+            const response = await fetch(`/api/jobs?userId=user-with-settings&workspaceId=${activeWorkspaceId}&limit=50&page=1`);
+            const data = await response.json();
+            if (data.success) {
+                console.log('✅ Fetched jobs:', data.jobs.length, 'jobs for workspace:', activeWorkspaceId);
+                setJobs(data.jobs);
             }
-
-            console.log('✅ Fetched jobs:', allJobs.length, 'jobs for workspace:', activeWorkspaceId);
-            console.log('📊 Job statuses:', allJobs.slice(0, 20).map((j: Job) => ({ id: j.id.substring(0, 8), status: j.status, resultUrl: j.resultUrl ? '✓' : '✗' })));
-
-            // Replace with full paginated result - server is source of truth
-            setJobs(allJobs);
         } catch (error) {
             console.error('Failed to fetch jobs:', error);
         }

@@ -19,12 +19,16 @@ import {
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
 
 export default function RightPanel() {
-    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
+    const { workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
-    const [visiblePages, setVisiblePages] = useState(1);
+    const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNextPage, setHasNextPage] = useState(false);
+    const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const pageSize = 50;
 
     // Workspace Creation State
@@ -46,9 +50,66 @@ export default function RightPanel() {
     }, [isCreatingWorkspace]);
 
 
+    const getApiType = (currentFilter: 'all' | 'image' | 'video' | 'audio') => {
+        if (currentFilter === 'all') return '';
+        return currentFilter;
+    };
+
+    const fetchJobsPage = useCallback(async (page: number, append = false) => {
+        if (!activeWorkspaceId) return;
+
+        if (append) {
+            setIsLoadingMore(true);
+        } else {
+            setIsLoadingJobs(true);
+        }
+
+        try {
+            const params = new URLSearchParams({
+                userId: 'user-with-settings',
+                workspaceId: activeWorkspaceId,
+                page: String(page),
+                limit: String(pageSize),
+            });
+
+            const apiType = getApiType(filter);
+            if (apiType) {
+                params.set('type', apiType);
+            }
+
+            const response = await fetch(`/api/jobs?${params.toString()}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to fetch jobs');
+            }
+
+            const nextJobs: Job[] = data.jobs || [];
+            setLoadedJobs(prev => (append ? [...prev, ...nextJobs] : nextJobs));
+            setCurrentPage(page);
+            setHasNextPage(!!data.pagination?.hasNextPage);
+        } catch (error) {
+            console.error('Failed to fetch jobs page:', error);
+            if (!append) {
+                setLoadedJobs([]);
+            }
+        } finally {
+            setIsLoadingJobs(false);
+            setIsLoadingMore(false);
+        }
+    }, [activeWorkspaceId, filter]);
+
     useEffect(() => {
-        setVisiblePages(1);
-    }, [filter, activeWorkspaceId]);
+        setSelectedJob(null);
+        setDetailsOpen(false);
+        if (!activeWorkspaceId) {
+            setLoadedJobs([]);
+            setCurrentPage(1);
+            setHasNextPage(false);
+            return;
+        }
+        void fetchJobsPage(1, false);
+    }, [filter, activeWorkspaceId, fetchJobsPage]);
 
     const handleJobClick = (job: Job) => {
         setSelectedJob(job);
@@ -59,6 +120,7 @@ export default function RightPanel() {
         e.stopPropagation();
         if (confirm('Are you sure you want to delete this generation?')) {
             deleteJob(jobId);
+            setLoadedJobs(prev => prev.filter(job => job.id !== jobId));
             if (selectedJob?.id === jobId) {
                 setDetailsOpen(false);
                 setSelectedJob(null);
@@ -83,21 +145,7 @@ export default function RightPanel() {
         }
     };
 
-    const filteredJobs = jobs.filter(job => {
-        const jobType = (job.type || '').toLowerCase();
-
-        if (filter === 'all') return true;
-
-        // Treat 'tts' and 'music' as 'audio' for filtering
-        if (filter === 'audio') {
-            return ['audio', 'tts', 'music'].includes(jobType);
-        }
-
-        return jobType === filter;
-    });
-
-    const visibleJobs = filteredJobs.slice(0, visiblePages * pageSize);
-    const hasMoreJobs = visibleJobs.length < filteredJobs.length;
+    const filteredJobs = loadedJobs;
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -214,7 +262,7 @@ export default function RightPanel() {
 
             {/* Job List */}
             <div className="flex-1 overflow-y-auto">
-                {!isMounted ? (
+                {!isMounted || isLoadingJobs ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                         <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
                             <FolderPlus className="w-5 h-5 opacity-50" />
@@ -229,7 +277,7 @@ export default function RightPanel() {
                         <div className="text-xs">No generations yet</div>
                     </div>
                 ) : (
-                    visibleJobs.map(job => {
+                    filteredJobs.map(job => {
                         const model = getModelById(job.modelId);
                         return (
                             <div
@@ -447,14 +495,15 @@ export default function RightPanel() {
                     })
                 )}
 
-                {isMounted && hasMoreJobs && (
+                {isMounted && hasNextPage && (
                     <div className="p-3 border-t border-border/60">
                         <Button
                             variant="outline"
                             className="w-full h-8 text-xs"
-                            onClick={() => setVisiblePages((prev) => prev + 1)}
+                            onClick={() => void fetchJobsPage(currentPage + 1, true)}
+                            disabled={isLoadingMore}
                         >
-                            Load more ({visibleJobs.length}/{filteredJobs.length})
+                            {isLoadingMore ? 'Loading...' : 'Load more'}
                         </Button>
                     </div>
                 )}
