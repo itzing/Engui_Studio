@@ -49,6 +49,7 @@ interface UIConfig {
 interface RunPodConfig {
   apiKey: string;
   generateTimeout?: number;
+  zImageFieldEncKeyB64?: string;
   encryptSensitiveZImage?: boolean;
   endpoints: {
     image: string;
@@ -159,7 +160,8 @@ class SettingsService {
             ltx2: '' // LTX2 endpoint 추가
           },
           generateTimeout: 3600, // default: 1 hour
-          encryptSensitiveZImage: false
+          encryptSensitiveZImage: false,
+          zImageFieldEncKeyB64: ''
         },
 
         elevenlabs: {
@@ -228,6 +230,8 @@ class SettingsService {
               settings.runpod.generateTimeout = parseInt(value) || 3600;
             } else if (setting.configKey === 'encryptSensitiveZImage') {
               settings.runpod.encryptSensitiveZImage = value === 'true';
+            } else if (setting.configKey === 'zImageFieldEncKeyB64') {
+              settings.runpod.zImageFieldEncKeyB64 = value;
             }
           } else if (setting.serviceName === 'elevenlabs') {
             if (setting.configKey === 'apiKey') {
@@ -452,6 +456,15 @@ class SettingsService {
             serviceName: 'runpod',
             configKey: 'encryptSensitiveZImage',
             configValue: String(settings.runpod.encryptSensitiveZImage),
+            isEncrypted: false
+          });
+        }
+
+        if (settings.runpod.zImageFieldEncKeyB64 !== undefined) {
+          flatSettings.push({
+            serviceName: 'runpod',
+            configKey: 'zImageFieldEncKeyB64',
+            configValue: settings.runpod.zImageFieldEncKeyB64,
             isEncrypted: false
           });
         }
@@ -711,6 +724,10 @@ class SettingsService {
     // Mask RunPod API key
     if (masked.runpod?.apiKey) {
       masked.runpod.apiKey = this.encryption.maskSensitiveData(masked.runpod.apiKey);
+    }
+
+    if (masked.runpod?.zImageFieldEncKeyB64) {
+      masked.runpod.zImageFieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.zImageFieldEncKeyB64);
     }
 
     // Mask Eleven Labs API key

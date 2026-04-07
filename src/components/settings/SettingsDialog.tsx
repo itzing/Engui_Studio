@@ -240,6 +240,16 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
         }));
     };
 
+    const updateRunPodZImageKey = (value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            runpod: {
+                ...prev.runpod,
+                zImageFieldEncKeyB64: value,
+            }
+        }));
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div className="bg-zinc-900 w-full max-w-2xl h-[600px] rounded-xl border border-border shadow-2xl overflow-hidden flex flex-col">
@@ -519,7 +529,7 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                         />
                                     </div>
 
-                                    <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
+                                    <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
                                         <div className="flex items-center gap-2">
                                             <input
                                                 id="zimage-secure-toggle"
@@ -532,8 +542,19 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                                 Encrypt Z-Image sensitive fields
                                             </Label>
                                         </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Z-Image Encryption Key (Base64, 32 bytes)</Label>
+                                            <Input
+                                                type="password"
+                                                value={formData.runpod.zImageFieldEncKeyB64 || ''}
+                                                onChange={(e) => updateRunPodZImageKey(e.target.value)}
+                                                placeholder="FIELD_ENC_KEY_B64"
+                                            />
+                                        </div>
+
                                         <p className="text-xs text-muted-foreground">
-                                            Encrypts prompt, negative prompt, and LoRA names before sending to RunPod. Requires FIELD_ENC_KEY_B64 on Engui and endpoint secret.
+                                            Encrypts prompt, negative prompt, and LoRA names before sending to RunPod. Set the same key in RunPod endpoint secret FIELD_ENC_KEY_B64.
                                         </p>
                                     </div>
 

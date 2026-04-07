@@ -20,13 +20,15 @@ class RunPodService {
   private endpointId: string;
   private baseUrl: string;
   private generateTimeout: number; // AI 생성 작업 타임아웃 (밀리초)
+  private zImageFieldEncKeyB64?: string;
 
-  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number) {
+  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number, zImageFieldEncKeyB64?: string) {
     // Use provided credentials or fall back to environment variables
     this.apiKey = apiKey || process.env.RUNPOD_API_KEY!;
     this.endpointId = endpointId || process.env.RUNPOD_ENDPOINT_ID!;
     this.baseUrl = `https://api.runpod.ai/v2/${this.endpointId}`;
     this.generateTimeout = (generateTimeout || 3600) * 1000; // 초를 밀리초로 변환
+    this.zImageFieldEncKeyB64 = zImageFieldEncKeyB64;
     
     if (!this.apiKey || !this.endpointId) {
       throw new Error('RunPod API key and endpoint ID are required');
@@ -41,7 +43,7 @@ class RunPodService {
   }
 
   private getZImageEncryptionKey(): Buffer | null {
-    const keyBase64 = process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    const keyBase64 = this.zImageFieldEncKeyB64 || process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
     if (!keyBase64) {
       return null;
     }

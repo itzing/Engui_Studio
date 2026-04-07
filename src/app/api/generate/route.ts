@@ -355,7 +355,12 @@ export async function POST(request: NextRequest) {
                 }, { status: 400 });
             }
 
-            const runpodService = new RunPodService(settings.runpod.apiKey, endpointId);
+            const runpodService = new RunPodService(
+                settings.runpod.apiKey,
+                endpointId,
+                settings.runpod.generateTimeout,
+                settings.runpod.zImageFieldEncKeyB64
+            );
 
             // Prepare RunPod input
             const runpodInput = {
