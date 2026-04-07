@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { useStudio } from '@/lib/context/StudioContext';
-import { CogIcon } from '@heroicons/react/24/outline';
+import { CogIcon, FolderOpenIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
 import AudioGenerationForm from '../forms/AudioGenerationForm';
 import MusicGenerationForm from '../forms/MusicGenerationForm';
 import GenerationTabs, { GenerationMode } from '../forms/GenerationTabs';
 import SettingsDialog from '../settings/SettingsDialog';
+import { S3BucketViewerDialog } from '../storage/S3BucketViewerDialog';
 
 // Simple icons for social media
 const DiscordIcon = ({ className }: { className?: string }) => (
@@ -34,6 +35,7 @@ export default function LeftPanel() {
     const { activeTool, setActiveTool } = useStudio();
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isStorageOpen, setIsStorageOpen] = useState(false);
 
     // Listen for job reuse events and switch to appropriate tab
     React.useEffect(() => {
@@ -120,6 +122,13 @@ export default function LeftPanel() {
                         </a>
                         <div className="w-px h-4 bg-border mx-1"></div>
                         <button
+                            onClick={() => setIsStorageOpen(true)}
+                            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
+                            title="Storage"
+                        >
+                            <FolderOpenIcon className="w-5 h-5" />
+                        </button>
+                        <button
                             onClick={() => setIsSettingsOpen(true)}
                             className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
                             title="Settings"
@@ -139,6 +148,7 @@ export default function LeftPanel() {
             </div>
 
             <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+            <S3BucketViewerDialog open={isStorageOpen} onOpenChange={setIsStorageOpen} />
         </div>
     );
 }
