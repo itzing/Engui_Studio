@@ -24,6 +24,8 @@ export default function RightPanel() {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
+    const [visiblePages, setVisiblePages] = useState(1);
+    const pageSize = 50;
 
     // Workspace Creation State
     const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
@@ -42,6 +44,11 @@ export default function RightPanel() {
             inputRef.current.focus();
         }
     }, [isCreatingWorkspace]);
+
+
+    useEffect(() => {
+        setVisiblePages(1);
+    }, [filter, activeWorkspaceId]);
 
     const handleJobClick = (job: Job) => {
         setSelectedJob(job);
@@ -77,13 +84,20 @@ export default function RightPanel() {
     };
 
     const filteredJobs = jobs.filter(job => {
+        const jobType = (job.type || '').toLowerCase();
+
         if (filter === 'all') return true;
+
         // Treat 'tts' and 'music' as 'audio' for filtering
         if (filter === 'audio') {
-            return ['audio', 'tts', 'music'].includes(job.type);
+            return ['audio', 'tts', 'music'].includes(jobType);
         }
-        return job.type === filter;
+
+        return jobType === filter;
     });
+
+    const visibleJobs = filteredJobs.slice(0, visiblePages * pageSize);
+    const hasMoreJobs = visibleJobs.length < filteredJobs.length;
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -215,7 +229,7 @@ export default function RightPanel() {
                         <div className="text-xs">No generations yet</div>
                     </div>
                 ) : (
-                    filteredJobs.map(job => {
+                    visibleJobs.map(job => {
                         const model = getModelById(job.modelId);
                         return (
                             <div
@@ -431,6 +445,18 @@ export default function RightPanel() {
                             </div>
                         );
                     })
+                )}
+
+                {isMounted && hasMoreJobs && (
+                    <div className="p-3 border-t border-border/60">
+                        <Button
+                            variant="outline"
+                            className="w-full h-8 text-xs"
+                            onClick={() => setVisiblePages((prev) => prev + 1)}
+                        >
+                            Load more ({visibleJobs.length}/{filteredJobs.length})
+                        </Button>
+                    </div>
                 )}
             </div>
 
