@@ -108,32 +108,6 @@ export default function RightPanel() {
         setSelectedJob(filteredJobs[nextIndex]);
     }, [selectedJob, filteredJobs]);
 
-    useEffect(() => {
-        if (!detailsOpen || !selectedJob || filteredJobs.length === 0) {
-            return;
-        }
-
-        const handleNavigationKey = (event: KeyboardEvent) => {
-            const target = event.target as HTMLElement | null;
-            const tagName = target?.tagName;
-
-            if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
-                return;
-            }
-
-            if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                navigateSelectedJob('previous');
-            } else if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                navigateSelectedJob('next');
-            }
-        };
-
-        window.addEventListener('keydown', handleNavigationKey);
-        return () => window.removeEventListener('keydown', handleNavigationKey);
-    }, [detailsOpen, selectedJob, filteredJobs, navigateSelectedJob]);
-
     // Helper to format time ago
     const timeAgo = (date: number) => {
         const seconds = Math.floor((Date.now() - date) / 1000);
@@ -461,6 +435,7 @@ export default function RightPanel() {
                 job={selectedJob}
                 open={detailsOpen}
                 onOpenChange={setDetailsOpen}
+                onNavigate={(direction) => navigateSelectedJob(direction)}
             />
         </div>
     );

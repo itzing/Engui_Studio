@@ -12,9 +12,10 @@ interface JobDetailsDialogProps {
     job: Job | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onNavigate?: (direction: 'previous' | 'next') => void;
 }
 
-export function JobDetailsDialog({ job, open, onOpenChange }: JobDetailsDialogProps) {
+export function JobDetailsDialog({ job, open, onOpenChange, onNavigate }: JobDetailsDialogProps) {
     const { deleteJob } = useStudio();
     const { t } = useI18n();
 
@@ -72,10 +73,27 @@ export function JobDetailsDialog({ job, open, onOpenChange }: JobDetailsDialogPr
         }
     };
 
+    const handleDialogKeyDownCapture = (event: React.KeyboardEvent) => {
+        const target = event.target as HTMLElement | null;
+        const tagName = target?.tagName;
+
+        if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            return;
+        }
+
+        if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            onNavigate?.('previous');
+        } else if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            onNavigate?.('next');
+        }
+    };
+
     return (
         <Dialog open={safeOpen} onOpenChange={onOpenChange}>
             {job && (
-                <DialogContent className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
+                <DialogContent onKeyDownCapture={handleDialogKeyDownCapture} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
                     {/* Media Preview - Left/Top Side */}
                     <div className="flex-1 bg-black/90 flex items-center justify-center relative min-h-[300px] md:h-full overflow-hidden p-4">
                         {job.status === 'completed' && job.resultUrl ? (
