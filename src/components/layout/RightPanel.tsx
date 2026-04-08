@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
 import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
+import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { Search, Filter, CloudUpload, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,9 @@ const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 
 export default function RightPanel() {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+    const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [galleryDetailsOpen, setGalleryDetailsOpen] = useState(false);
     const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
@@ -162,7 +165,9 @@ export default function RightPanel() {
 
     useEffect(() => {
         setSelectedJob(null);
+        setSelectedGalleryAsset(null);
         setDetailsOpen(false);
+        setGalleryDetailsOpen(false);
         if (!activeWorkspaceId) {
             setLoadedJobs([]);
             setGalleryAssets([]);
@@ -190,6 +195,11 @@ export default function RightPanel() {
     const handleJobClick = (job: Job) => {
         setSelectedJob(job);
         setDetailsOpen(true);
+    };
+
+    const handleGalleryAssetClick = (asset: GalleryAsset) => {
+        setSelectedGalleryAsset(asset);
+        setGalleryDetailsOpen(true);
     };
 
     const emitHoverPreview = (job: Job | null) => {
@@ -302,6 +312,7 @@ export default function RightPanel() {
         e.stopPropagation();
         const nextFavorited = !asset.favorited;
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
+        setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: nextFavorited } : prev);
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/favorite`, {
                 method: 'POST',
@@ -316,6 +327,7 @@ export default function RightPanel() {
         } catch (error) {
             console.error('Failed to update favorite:', error);
             setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
+            setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: asset.favorited } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to update favorite', 'error');
         }
     };
@@ -323,6 +335,10 @@ export default function RightPanel() {
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset) => {
         e.stopPropagation();
         setGalleryAssets(prev => prev.filter(item => item.id !== asset.id));
+        if (selectedGalleryAsset?.id === asset.id) {
+            setGalleryDetailsOpen(false);
+            setSelectedGalleryAsset(null);
+        }
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/trash`, {
                 method: 'POST',
@@ -459,7 +475,7 @@ export default function RightPanel() {
                                 <button
                                     key={asset.id}
                                     type="button"
-                                    onClick={() => window.open(asset.originalUrl, '_blank', 'noopener,noreferrer')}
+                                    onClick={() => handleGalleryAssetClick(asset)}
                                     className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors relative"
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
@@ -761,6 +777,14 @@ export default function RightPanel() {
                 onNavigate={(direction) => navigateSelectedJob(direction)}
                 currentIndex={selectedJobPosition}
                 totalCount={filteredJobs.length}
+            />
+
+            <GalleryAssetDialog
+                asset={selectedGalleryAsset}
+                open={galleryDetailsOpen}
+                onOpenChange={setGalleryDetailsOpen}
+                onToggleFavorite={() => selectedGalleryAsset && void handleGalleryFavorite({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
+                onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
             />
         </div>
     );
