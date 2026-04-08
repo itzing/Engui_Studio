@@ -18,16 +18,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
 
+type GalleryAsset = {
+    id: string;
+    workspaceId: string;
+    type: 'image' | 'video' | 'audio';
+    originalUrl: string;
+    previewUrl?: string | null;
+    thumbnailUrl?: string | null;
+    favorited: boolean;
+    trashed: boolean;
+    sourceJobId?: string | null;
+    sourceOutputId?: string | null;
+    addedToGalleryAt: string;
+};
+
 export default function RightPanel() {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
+    const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+    const [isLoadingGallery, setIsLoadingGallery] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const pageSize = 50;
 
@@ -116,17 +133,44 @@ export default function RightPanel() {
         }
     }, [activeWorkspaceId, filter, mergeUniqueJobs]);
 
+    const fetchGalleryAssets = useCallback(async () => {
+        if (!activeWorkspaceId) return;
+
+        setIsLoadingGallery(true);
+        try {
+            const params = new URLSearchParams({
+                workspaceId: activeWorkspaceId,
+                limit: '100',
+            });
+
+            const response = await fetch(`/api/gallery/assets?${params.toString()}`);
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to fetch gallery assets');
+            }
+
+            setGalleryAssets(data.assets || []);
+        } catch (error) {
+            console.error('Failed to fetch gallery assets:', error);
+            setGalleryAssets([]);
+        } finally {
+            setIsLoadingGallery(false);
+        }
+    }, [activeWorkspaceId]);
+
     useEffect(() => {
         setSelectedJob(null);
         setDetailsOpen(false);
         if (!activeWorkspaceId) {
             setLoadedJobs([]);
+            setGalleryAssets([]);
             setCurrentPage(1);
             setHasNextPage(false);
             return;
         }
         void fetchJobsPage(1, false);
-    }, [filter, activeWorkspaceId, fetchJobsPage]);
+        void fetchGalleryAssets();
+    }, [filter, activeWorkspaceId, fetchJobsPage, fetchGalleryAssets]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
@@ -301,38 +345,94 @@ export default function RightPanel() {
                 </div>
 
                 {/* Filters & Actions */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
-                        {(['all', 'image', 'video', 'audio'] as const).map((t) => (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5 w-fit">
+                        {(['jobs', 'gallery'] as const).map((mode) => (
                             <button
-                                key={t}
-                                onClick={() => setFilter(t)}
-                                className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${filter === t
+                                key={mode}
+                                onClick={() => setPanelMode(mode)}
+                                className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${panelMode === mode
                                     ? 'bg-background shadow-sm text-foreground font-medium'
                                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                     }`}
                             >
-                                {t}
+                                {mode}
                             </button>
                         ))}
                     </div>
-                    <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
-                            <CloudUpload className="w-3.5 h-3.5" />
-                        </Button>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
+                            {(['all', 'image', 'video', 'audio'] as const).map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => setFilter(t)}
+                                    className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${filter === t
+                                        ? 'bg-background shadow-sm text-foreground font-medium'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                        }`}
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => {
+                                if (panelMode === 'gallery') {
+                                    void fetchGalleryAssets();
+                                } else {
+                                    void fetchJobsPage(1, false);
+                                }
+                            }}>
+                                <CloudUpload className="w-3.5 h-3.5" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Job List */}
+            {/* Content List */}
             <div className="flex-1 overflow-y-auto">
-                {!isMounted || isLoadingJobs ? (
+                {!isMounted || (panelMode === 'jobs' ? isLoadingJobs : isLoadingGallery) ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                         <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
                             <FolderPlus className="w-5 h-5 opacity-50" />
                         </div>
                         <div className="text-xs">Loading...</div>
                     </div>
+                ) : panelMode === 'gallery' ? (
+                    galleryAssets.filter(asset => filter === 'all' ? true : asset.type === filter).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+                            <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
+                                <FolderPlus className="w-5 h-5 opacity-50" />
+                            </div>
+                            <div className="text-xs">No gallery assets yet</div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2 p-2">
+                            {galleryAssets.filter(asset => filter === 'all' ? true : asset.type === filter).map(asset => (
+                                <button
+                                    key={asset.id}
+                                    type="button"
+                                    onClick={() => window.open(asset.originalUrl, '_blank', 'noopener,noreferrer')}
+                                    className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors"
+                                >
+                                    <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
+                                        {asset.type === 'video' ? (
+                                            <video src={asset.previewUrl || asset.originalUrl} className="w-full h-full object-cover" muted />
+                                        ) : asset.type === 'audio' ? (
+                                            <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
+                                        ) : (
+                                            <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
+                                        )}
+                                    </div>
+                                    <div className="p-2 space-y-1">
+                                        <div className="text-[10px] font-medium capitalize text-foreground">{asset.type}</div>
+                                        <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )
                 ) : filteredJobs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                         <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
@@ -570,7 +670,7 @@ export default function RightPanel() {
                     })
                 )}
 
-                {isMounted && hasNextPage && (
+                {panelMode === 'jobs' && isMounted && hasNextPage && (
                     <div className="p-3 border-t border-border/60">
                         <Button
                             variant="outline"
