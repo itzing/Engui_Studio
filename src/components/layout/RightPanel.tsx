@@ -363,6 +363,12 @@ export default function RightPanel() {
         }
     };
 
+    const handleGalleryTagClick = (tag: string) => {
+        setPanelMode('gallery');
+        setGallerySearchQuery(tag);
+        setShowTrashed(false);
+    };
+
     const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: tags } : item));
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: tags } : prev);
@@ -603,7 +609,17 @@ export default function RightPanel() {
                                         {!!asset.userTags?.length && (
                                             <div className="flex flex-wrap gap-1 pt-1">
                                                 {asset.userTags.slice(0, 2).map(tag => (
-                                                    <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{tag}</span>
+                                                    <button
+                                                        key={tag}
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleGalleryTagClick(tag);
+                                                        }}
+                                                        className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                                                    >
+                                                        {tag}
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -882,6 +898,7 @@ export default function RightPanel() {
                 onToggleFavorite={() => selectedGalleryAsset && void handleGalleryFavorite({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
                 onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset, !selectedGalleryAsset.trashed)}
                 onSaveTags={(tags) => selectedGalleryAsset ? handleGallerySaveTags(selectedGalleryAsset, tags) : undefined}
+                onTagClick={(tag) => handleGalleryTagClick(tag)}
             />
         </div>
     );

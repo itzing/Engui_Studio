@@ -27,9 +27,10 @@ interface GalleryAssetDialogProps {
   onToggleFavorite: () => void;
   onTrash: () => void;
   onSaveTags: (tags: string[]) => Promise<void> | void;
+  onTagClick: (tag: string) => void;
 }
 
-export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onSaveTags }: GalleryAssetDialogProps) {
+export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onSaveTags, onTagClick }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
 
@@ -112,7 +113,14 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                   />
                   <div className="flex flex-wrap gap-1">
                     {(asset.userTags || []).map(tag => (
-                      <span key={tag} className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{tag}</span>
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => onTagClick(tag)}
+                        className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                      >
+                        {tag}
+                      </button>
                     ))}
                   </div>
                   <Button
