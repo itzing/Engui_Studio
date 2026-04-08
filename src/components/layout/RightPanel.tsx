@@ -153,6 +153,10 @@ export default function RightPanel() {
                 workspaceId: activeWorkspaceId,
                 limit: '100',
                 includeTrashed: showTrashed ? 'true' : 'false',
+                type: filter,
+                favoritesOnly: favoritesOnly ? 'true' : 'false',
+                q: gallerySearchQuery,
+                sort: gallerySort,
             });
 
             const response = await fetch(`/api/gallery/assets?${params.toString()}`);
@@ -168,7 +172,7 @@ export default function RightPanel() {
         } finally {
             setIsLoadingGallery(false);
         }
-    }, [activeWorkspaceId, showTrashed]);
+    }, [activeWorkspaceId, showTrashed, filter, favoritesOnly, gallerySearchQuery, gallerySort]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -183,8 +187,12 @@ export default function RightPanel() {
             return;
         }
         void fetchJobsPage(1, false);
+    }, [filter, activeWorkspaceId, fetchJobsPage]);
+
+    useEffect(() => {
+        if (!activeWorkspaceId) return;
         void fetchGalleryAssets();
-    }, [filter, activeWorkspaceId, fetchJobsPage, fetchGalleryAssets]);
+    }, [activeWorkspaceId, fetchGalleryAssets]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
@@ -254,31 +262,7 @@ export default function RightPanel() {
     };
 
     const filteredJobs = loadedJobs;
-    const filteredGalleryAssets = galleryAssets
-        .filter(asset => galleryFilter(asset, filter))
-        .filter(asset => showTrashed ? asset.trashed : !asset.trashed)
-        .filter(asset => favoritesOnly ? asset.favorited : true)
-        .filter(asset => {
-            const query = gallerySearchQuery.trim().toLowerCase();
-            if (!query) return true;
-            const haystack = [
-                asset.id,
-                asset.sourceJobId || '',
-                asset.sourceOutputId || '',
-                ...(asset.userTags || []),
-            ].join(' ').toLowerCase();
-            return haystack.includes(query);
-        })
-        .sort((a, b) => {
-            if (gallerySort === 'favorites') {
-                if (a.favorited !== b.favorited) return a.favorited ? -1 : 1;
-                return new Date(b.addedToGalleryAt).getTime() - new Date(a.addedToGalleryAt).getTime();
-            }
-            if (gallerySort === 'oldest') {
-                return new Date(a.addedToGalleryAt).getTime() - new Date(b.addedToGalleryAt).getTime();
-            }
-            return new Date(b.addedToGalleryAt).getTime() - new Date(a.addedToGalleryAt).getTime();
-        });
+    const filteredGalleryAssets = galleryAssets;
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
