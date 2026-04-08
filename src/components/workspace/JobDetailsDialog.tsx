@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { Download, Trash2, Copy } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
@@ -30,9 +31,11 @@ type JobOutput = {
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
     const { deleteJob } = useStudio();
     const { t } = useI18n();
+    const { showToast } = useToast();
 
     const [jobOutputs, setJobOutputs] = useState<JobOutput[]>([]);
     const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
+    const [isSavingToGallery, setIsSavingToGallery] = useState(false);
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -121,14 +124,50 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     };
 
     const handleDelete = () => {
-        // ... (existing handleDelete)
         if (job && confirm('Are you sure you want to delete this job?')) {
             deleteJob(job.id);
             onOpenChange(false);
         }
     };
 
-    // ... (existing handleCopyPrompt)
+    const handleAddToGallery = async () => {
+        if (!job || !selectedOutput || selectedOutput.alreadyInGallery || isSavingToGallery) return;
+
+        setIsSavingToGallery(true);
+        try {
+            const response = await fetch('/api/gallery/assets/from-job-output', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jobId: job.id,
+                    outputId: selectedOutput.outputId,
+                }),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to add output to gallery');
+            }
+
+            setJobOutputs((prev) => prev.map((output, index) => {
+                if (index !== selectedOutputIndex) return output;
+                return {
+                    ...output,
+                    alreadyInGallery: true,
+                    galleryAssetId: data.asset?.id || output.galleryAssetId,
+                };
+            }));
+
+            showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
+        } catch (error) {
+            console.error('Failed to save output to gallery:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to add output to Gallery', 'error');
+        } finally {
+            setIsSavingToGallery(false);
+        }
+    };
 
     const handleCopyPrompt = () => {
         if (job?.prompt) {
@@ -318,6 +357,14 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             <Button className="flex-1" variant="outline" onClick={handleDownload} disabled={!selectedOutput?.url}>
                                 <Download className="w-4 h-4 mr-2" />
                                 {t('jobDetails.download')}
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                variant="default"
+                                onClick={handleAddToGallery}
+                                disabled={!selectedOutput || selectedOutput.alreadyInGallery || isSavingToGallery}
+                            >
+                                {selectedOutput?.alreadyInGallery ? 'In Gallery' : isSavingToGallery ? 'Saving...' : 'Add to Gallery'}
                             </Button>
                             <Button
                                 variant="ghost"
