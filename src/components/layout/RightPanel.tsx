@@ -50,6 +50,7 @@ export default function RightPanel() {
     const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
     const [showTrashed, setShowTrashed] = useState(false);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
+    const [gallerySearchQuery, setGallerySearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -255,7 +256,18 @@ export default function RightPanel() {
     const filteredGalleryAssets = galleryAssets
         .filter(asset => galleryFilter(asset, filter))
         .filter(asset => showTrashed ? asset.trashed : !asset.trashed)
-        .filter(asset => favoritesOnly ? asset.favorited : true);
+        .filter(asset => favoritesOnly ? asset.favorited : true)
+        .filter(asset => {
+            const query = gallerySearchQuery.trim().toLowerCase();
+            if (!query) return true;
+            const haystack = [
+                asset.id,
+                asset.sourceJobId || '',
+                asset.sourceOutputId || '',
+                ...(asset.userTags || []),
+            ].join(' ').toLowerCase();
+            return haystack.includes(query);
+        });
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -459,7 +471,7 @@ export default function RightPanel() {
                             </button>
                         ))}
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
                             {(['all', 'image', 'video', 'audio'] as const).map((t) => (
                                 <button
@@ -496,6 +508,14 @@ export default function RightPanel() {
                             </Button>
                         </div>
                     </div>
+                    {panelMode === 'gallery' && (
+                        <Input
+                            value={gallerySearchQuery}
+                            onChange={(e) => setGallerySearchQuery(e.target.value)}
+                            placeholder="Search by tag, asset id, source job..."
+                            className="h-8 text-xs"
+                        />
+                    )}
                 </div>
             </div>
 
