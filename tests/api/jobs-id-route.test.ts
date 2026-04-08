@@ -63,4 +63,70 @@ describe('GET /api/jobs/[id]', () => {
       galleryAssetId: 'asset-2',
     });
   });
+
+  it('keeps supported media payload compatibility for video jobs', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-video',
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      status: 'completed',
+      type: 'video',
+      modelId: 'wan-video',
+      prompt: 'camera move',
+      options: JSON.stringify({ videos: ['/clip.mp4'] }),
+      resultUrl: '/clip.mp4',
+      thumbnailUrl: '/clip-thumb.png',
+      createdAt: new Date('2026-04-08T10:00:00Z'),
+      completedAt: new Date('2026-04-08T10:01:00Z'),
+    });
+
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([]);
+
+    const response = await GET(new Request('http://localhost/api/jobs/job-video') as any, {
+      params: Promise.resolve({ id: 'job-video' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.job.outputs[0]).toMatchObject({
+      outputId: 'output-1',
+      type: 'video',
+      url: '/clip.mp4',
+      previewUrl: '/clip.mp4',
+      thumbnailUrl: '/clip-thumb.png',
+    });
+  });
+
+  it('keeps supported media payload compatibility for audio jobs', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-audio',
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      status: 'completed',
+      type: 'audio',
+      modelId: 'musicgen',
+      prompt: 'ambient loop',
+      options: JSON.stringify({ audioUrl: '/track.mp3' }),
+      resultUrl: '/track.mp3',
+      thumbnailUrl: null,
+      createdAt: new Date('2026-04-08T10:00:00Z'),
+      completedAt: new Date('2026-04-08T10:01:00Z'),
+    });
+
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([]);
+
+    const response = await GET(new Request('http://localhost/api/jobs/job-audio') as any, {
+      params: Promise.resolve({ id: 'job-audio' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.job.outputs[0]).toMatchObject({
+      outputId: 'output-1',
+      type: 'audio',
+      url: '/track.mp3',
+      previewUrl: '/track.mp3',
+      thumbnailUrl: null,
+    });
+  });
 });
