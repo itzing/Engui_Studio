@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
     const q = (searchParams.get('q') || '').trim().toLowerCase();
+    const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       updatedAt: asset.updatedAt,
     }));
 
-    if (q) {
+    if (tokens.length > 0) {
       normalizedAssets = normalizedAssets.filter(asset => {
         const haystack = [
           asset.id,
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
           asset.sourceOutputId || '',
           ...(asset.userTags || []),
         ].join(' ').toLowerCase();
-        return haystack.includes(q);
+        return tokens.every(token => haystack.includes(token));
       });
     }
 

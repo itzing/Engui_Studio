@@ -263,6 +263,7 @@ export default function RightPanel() {
 
     const filteredJobs = loadedJobs;
     const filteredGalleryAssets = galleryAssets;
+    const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -349,8 +350,16 @@ export default function RightPanel() {
 
     const handleGalleryTagClick = (tag: string) => {
         setPanelMode('gallery');
-        setGallerySearchQuery(tag);
+        setGallerySearchQuery(prev => {
+            const tokens = Array.from(new Set(prev.split(/\s+/).map(token => token.trim()).filter(Boolean)));
+            if (tokens.includes(tag)) return prev;
+            return [...tokens, tag].join(' ');
+        });
         setShowTrashed(false);
+    };
+
+    const handleGalleryTokenRemove = (tokenToRemove: string) => {
+        setGallerySearchQuery(prev => prev.split(/\s+/).map(token => token.trim()).filter(Boolean).filter(token => token !== tokenToRemove).join(' '));
     };
 
     const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
@@ -510,22 +519,38 @@ export default function RightPanel() {
                         </div>
                     </div>
                     {panelMode === 'gallery' && (
-                        <div className="flex gap-2">
-                            <Input
-                                value={gallerySearchQuery}
-                                onChange={(e) => setGallerySearchQuery(e.target.value)}
-                                placeholder="Search by tag, asset id, source job..."
-                                className="h-8 text-xs"
-                            />
-                            <select
-                                value={gallerySort}
-                                onChange={(e) => setGallerySort(e.target.value as 'newest' | 'oldest' | 'favorites')}
-                                className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-                            >
-                                <option value="newest">Newest</option>
-                                <option value="oldest">Oldest</option>
-                                <option value="favorites">Favorites first</option>
-                            </select>
+                        <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <Input
+                                    value={gallerySearchQuery}
+                                    onChange={(e) => setGallerySearchQuery(e.target.value)}
+                                    placeholder="Search by tags, asset id, source job..."
+                                    className="h-8 text-xs"
+                                />
+                                <select
+                                    value={gallerySort}
+                                    onChange={(e) => setGallerySort(e.target.value as 'newest' | 'oldest' | 'favorites')}
+                                    className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                                >
+                                    <option value="newest">Newest</option>
+                                    <option value="oldest">Oldest</option>
+                                    <option value="favorites">Favorites first</option>
+                                </select>
+                            </div>
+                            {gallerySearchTokens.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                    {gallerySearchTokens.map(token => (
+                                        <button
+                                            key={token}
+                                            type="button"
+                                            onClick={() => handleGalleryTokenRemove(token)}
+                                            className="text-[10px] px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                                        >
+                                            {token} ×
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
