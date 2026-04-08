@@ -61,6 +61,7 @@ export default function RightPanel() {
     const [galleryHasNextPage, setGalleryHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
     const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+    const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const pageSize = 50;
@@ -437,6 +438,29 @@ export default function RightPanel() {
         }
     };
 
+    const handleGalleryBackfill = async () => {
+        if (!activeWorkspaceId || isBackfillingGallery) return;
+        setIsBackfillingGallery(true);
+        try {
+            const response = await fetch('/api/gallery/assets/backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workspaceId: activeWorkspaceId, limit: 100 }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to backfill gallery enrichment');
+            }
+            showToast(`Enriched ${data.processed || 0} gallery assets`, 'success');
+            void fetchGalleryAssets(1, false);
+        } catch (error) {
+            console.error('Failed to backfill gallery enrichment:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to backfill gallery enrichment', 'error');
+        } finally {
+            setIsBackfillingGallery(false);
+        }
+    };
+
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
@@ -575,9 +599,19 @@ export default function RightPanel() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                                 <div className="truncate">{gallerySummaryParts.join(' • ')}</div>
-                                {gallerySearchQuery !== debouncedGallerySearchQuery && (
-                                    <div className="text-blue-400">Updating...</div>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleGalleryBackfill()}
+                                        disabled={isBackfillingGallery}
+                                        className="text-[10px] text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                                    >
+                                        {isBackfillingGallery ? 'Enriching...' : 'Backfill tags'}
+                                    </button>
+                                    {gallerySearchQuery !== debouncedGallerySearchQuery && (
+                                        <div className="text-blue-400">Updating...</div>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex flex-wrap gap-1">
                                 {([

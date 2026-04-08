@@ -76,3 +76,26 @@ export async function enrichGalleryAsset(assetId: string) {
     autoTags,
   };
 }
+
+export async function backfillGalleryEnrichment(workspaceId: string, limit = 50) {
+  const assets = await prisma.galleryAsset.findMany({
+    where: {
+      workspaceId,
+      enrichmentStatus: { not: 'completed' },
+    },
+    orderBy: { addedToGalleryAt: 'desc' },
+    take: limit,
+    select: { id: true },
+  });
+
+  const results = [] as Array<{ id: string; autoTags: string[] }>;
+  for (const asset of assets) {
+    const enriched = await enrichGalleryAsset(asset.id);
+    results.push({ id: asset.id, autoTags: enriched.autoTags });
+  }
+
+  return {
+    processed: results.length,
+    results,
+  };
+}
