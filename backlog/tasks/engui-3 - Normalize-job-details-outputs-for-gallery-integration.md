@@ -1,9 +1,10 @@
 ---
 id: ENGUI-3
 title: Normalize job details outputs for gallery integration
-status: Planned
+status: In Progress
 assignee: []
 created_date: '2026-04-08 21:01'
+updated_date: '2026-04-08 21:06'
 labels:
   - gallery
   - jobs
