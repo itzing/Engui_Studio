@@ -293,8 +293,13 @@ export async function POST(request: NextRequest) {
                 const weight = loraWeight ? parseFloat(loraWeight) : 1.0;
                 // Extract just the filename (worker expects filename, not full path)
                 const loraFileName = lora.split('/').pop() || lora;
-                // Store as array format: [[filename, weight]]
+                // Store as array format for RunPod input: [[filename, weight]]
                 inputData['lora'] = [[loraFileName, weight]];
+
+                // Keep original UI values for reliable reuse in options
+                inputData['zImageLora'] = lora;
+                inputData['zImageLoraWeight'] = weight;
+
                 console.log(`🔍 Z-Image LoRA: [["${loraFileName}", ${weight}]]`);
             }
 
@@ -315,7 +320,7 @@ export async function POST(request: NextRequest) {
                 id: jobId,
                 userId,
                 workspaceId: workspaceId || null,
-                status: 'processing',
+                status: model.api.type === 'runpod' ? 'queued' : 'processing',
                 type: model.type,
                 modelId: model.id,
                 prompt: prompt || null,

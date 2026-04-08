@@ -452,6 +452,21 @@ class RunPodService {
     return data;
   }
 
+
+  async cancelJob(jobId: string): Promise<boolean> {
+    const response = await this.fetchWithRetry(`${this.baseUrl}/cancel/${jobId}`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`RunPod cancel API error: ${response.status} - ${errorText}`);
+    }
+
+    return true;
+  }
+
   async waitForCompletion(jobId: string, maxWaitTime?: number): Promise<RunPodJobResponse> {
     const startTime = Date.now();
     const pollInterval = 5000; // 5 seconds

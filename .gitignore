@@ -80,4 +80,6 @@ temp_status.txt
 # Claude Code
 .claude/
 
-/videosos
+/videos
+/generations/
+/src/app/generations/

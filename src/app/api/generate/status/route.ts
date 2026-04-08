@@ -3,9 +3,52 @@ import { PrismaClient } from '@prisma/client';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
 import { getModelById } from '@/lib/models/modelConfig';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
+
+function getResultEncryptionKey(settings: any): Buffer | null {
+    const keyBase64 = settings?.runpod?.zImageFieldEncKeyB64 || process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    if (!keyBase64 || typeof keyBase64 !== 'string' || keyBase64.trim() === '') {
+        return null;
+    }
+
+    const key = Buffer.from(keyBase64, 'base64');
+    if (key.length !== 32) {
+        throw new Error(`Invalid result encryption key length: expected 32 bytes, got ${key.length}`);
+    }
+
+    return key;
+}
+
+function decryptEncryptedImageBlock(block: any, key: Buffer): string {
+    if (!block || typeof block !== 'object') {
+        throw new Error('Encrypted image block is missing');
+    }
+
+    const nonceB64 = block.nonce;
+    const ciphertextB64 = block.ciphertext;
+    if (!nonceB64 || !ciphertextB64) {
+        throw new Error('Encrypted image block is malformed');
+    }
+
+    const nonce = Buffer.from(nonceB64, 'base64');
+    const payload = Buffer.from(ciphertextB64, 'base64');
+    if (payload.length <= 16) {
+        throw new Error('Encrypted image payload is too short');
+    }
+
+    const ciphertext = payload.subarray(0, payload.length - 16);
+    const tag = payload.subarray(payload.length - 16);
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
+    decipher.setAAD(Buffer.from('engui:zimage:result:v1', 'utf-8'));
+    decipher.setAuthTag(tag);
+
+    const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return plain.toString('base64');
+}
 
 export async function GET(request: Request) {
     try {
@@ -71,6 +114,33 @@ export async function GET(request: Request) {
 
         const status = await runpodService.getJobStatus(runpodJobId);
 
+        let normalizedOutput: any = status.output;
+
+        if (model.id === 'z-image' && normalizedOutput && typeof normalizedOutput === 'object' && normalizedOutput.image_encrypted) {
+            const key = getResultEncryptionKey(settings);
+            if (!key) {
+                return NextResponse.json({
+                    success: true,
+                    status: 'FAILED',
+                    error: 'Missing result decryption key (zImageFieldEncKeyB64)',
+                });
+            }
+
+            try {
+                const decryptedBase64 = decryptEncryptedImageBlock(normalizedOutput.image_encrypted, key);
+                normalizedOutput = {
+                    ...normalizedOutput,
+                    image: decryptedBase64,
+                };
+            } catch (decryptError: any) {
+                return NextResponse.json({
+                    success: true,
+                    status: 'FAILED',
+                    error: `Failed to decrypt image output: ${decryptError.message}`,
+                });
+            }
+        }
+
         // Job이 실패한 경우에만 DB 업데이트
         // IN_QUEUE는 job이 아직 준비 중일 수 있으므로 failed로 처리하지 않음
         if (status.status === 'FAILED' && status.error && !status.error.includes('initializing')) {
@@ -99,7 +169,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             success: true,
             status: status.status,
-            output: status.output,
+            output: normalizedOutput,
             error: status.error
         });
 

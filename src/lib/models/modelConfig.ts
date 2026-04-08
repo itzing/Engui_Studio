@@ -308,7 +308,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'guidance', label: 'Guidance Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
             { name: 'seed', label: 'Seed', type: 'number', default: 1234, description: '-1 for random', group: 'advanced' },
             // { name: 'lora', label: 'LoRA Model', type: 'lora-selector', default: '', group: 'advanced', description: 'LoRA model for custom styling' },
-            // { name: 'loraWeight', label: 'LoRA Weight', type: 'number', default: 1.0, min: 0.1, max: 2.0, step: 0.1, group: 'advanced' }
+            // { name: 'loraWeight', label: 'LoRA Weight', type: 'number', default: 1.0, min: -2.0, max: 2.0, step: 0.1, group: 'advanced' }
         ]
     },
     {
@@ -357,7 +357,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'steps', label: 'Steps', type: 'number', default: 9, min: 1, max: 50, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 0.1, max: 20, step: 0.1, group: 'advanced' },
             { name: 'lora', label: 'LoRA Model', type: 'lora-selector', default: '', group: 'advanced', description: 'LoRA model for custom styling' },
-            { name: 'loraWeight', label: 'LoRA Weight', type: 'number', default: 1.0, min: 0.1, max: 2.0, step: 0.1, group: 'advanced' }
+            { name: 'loraWeight', label: 'LoRA Weight', type: 'number', default: 1.0, min: -2.0, max: 2.0, step: 0.1, group: 'advanced' }
         ]
     },
 

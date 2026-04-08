@@ -75,6 +75,21 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         }
     };
 
+    const getExecutionLabel = () => {
+        if (!job) return null;
+        try {
+            const opts = typeof (job as any).options === 'string' ? JSON.parse((job as any).options) : ((job as any).options || {});
+            const raw = opts?.executionMs;
+            let ms: number | null = null;
+            if (typeof raw === 'number' && Number.isFinite(raw)) ms = raw;
+            else if (typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))) ms = Number(raw);
+            if (ms === null) return null;
+            return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+        } catch {
+            return null;
+        }
+    };
+
     const handleDialogKeyDownCapture = (event: React.KeyboardEvent) => {
         const target = event.target as HTMLElement | null;
         const tagName = target?.tagName;
@@ -190,6 +205,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <div className="text-sm font-medium">
                                         {new Date(job.createdAt).toLocaleTimeString()}
                                     </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-xs text-muted-foreground">Execution</span>
+                                    <div className="text-sm font-medium">{getExecutionLabel() || '—'}</div>
                                 </div>
                             </div>
 

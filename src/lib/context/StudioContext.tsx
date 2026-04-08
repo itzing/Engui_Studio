@@ -750,6 +750,43 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                     const data = await response.json();
 
                     if (data.success) {
+                        if (data.status === 'IN_QUEUE') {
+                            if (job.status !== 'queued') {
+                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'queued' } : j));
+                                await fetch(`/api/jobs/${job.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ status: 'queued' })
+                                });
+                            }
+                            continue;
+                        }
+
+                        if (data.status === 'IN_PROGRESS') {
+                            const rawOptions = (job as any).options;
+                            const parsedOptions = typeof rawOptions === 'string'
+                                ? (() => { try { return JSON.parse(rawOptions); } catch { return {}; } })()
+                                : (rawOptions || {});
+
+                            if (!parsedOptions.runStartedAt) {
+                                parsedOptions.runStartedAt = Date.now();
+                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing', options: parsedOptions } : j));
+                                await fetch(`/api/jobs/${job.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ status: 'processing', options: JSON.stringify(parsedOptions) })
+                                });
+                            } else if (job.status !== 'processing') {
+                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing' } : j));
+                                await fetch(`/api/jobs/${job.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ status: 'processing' })
+                                });
+                            }
+                            continue;
+                        }
+
                         if (data.status === 'COMPLETED') {
                             console.log('Job Completed. Output:', data.output); // Debug logging
 
@@ -821,6 +858,32 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                                 } catch (err) {
                                     console.error('Error calling download API:', err);
                                 }
+                            }
+
+                            const rawOptions = (job as any).options;
+                            const parsedOptions = typeof rawOptions === 'string'
+                                ? (() => { try { return JSON.parse(rawOptions); } catch { return {}; } })()
+                                : (rawOptions || {});
+
+                            let executionMs: number | undefined;
+                            const rawExec = data.executionTime ?? data.execution_time ?? data?.metrics?.executionTime;
+                            if (typeof rawExec === 'number' && Number.isFinite(rawExec)) {
+                                executionMs = rawExec > 1000 ? Math.round(rawExec) : Math.round(rawExec * 1000);
+                            } else if (typeof rawExec === 'string' && rawExec.trim() !== '' && !Number.isNaN(Number(rawExec))) {
+                                const parsed = Number(rawExec);
+                                executionMs = parsed > 1000 ? Math.round(parsed) : Math.round(parsed * 1000);
+                            } else if (parsedOptions.runStartedAt) {
+                                executionMs = Math.max(0, Date.now() - Number(parsedOptions.runStartedAt));
+                            }
+
+                            if (executionMs !== undefined) {
+                                parsedOptions.executionMs = executionMs;
+                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, options: parsedOptions } : j));
+                                await fetch(`/api/jobs/${job.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ options: JSON.stringify(parsedOptions) })
+                                });
                             }
 
                             updateJobStatus(job.id, 'completed', resultUrl);

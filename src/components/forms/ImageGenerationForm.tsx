@@ -29,6 +29,7 @@ export default function ImageGenerationForm() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const formRef = useRef<HTMLDivElement>(null);
+    const formElementRef = useRef<HTMLFormElement>(null);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -100,6 +101,29 @@ export default function ImageGenerationForm() {
         }
     };
 
+    const getLorasForReuse = async (): Promise<LoRAFile[]> => {
+        if (availableLoras.length > 0) {
+            return availableLoras;
+        }
+
+        if (!activeWorkspaceId) {
+            return [];
+        }
+
+        try {
+            const response = await fetch(`/api/lora?workspaceId=${activeWorkspaceId}`);
+            const data = await response.json();
+            if (data.success && Array.isArray(data.loras)) {
+                setAvailableLoras(data.loras);
+                return data.loras;
+            }
+        } catch (error) {
+            console.error('Error fetching LoRAs for reuse:', error);
+        }
+
+        return [];
+    };
+
     // Initialize parameter values with defaults when model changes
     useEffect(() => {
         if (currentModel) {
@@ -153,6 +177,53 @@ export default function ImageGenerationForm() {
 
                 // Parse options safely
                 const parsedOptions = typeof options === 'string' ? JSON.parse(options) : (options || {});
+
+                const loraPool = modelId === 'z-image' ? await getLorasForReuse() : [];
+
+                // Normalize z-image LoRA reuse fields
+                if (modelId === 'z-image') {
+                    // Preferred fields (saved specifically for UI reuse)
+                    if (parsedOptions.zImageLora && parsedOptions.lora === undefined) {
+                        parsedOptions.lora = parsedOptions.zImageLora;
+                    }
+                    if (parsedOptions.zImageLoraWeight !== undefined && parsedOptions.loraWeight === undefined) {
+                        parsedOptions.loraWeight = parsedOptions.zImageLoraWeight;
+                    }
+
+                    // Backward compatibility: if only array form exists, infer loraWeight
+                    if (Array.isArray(parsedOptions.lora) && parsedOptions.lora.length > 0) {
+                        const first = parsedOptions.lora[0];
+                        if (Array.isArray(first)) {
+                            if (parsedOptions.loraWeight === undefined && first.length > 1) {
+                                parsedOptions.loraWeight = first[1];
+                            }
+                            // Keep selector value only if it is a string path/name
+                            if (typeof first[0] === 'string') {
+                                parsedOptions.lora = first[0];
+                            }
+                        }
+                    }
+
+                    // If LoRA value is just a filename, resolve it to full s3Path for selector.
+                    if (typeof parsedOptions.lora === 'string' && parsedOptions.lora.trim() !== '') {
+                        const currentLoraValue = parsedOptions.lora.trim();
+                        const lowerValue = currentLoraValue.toLowerCase();
+
+                        const matchedLora = loraPool.find((lora) => {
+                            const s3Path = (lora.s3Path || '').toLowerCase();
+                            const fileName = (lora.fileName || '').toLowerCase();
+                            return (
+                                s3Path === lowerValue ||
+                                fileName === lowerValue ||
+                                s3Path.endsWith('/' + lowerValue)
+                            );
+                        });
+
+                        if (matchedLora?.s3Path) {
+                            parsedOptions.lora = matchedLora.s3Path;
+                        }
+                    }
+                }
 
                 // Load image file from path if exists
                 const imagePath = imageInputPath || parsedOptions.image_path;
@@ -521,6 +592,23 @@ export default function ImageGenerationForm() {
         }
     };
 
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            const isSubmitShortcut = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+            if (!isSubmitShortcut) return;
+            if (isGenerating) return;
+            if (!formElementRef.current) return;
+
+            // Global shortcut: submit even when focus is outside the form.
+            event.preventDefault();
+            formElementRef.current.requestSubmit();
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isGenerating]);
+
     if (!currentModel) return <div>{t('generationForm.loading')}</div>;
 
     return (
@@ -591,7 +679,7 @@ export default function ImageGenerationForm() {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form ref={formElementRef} onSubmit={handleSubmit} className="space-y-4">
                 {/* Image Upload - conditionalInputs 기반으로 표시 */}
                 {isInputVisible(currentModel, 'image', parameterValues) && (
                     <div className="space-y-2">

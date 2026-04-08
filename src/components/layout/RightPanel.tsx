@@ -146,6 +146,21 @@ export default function RightPanel() {
         setDetailsOpen(true);
     };
 
+    const emitHoverPreview = (job: Job | null) => {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('jobHoverPreview', {
+            detail: job ? {
+                id: job.id,
+                type: job.type,
+                url: job.resultUrl,
+                prompt: job.prompt,
+                modelId: job.modelId,
+                status: job.status,
+                createdAt: job.createdAt,
+            } : null
+        }));
+    };
+
     const handleDeleteJob = (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation();
         if (confirm('Are you sure you want to delete this generation?')) {
@@ -205,6 +220,25 @@ export default function RightPanel() {
         ? filteredJobs.findIndex(job => job.id === selectedJob.id)
         : -1;
     const selectedJobPosition = selectedJobIndex >= 0 ? selectedJobIndex + 1 : 0;
+
+    const getExecutionMs = (job: Job): number | null => {
+        try {
+            const rawOptions = (job as any).options;
+            const opts = typeof rawOptions === 'string' ? JSON.parse(rawOptions) : (rawOptions || {});
+            const v = opts?.executionMs;
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
+            return null;
+        } catch {
+            return null;
+        }
+    };
+
+    const formatExecution = (ms: number | null) => {
+        if (ms === null) return null;
+        if (ms < 1000) return `${ms}ms`;
+        return `${(ms / 1000).toFixed(1)}s`;
+    };
 
     // Helper to format time ago
     const timeAgo = (date: number) => {
@@ -309,10 +343,12 @@ export default function RightPanel() {
                 ) : (
                     filteredJobs.map(job => {
                         const model = getModelById(job.modelId);
+                        const executionLabel = formatExecution(getExecutionMs(job));
                         return (
                             <div
                                 key={job.id}
                                 onClick={() => handleJobClick(job)}
+                                onMouseEnter={() => emitHoverPreview(job)}
                                 className="group flex gap-3 p-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative"
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
@@ -394,8 +430,17 @@ export default function RightPanel() {
                                             {timeAgo(job.createdAt)}
                                         </span>
                                         <div className="flex items-center gap-2">
+                                            {job.status === 'queued' && (
+                                                <span className="text-[9px] text-amber-500 font-medium">In Queue</span>
+                                            )}
+                                            {job.status === 'processing' && (
+                                                <span className="text-[9px] text-blue-500 font-medium">Running</span>
+                                            )}
                                             {job.status === 'failed' && (
                                                 <span className="text-[9px] text-red-500 font-medium">Failed</span>
+                                            )}
+                                            {job.status === 'completed' && executionLabel && (
+                                                <span className="text-[9px] text-emerald-500 font-medium">⏱ {executionLabel}</span>
                                             )}
                                         </div>
                                     </div>

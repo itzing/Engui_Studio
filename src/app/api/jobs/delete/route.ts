@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import RunPodService from '@/lib/runpodService';
+import SettingsService from '@/lib/settingsService';
 
 const prisma = new PrismaClient();
+
+const RUNNING_STATUSES = new Set(['processing', 'queued', 'in_queue', 'in_progress']);
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -11,32 +15,64 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
 
-    // 작업 삭제
-    const deletedJob = await prisma.job.delete({
-      where: { id: jobId }
-    });
+    const job = await prisma.job.findUnique({ where: { id: jobId } });
+    if (!job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
 
-    // 관련 파일들도 정리 (선택사항)
-    // 여기서는 데이터베이스 레코드만 삭제
+    const status = String(job.status || '').toLowerCase();
+    const shouldCancelRemote = RUNNING_STATUSES.has(status);
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Job deleted successfully',
-      deletedJob 
+    if (shouldCancelRemote) {
+      const settingsService = new SettingsService();
+      const { settings } = await settingsService.getSettings('user-with-settings');
+
+      const runpodApiKey = settings.apiKeys?.runpod || request.headers.get('x-runpod-key') || undefined;
+      const endpointFromModelMap = settings.runpod?.endpoints?.[job.modelId || ''];
+      const endpointId = job.endpointId || endpointFromModelMap;
+      const runpodJobId = job.runpodJobId || (() => {
+        try {
+          if (!job.options) return undefined;
+          const options = typeof job.options === 'string' ? JSON.parse(job.options) : (job.options as any);
+          return options?.runpodJobId;
+        } catch {
+          return undefined;
+        }
+      })();
+
+      if (runpodApiKey && endpointId && runpodJobId) {
+        const runpodService = new RunPodService(runpodApiKey, endpointId);
+        await runpodService.cancelJob(runpodJobId);
+      } else {
+        return NextResponse.json({
+          error: 'Cannot cancel remote RunPod job before delete',
+          details: {
+            hasRunPodApiKey: !!runpodApiKey,
+            hasEndpointId: !!endpointId,
+            hasRunpodJobId: !!runpodJobId,
+          }
+        }, { status: 400 });
+      }
+    }
+
+    const deletedJob = await prisma.job.delete({ where: { id: jobId } });
+
+    return NextResponse.json({
+      success: true,
+      message: shouldCancelRemote ? 'Job canceled on RunPod and deleted locally' : 'Job deleted locally',
+      deletedJob,
     });
 
   } catch (error) {
     console.error('Error deleting job:', error);
-    
+
     if (error instanceof Error) {
-      return NextResponse.json({ 
-        error: 'Failed to delete job', 
-        details: error.message 
+      return NextResponse.json({
+        error: 'Failed to delete job',
+        details: error.message,
       }, { status: 500 });
     }
-    
-    return NextResponse.json({ 
-      error: 'Failed to delete job' 
-    }, { status: 500 });
+
+    return NextResponse.json({ error: 'Failed to delete job' }, { status: 500 });
   }
 }
