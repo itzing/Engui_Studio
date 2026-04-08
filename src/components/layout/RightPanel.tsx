@@ -51,6 +51,7 @@ export default function RightPanel() {
     const [showTrashed, setShowTrashed] = useState(false);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [gallerySearchQuery, setGallerySearchQuery] = useState('');
+    const [debouncedGallerySearchQuery, setDebouncedGallerySearchQuery] = useState('');
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
@@ -97,6 +98,13 @@ export default function RightPanel() {
         }
     }, [isCreatingWorkspace]);
 
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setDebouncedGallerySearchQuery(gallerySearchQuery);
+        }, 250);
+
+        return () => window.clearTimeout(timeout);
+    }, [gallerySearchQuery]);
 
     const getApiType = (currentFilter: 'all' | 'image' | 'video' | 'audio') => {
         if (currentFilter === 'all') return '';
@@ -164,7 +172,7 @@ export default function RightPanel() {
                 includeTrashed: showTrashed ? 'true' : 'false',
                 type: filter,
                 favoritesOnly: favoritesOnly ? 'true' : 'false',
-                q: gallerySearchQuery,
+                q: debouncedGallerySearchQuery,
                 sort: gallerySort,
             });
 
@@ -187,7 +195,7 @@ export default function RightPanel() {
             setIsLoadingGallery(false);
             setIsLoadingMoreGallery(false);
         }
-    }, [activeWorkspaceId, showTrashed, filter, favoritesOnly, gallerySearchQuery, gallerySort]);
+    }, [activeWorkspaceId, showTrashed, filter, favoritesOnly, debouncedGallerySearchQuery, gallerySort]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -281,6 +289,12 @@ export default function RightPanel() {
     const filteredJobs = loadedJobs;
     const filteredGalleryAssets = galleryAssets;
     const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
+    const gallerySummaryParts = [
+        `${filteredGalleryAssets.length} assets`,
+        filter !== 'all' ? filter : null,
+        favoritesOnly ? 'favorites' : null,
+        showTrashed ? 'trash' : 'active',
+    ].filter(Boolean);
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -537,6 +551,12 @@ export default function RightPanel() {
                     </div>
                     {panelMode === 'gallery' && (
                         <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                                <div className="truncate">{gallerySummaryParts.join(' • ')}</div>
+                                {gallerySearchQuery !== debouncedGallerySearchQuery && (
+                                    <div className="text-blue-400">Updating...</div>
+                                )}
+                            </div>
                             <div className="flex gap-2">
                                 <Input
                                     value={gallerySearchQuery}
@@ -584,11 +604,18 @@ export default function RightPanel() {
                     </div>
                 ) : panelMode === 'gallery' ? (
                     filteredGalleryAssets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+                        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2 px-4 text-center">
                             <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
                                 <FolderPlus className="w-5 h-5 opacity-50" />
                             </div>
                             <div className="text-xs">No gallery assets found</div>
+                            <div className="text-[10px] opacity-70">
+                                {gallerySearchTokens.length > 0
+                                    ? 'Try removing a token or changing filters'
+                                    : showTrashed
+                                        ? 'Trash is empty for this selection'
+                                        : 'Save items to gallery or broaden the current filters'}
+                            </div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 p-2">
