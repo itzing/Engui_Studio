@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { enrichGalleryAsset } from '@/lib/galleryEnrichment';
+import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {
   if (!rawOptions) return {};
@@ -178,6 +179,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    queueGalleryDerivatives(asset.id);
     const enriched = await enrichGalleryAsset(asset.id);
 
     return NextResponse.json({

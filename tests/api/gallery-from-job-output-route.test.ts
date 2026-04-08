@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPrisma, enrichGalleryAssetMock } = vi.hoisted(() => ({
+const { mockPrisma, enrichGalleryAssetMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
   mockPrisma: {
     job: { findUnique: vi.fn() },
     galleryAsset: { findUnique: vi.fn(), create: vi.fn() },
   },
   enrichGalleryAssetMock: vi.fn(),
+  queueGalleryDerivativesMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
 vi.mock('@/lib/galleryEnrichment', () => ({ enrichGalleryAsset: enrichGalleryAssetMock }));
+vi.mock('@/lib/galleryDerivatives', () => ({ queueGalleryDerivatives: queueGalleryDerivativesMock }));
 vi.mock('fs', () => ({
   default: {
     existsSync: vi.fn(() => true),
@@ -63,6 +65,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     expect(response.status).toBe(200);
     expect(json).toMatchObject({ success: true, alreadyInGallery: false, autoTags: ['portrait', 'client-a'] });
     expect(mockPrisma.galleryAsset.create).toHaveBeenCalledTimes(1);
+    expect(queueGalleryDerivativesMock).toHaveBeenCalledWith('asset-new');
     expect(enrichGalleryAssetMock).toHaveBeenCalledWith('asset-new');
   });
 });

@@ -62,6 +62,7 @@ export default function RightPanel() {
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
     const [isLoadingGallery, setIsLoadingGallery] = useState(false);
     const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
+    const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const pageSize = 50;
@@ -461,6 +462,29 @@ export default function RightPanel() {
         }
     };
 
+    const handleGalleryDerivativesBackfill = async () => {
+        if (!activeWorkspaceId || isBackfillingDerivatives) return;
+        setIsBackfillingDerivatives(true);
+        try {
+            const response = await fetch('/api/gallery/assets/derivatives/backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workspaceId: activeWorkspaceId, limit: 100 }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to backfill gallery derivatives');
+            }
+            showToast(`Generated derivatives for ${data.processed || 0} gallery assets`, 'success');
+            void fetchGalleryAssets(1, false);
+        } catch (error) {
+            console.error('Failed to backfill gallery derivatives:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to backfill gallery derivatives', 'error');
+        } finally {
+            setIsBackfillingDerivatives(false);
+        }
+    };
+
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
@@ -607,6 +631,14 @@ export default function RightPanel() {
                                         className="text-[10px] text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
                                     >
                                         {isBackfillingGallery ? 'Enriching...' : 'Backfill tags'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleGalleryDerivativesBackfill()}
+                                        disabled={isBackfillingDerivatives}
+                                        className="text-[10px] text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                                    >
+                                        {isBackfillingDerivatives ? 'Generating...' : 'Backfill previews'}
                                     </button>
                                     {gallerySearchQuery !== debouncedGallerySearchQuery && (
                                         <div className="text-blue-400">Updating...</div>
