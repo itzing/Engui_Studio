@@ -28,6 +28,7 @@ type GalleryAsset = {
     thumbnailUrl?: string | null;
     favorited: boolean;
     trashed: boolean;
+    userTags?: string[];
     sourceJobId?: string | null;
     sourceOutputId?: string | null;
     addedToGalleryAt: string;
@@ -339,6 +340,28 @@ export default function RightPanel() {
         }
     };
 
+    const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
+        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: tags } : item));
+        setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: tags } : prev);
+        try {
+            const response = await fetch(`/api/gallery/assets/${asset.id}/tags`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to save tags');
+            }
+            showToast('Tags saved', 'success');
+        } catch (error) {
+            console.error('Failed to save tags:', error);
+            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: asset.userTags || [] } : item));
+            setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: asset.userTags || [] } : prev);
+            showToast(error instanceof Error ? error.message : 'Failed to save tags', 'error');
+        }
+    };
+
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
@@ -535,6 +558,13 @@ export default function RightPanel() {
                                             {asset.favorited && <span className="text-pink-400">♥</span>}
                                         </div>
                                         <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
+                                        {!!asset.userTags?.length && (
+                                            <div className="flex flex-wrap gap-1 pt-1">
+                                                {asset.userTags.slice(0, 2).map(tag => (
+                                                    <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{tag}</span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </button>
                             ))}
@@ -809,6 +839,7 @@ export default function RightPanel() {
                 onOpenChange={setGalleryDetailsOpen}
                 onToggleFavorite={() => selectedGalleryAsset && void handleGalleryFavorite({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
                 onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset, !selectedGalleryAsset.trashed)}
+                onSaveTags={(tags) => selectedGalleryAsset ? handleGallerySaveTags(selectedGalleryAsset, tags) : undefined}
             />
         </div>
     );

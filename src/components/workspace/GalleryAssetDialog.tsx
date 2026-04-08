@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2 } from 'lucide-react';
@@ -14,6 +14,7 @@ export type GalleryAssetDialogAsset = {
   thumbnailUrl?: string | null;
   favorited: boolean;
   trashed: boolean;
+  userTags?: string[];
   sourceJobId?: string | null;
   sourceOutputId?: string | null;
   addedToGalleryAt: string;
@@ -25,10 +26,16 @@ interface GalleryAssetDialogProps {
   onOpenChange: (open: boolean) => void;
   onToggleFavorite: () => void;
   onTrash: () => void;
+  onSaveTags: (tags: string[]) => Promise<void> | void;
 }
 
-export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash }: GalleryAssetDialogProps) {
+export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onSaveTags }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
+  const [tagsInput, setTagsInput] = useState('');
+
+  useEffect(() => {
+    setTagsInput((asset?.userTags || []).join(', '));
+  }, [asset?.id, asset?.userTags]);
 
   const handleDownload = async () => {
     if (!asset) return;
@@ -94,6 +101,27 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                     {asset.favorited && <span className="text-[11px] px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">Favorited</span>}
                     {!asset.trashed ? <span className="text-[11px] px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20">Active</span> : <span className="text-[11px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">Trashed</span>}
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-xs text-muted-foreground">Tags</span>
+                  <input
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    placeholder="portrait, favorites, client-a"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {(asset.userTags || []).map(tag => (
+                      <span key={tag} className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{tag}</span>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSaveTags(tagsInput.split(',').map(tag => tag.trim()).filter(Boolean))}
+                  >
+                    Save Tags
+                  </Button>
                 </div>
               </div>
             </div>
