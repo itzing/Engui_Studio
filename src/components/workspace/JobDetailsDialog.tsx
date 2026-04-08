@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, X, Copy, ExternalLink } from 'lucide-react';
+import { Download, Trash2, Copy } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -17,21 +17,83 @@ interface JobDetailsDialogProps {
     totalCount?: number;
 }
 
+type JobOutput = {
+    outputId: string;
+    type: 'image' | 'video' | 'audio';
+    url: string;
+    previewUrl: string | null;
+    thumbnailUrl: string | null;
+    alreadyInGallery: boolean;
+    galleryAssetId: string | null;
+};
+
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
     const { deleteJob } = useStudio();
     const { t } = useI18n();
 
+    const [jobOutputs, setJobOutputs] = useState<JobOutput[]>([]);
+    const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
+
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
-    // or we render empty content if it somehow opens without a job
     const safeOpen = open && !!job;
     const model = job ? getModelById(job.modelId) : null;
-    const isVideo = job?.type === 'video';
-    const isAudio = job?.type === 'audio' || job?.type === 'tts' || job?.type === 'music';
+
+    useEffect(() => {
+        if (!job || !safeOpen) {
+            setJobOutputs([]);
+            setSelectedOutputIndex(0);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadJobDetails = async () => {
+            try {
+                const response = await fetch(`/api/jobs/${job.id}`);
+                const data = await response.json();
+                if (!cancelled && data.success && Array.isArray(data.job?.outputs)) {
+                    setJobOutputs(data.job.outputs);
+                    setSelectedOutputIndex(0);
+                }
+            } catch (error) {
+                console.error('Failed to load job outputs:', error);
+            }
+        };
+
+        void loadJobDetails();
+        return () => {
+            cancelled = true;
+        };
+    }, [job?.id, safeOpen]);
+
+    const fallbackOutput = useMemo<JobOutput | null>(() => {
+        if (!job?.resultUrl) return null;
+        const type: 'image' | 'video' | 'audio' = job.type === 'video'
+            ? 'video'
+            : (job.type === 'audio' || job.type === 'tts' || job.type === 'music')
+                ? 'audio'
+                : 'image';
+
+        return {
+            outputId: 'output-1',
+            type,
+            url: job.resultUrl,
+            previewUrl: job.resultUrl,
+            thumbnailUrl: null,
+            alreadyInGallery: false,
+            galleryAssetId: null,
+        };
+    }, [job]);
+
+    const outputs = jobOutputs.length > 0 ? jobOutputs : (fallbackOutput ? [fallbackOutput] : []);
+    const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
+    const isVideo = selectedOutput?.type === 'video';
+    const isAudio = selectedOutput?.type === 'audio';
 
     const handleDownload = async () => {
-        if (!job?.resultUrl) return;
+        if (!job || !selectedOutput?.url) return;
         try {
-            const response = await fetch(job.resultUrl);
+            const response = await fetch(selectedOutput.url);
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -41,18 +103,17 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
             if (isVideo) ext = 'mp4';
             if (isAudio) ext = 'mp3';
 
-            a.download = `job-${job.id}.${ext}`;
+            a.download = `job-${job.id}-${selectedOutput.outputId}.${ext}`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (error) {
             console.error('Download failed:', error);
-            // Fallback
             const a = document.createElement('a');
-            a.href = job.resultUrl;
+            a.href = selectedOutput.url;
             a.target = '_blank';
-            a.download = `job-${job.id}.${isVideo ? 'mp4' : isAudio ? 'mp3' : 'png'}`;
+            a.download = `job-${job.id}-${selectedOutput.outputId}.${isVideo ? 'mp4' : isAudio ? 'mp3' : 'png'}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -113,10 +174,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                 <DialogContent onKeyDownCapture={handleDialogKeyDownCapture} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
                     {/* Media Preview - Left/Top Side */}
                     <div className="flex-1 bg-black/90 flex items-center justify-center relative min-h-[300px] md:h-full overflow-hidden p-4">
-                        {job.status === 'completed' && job.resultUrl ? (
+                        {job.status === 'completed' && selectedOutput?.url ? (
                             isVideo ? (
                                 <video
-                                    src={job.resultUrl}
+                                    src={selectedOutput.url}
                                     controls
                                     loop
                                     className="max-w-full max-h-full object-contain"
@@ -129,7 +190,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                         </svg>
                                     </div>
                                     <audio
-                                        src={job.resultUrl}
+                                        src={selectedOutput.url}
                                         controls
                                         className="w-full"
                                     />
@@ -139,7 +200,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 </div>
                             ) : (
                                 <img
-                                    src={job.resultUrl}
+                                    src={selectedOutput.previewUrl || selectedOutput.url}
                                     alt={job.prompt || 'Generated Image'}
                                     className="max-w-full max-h-full object-contain"
                                 />
@@ -182,6 +243,27 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 </div>
                             </div>
 
+                            {outputs.length > 1 && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-medium text-foreground">Outputs</h3>
+                                        <span className="text-xs text-muted-foreground">{selectedOutputIndex + 1} / {outputs.length}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {outputs.map((output, index) => (
+                                            <button
+                                                key={output.outputId}
+                                                type="button"
+                                                onClick={() => setSelectedOutputIndex(index)}
+                                                className={`px-2 py-1 text-xs rounded border ${index === selectedOutputIndex ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted/50'}`}
+                                            >
+                                                {output.outputId}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Info Grid */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
@@ -210,6 +292,17 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <span className="text-xs text-muted-foreground">Execution</span>
                                     <div className="text-sm font-medium">{getExecutionLabel() || '—'}</div>
                                 </div>
+                                <div className="space-y-1 col-span-2">
+                                    <span className="text-xs text-muted-foreground">Selected Output</span>
+                                    <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                                        <span>{selectedOutput?.outputId || '—'}</span>
+                                        {selectedOutput?.alreadyInGallery && (
+                                            <span className="text-[11px] px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20">
+                                                Already in Gallery
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Error Message */}
@@ -222,7 +315,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
                         {/* Footer Actions */}
                         <div className="p-4 border-t border-border bg-muted/10 flex gap-2">
-                            <Button className="flex-1" variant="outline" onClick={handleDownload} disabled={!job.resultUrl}>
+                            <Button className="flex-1" variant="outline" onClick={handleDownload} disabled={!selectedOutput?.url}>
                                 <Download className="w-4 h-4 mr-2" />
                                 {t('jobDetails.download')}
                             </Button>
