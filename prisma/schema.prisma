@@ -124,6 +124,7 @@ model Workspace {
   // 관계 설정
   jobs        Job[]     @relation("WorkspaceJobs")
   media       WorkspaceMedia[] @relation("WorkspaceMedia")
+  galleryAssets GalleryAsset[]
   loras       LoRA[]
   
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
@@ -145,6 +146,36 @@ model WorkspaceMedia {
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@map("workspace_media")
+}
+
+model GalleryAsset {
+  id                   String    @id @default(uuid())
+  workspaceId          String
+  type                 String
+  originKind           String    @default("job_output")
+  sourceJobId          String?
+  sourceOutputId       String?
+  contentHash          String
+  originalUrl          String
+  previewUrl           String?
+  thumbnailUrl         String?
+  favorited            Boolean   @default(false)
+  trashed              Boolean   @default(false)
+  userTags             String?
+  autoTags             String?
+  generationSnapshot   String?
+  derivativeStatus     String    @default("pending")
+  enrichmentStatus     String    @default("pending")
+  addedToGalleryAt     DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, contentHash])
+  @@index([workspaceId, addedToGalleryAt(sort: Desc)])
+  @@index([workspaceId, trashed, addedToGalleryAt(sort: Desc)])
+  @@index([sourceJobId])
+  @@map("gallery_assets")
 }
 
 model VideoProject {
