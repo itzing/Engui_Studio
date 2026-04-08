@@ -98,6 +98,27 @@ export async function GET(
 
         const outputs = buildNormalizedOutputs(job);
 
+        if (job.workspaceId && outputs.length > 0) {
+            const galleryAssets = await prisma.galleryAsset.findMany({
+                where: {
+                    workspaceId: job.workspaceId,
+                    sourceJobId: job.id,
+                    trashed: false,
+                },
+                select: {
+                    id: true,
+                    sourceOutputId: true,
+                },
+            });
+
+            const byOutputId = new Map(galleryAssets.map(asset => [asset.sourceOutputId, asset.id]));
+            for (const output of outputs) {
+                const galleryAssetId = byOutputId.get(output.outputId) || null;
+                output.alreadyInGallery = !!galleryAssetId;
+                output.galleryAssetId = galleryAssetId;
+            }
+        }
+
         return NextResponse.json({
             success: true,
             job: {
