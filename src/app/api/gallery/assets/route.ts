@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
           asset.sourceJobId || '',
           asset.sourceOutputId || '',
           ...(asset.userTags || []),
+          ...(asset.autoTags || []),
         ].join(' ').toLowerCase();
         return tokens.every(token => haystack.includes(token));
       });

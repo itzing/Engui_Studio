@@ -15,8 +15,10 @@ export type GalleryAssetDialogAsset = {
   favorited: boolean;
   trashed: boolean;
   userTags?: string[];
+  autoTags?: string[];
   sourceJobId?: string | null;
   sourceOutputId?: string | null;
+  enrichmentStatus?: string;
   addedToGalleryAt: string;
 };
 
@@ -101,6 +103,8 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                   <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
                     {asset.favorited && <span className="text-[11px] px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">Favorited</span>}
                     {!asset.trashed ? <span className="text-[11px] px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20">Active</span> : <span className="text-[11px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">Trashed</span>}
+                    {asset.enrichmentStatus === 'completed' && <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Auto-tagged</span>}
+                    {asset.enrichmentStatus === 'pending' && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Enrichment pending</span>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -111,18 +115,40 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                     placeholder="portrait, favorites, client-a"
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
-                  <div className="flex flex-wrap gap-1">
-                    {(asset.userTags || []).map(tag => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => onTagClick(tag)}
-                        className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
+                  {!!asset.userTags?.length && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] text-muted-foreground">Manual tags</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(asset.userTags || []).map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => onTagClick(tag)}
+                            className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!!asset.autoTags?.length && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] text-muted-foreground">Auto tags</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(asset.autoTags || []).map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => onTagClick(tag)}
+                            className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

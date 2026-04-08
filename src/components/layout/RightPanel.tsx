@@ -29,8 +29,10 @@ type GalleryAsset = {
     favorited: boolean;
     trashed: boolean;
     userTags?: string[];
+    autoTags?: string[];
     sourceJobId?: string | null;
     sourceOutputId?: string | null;
+    enrichmentStatus?: string;
     addedToGalleryAt: string;
     updatedAt?: string;
 };
@@ -289,6 +291,15 @@ export default function RightPanel() {
     const filteredJobs = loadedJobs;
     const filteredGalleryAssets = galleryAssets;
     const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
+    const activeGalleryPreset = showTrashed
+        ? 'trash'
+        : favoritesOnly
+            ? 'favorites'
+            : filter === 'image'
+                ? 'images'
+                : filter === 'video'
+                    ? 'videos'
+                    : 'all';
     const gallerySummaryParts = [
         `${filteredGalleryAssets.length} assets`,
         filter !== 'all' ? filter : null,
@@ -391,6 +402,17 @@ export default function RightPanel() {
 
     const handleGalleryTokenRemove = (tokenToRemove: string) => {
         setGallerySearchQuery(prev => prev.split(/\s+/).map(token => token.trim()).filter(Boolean).filter(token => token !== tokenToRemove).join(' '));
+    };
+
+    const applyGalleryPreset = (preset: 'all' | 'favorites' | 'images' | 'videos' | 'trash') => {
+        setPanelMode('gallery');
+        setShowTrashed(preset === 'trash');
+        setFavoritesOnly(preset === 'favorites');
+        setFilter(preset === 'images' ? 'image' : preset === 'videos' ? 'video' : 'all');
+        if (preset === 'trash') {
+            setFavoritesOnly(false);
+            setFilter('all');
+        }
     };
 
     const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
@@ -557,6 +579,27 @@ export default function RightPanel() {
                                     <div className="text-blue-400">Updating...</div>
                                 )}
                             </div>
+                            <div className="flex flex-wrap gap-1">
+                                {([
+                                    ['all', 'All'],
+                                    ['favorites', 'Favorites'],
+                                    ['images', 'Images'],
+                                    ['videos', 'Videos'],
+                                    ['trash', 'Trash'],
+                                ] as const).map(([preset, label]) => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => applyGalleryPreset(preset)}
+                                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${activeGalleryPreset === preset
+                                            ? 'bg-background text-foreground border-border shadow-sm'
+                                            : 'bg-muted/20 text-muted-foreground border-border/50 hover:text-foreground hover:bg-muted/40'
+                                            }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                             <div className="flex gap-2">
                                 <Input
                                     value={gallerySearchQuery}
@@ -654,14 +697,20 @@ export default function RightPanel() {
                                         </button>
                                     </div>
                                     <div className="p-2 space-y-1">
-                                        <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1">
+                                        <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
                                             <span>{asset.type}</span>
                                             {asset.favorited && <span className="text-pink-400">♥</span>}
+                                            {asset.enrichmentStatus === 'completed' && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
+                                            )}
+                                            {asset.enrichmentStatus === 'pending' && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Pending</span>
+                                            )}
                                         </div>
                                         <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
-                                        {!!asset.userTags?.length && (
+                                        {!!(asset.userTags?.length || asset.autoTags?.length) && (
                                             <div className="flex flex-wrap gap-1 pt-1">
-                                                {asset.userTags.slice(0, 2).map(tag => (
+                                                {(asset.userTags || []).slice(0, 2).map(tag => (
                                                     <button
                                                         key={tag}
                                                         type="button"
@@ -670,6 +719,19 @@ export default function RightPanel() {
                                                             handleGalleryTagClick(tag);
                                                         }}
                                                         className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                                                    >
+                                                        {tag}
+                                                    </button>
+                                                ))}
+                                                {(asset.autoTags || []).slice(0, Math.max(0, 2 - (asset.userTags || []).length)).map(tag => (
+                                                    <button
+                                                        key={tag}
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleGalleryTagClick(tag);
+                                                        }}
+                                                        className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
                                                     >
                                                         {tag}
                                                     </button>
