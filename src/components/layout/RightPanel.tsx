@@ -54,9 +54,12 @@ export default function RightPanel() {
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
+    const [galleryPage, setGalleryPage] = useState(1);
+    const [galleryHasNextPage, setGalleryHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
     const [isLoadingGallery, setIsLoadingGallery] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const pageSize = 50;
 
     // Workspace Creation State
@@ -144,14 +147,20 @@ export default function RightPanel() {
         }
     }, [activeWorkspaceId, filter, mergeUniqueJobs]);
 
-    const fetchGalleryAssets = useCallback(async () => {
+    const fetchGalleryAssets = useCallback(async (page: number, append = false) => {
         if (!activeWorkspaceId) return;
 
-        setIsLoadingGallery(true);
+        if (append) {
+            setIsLoadingMoreGallery(true);
+        } else {
+            setIsLoadingGallery(true);
+        }
+
         try {
             const params = new URLSearchParams({
                 workspaceId: activeWorkspaceId,
-                limit: '100',
+                page: String(page),
+                limit: String(pageSize),
                 includeTrashed: showTrashed ? 'true' : 'false',
                 type: filter,
                 favoritesOnly: favoritesOnly ? 'true' : 'false',
@@ -165,12 +174,18 @@ export default function RightPanel() {
                 throw new Error(data.error || 'Failed to fetch gallery assets');
             }
 
-            setGalleryAssets(data.assets || []);
+            const nextAssets = data.assets || [];
+            setGalleryAssets(prev => append ? [...prev, ...nextAssets] : nextAssets);
+            setGalleryPage(page);
+            setGalleryHasNextPage(!!data.pagination?.hasNextPage);
         } catch (error) {
             console.error('Failed to fetch gallery assets:', error);
-            setGalleryAssets([]);
+            if (!append) {
+                setGalleryAssets([]);
+            }
         } finally {
             setIsLoadingGallery(false);
+            setIsLoadingMoreGallery(false);
         }
     }, [activeWorkspaceId, showTrashed, filter, favoritesOnly, gallerySearchQuery, gallerySort]);
 
@@ -184,6 +199,8 @@ export default function RightPanel() {
             setGalleryAssets([]);
             setCurrentPage(1);
             setHasNextPage(false);
+            setGalleryPage(1);
+            setGalleryHasNextPage(false);
             return;
         }
         void fetchJobsPage(1, false);
@@ -191,7 +208,7 @@ export default function RightPanel() {
 
     useEffect(() => {
         if (!activeWorkspaceId) return;
-        void fetchGalleryAssets();
+        void fetchGalleryAssets(1, false);
     }, [activeWorkspaceId, fetchGalleryAssets]);
 
 
@@ -509,7 +526,7 @@ export default function RightPanel() {
                             )}
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => {
                                 if (panelMode === 'gallery') {
-                                    void fetchGalleryAssets();
+                                    void fetchGalleryAssets(1, false);
                                 } else {
                                     void fetchJobsPage(1, false);
                                 }
@@ -872,6 +889,19 @@ export default function RightPanel() {
                             </div>
                         );
                     })
+                )}
+
+                {panelMode === 'gallery' && isMounted && galleryHasNextPage && (
+                    <div className="p-3 border-t border-border/60">
+                        <Button
+                            variant="outline"
+                            className="w-full h-8 text-xs"
+                            onClick={() => void fetchGalleryAssets(galleryPage + 1, true)}
+                            disabled={isLoadingMoreGallery}
+                        >
+                            {isLoadingMoreGallery ? 'Loading...' : 'Load more'}
+                        </Button>
+                    </div>
                 )}
 
                 {panelMode === 'jobs' && isMounted && hasNextPage && (

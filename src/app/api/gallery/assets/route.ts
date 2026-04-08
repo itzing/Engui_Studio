@@ -11,23 +11,26 @@ export async function GET(request: NextRequest) {
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const skip = (page - 1) * limit;
 
     if (!workspaceId) {
       return NextResponse.json({ success: false, error: 'workspaceId is required' }, { status: 400 });
     }
 
+    const where = {
+      workspaceId,
+      ...(includeTrashed ? {} : { trashed: false }),
+      ...(type && type !== 'all' ? { type } : {}),
+      ...(favoritesOnly ? { favorited: true } : {}),
+    };
+
     const assets = await prisma.galleryAsset.findMany({
-      where: {
-        workspaceId,
-        ...(includeTrashed ? {} : { trashed: false }),
-        ...(type && type !== 'all' ? { type } : {}),
-        ...(favoritesOnly ? { favorited: true } : {}),
-      },
+      where,
       orderBy: sort === 'oldest'
         ? { addedToGalleryAt: 'asc' }
         : { addedToGalleryAt: 'desc' },
-      take: limit,
     });
 
     let normalizedAssets = assets.map(asset => ({
@@ -68,9 +71,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const totalCount = normalizedAssets.length;
+    const paginatedAssets = normalizedAssets.slice(skip, skip + limit);
+    const hasNextPage = totalCount > page * limit;
+
     return NextResponse.json({
       success: true,
-      assets: normalizedAssets,
+      assets: paginatedAssets,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        hasNextPage,
+        hasPrevPage: page > 1,
+      },
     });
   } catch (error: any) {
     console.error('Failed to fetch gallery assets:', error);
