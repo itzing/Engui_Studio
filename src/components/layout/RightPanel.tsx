@@ -32,6 +32,8 @@ type GalleryAsset = {
     addedToGalleryAt: string;
 };
 
+const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 'audio') => filter === 'all' ? true : asset.type === filter;
+
 export default function RightPanel() {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -235,6 +237,7 @@ export default function RightPanel() {
     };
 
     const filteredJobs = loadedJobs;
+    const filteredGalleryAssets = galleryAssets.filter(asset => galleryFilter(asset, filter));
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -293,6 +296,49 @@ export default function RightPanel() {
         const hours = Math.floor(minutes / 60);
         if (hours < 24) return `${hours}h ago`;
         return `${Math.floor(hours / 24)}d ago`;
+    };
+
+    const handleGalleryFavorite = async (e: React.MouseEvent, asset: GalleryAsset) => {
+        e.stopPropagation();
+        const nextFavorited = !asset.favorited;
+        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
+        try {
+            const response = await fetch(`/api/gallery/assets/${asset.id}/favorite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ favorited: nextFavorited }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to update favorite');
+            }
+            showToast(nextFavorited ? 'Added to favorites' : 'Removed from favorites', 'success');
+        } catch (error) {
+            console.error('Failed to update favorite:', error);
+            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
+            showToast(error instanceof Error ? error.message : 'Failed to update favorite', 'error');
+        }
+    };
+
+    const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset) => {
+        e.stopPropagation();
+        setGalleryAssets(prev => prev.filter(item => item.id !== asset.id));
+        try {
+            const response = await fetch(`/api/gallery/assets/${asset.id}/trash`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trashed: true }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to move asset to trash');
+            }
+            showToast('Moved asset to trash', 'success');
+        } catch (error) {
+            console.error('Failed to trash asset:', error);
+            setGalleryAssets(prev => [asset, ...prev]);
+            showToast(error instanceof Error ? error.message : 'Failed to move asset to trash', 'error');
+        }
     };
 
     return (
@@ -400,7 +446,7 @@ export default function RightPanel() {
                         <div className="text-xs">Loading...</div>
                     </div>
                 ) : panelMode === 'gallery' ? (
-                    galleryAssets.filter(asset => filter === 'all' ? true : asset.type === filter).length === 0 ? (
+                    filteredGalleryAssets.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                             <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
                                 <FolderPlus className="w-5 h-5 opacity-50" />
@@ -409,12 +455,12 @@ export default function RightPanel() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 p-2">
-                            {galleryAssets.filter(asset => filter === 'all' ? true : asset.type === filter).map(asset => (
+                            {filteredGalleryAssets.map(asset => (
                                 <button
                                     key={asset.id}
                                     type="button"
                                     onClick={() => window.open(asset.originalUrl, '_blank', 'noopener,noreferrer')}
-                                    className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors"
+                                    className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors relative"
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
                                         {asset.type === 'video' ? (
@@ -425,8 +471,29 @@ export default function RightPanel() {
                                             <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
                                         )}
                                     </div>
+                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => void handleGalleryFavorite(e, asset)}
+                                            className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
+                                            title={asset.favorited ? 'Unfavorite' : 'Favorite'}
+                                        >
+                                            ♥
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => void handleGalleryTrash(e, asset)}
+                                            className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
+                                            title="Move to trash"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
                                     <div className="p-2 space-y-1">
-                                        <div className="text-[10px] font-medium capitalize text-foreground">{asset.type}</div>
+                                        <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1">
+                                            <span>{asset.type}</span>
+                                            {asset.favorited && <span className="text-pink-400">♥</span>}
+                                        </div>
                                         <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
                                     </div>
                                 </button>
