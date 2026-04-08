@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { enrichGalleryAsset } from '@/lib/galleryEnrichment';
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {
   if (!rawOptions) return {};
@@ -166,16 +167,24 @@ export async function POST(request: NextRequest) {
         originalUrl,
         previewUrl: originalUrl,
         thumbnailUrl: selectedOutput.thumbnailUrl,
-        generationSnapshot: typeof job.options === 'string' ? job.options : JSON.stringify(job.options || {}),
+        generationSnapshot: JSON.stringify({
+          ...parseJobOptions(job.options),
+          prompt: job.prompt || null,
+          modelId: job.modelId || null,
+          endpointId: job.endpointId || null,
+        }),
         derivativeStatus: 'pending',
         enrichmentStatus: 'pending',
       },
     });
 
+    const enriched = await enrichGalleryAsset(asset.id);
+
     return NextResponse.json({
       success: true,
       alreadyInGallery: false,
-      asset,
+      asset: enriched.asset,
+      autoTags: enriched.autoTags,
     });
   } catch (error: any) {
     console.error('Failed to add output to gallery:', error);

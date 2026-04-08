@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
   id: string;
@@ -35,6 +36,8 @@ interface GalleryAssetDialogProps {
 export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onSaveTags, onTagClick }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
+  const [isEnriching, setIsEnriching] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     setTagsInput((asset?.userTags || []).join(', '));
@@ -55,6 +58,25 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       document.body.removeChild(a);
     } catch {
       window.open(asset.originalUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleRunEnrichment = async () => {
+    if (!asset || isEnriching) return;
+    setIsEnriching(true);
+    try {
+      const response = await fetch(`/api/gallery/assets/${asset.id}/enrich`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to enrich gallery asset');
+      }
+      showToast('Gallery enrichment completed', 'success');
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to enrich gallery asset:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to enrich gallery asset', 'error');
+    } finally {
+      setIsEnriching(false);
     }
   };
 
@@ -149,13 +171,23 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                       </div>
                     </div>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onSaveTags(tagsInput.split(',').map(tag => tag.trim()).filter(Boolean))}
-                  >
-                    Save Tags
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onSaveTags(tagsInput.split(',').map(tag => tag.trim()).filter(Boolean))}
+                    >
+                      Save Tags
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunEnrichment}
+                      disabled={isEnriching}
+                    >
+                      {isEnriching ? 'Running...' : 'Re-run Enrichment'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
