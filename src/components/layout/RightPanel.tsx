@@ -31,6 +31,7 @@ type GalleryAsset = {
     sourceJobId?: string | null;
     sourceOutputId?: string | null;
     addedToGalleryAt: string;
+    updatedAt?: string;
 };
 
 const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 'audio') => filter === 'all' ? true : asset.type === filter;
@@ -46,6 +47,7 @@ export default function RightPanel() {
     const [isMounted, setIsMounted] = useState(false);
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
     const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
+    const [showTrashed, setShowTrashed] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -146,6 +148,7 @@ export default function RightPanel() {
             const params = new URLSearchParams({
                 workspaceId: activeWorkspaceId,
                 limit: '100',
+                includeTrashed: showTrashed ? 'true' : 'false',
             });
 
             const response = await fetch(`/api/gallery/assets?${params.toString()}`);
@@ -161,7 +164,7 @@ export default function RightPanel() {
         } finally {
             setIsLoadingGallery(false);
         }
-    }, [activeWorkspaceId]);
+    }, [activeWorkspaceId, showTrashed]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -247,7 +250,7 @@ export default function RightPanel() {
     };
 
     const filteredJobs = loadedJobs;
-    const filteredGalleryAssets = galleryAssets.filter(asset => galleryFilter(asset, filter));
+    const filteredGalleryAssets = galleryAssets.filter(asset => galleryFilter(asset, filter)).filter(asset => showTrashed ? asset.trashed : !asset.trashed);
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -332,28 +335,35 @@ export default function RightPanel() {
         }
     };
 
-    const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset) => {
+    const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
-        setGalleryAssets(prev => prev.filter(item => item.id !== asset.id));
+        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
         if (selectedGalleryAsset?.id === asset.id) {
-            setGalleryDetailsOpen(false);
-            setSelectedGalleryAsset(null);
+            setSelectedGalleryAsset(prev => prev ? { ...prev, trashed: nextTrashed } : prev);
+            if (!showTrashed && nextTrashed) {
+                setGalleryDetailsOpen(false);
+                setSelectedGalleryAsset(null);
+            }
         }
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/trash`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ trashed: true }),
+                body: JSON.stringify({ trashed: nextTrashed }),
             });
             const data = await response.json();
             if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to move asset to trash');
+                throw new Error(data.error || 'Failed to update trash state');
             }
-            showToast('Moved asset to trash', 'success');
+            showToast(nextTrashed ? 'Moved asset to trash' : 'Restored asset from trash', 'success');
+            if (!showTrashed) {
+                setGalleryAssets(prev => prev.filter(item => !item.trashed));
+            }
         } catch (error) {
-            console.error('Failed to trash asset:', error);
-            setGalleryAssets(prev => [asset, ...prev]);
-            showToast(error instanceof Error ? error.message : 'Failed to move asset to trash', 'error');
+            console.error('Failed to update trash state:', error);
+            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: asset.trashed } : item));
+            setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, trashed: asset.trashed } : prev);
+            showToast(error instanceof Error ? error.message : 'Failed to update trash state', 'error');
         }
     };
 
@@ -438,6 +448,11 @@ export default function RightPanel() {
                             ))}
                         </div>
                         <div className="flex items-center gap-1">
+                            {panelMode === 'gallery' && (
+                                <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={() => setShowTrashed(prev => !prev)}>
+                                    {showTrashed ? 'Trash' : 'Active'}
+                                </Button>
+                            )}
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => {
                                 if (panelMode === 'gallery') {
                                     void fetchGalleryAssets();
@@ -498,9 +513,9 @@ export default function RightPanel() {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={(e) => void handleGalleryTrash(e, asset)}
+                                            onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
                                             className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
-                                            title="Move to trash"
+                                            title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
                                         >
                                             <Trash2 className="w-3 h-3" />
                                         </button>
@@ -784,7 +799,7 @@ export default function RightPanel() {
                 open={galleryDetailsOpen}
                 onOpenChange={setGalleryDetailsOpen}
                 onToggleFavorite={() => selectedGalleryAsset && void handleGalleryFavorite({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
-                onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
+                onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset, !selectedGalleryAsset.trashed)}
             />
         </div>
     );

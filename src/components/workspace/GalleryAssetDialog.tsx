@@ -106,7 +106,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               <Button className="flex-1" variant="default" onClick={onToggleFavorite}>
                 {asset.favorited ? 'Unfavorite' : 'Favorite'}
               </Button>
-              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={onTrash}>
+              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={onTrash} title={asset.trashed ? 'Restore' : 'Move to trash'}>
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>

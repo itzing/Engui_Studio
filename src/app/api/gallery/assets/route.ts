@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
         derivativeStatus: asset.derivativeStatus,
         enrichmentStatus: asset.enrichmentStatus,
         addedToGalleryAt: asset.addedToGalleryAt,
+        updatedAt: asset.updatedAt,
       })),
     });
   } catch (error: any) {
