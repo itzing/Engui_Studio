@@ -51,6 +51,7 @@ export default function RightPanel() {
     const [showTrashed, setShowTrashed] = useState(false);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [gallerySearchQuery, setGallerySearchQuery] = useState('');
+    const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -267,6 +268,16 @@ export default function RightPanel() {
                 ...(asset.userTags || []),
             ].join(' ').toLowerCase();
             return haystack.includes(query);
+        })
+        .sort((a, b) => {
+            if (gallerySort === 'favorites') {
+                if (a.favorited !== b.favorited) return a.favorited ? -1 : 1;
+                return new Date(b.addedToGalleryAt).getTime() - new Date(a.addedToGalleryAt).getTime();
+            }
+            if (gallerySort === 'oldest') {
+                return new Date(a.addedToGalleryAt).getTime() - new Date(b.addedToGalleryAt).getTime();
+            }
+            return new Date(b.addedToGalleryAt).getTime() - new Date(a.addedToGalleryAt).getTime();
         });
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
@@ -509,12 +520,23 @@ export default function RightPanel() {
                         </div>
                     </div>
                     {panelMode === 'gallery' && (
-                        <Input
-                            value={gallerySearchQuery}
-                            onChange={(e) => setGallerySearchQuery(e.target.value)}
-                            placeholder="Search by tag, asset id, source job..."
-                            className="h-8 text-xs"
-                        />
+                        <div className="flex gap-2">
+                            <Input
+                                value={gallerySearchQuery}
+                                onChange={(e) => setGallerySearchQuery(e.target.value)}
+                                placeholder="Search by tag, asset id, source job..."
+                                className="h-8 text-xs"
+                            />
+                            <select
+                                value={gallerySort}
+                                onChange={(e) => setGallerySort(e.target.value as 'newest' | 'oldest' | 'favorites')}
+                                className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                            >
+                                <option value="newest">Newest</option>
+                                <option value="oldest">Oldest</option>
+                                <option value="favorites">Favorites first</option>
+                            </select>
+                        </div>
                     )}
                 </div>
             </div>
