@@ -48,6 +48,7 @@ export default function RightPanel() {
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
     const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
     const [showTrashed, setShowTrashed] = useState(false);
+    const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -250,7 +251,10 @@ export default function RightPanel() {
     };
 
     const filteredJobs = loadedJobs;
-    const filteredGalleryAssets = galleryAssets.filter(asset => galleryFilter(asset, filter)).filter(asset => showTrashed ? asset.trashed : !asset.trashed);
+    const filteredGalleryAssets = galleryAssets
+        .filter(asset => galleryFilter(asset, filter))
+        .filter(asset => showTrashed ? asset.trashed : !asset.trashed)
+        .filter(asset => favoritesOnly ? asset.favorited : true);
 
     const navigateSelectedJob = useCallback((direction: 'previous' | 'next') => {
         if (!selectedJob || filteredJobs.length === 0) return;
@@ -449,9 +453,14 @@ export default function RightPanel() {
                         </div>
                         <div className="flex items-center gap-1">
                             {panelMode === 'gallery' && (
-                                <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={() => setShowTrashed(prev => !prev)}>
-                                    {showTrashed ? 'Trash' : 'Active'}
-                                </Button>
+                                <>
+                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${favoritesOnly ? 'text-pink-400' : 'text-muted-foreground'}`} onClick={() => setFavoritesOnly(prev => !prev)}>
+                                        ♥
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={() => setShowTrashed(prev => !prev)}>
+                                        {showTrashed ? 'Trash' : 'Active'}
+                                    </Button>
+                                </>
                             )}
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => {
                                 if (panelMode === 'gallery') {
@@ -482,7 +491,7 @@ export default function RightPanel() {
                             <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
                                 <FolderPlus className="w-5 h-5 opacity-50" />
                             </div>
-                            <div className="text-xs">No gallery assets yet</div>
+                            <div className="text-xs">No gallery assets found</div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 p-2">
