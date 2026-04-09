@@ -154,7 +154,9 @@ interface StudioContextType {
     addJob: (job: Job) => void;
     addCompletedJob: (job: Job) => void;
     updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number) => void;
-    deleteJob: (id: string) => void;
+    deleteJob: (id: string) => Promise<boolean>;
+    cancelJob: (id: string) => Promise<boolean>;
+    clearFinishedJobs: (workspaceId: string | null) => Promise<{ success: boolean; deleted?: number; deletedFiles?: number; error?: string }>;
     reuseJobInput: (jobId: string) => void;
 
     // Workspaces
@@ -579,15 +581,63 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     };
 
     const deleteJob = async (id: string) => {
-        // Optimistic update
-        setJobs(prev => prev.filter(job => job.id !== id));
-
         try {
-            await fetch(`/api/jobs/${id}`, {
+            const response = await fetch(`/api/jobs/${id}`, {
                 method: 'DELETE'
             });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to delete job');
+            }
+
+            setJobs(prev => prev.filter(job => job.id !== id));
+            return true;
         } catch (error) {
             console.error('Failed to delete job:', error);
+            return false;
+        }
+    };
+
+    const cancelJob = async (id: string) => {
+        try {
+            const response = await fetch(`/api/jobs/${id}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success || !data.job) {
+                throw new Error(data.error || 'Failed to cancel job');
+            }
+
+            setJobs(prev => prev.map(job => job.id === id ? {
+                ...job,
+                status: 'failed',
+                error: 'cancelled',
+            } : job));
+            return true;
+        } catch (error) {
+            console.error('Failed to cancel job:', error);
+            return false;
+        }
+    };
+
+    const clearFinishedJobs = async (workspaceId: string | null) => {
+        try {
+            const response = await fetch('/api/jobs/clear-finished', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workspaceId, userId: 'user-with-settings' })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to clear finished jobs');
+            }
+
+            setJobs(prev => prev.filter(job => !(job.workspaceId === workspaceId && (job.status === 'completed' || job.status === 'failed'))));
+            return { success: true, deleted: data.deleted, deletedFiles: data.deletedFiles };
+        } catch (error: any) {
+            console.error('Failed to clear finished jobs:', error);
+            return { success: false, error: error?.message || 'Failed to clear finished jobs' };
         }
     };
 
@@ -1494,6 +1544,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             addCompletedJob,
             updateJobStatus,
             deleteJob,
+            cancelJob,
+            clearFinishedJobs,
             reuseJobInput,
 
             // Workspaces

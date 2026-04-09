@@ -41,7 +41,7 @@ type GalleryAsset = {
 const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 'audio') => filter === 'all' ? true : asset.type === filter;
 
 export default function RightPanel() {
-    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, reuseJobInput, addJob } = useStudio();
+    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -324,16 +324,57 @@ export default function RightPanel() {
         }));
     };
 
-    const handleDeleteJob = (e: React.MouseEvent, jobId: string) => {
+    const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation();
-        if (confirm('Are you sure you want to delete this generation?')) {
-            deleteJob(jobId);
-            setLoadedJobs(prev => prev.filter(job => job.id !== jobId));
-            if (selectedJob?.id === jobId) {
-                setDetailsOpen(false);
-                setSelectedJob(null);
-            }
+        if (!confirm('Delete this finished job and clean up its local outputs when safe?')) return;
+
+        const ok = await deleteJob(jobId);
+        if (!ok) {
+            showToast('Failed to delete job', 'error');
+            return;
         }
+
+        setLoadedJobs(prev => prev.filter(job => job.id !== jobId));
+        if (selectedJob?.id === jobId) {
+            setDetailsOpen(false);
+            setSelectedJob(null);
+        }
+        showToast('Job deleted', 'success');
+    };
+
+    const handleCancelJob = async (e: React.MouseEvent, jobId: string) => {
+        e.stopPropagation();
+        if (!confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
+
+        const ok = await cancelJob(jobId);
+        if (!ok) {
+            showToast('Failed to cancel job', 'error');
+            return;
+        }
+
+        setLoadedJobs(prev => prev.map(job => job.id === jobId ? {
+            ...job,
+            status: 'failed',
+            error: 'cancelled',
+        } : job));
+        showToast('Job cancelled', 'success');
+    };
+
+    const handleClearFinishedJobs = async () => {
+        if (!confirm('Delete all finished jobs in this workspace? Active jobs will be kept.')) return;
+
+        const result = await clearFinishedJobs(activeWorkspaceId);
+        if (!result.success) {
+            showToast(result.error || 'Failed to clear finished jobs', 'error');
+            return;
+        }
+
+        setLoadedJobs(prev => prev.filter(job => job.status !== 'completed' && job.status !== 'failed'));
+        if (selectedJob && (selectedJob.status === 'completed' || selectedJob.status === 'failed')) {
+            setDetailsOpen(false);
+            setSelectedJob(null);
+        }
+        showToast(`Cleared ${result.deleted || 0} finished jobs`, 'success');
     };
 
     const handleCreateWorkspace = async () => {
@@ -354,6 +395,7 @@ export default function RightPanel() {
     };
 
     const filteredJobs = loadedJobs;
+    const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
     const filteredGalleryAssets = galleryAssets;
     const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const activeGalleryPreset = showTrashed
@@ -715,6 +757,18 @@ export default function RightPanel() {
                                     </Button>
                                 </>
                             )}
+                            {panelMode === 'jobs' && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
+                                    title="Delete all finished jobs"
+                                    onClick={() => void handleClearFinishedJobs()}
+                                    disabled={finishedJobsCount === 0}
+                                >
+                                    Clear finished
+                                </Button>
+                            )}
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -1047,7 +1101,7 @@ export default function RightPanel() {
                                                 <span className="text-[9px] text-blue-500 font-medium">Running</span>
                                             )}
                                             {job.status === 'failed' && (
-                                                <span className="text-[9px] text-red-500 font-medium">Failed</span>
+                                                <span className="text-[9px] text-red-500 font-medium">{job.error === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
                                             )}
                                             {job.status === 'completed' && executionLabel && (
                                                 <span className="text-[9px] text-emerald-500 font-medium">⏱ {executionLabel}</span>
@@ -1167,14 +1221,24 @@ export default function RightPanel() {
                                     </div>
                                 )}
 
-                                {/* Delete Button (Top Right - Hover) */}
-                                <button
-                                    onClick={(e) => handleDeleteJob(e, job.id)}
-                                    className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-red-500 hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
-                                    title="Delete"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {/* Top Right Action (Cancel for active, Delete for finished) */}
+                                {(job.status === 'completed' || job.status === 'failed') ? (
+                                    <button
+                                        onClick={(e) => void handleDeleteJob(e, job.id)}
+                                        className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-red-500 hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Delete"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={(e) => void handleCancelJob(e, job.id)}
+                                        className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Cancel"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
                         );
                     })

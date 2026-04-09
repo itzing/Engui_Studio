@@ -5,7 +5,7 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { Download, Trash2, Copy } from 'lucide-react';
+import { Download, Trash2, Copy, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -29,7 +29,7 @@ type JobOutput = {
 };
 
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
-    const { deleteJob } = useStudio();
+    const { deleteJob, cancelJob } = useStudio();
     const { t } = useI18n();
     const { showToast } = useToast();
 
@@ -98,6 +98,9 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
+    const isRunning = job ? (job.status === 'queued' || job.status === 'processing') : false;
+    const isFinished = job ? (job.status === 'completed' || job.status === 'failed') : false;
+    const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
 
     const handleDownload = async () => {
         if (!job || !selectedOutput?.url) return;
@@ -129,11 +132,26 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         }
     };
 
-    const handleDelete = () => {
-        if (job && confirm('Are you sure you want to delete this job?')) {
-            deleteJob(job.id);
-            onOpenChange(false);
+    const handleDelete = async () => {
+        if (!job || !confirm('Delete this finished job and clean up its local outputs when safe?')) return;
+        const ok = await deleteJob(job.id);
+        if (!ok) {
+            showToast('Failed to delete job', 'error');
+            return;
         }
+        showToast('Job deleted', 'success');
+        onOpenChange(false);
+    };
+
+    const handleCancel = async () => {
+        if (!job || !confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
+        const ok = await cancelJob(job.id);
+        if (!ok) {
+            showToast('Failed to cancel job', 'error');
+            return;
+        }
+        showToast('Job cancelled', 'success');
+        onOpenChange(false);
     };
 
     const handleAddToGallery = async () => {
@@ -335,7 +353,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <div className={`text-sm font-medium capitalize ${job.status === 'completed' ? 'text-green-500' :
                                         job.status === 'failed' ? 'text-red-500' : 'text-blue-500'
                                         }`}>
-                                        {job.status}
+                                        {statusLabel}
                                     </div>
                                 </div>
                                 <div className="space-y-1">
@@ -363,8 +381,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
                             {/* Error Message */}
                             {job.error && (
-                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-500">
-                                    <span className="font-bold">Error:</span> {job.error}
+                                <div className={`rounded-lg p-3 text-xs border ${job.error === 'cancelled' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                                    <span className="font-bold">{job.error === 'cancelled' ? 'Cancelled:' : 'Error:'}</span> {job.error}
                                 </div>
                             )}
                         </div>
@@ -383,14 +401,26 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             >
                                 {selectedOutput?.alreadyInGallery ? 'In Gallery' : isSavingToGallery ? 'Saving...' : 'Add to Gallery'}
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                onClick={handleDelete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {isFinished && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                    onClick={() => void handleDelete()}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            )}
+                            {isRunning && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                    onClick={() => void handleCancel()}
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </DialogContent>

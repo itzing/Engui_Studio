@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { deleteFinishedJob } from '@/lib/jobManagement';
 
 const prisma = new PrismaClient();
 
@@ -182,18 +183,30 @@ export async function DELETE(
     try {
         const { id: jobId } = await params;
 
-        await prisma.job.delete({
+        const job = await prisma.job.findUnique({
             where: { id: jobId }
         });
 
+        if (!job) {
+            return NextResponse.json({
+                success: false,
+                error: 'Job not found'
+            }, { status: 404 });
+        }
+
+        const result = await deleteFinishedJob(job);
+
         return NextResponse.json({
-            success: true
+            success: true,
+            ...result
         });
     } catch (error: any) {
         console.error('Error deleting job:', error);
+        const message = error.message || 'Internal server error';
+        const status = message.includes('cancel it first') ? 409 : 500;
         return NextResponse.json({
             success: false,
-            error: error.message || 'Internal server error'
-        }, { status: 500 });
+            error: message
+        }, { status });
     }
 }
