@@ -24,7 +24,7 @@ describe('POST /api/gallery/assets/derivatives/backfill', () => {
   });
 
   it('delegates derivative backfill with workspace scope', async () => {
-    backfillGalleryDerivatives.mockResolvedValue({ processed: 3, results: [{ id: 'a1' }] });
+    backfillGalleryDerivatives.mockResolvedValue({ processed: 3, results: [{ id: 'a1', previewUrl: '/derived/a1.webp', thumbnailUrl: '/derived/a1-thumb.webp' }] });
 
     const response = await POST(new Request('http://localhost/api/gallery/assets/derivatives/backfill', {
       method: 'POST',
