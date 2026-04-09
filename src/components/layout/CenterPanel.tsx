@@ -39,7 +39,7 @@ export default function CenterPanel() {
   const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('native');
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
-  const [isFavoritingImage, setIsFavoritingImage] = useState(false);
+  const [isSavingToGallery, setIsSavingToGallery] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
 
   useEffect(() => {
@@ -185,69 +185,48 @@ export default function CenterPanel() {
 
   const isGalleryPreview = previewJob?.modelId === 'gallery';
 
-  const dispatchGalleryAssetChanged = (assetId: string) => {
+  const dispatchGalleryAssetChanged = (assetId: string, reason: 'created' | 'existing' | 'updated' = 'updated') => {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
       detail: {
         workspaceId: previewJob?.workspaceId || activeWorkspaceId,
         assetId,
-        reason: 'updated',
+        reason,
       }
     }));
   };
 
-  const ensureGalleryAssetForPreview = async (): Promise<string> => {
-    if (!previewJob) {
-      throw new Error('No image selected');
-    }
+  const handleAddToGallery = async () => {
+    if (!previewJob || isGalleryPreview || isSavingToGallery) return;
 
-    if (isGalleryPreview) {
-      return previewJob.id;
-    }
-
-    const response = await fetch('/api/gallery/assets/from-job-output', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jobId: previewJob.id,
-        outputId: 'output-1',
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok || !data.success || !data.asset?.id) {
-      throw new Error(data.error || 'Failed to add output to Gallery');
-    }
-
-    dispatchGalleryAssetChanged(data.asset.id);
-    return data.asset.id;
-  };
-
-  const handleAddToFavorites = async () => {
-    if (!previewJob || isFavoritingImage) return;
-
-    setIsFavoritingImage(true);
+    setIsSavingToGallery(true);
     try {
-      const assetId = await ensureGalleryAssetForPreview();
-      const response = await fetch(`/api/gallery/assets/${assetId}/favorite`, {
+      const response = await fetch('/api/gallery/assets/from-job-output', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ favorited: true }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobId: previewJob.id,
+          outputId: 'output-1',
+        }),
       });
+
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to add image to favorites');
+        throw new Error(data.error || 'Failed to add output to Gallery');
       }
 
-      dispatchGalleryAssetChanged(assetId);
-      showToast('Added to favorites', 'success');
+      if (data.asset?.id) {
+        dispatchGalleryAssetChanged(data.asset.id, data.alreadyInGallery ? 'existing' : 'created');
+      }
+
+      showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
     } catch (error) {
-      console.error('Failed to add center image to favorites:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to add image to favorites', 'error');
+      console.error('Failed to add center image to gallery:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to add output to Gallery', 'error');
     } finally {
-      setIsFavoritingImage(false);
+      setIsSavingToGallery(false);
     }
   };
 
@@ -256,11 +235,14 @@ export default function CenterPanel() {
 
     setReuseAction(action);
     try {
-      const assetId = await ensureGalleryAssetForPreview();
-      const response = await fetch(`/api/gallery/assets/${assetId}/reuse`, {
+      const reuseUrl = isGalleryPreview
+        ? `/api/gallery/assets/${previewJob.id}/reuse`
+        : `/api/jobs/${previewJob.id}/reuse`;
+
+      const response = await fetch(reuseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(isGalleryPreview ? { action } : { action, outputId: 'output-1' }),
       });
       const data = await response.json();
       if (!response.ok || !data.success || !data.payload) {
@@ -357,16 +339,18 @@ export default function CenterPanel() {
               />
             </div>
             <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToFavorites()} disabled={isFavoritingImage || !!reuseAction}>
-                {isFavoritingImage ? 'Adding...' : 'Add to favorites'}
-              </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isFavoritingImage || !!reuseAction}>
+              {!isGalleryPreview && (
+                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || !!reuseAction}>
+                  {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
+                </Button>
+              )}
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || !!reuseAction}>
                 {reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isFavoritingImage || !!reuseAction}>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || !!reuseAction}>
                 {reuseAction === 'img2img' ? 'Opening...' : 'To img2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isFavoritingImage || !!reuseAction}>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || !!reuseAction}>
                 {reuseAction === 'img2vid' ? 'Opening...' : 'To img2vid'}
               </Button>
             </div>
