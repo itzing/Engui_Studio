@@ -29,11 +29,12 @@ interface GalleryAssetDialogProps {
   onOpenChange: (open: boolean) => void;
   onToggleFavorite: () => void;
   onTrash: () => void;
+  onPermanentDelete: () => void;
   onSaveTags: (tags: string[]) => Promise<void> | void;
   onTagClick: (tag: string) => void;
 }
 
-export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onSaveTags, onTagClick }: GalleryAssetDialogProps) {
+export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onTagClick }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
@@ -192,7 +193,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               </div>
             </div>
 
-            <div className="p-4 border-t border-border bg-muted/10 flex gap-2">
+            <div className="p-4 border-t border-border bg-muted/10 flex gap-2 flex-wrap">
               <Button className="flex-1" variant="outline" onClick={handleDownload}>
                 <Download className="w-4 h-4 mr-2" />
                 Download
@@ -203,6 +204,11 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={onTrash} title={asset.trashed ? 'Restore' : 'Move to trash'}>
                 <Trash2 className="w-4 h-4" />
               </Button>
+              {asset.trashed && (
+                <Button variant="destructive" size="sm" onClick={onPermanentDelete}>
+                  Delete forever
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

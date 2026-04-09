@@ -63,6 +63,7 @@ export default function RightPanel() {
     const [isLoadingGallery, setIsLoadingGallery] = useState(false);
     const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
     const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
+    const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const pageSize = 50;
@@ -485,6 +486,50 @@ export default function RightPanel() {
         }
     };
 
+    const handleGalleryPermanentDelete = async (asset: GalleryAsset) => {
+        if (!confirm('Delete this gallery asset forever? This will remove stored files too.')) return;
+        try {
+            const response = await fetch(`/api/gallery/assets/${asset.id}?permanent=true`, { method: 'DELETE' });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to permanently delete asset');
+            }
+            setGalleryAssets(prev => prev.filter(item => item.id !== asset.id));
+            if (selectedGalleryAsset?.id === asset.id) {
+                setSelectedGalleryAsset(null);
+                setGalleryDetailsOpen(false);
+            }
+            showToast('Gallery asset permanently deleted', 'success');
+        } catch (error) {
+            console.error('Failed to permanently delete gallery asset:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to permanently delete asset', 'error');
+        }
+    };
+
+    const handleEmptyGalleryTrash = async () => {
+        if (!activeWorkspaceId || isEmptyingTrash) return;
+        if (!confirm('Empty gallery trash for this workspace? This permanently deletes trashed assets and files.')) return;
+        setIsEmptyingTrash(true);
+        try {
+            const response = await fetch(`/api/gallery/trash?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, { method: 'DELETE' });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to empty gallery trash');
+            }
+            showToast(`Deleted ${data.deletedCount || 0} trashed assets`, 'success');
+            void fetchGalleryAssets(1, false);
+            if (selectedGalleryAsset?.trashed) {
+                setSelectedGalleryAsset(null);
+                setGalleryDetailsOpen(false);
+            }
+        } catch (error) {
+            console.error('Failed to empty gallery trash:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to empty gallery trash', 'error');
+        } finally {
+            setIsEmptyingTrash(false);
+        }
+    };
+
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
@@ -640,6 +685,16 @@ export default function RightPanel() {
                                     >
                                         {isBackfillingDerivatives ? 'Generating...' : 'Backfill previews'}
                                     </button>
+                                    {showTrashed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleEmptyGalleryTrash()}
+                                            disabled={isEmptyingTrash}
+                                            className="text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50"
+                                        >
+                                            {isEmptyingTrash ? 'Deleting...' : 'Empty trash'}
+                                        </button>
+                                    )}
                                     {gallerySearchQuery !== debouncedGallerySearchQuery && (
                                         <div className="text-blue-400">Updating...</div>
                                     )}
@@ -1091,6 +1146,7 @@ export default function RightPanel() {
                 onOpenChange={setGalleryDetailsOpen}
                 onToggleFavorite={() => selectedGalleryAsset && void handleGalleryFavorite({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset)}
                 onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset, !selectedGalleryAsset.trashed)}
+                onPermanentDelete={() => selectedGalleryAsset && void handleGalleryPermanentDelete(selectedGalleryAsset)}
                 onSaveTags={(tags) => selectedGalleryAsset ? handleGallerySaveTags(selectedGalleryAsset, tags) : undefined}
                 onTagClick={(tag) => handleGalleryTagClick(tag)}
             />
