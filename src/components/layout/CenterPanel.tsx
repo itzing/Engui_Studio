@@ -39,6 +39,7 @@ export default function CenterPanel() {
   const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('native');
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [isPreviewAlreadyInGallery, setIsPreviewAlreadyInGallery] = useState(false);
   const [isSavingToGallery, setIsSavingToGallery] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
 
@@ -184,6 +185,36 @@ export default function CenterPanel() {
   }, [hoverPreview, selectedImageJob]);
 
   const isGalleryPreview = previewJob?.modelId === 'gallery';
+  const shouldShowAddToGallery = !!previewJob && !isGalleryPreview && !isPreviewAlreadyInGallery;
+
+  useEffect(() => {
+    if (!previewJob || isGalleryPreview) {
+      setIsPreviewAlreadyInGallery(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadGalleryState = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${previewJob.id}`);
+        const data = await response.json();
+        if (!cancelled && response.ok && data.success) {
+          const firstOutput = Array.isArray(data.job?.outputs) ? data.job.outputs.find((output: any) => output.outputId === 'output-1') || data.job.outputs[0] : null;
+          setIsPreviewAlreadyInGallery(!!firstOutput?.alreadyInGallery);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsPreviewAlreadyInGallery(false);
+        }
+      }
+    };
+
+    void loadGalleryState();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewJob?.id, isGalleryPreview]);
 
   const dispatchGalleryAssetChanged = (assetId: string, reason: 'created' | 'existing' | 'updated' = 'updated') => {
     if (typeof window === 'undefined') return;
@@ -220,6 +251,7 @@ export default function CenterPanel() {
       if (data.asset?.id) {
         dispatchGalleryAssetChanged(data.asset.id, data.alreadyInGallery ? 'existing' : 'created');
       }
+      setIsPreviewAlreadyInGallery(true);
 
       showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
     } catch (error) {
@@ -339,7 +371,7 @@ export default function CenterPanel() {
               />
             </div>
             <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
-              {!isGalleryPreview && (
+              {shouldShowAddToGallery && (
                 <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || !!reuseAction}>
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
                 </Button>
