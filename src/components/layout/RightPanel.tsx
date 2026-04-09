@@ -301,6 +301,7 @@ export default function RightPanel() {
                 url: job.resultUrl,
                 prompt: job.prompt,
                 modelId: job.modelId,
+                workspaceId: job.workspaceId,
                 status: job.status,
                 createdAt: job.createdAt,
             } : null
@@ -316,6 +317,7 @@ export default function RightPanel() {
                 url: asset.previewUrl || asset.originalUrl,
                 prompt: (asset.userTags || asset.autoTags || []).join(', '),
                 modelId: 'gallery',
+                workspaceId: asset.workspaceId,
                 status: 'completed',
                 createdAt: new Date(asset.addedToGalleryAt).getTime(),
             } : null

@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStudio, Job } from '@/lib/context/StudioContext';
 import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 type CenterMode = 'image' | 'video';
 type ImageViewMode = 'native' | 'fit';
@@ -12,6 +14,7 @@ type GalleryItem = {
   url: string;
   prompt?: string;
   modelId?: string;
+  workspaceId?: string;
   createdAt?: number;
 };
 
@@ -21,17 +24,23 @@ type HoverPreview = {
   url?: string;
   prompt?: string;
   modelId?: string;
+  workspaceId?: string;
   status?: string;
   createdAt?: number;
 } | null;
 
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+
 export default function CenterPanel() {
-  const { activeArtifactId, activeTool, jobs } = useStudio();
+  const { activeArtifactId, activeTool, jobs, activeWorkspaceId } = useStudio();
+  const { showToast } = useToast();
   const [mode, setMode] = useState<CenterMode>('image');
   const [hoverPreview, setHoverPreview] = useState<HoverPreview>(null);
   const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('native');
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [isFavoritingImage, setIsFavoritingImage] = useState(false);
+  const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
 
   useEffect(() => {
     if (activeTool === 'speech-sequencer') {
@@ -71,6 +80,7 @@ export default function CenterPanel() {
             url: detail.url,
             prompt: detail.prompt,
             modelId: detail.modelId,
+            workspaceId: detail.workspaceId,
             createdAt: detail.createdAt,
           }];
           return next.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -90,6 +100,7 @@ export default function CenterPanel() {
         url: job.resultUrl as string,
         prompt: job.prompt,
         modelId: job.modelId,
+        workspaceId: job.workspaceId,
         createdAt: job.createdAt,
       }));
 
@@ -172,6 +183,105 @@ export default function CenterPanel() {
     return selectedImageJob;
   }, [hoverPreview, selectedImageJob]);
 
+  const isGalleryPreview = previewJob?.modelId === 'gallery';
+
+  const dispatchGalleryAssetChanged = (assetId: string) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
+      detail: {
+        workspaceId: previewJob?.workspaceId || activeWorkspaceId,
+        assetId,
+        reason: 'updated',
+      }
+    }));
+  };
+
+  const ensureGalleryAssetForPreview = async (): Promise<string> => {
+    if (!previewJob) {
+      throw new Error('No image selected');
+    }
+
+    if (isGalleryPreview) {
+      return previewJob.id;
+    }
+
+    const response = await fetch('/api/gallery/assets/from-job-output', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jobId: previewJob.id,
+        outputId: 'output-1',
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success || !data.asset?.id) {
+      throw new Error(data.error || 'Failed to add output to Gallery');
+    }
+
+    dispatchGalleryAssetChanged(data.asset.id);
+    return data.asset.id;
+  };
+
+  const handleAddToFavorites = async () => {
+    if (!previewJob || isFavoritingImage) return;
+
+    setIsFavoritingImage(true);
+    try {
+      const assetId = await ensureGalleryAssetForPreview();
+      const response = await fetch(`/api/gallery/assets/${assetId}/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorited: true }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to add image to favorites');
+      }
+
+      dispatchGalleryAssetChanged(assetId);
+      showToast('Added to favorites', 'success');
+    } catch (error) {
+      console.error('Failed to add center image to favorites:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to add image to favorites', 'error');
+    } finally {
+      setIsFavoritingImage(false);
+    }
+  };
+
+  const handleReuse = async (action: ReuseAction) => {
+    if (!previewJob || reuseAction) return;
+
+    setReuseAction(action);
+    try {
+      const assetId = await ensureGalleryAssetForPreview();
+      const response = await fetch(`/api/gallery/assets/${assetId}/reuse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.payload) {
+        throw new Error(data.error || 'Failed to prepare reuse payload');
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('reuseJobInput', {
+          detail: data.payload,
+        }));
+      }
+
+      showToast(`Opened in ${action}`, 'success');
+    } catch (error) {
+      console.error('Failed to reuse center image:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to reuse image', 'error');
+    } finally {
+      setReuseAction(null);
+    }
+  };
+
   if (mode === 'video') {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -245,6 +355,20 @@ export default function CenterPanel() {
                   : 'block max-w-none max-h-none rounded-md border border-border/40 shadow-2xl'}
                 draggable={false}
               />
+            </div>
+            <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToFavorites()} disabled={isFavoritingImage || !!reuseAction}>
+                {isFavoritingImage ? 'Adding...' : 'Add to favorites'}
+              </Button>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isFavoritingImage || !!reuseAction}>
+                {reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img'}
+              </Button>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isFavoritingImage || !!reuseAction}>
+                {reuseAction === 'img2img' ? 'Opening...' : 'To img2img'}
+              </Button>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isFavoritingImage || !!reuseAction}>
+                {reuseAction === 'img2vid' ? 'Opening...' : 'To img2vid'}
+              </Button>
             </div>
             <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-black/60 text-white text-xs rounded-md truncate pointer-events-none">
               {hoverPreview ? (previewJob.modelId === 'gallery' ? 'Hovered gallery preview' : 'Hovered job preview') : 'Latest successful image'}
