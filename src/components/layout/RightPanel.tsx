@@ -5,7 +5,7 @@ import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
 import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
-import { Search, Filter, CloudUpload, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X } from 'lucide-react';
+import { Search, Filter, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -715,14 +715,21 @@ export default function RightPanel() {
                                     </Button>
                                 </>
                             )}
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => {
-                                if (panelMode === 'gallery') {
-                                    void fetchGalleryAssets(1, false);
-                                } else {
-                                    void fetchJobsPage(1, false);
-                                }
-                            }}>
-                                <CloudUpload className="w-3.5 h-3.5" />
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                title={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
+                                aria-label={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
+                                onClick={() => {
+                                    if (panelMode === 'gallery') {
+                                        void fetchGalleryAssets(1, false);
+                                    } else {
+                                        void fetchJobsPage(1, false);
+                                    }
+                                }}
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" />
                             </Button>
                         </div>
                     </div>
