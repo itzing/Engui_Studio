@@ -192,7 +192,9 @@ export default function RightPanel() {
                 sort: gallerySort,
             });
 
-            const response = await fetch(`/api/gallery/assets?${params.toString()}`);
+            const response = await fetch(`/api/gallery/assets?${params.toString()}`, {
+                cache: 'no-store',
+            });
             const data = await response.json();
             if (!data.success) {
                 throw new Error(data.error || 'Failed to fetch gallery assets');
