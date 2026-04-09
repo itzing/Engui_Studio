@@ -145,6 +145,25 @@ function validateSettings(settings: any): string | null {
         return 'RunPod zImageFieldEncKeyB64 must be valid base64';
       }
     }
+
+    if (settings.runpod.encryptSensitiveUpscale !== undefined && typeof settings.runpod.encryptSensitiveUpscale !== 'boolean') {
+      return 'RunPod encryptSensitiveUpscale must be a boolean';
+    }
+
+    if (settings.runpod.upscaleFieldEncKeyB64 !== undefined && typeof settings.runpod.upscaleFieldEncKeyB64 !== 'string') {
+      return 'RunPod upscaleFieldEncKeyB64 must be a string';
+    }
+
+    if (typeof settings.runpod.upscaleFieldEncKeyB64 === 'string' && settings.runpod.upscaleFieldEncKeyB64.trim() !== '') {
+      try {
+        const decoded = Buffer.from(settings.runpod.upscaleFieldEncKeyB64, 'base64');
+        if (decoded.length !== 32) {
+          return 'RunPod upscaleFieldEncKeyB64 must be base64 for 32-byte key';
+        }
+      } catch {
+        return 'RunPod upscaleFieldEncKeyB64 must be valid base64';
+      }
+    }
   }
   
   // Validate S3 settings if provided

@@ -8,13 +8,13 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
 
-function getResultEncryptionKey(settings: any): Buffer | null {
-    const keyBase64 = settings?.runpod?.zImageFieldEncKeyB64 || process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
-    if (!keyBase64 || typeof keyBase64 !== 'string' || keyBase64.trim() === '') {
+function getConfiguredEncryptionKey(keyBase64: string | undefined | null, fallbackEnv?: string): Buffer | null {
+    const rawKey = keyBase64 || (fallbackEnv ? process.env[fallbackEnv] : undefined) || process.env.FIELD_ENC_KEY_B64;
+    if (!rawKey || typeof rawKey !== 'string' || rawKey.trim() === '') {
         return null;
     }
 
-    const key = Buffer.from(keyBase64, 'base64');
+    const key = Buffer.from(rawKey, 'base64');
     if (key.length !== 32) {
         throw new Error(`Invalid result encryption key length: expected 32 bytes, got ${key.length}`);
     }
@@ -22,28 +22,36 @@ function getResultEncryptionKey(settings: any): Buffer | null {
     return key;
 }
 
-function decryptEncryptedImageBlock(block: any, key: Buffer): string {
+function getZImageResultEncryptionKey(settings: any): Buffer | null {
+    return getConfiguredEncryptionKey(settings?.runpod?.zImageFieldEncKeyB64, 'ZIMAGE_FIELD_ENC_KEY_B64');
+}
+
+function getUpscaleResultEncryptionKey(settings: any): Buffer | null {
+    return getConfiguredEncryptionKey(settings?.runpod?.upscaleFieldEncKeyB64, 'UPSCALE_FIELD_ENC_KEY_B64');
+}
+
+function decryptEncryptedMediaBlock(block: any, key: Buffer, aad: string): string {
     if (!block || typeof block !== 'object') {
-        throw new Error('Encrypted image block is missing');
+        throw new Error('Encrypted media block is missing');
     }
 
     const nonceB64 = block.nonce;
     const ciphertextB64 = block.ciphertext;
     if (!nonceB64 || !ciphertextB64) {
-        throw new Error('Encrypted image block is malformed');
+        throw new Error('Encrypted media block is malformed');
     }
 
     const nonce = Buffer.from(nonceB64, 'base64');
     const payload = Buffer.from(ciphertextB64, 'base64');
     if (payload.length <= 16) {
-        throw new Error('Encrypted image payload is too short');
+        throw new Error('Encrypted media payload is too short');
     }
 
     const ciphertext = payload.subarray(0, payload.length - 16);
     const tag = payload.subarray(payload.length - 16);
 
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
-    decipher.setAAD(Buffer.from('engui:zimage:result:v1', 'utf-8'));
+    decipher.setAAD(Buffer.from(aad, 'utf-8'));
     decipher.setAuthTag(tag);
 
     const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
@@ -117,7 +125,7 @@ export async function GET(request: Request) {
         let normalizedOutput: any = status.output;
 
         if (model.id === 'z-image' && normalizedOutput && typeof normalizedOutput === 'object' && normalizedOutput.image_encrypted) {
-            const key = getResultEncryptionKey(settings);
+            const key = getZImageResultEncryptionKey(settings);
             if (!key) {
                 return NextResponse.json({
                     success: true,
@@ -127,7 +135,7 @@ export async function GET(request: Request) {
             }
 
             try {
-                const decryptedBase64 = decryptEncryptedImageBlock(normalizedOutput.image_encrypted, key);
+                const decryptedBase64 = decryptEncryptedMediaBlock(normalizedOutput.image_encrypted, key, 'engui:zimage:result:v1');
                 normalizedOutput = {
                     ...normalizedOutput,
                     image: decryptedBase64,
@@ -138,6 +146,58 @@ export async function GET(request: Request) {
                     status: 'FAILED',
                     error: `Failed to decrypt image output: ${decryptError.message}`,
                 });
+            }
+        }
+
+        if ((model.id === 'upscale' || model.id === 'video-upscale') && normalizedOutput && typeof normalizedOutput === 'object') {
+            const key = getUpscaleResultEncryptionKey(settings);
+
+            if (normalizedOutput.image_encrypted) {
+                if (!key) {
+                    return NextResponse.json({
+                        success: true,
+                        status: 'FAILED',
+                        error: 'Missing result decryption key (upscaleFieldEncKeyB64)',
+                    });
+                }
+
+                try {
+                    const decryptedBase64 = decryptEncryptedMediaBlock(normalizedOutput.image_encrypted, key, 'engui:upscale-interpolation:image-result:v1');
+                    normalizedOutput = {
+                        ...normalizedOutput,
+                        image: decryptedBase64,
+                    };
+                } catch (decryptError: any) {
+                    return NextResponse.json({
+                        success: true,
+                        status: 'FAILED',
+                        error: `Failed to decrypt upscale image output: ${decryptError.message}`,
+                    });
+                }
+            }
+
+            if (normalizedOutput.video_encrypted) {
+                if (!key) {
+                    return NextResponse.json({
+                        success: true,
+                        status: 'FAILED',
+                        error: 'Missing result decryption key (upscaleFieldEncKeyB64)',
+                    });
+                }
+
+                try {
+                    const decryptedBase64 = decryptEncryptedMediaBlock(normalizedOutput.video_encrypted, key, 'engui:upscale-interpolation:video-result:v1');
+                    normalizedOutput = {
+                        ...normalizedOutput,
+                        video: decryptedBase64,
+                    };
+                } catch (decryptError: any) {
+                    return NextResponse.json({
+                        success: true,
+                        status: 'FAILED',
+                        error: `Failed to decrypt upscale video output: ${decryptError.message}`,
+                    });
+                }
             }
         }
 

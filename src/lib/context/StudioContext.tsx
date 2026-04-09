@@ -27,6 +27,8 @@ export interface StudioSettings {
         endpoints: Record<string, string>; // modelId -> endpointId
         encryptSensitiveZImage?: boolean;
         zImageFieldEncKeyB64?: string;
+        encryptSensitiveUpscale?: boolean;
+        upscaleFieldEncKeyB64?: string;
     };
     elevenlabs?: {
         apiKey?: string;
@@ -126,7 +128,13 @@ export type PlayerRef = any; // Will be properly typed when Remotion is installe
 
 const defaultSettings: StudioSettings = {
     apiKeys: {},
-    runpod: { endpoints: {}, encryptSensitiveZImage: false, zImageFieldEncKeyB64: '' },
+    runpod: {
+        endpoints: {},
+        encryptSensitiveZImage: false,
+        zImageFieldEncKeyB64: '',
+        encryptSensitiveUpscale: false,
+        upscaleFieldEncKeyB64: ''
+    },
     upscale: {},
     storage: {}
 };

@@ -12,6 +12,7 @@ interface RunPodJobResponse {
 // Generic input type - model-specific payload creation is handled by createPayload
 export interface RunPodInput {
   __encryptSensitiveZImage?: boolean;
+  __encryptSensitiveUpscale?: boolean;
   [key: string]: any;
 }
 
@@ -21,14 +22,16 @@ class RunPodService {
   private baseUrl: string;
   private generateTimeout: number; // AI 생성 작업 타임아웃 (밀리초)
   private zImageFieldEncKeyB64?: string;
+  private upscaleFieldEncKeyB64?: string;
 
-  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number, zImageFieldEncKeyB64?: string) {
+  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number, zImageFieldEncKeyB64?: string, upscaleFieldEncKeyB64?: string) {
     // Use provided credentials or fall back to environment variables
     this.apiKey = apiKey || process.env.RUNPOD_API_KEY!;
     this.endpointId = endpointId || process.env.RUNPOD_ENDPOINT_ID!;
     this.baseUrl = `https://api.runpod.ai/v2/${this.endpointId}`;
     this.generateTimeout = (generateTimeout || 3600) * 1000; // 초를 밀리초로 변환
     this.zImageFieldEncKeyB64 = zImageFieldEncKeyB64;
+    this.upscaleFieldEncKeyB64 = upscaleFieldEncKeyB64;
     
     if (!this.apiKey || !this.endpointId) {
       throw new Error('RunPod API key and endpoint ID are required');
@@ -57,6 +60,62 @@ class RunPodService {
     } catch (error: any) {
       throw new Error(`Invalid Z-Image encryption key: ${error.message}`);
     }
+  }
+
+  private getUpscaleEncryptionKey(): Buffer | null {
+    const keyBase64 = this.upscaleFieldEncKeyB64 || process.env.UPSCALE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    if (!keyBase64) {
+      return null;
+    }
+
+    try {
+      const key = Buffer.from(keyBase64, 'base64');
+      if (key.length !== 32) {
+        throw new Error(`Expected 32-byte key, got ${key.length}`);
+      }
+      return key;
+    } catch (error: any) {
+      throw new Error(`Invalid Upscale encryption key: ${error.message}`);
+    }
+  }
+
+  private encryptUpscaleSensitiveFields(input: RunPodInput): Record<string, any> | null {
+    const key = this.getUpscaleEncryptionKey();
+    if (!key) {
+      throw new Error('Upscale secure mode is enabled but UPSCALE_FIELD_ENC_KEY_B64 is missing on Engui server');
+    }
+
+    const sensitivePayload: Record<string, any> = {};
+    const sensitiveKeys = ['image_base64', 'video_base64', 'image_url', 'video_url'];
+
+    for (const keyName of sensitiveKeys) {
+      if (typeof input[keyName] === 'string' && input[keyName].trim() !== '') {
+        sensitivePayload[keyName] = input[keyName];
+      }
+    }
+
+    if (Object.keys(sensitivePayload).length === 0) {
+      return null;
+    }
+
+    const nonce = crypto.randomBytes(12);
+    const aad = Buffer.from('engui:upscale-interpolation:v1', 'utf8');
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
+    cipher.setAAD(aad);
+
+    const plaintext = Buffer.from(JSON.stringify(sensitivePayload), 'utf8');
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    const cipherWithTag = Buffer.concat([encrypted, authTag]);
+
+    return {
+      v: 1,
+      alg: 'AES-256-GCM',
+      kid: process.env.UPSCALE_FIELD_ENC_KID || 'upscale-k1',
+      ts: Math.floor(Date.now() / 1000),
+      nonce: nonce.toString('base64'),
+      ciphertext: cipherWithTag.toString('base64'),
+    };
   }
 
   private encryptZImageSensitiveFields(input: RunPodInput): {
@@ -238,14 +297,54 @@ class RunPodService {
           }
         };
 
-      case 'video-upscale':
-        return {
-          input: {
-            video_path: input.video_path,
-            task_type: input.task_type,
-            network_volume: true
-          }
+      case 'video-upscale': {
+        const videoUpscaleInput: Record<string, any> = {
+          ...(input.video_path && { video_path: input.video_path }),
+          ...(input.video_url && { video_url: input.video_url }),
+          ...(input.video_base64 && { video_base64: input.video_base64 }),
+          task_type: input.task_type,
+          output: input.output || 'base64',
+          network_volume: true
         };
+
+        if (input.__encryptSensitiveUpscale === true) {
+          const secureBlock = this.encryptUpscaleSensitiveFields(input);
+          if (secureBlock) {
+            videoUpscaleInput._secure = secureBlock;
+            delete videoUpscaleInput.video_url;
+            delete videoUpscaleInput.video_base64;
+          }
+        }
+
+        return { input: videoUpscaleInput };
+      }
+
+      case 'upscale': {
+        const upscaleInput: Record<string, any> = {
+          ...(input.image_path && { image_path: input.image_path }),
+          ...(input.image_url && { image_url: input.image_url }),
+          ...(input.image_base64 && { image_base64: input.image_base64 }),
+          ...(input.video_path && { video_path: input.video_path }),
+          ...(input.video_url && { video_url: input.video_url }),
+          ...(input.video_base64 && { video_base64: input.video_base64 }),
+          task_type: input.task_type,
+          output: input.output || 'base64',
+          network_volume: true
+        };
+
+        if (input.__encryptSensitiveUpscale === true) {
+          const secureBlock = this.encryptUpscaleSensitiveFields(input);
+          if (secureBlock) {
+            upscaleInput._secure = secureBlock;
+            delete upscaleInput.image_url;
+            delete upscaleInput.image_base64;
+            delete upscaleInput.video_url;
+            delete upscaleInput.video_base64;
+          }
+        }
+
+        return { input: upscaleInput };
+      }
 
       case 'qwen-image-edit':
         return {

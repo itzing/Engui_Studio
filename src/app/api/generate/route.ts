@@ -364,7 +364,8 @@ export async function POST(request: NextRequest) {
                 settings.runpod.apiKey,
                 endpointId,
                 settings.runpod.generateTimeout,
-                settings.runpod.zImageFieldEncKeyB64
+                settings.runpod.zImageFieldEncKeyB64,
+                settings.runpod.upscaleFieldEncKeyB64
             );
 
             // Prepare RunPod input
@@ -377,6 +378,10 @@ export async function POST(request: NextRequest) {
                 runpodInput.__encryptSensitiveZImage = true;
             }
 
+            if ((modelId === 'upscale' || modelId === 'video-upscale') && settings.runpod?.encryptSensitiveUpscale) {
+                runpodInput.__encryptSensitiveUpscale = true;
+            }
+
             console.log('📤 Sending to RunPod:', {
                 modelId,
                 endpointId,
@@ -384,6 +389,10 @@ export async function POST(request: NextRequest) {
                     ...runpodInput,
                     prompt: runpodInput.prompt ? '[REDACTED]' : undefined,
                     negativePrompt: runpodInput.negativePrompt ? '[REDACTED]' : undefined,
+                    image_base64: runpodInput.image_base64 ? '[REDACTED]' : undefined,
+                    video_base64: runpodInput.video_base64 ? '[REDACTED]' : undefined,
+                    image_url: runpodInput.image_url ? '[REDACTED]' : undefined,
+                    video_url: runpodInput.video_url ? '[REDACTED]' : undefined,
                 }
             });
 

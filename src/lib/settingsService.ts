@@ -51,6 +51,8 @@ interface RunPodConfig {
   generateTimeout?: number;
   zImageFieldEncKeyB64?: string;
   encryptSensitiveZImage?: boolean;
+  upscaleFieldEncKeyB64?: string;
+  encryptSensitiveUpscale?: boolean;
   endpoints: {
     image: string;
     video: string;
@@ -161,7 +163,9 @@ class SettingsService {
           },
           generateTimeout: 3600, // default: 1 hour
           encryptSensitiveZImage: false,
-          zImageFieldEncKeyB64: ''
+          zImageFieldEncKeyB64: '',
+          encryptSensitiveUpscale: false,
+          upscaleFieldEncKeyB64: ''
         },
 
         elevenlabs: {
@@ -232,6 +236,10 @@ class SettingsService {
               settings.runpod.encryptSensitiveZImage = value === 'true';
             } else if (setting.configKey === 'zImageFieldEncKeyB64') {
               settings.runpod.zImageFieldEncKeyB64 = value;
+            } else if (setting.configKey === 'encryptSensitiveUpscale') {
+              settings.runpod.encryptSensitiveUpscale = value === 'true';
+            } else if (setting.configKey === 'upscaleFieldEncKeyB64') {
+              settings.runpod.upscaleFieldEncKeyB64 = value;
             }
           } else if (setting.serviceName === 'elevenlabs') {
             if (setting.configKey === 'apiKey') {
@@ -465,6 +473,24 @@ class SettingsService {
             serviceName: 'runpod',
             configKey: 'zImageFieldEncKeyB64',
             configValue: settings.runpod.zImageFieldEncKeyB64,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.runpod.encryptSensitiveUpscale !== undefined) {
+          flatSettings.push({
+            serviceName: 'runpod',
+            configKey: 'encryptSensitiveUpscale',
+            configValue: String(settings.runpod.encryptSensitiveUpscale),
+            isEncrypted: false
+          });
+        }
+
+        if (settings.runpod.upscaleFieldEncKeyB64 !== undefined) {
+          flatSettings.push({
+            serviceName: 'runpod',
+            configKey: 'upscaleFieldEncKeyB64',
+            configValue: settings.runpod.upscaleFieldEncKeyB64,
             isEncrypted: false
           });
         }
@@ -728,6 +754,10 @@ class SettingsService {
 
     if (masked.runpod?.zImageFieldEncKeyB64) {
       masked.runpod.zImageFieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.zImageFieldEncKeyB64);
+    }
+
+    if (masked.runpod?.upscaleFieldEncKeyB64) {
+      masked.runpod.upscaleFieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.upscaleFieldEncKeyB64);
     }
 
     // Mask Eleven Labs API key
