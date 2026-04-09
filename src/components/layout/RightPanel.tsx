@@ -95,7 +95,17 @@ export default function RightPanel() {
 
     useEffect(() => {
         setIsMounted(true);
+        if (typeof window === 'undefined') return;
+        const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
+        if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
+            setPanelMode(savedPanelMode);
+        }
     }, []);
+
+    useEffect(() => {
+        if (!isMounted || typeof window === 'undefined') return;
+        window.localStorage.setItem('engui.rightPanel.mode', panelMode);
+    }, [isMounted, panelMode]);
 
     useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
