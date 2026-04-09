@@ -32,6 +32,7 @@ type GalleryAsset = {
     autoTags?: string[];
     sourceJobId?: string | null;
     sourceOutputId?: string | null;
+    derivativeStatus?: string;
     enrichmentStatus?: string;
     addedToGalleryAt: string;
     updatedAt?: string;
@@ -246,6 +247,25 @@ export default function RightPanel() {
         window.addEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
         return () => window.removeEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
     }, [activeWorkspaceId, fetchGalleryAssets]);
+
+    useEffect(() => {
+        if (!activeWorkspaceId || panelMode !== 'gallery') return;
+
+        const hasPendingGalleryWork = galleryAssets.some(asset =>
+            asset.derivativeStatus === 'pending'
+            || asset.derivativeStatus === 'processing'
+            || asset.enrichmentStatus === 'pending'
+            || asset.enrichmentStatus === 'processing'
+        );
+
+        if (!hasPendingGalleryWork) return;
+
+        const interval = window.setInterval(() => {
+            void fetchGalleryAssets(1, false);
+        }, 2500);
+
+        return () => window.clearInterval(interval);
+    }, [activeWorkspaceId, panelMode, galleryAssets, fetchGalleryAssets]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
@@ -851,8 +871,11 @@ export default function RightPanel() {
                                             {asset.enrichmentStatus === 'completed' && (
                                                 <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
                                             )}
-                                            {asset.enrichmentStatus === 'pending' && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Pending</span>
+                                            {(asset.enrichmentStatus === 'pending' || asset.enrichmentStatus === 'processing') && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Tagging…</span>
+                                            )}
+                                            {(asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing') && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
                                             )}
                                         </div>
                                         <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
