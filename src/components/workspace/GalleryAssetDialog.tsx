@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2 } from 'lucide-react';
+
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
@@ -38,6 +40,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
+  const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -78,6 +81,36 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       showToast(error instanceof Error ? error.message : 'Failed to enrich gallery asset', 'error');
     } finally {
       setIsEnriching(false);
+    }
+  };
+
+  const handleReuse = async (action: ReuseAction) => {
+    if (!asset || isReusing) return;
+    setIsReusing(action);
+    try {
+      const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.payload) {
+        throw new Error(data.error || 'Failed to prepare reuse payload');
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('reuseJobInput', {
+          detail: data.payload,
+        }));
+      }
+
+      showToast(`Opened in ${action}`, 'success');
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to reuse gallery asset:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to reuse gallery asset', 'error');
+    } finally {
+      setIsReusing(null);
     }
   };
 
@@ -172,7 +205,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -188,6 +221,19 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                     >
                       {isEnriching ? 'Running...' : 'Re-run Enrichment'}
                     </Button>
+                    {asset.type === 'image' && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => void handleReuse('txt2img')} disabled={!!isReusing}>
+                          {isReusing === 'txt2img' ? 'Opening...' : 'Open in txt2img'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => void handleReuse('img2img')} disabled={!!isReusing}>
+                          {isReusing === 'img2img' ? 'Opening...' : 'Open in img2img'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => void handleReuse('img2vid')} disabled={!!isReusing}>
+                          {isReusing === 'img2vid' ? 'Opening...' : 'Open in img2vid'}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

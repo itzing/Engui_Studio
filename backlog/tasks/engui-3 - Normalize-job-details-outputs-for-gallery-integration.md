@@ -1,10 +1,10 @@
 ---
 id: ENGUI-3
 title: Normalize job details outputs for gallery integration
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-08 21:01'
-updated_date: '2026-04-08 21:06'
+updated_date: '2026-04-09 09:06'
 labels:
   - gallery
   - jobs
@@ -26,7 +26,7 @@ Make Job Details expose a stable outputs[] contract for gallery save and multi-o
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Job details API returns normalized outputs[] items with stable outputId
-- [ ] #2 Each output exposes alreadyInGallery and galleryAssetId when available
-- [ ] #3 Frontend can call Add to Gallery using jobId + outputId without raw path logic
+- [x] #1 Job details API returns normalized outputs[] items with stable outputId
+- [x] #2 Each output exposes alreadyInGallery and galleryAssetId when available
+- [x] #3 Frontend can call Add to Gallery using jobId + outputId without raw path logic
 <!-- AC:END -->
