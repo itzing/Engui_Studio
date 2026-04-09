@@ -62,5 +62,6 @@ describe('gallery reuse route', () => {
       imageInputPath: '/generations/gallery/ws-1/file.png',
     });
     expect(json.payload.options.image_path).toBe('/generations/gallery/ws-1/file.png');
+    expect(json.payload.options.use_controlnet).toBe(true);
   });
 });

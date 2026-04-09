@@ -45,6 +45,7 @@ function buildReusePayload(action: ReuseAction, asset: { originalUrl: string; ty
       imageInputPath: asset.originalUrl,
       options: {
         ...baseOptions,
+        use_controlnet: true,
         image_path: asset.originalUrl,
       },
     };
