@@ -50,13 +50,19 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
         let cancelled = false;
 
-        const loadJobDetails = async () => {
+        const loadJobDetails = async (preserveSelectedOutputId?: string | null) => {
             try {
                 const response = await fetch(`/api/jobs/${job.id}`);
                 const data = await response.json();
                 if (!cancelled && data.success && Array.isArray(data.job?.outputs)) {
-                    setJobOutputs(data.job.outputs);
-                    setSelectedOutputIndex(0);
+                    const nextOutputs = data.job.outputs;
+                    setJobOutputs(nextOutputs);
+                    if (preserveSelectedOutputId) {
+                        const nextIndex = nextOutputs.findIndex((output: JobOutput) => output.outputId === preserveSelectedOutputId);
+                        setSelectedOutputIndex(nextIndex >= 0 ? nextIndex : 0);
+                    } else {
+                        setSelectedOutputIndex(0);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load job outputs:', error);
@@ -160,6 +166,16 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                 };
             }));
 
+            if (typeof window !== 'undefined' && data.asset) {
+                window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
+                    detail: {
+                        workspaceId: job.workspaceId,
+                        assetId: data.asset.id,
+                        reason: data.alreadyInGallery ? 'existing' : 'created',
+                    }
+                }));
+            }
+
             showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
         } catch (error) {
             console.error('Failed to save output to gallery:', error);
@@ -217,6 +233,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             isVideo ? (
                                 <video
                                     src={selectedOutput.url}
+                                    poster={selectedOutput.thumbnailUrl || undefined}
                                     controls
                                     loop
                                     className="max-w-full max-h-full object-contain"

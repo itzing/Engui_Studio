@@ -224,6 +224,19 @@ export default function RightPanel() {
         void fetchGalleryAssets(1, false);
     }, [activeWorkspaceId, fetchGalleryAssets]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleGalleryAssetChanged = (event: Event) => {
+            const customEvent = event as CustomEvent<{ workspaceId?: string; assetId?: string; reason?: string }>;
+            if (!customEvent.detail?.workspaceId || customEvent.detail.workspaceId !== activeWorkspaceId) return;
+            void fetchGalleryAssets(1, false);
+        };
+
+        window.addEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
+        return () => window.removeEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
+    }, [activeWorkspaceId, fetchGalleryAssets]);
+
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
     useEffect(() => {
@@ -792,7 +805,11 @@ export default function RightPanel() {
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
                                         {asset.type === 'video' ? (
-                                            <video src={asset.previewUrl || asset.originalUrl} className="w-full h-full object-cover" muted />
+                                            asset.thumbnailUrl ? (
+                                                <img src={asset.thumbnailUrl} alt="Gallery video thumbnail" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="w-full h-full object-cover" muted />
+                                            )
                                         ) : asset.type === 'audio' ? (
                                             <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
                                         ) : (
