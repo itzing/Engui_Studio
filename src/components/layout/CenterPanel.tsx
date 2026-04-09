@@ -247,7 +247,7 @@ export default function CenterPanel() {
               />
             </div>
             <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-black/60 text-white text-xs rounded-md truncate pointer-events-none">
-              {hoverPreview ? 'Hovered job preview' : 'Latest successful image'}
+              {hoverPreview ? (previewJob.modelId === 'gallery' ? 'Hovered gallery preview' : 'Hovered job preview') : 'Latest successful image'}
               {previewJob.modelId ? ` · ${previewJob.modelId}` : ''}
             </div>
           </div>
@@ -258,7 +258,7 @@ export default function CenterPanel() {
             </div>
             <h3 className="text-xl font-medium mb-2 text-foreground">No successful image yet</h3>
             <p className="max-w-md mx-auto text-sm text-muted-foreground/80">
-              Generate an image to show it here. Hover jobs on the right panel to preview them.
+              Generate an image to show it here. Hover jobs or gallery items on the right panel to preview them.
             </p>
           </div>
         )}

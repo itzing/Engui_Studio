@@ -307,6 +307,21 @@ export default function RightPanel() {
         }));
     };
 
+    const emitGalleryHoverPreview = (asset: GalleryAsset | null) => {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('jobHoverPreview', {
+            detail: asset ? {
+                id: asset.id,
+                type: asset.type,
+                url: asset.previewUrl || asset.originalUrl,
+                prompt: (asset.userTags || asset.autoTags || []).join(', '),
+                modelId: 'gallery',
+                status: 'completed',
+                createdAt: new Date(asset.addedToGalleryAt).getTime(),
+            } : null
+        }));
+    };
+
     const handleDeleteJob = (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation();
         if (confirm('Are you sure you want to delete this generation?')) {
@@ -833,6 +848,8 @@ export default function RightPanel() {
                                     key={asset.id}
                                     type="button"
                                     onClick={() => handleGalleryAssetClick(asset)}
+                                    onMouseEnter={() => emitGalleryHoverPreview(asset)}
+                                    onMouseLeave={() => emitGalleryHoverPreview(null)}
                                     className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors relative"
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
@@ -932,6 +949,7 @@ export default function RightPanel() {
                                 key={job.id}
                                 onClick={() => handleJobClick(job)}
                                 onMouseEnter={() => emitHoverPreview(job)}
+                                onMouseLeave={() => emitHoverPreview(null)}
                                 className="group flex gap-3 p-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative"
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
