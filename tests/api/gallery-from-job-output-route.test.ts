@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPrisma, enrichGalleryAssetMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
+const { mockPrisma, queueGalleryEnrichmentMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
   mockPrisma: {
     job: { findUnique: vi.fn() },
     galleryAsset: { findUnique: vi.fn(), create: vi.fn() },
   },
-  enrichGalleryAssetMock: vi.fn(),
+  queueGalleryEnrichmentMock: vi.fn(),
   queueGalleryDerivativesMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
-vi.mock('@/lib/galleryEnrichment', () => ({ enrichGalleryAsset: enrichGalleryAssetMock }));
+vi.mock('@/lib/galleryEnrichment', () => ({ queueGalleryEnrichment: queueGalleryEnrichmentMock }));
 vi.mock('@/lib/galleryDerivatives', () => ({ queueGalleryDerivatives: queueGalleryDerivativesMock }));
 vi.mock('fs', () => ({
   default: {
@@ -46,14 +46,13 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     expect(mockPrisma.galleryAsset.create).not.toHaveBeenCalled();
   });
 
-  it('creates and enriches a new asset when duplicate is absent', async () => {
+  it('creates a new asset and queues async enrichment/derivatives when duplicate is absent', async () => {
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'job-1', workspaceId: 'ws-1', type: 'image', resultUrl: '/generations/test.png', options: JSON.stringify({ stylePreset: 'studio' }), thumbnailUrl: '/thumb.png',
       prompt: 'portrait client-a', modelId: 'flux-dev', endpointId: 'endpoint-1',
     });
     mockPrisma.galleryAsset.findUnique.mockResolvedValue(null);
-    mockPrisma.galleryAsset.create.mockResolvedValue({ id: 'asset-new' });
-    enrichGalleryAssetMock.mockResolvedValue({ asset: { id: 'asset-new', enrichmentStatus: 'completed' }, autoTags: ['portrait', 'client-a'] });
+    mockPrisma.galleryAsset.create.mockResolvedValue({ id: 'asset-new', enrichmentStatus: 'pending' });
 
     const response = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
       method: 'POST',
@@ -63,9 +62,9 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json).toMatchObject({ success: true, alreadyInGallery: false, autoTags: ['portrait', 'client-a'] });
+    expect(json).toMatchObject({ success: true, alreadyInGallery: false, autoTags: [] });
     expect(mockPrisma.galleryAsset.create).toHaveBeenCalledTimes(1);
     expect(queueGalleryDerivativesMock).toHaveBeenCalledWith('asset-new');
-    expect(enrichGalleryAssetMock).toHaveBeenCalledWith('asset-new');
+    expect(queueGalleryEnrichmentMock).toHaveBeenCalledWith('asset-new');
   });
 });

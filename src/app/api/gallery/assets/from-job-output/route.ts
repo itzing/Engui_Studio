@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { enrichGalleryAsset } from '@/lib/galleryEnrichment';
+import { queueGalleryEnrichment } from '@/lib/galleryEnrichment';
 import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {
@@ -180,13 +180,13 @@ export async function POST(request: NextRequest) {
     });
 
     queueGalleryDerivatives(asset.id);
-    const enriched = await enrichGalleryAsset(asset.id);
+    queueGalleryEnrichment(asset.id);
 
     return NextResponse.json({
       success: true,
       alreadyInGallery: false,
-      asset: enriched.asset,
-      autoTags: enriched.autoTags,
+      asset,
+      autoTags: [],
     });
   } catch (error: any) {
     console.error('Failed to add output to gallery:', error);

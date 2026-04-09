@@ -60,21 +60,42 @@ export async function enrichGalleryAsset(assetId: string) {
     throw new Error('Gallery asset not found');
   }
 
-  const snapshot = safeJsonParse(asset.generationSnapshot);
-  const autoTags = extractAutoTagsFromSnapshot(snapshot, asset.type);
-
-  const updated = await prisma.galleryAsset.update({
+  await prisma.galleryAsset.update({
     where: { id: assetId },
-    data: {
-      autoTags: JSON.stringify(autoTags),
-      enrichmentStatus: 'completed',
-    },
+    data: { enrichmentStatus: 'processing' },
   });
 
-  return {
-    asset: updated,
-    autoTags,
-  };
+  try {
+    const snapshot = safeJsonParse(asset.generationSnapshot);
+    const autoTags = extractAutoTagsFromSnapshot(snapshot, asset.type);
+
+    const updated = await prisma.galleryAsset.update({
+      where: { id: assetId },
+      data: {
+        autoTags: JSON.stringify(autoTags),
+        enrichmentStatus: 'completed',
+      },
+    });
+
+    return {
+      asset: updated,
+      autoTags,
+    };
+  } catch (error) {
+    await prisma.galleryAsset.update({
+      where: { id: assetId },
+      data: { enrichmentStatus: 'failed' },
+    });
+    throw error;
+  }
+}
+
+export function queueGalleryEnrichment(assetId: string) {
+  setTimeout(() => {
+    void enrichGalleryAsset(assetId).catch((error) => {
+      console.error('Failed to enrich gallery asset:', error);
+    });
+  }, 0);
 }
 
 export async function backfillGalleryEnrichment(workspaceId: string, limit = 50) {
@@ -88,10 +109,14 @@ export async function backfillGalleryEnrichment(workspaceId: string, limit = 50)
     select: { id: true },
   });
 
-  const results = [] as Array<{ id: string; autoTags: string[] }>;
+  const results = [] as Array<{ id: string; autoTags: string[]; enrichmentStatus: string }>;
   for (const asset of assets) {
-    const enriched = await enrichGalleryAsset(asset.id);
-    results.push({ id: asset.id, autoTags: enriched.autoTags });
+    try {
+      const enriched = await enrichGalleryAsset(asset.id);
+      results.push({ id: asset.id, autoTags: enriched.autoTags, enrichmentStatus: 'completed' });
+    } catch {
+      results.push({ id: asset.id, autoTags: [], enrichmentStatus: 'failed' });
+    }
   }
 
   return {
