@@ -33,6 +33,20 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const { t } = useI18n();
     const { showToast } = useToast();
 
+    const parsedSecureState = useMemo(() => {
+        if (!job) return null;
+        const raw = (job as any).secureState;
+        if (!raw) return null;
+        if (typeof raw === 'string') {
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        }
+        return typeof raw === 'object' ? raw : null;
+    }, [job]);
+
     const [jobOutputs, setJobOutputs] = useState<JobOutput[]>([]);
     const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
     const [isSavingToGallery, setIsSavingToGallery] = useState(false);
@@ -378,6 +392,38 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     </div>
                                 </div>
                             </div>
+
+                            {parsedSecureState && (
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-medium text-foreground">Secure Flow</h3>
+                                    <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Phase</span>
+                                            <span className="font-mono text-right">{parsedSecureState.phase || '—'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Attempt</span>
+                                            <span className="font-mono text-right truncate max-w-[180px]">{parsedSecureState.activeAttempt?.attemptId || '—'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Cleanup</span>
+                                            <span className="font-mono text-right">{parsedSecureState.cleanup?.transportStatus || 'pending'}</span>
+                                        </div>
+                                        {parsedSecureState.cleanup?.warning && (
+                                            <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-amber-500 break-words">
+                                                <span className="font-semibold">Cleanup warning:</span> {parsedSecureState.cleanup.warning}
+                                            </div>
+                                        )}
+                                        {parsedSecureState.failure?.error && (
+                                            <div className="rounded border border-red-500/20 bg-red-500/10 p-2 text-red-500 break-words">
+                                                <div><span className="font-semibold">Source:</span> {parsedSecureState.failure.source || '—'}</div>
+                                                <div><span className="font-semibold">Code:</span> {parsedSecureState.failure.error.code || '—'}</div>
+                                                <div><span className="font-semibold">Message:</span> {parsedSecureState.failure.error.message || '—'}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Error Message */}
                             {job.error && (
