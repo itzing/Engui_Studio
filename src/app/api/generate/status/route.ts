@@ -113,6 +113,20 @@ function decryptEncryptedMediaBlock(block: any, key: Buffer, aad: string): strin
     return plain.toString('base64');
 }
 
+function normalizeSecureFailure(source: string, error: any, fallbackCode: string, fallbackMessage: string) {
+    const rawCode = error?.code || error?.error?.code || error?.name;
+    const rawMessage = error?.message || error?.error?.message || fallbackMessage;
+
+    return {
+        source,
+        error: {
+            code: typeof rawCode === 'string' && rawCode.trim() !== '' ? rawCode : fallbackCode,
+            message: typeof rawMessage === 'string' && rawMessage.trim() !== '' ? rawMessage : fallbackMessage,
+        },
+        recordedAt: new Date().toISOString(),
+    };
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -228,90 +242,142 @@ export async function GET(request: Request) {
             };
 
             if (transportResult.status === 'completed' && transportResult.result_media) {
-                ensureGenerationsDir();
-                const resultBuffer = await downloadAndDecryptResultMedia({
-                    s3: s3Service,
-                    masterKey,
-                    jobId,
-                    modelId: model.id,
-                    attemptId,
-                    media: transportResult.result_media,
-                });
-
-                const ext = detectResultExtension(transportResult.result_media.mime, transportResult.result_media.kind);
-                const safeModelId = model.id.replace(/[^a-zA-Z0-9-_]/g, '_');
-                const fileName = `${safeModelId}-${jobId}${ext}`;
-                const filePath = path.join(GENERATIONS_DIR, fileName);
-                const relativePath = `/generations/${fileName}`;
-                fs.writeFileSync(filePath, resultBuffer);
-
-                const cleanup = secureState?.cleanup?.transportStatus === 'completed' || secureState?.cleanup?.transportStatus === 'warning'
-                    ? secureState.cleanup
-                    : await cleanupSecureTransportArtifacts({
+                try {
+                    ensureGenerationsDir();
+                    const resultBuffer = await downloadAndDecryptResultMedia({
                         s3: s3Service,
-                        secureState,
-                        resultStoragePath: transportResult.result_media.storage_path,
+                        masterKey,
+                        jobId,
+                        modelId: model.id,
+                        attemptId,
+                        media: transportResult.result_media,
                     });
 
-                secureState = {
-                    ...secureState,
-                    phase: 'completed',
-                    activeAttempt: {
-                        ...secureState.activeAttempt,
-                        finalization: {
+                    const ext = detectResultExtension(transportResult.result_media.mime, transportResult.result_media.kind);
+                    const safeModelId = model.id.replace(/[^a-zA-Z0-9-_]/g, '_');
+                    const fileName = `${safeModelId}-${jobId}${ext}`;
+                    const filePath = path.join(GENERATIONS_DIR, fileName);
+                    const relativePath = `/generations/${fileName}`;
+                    fs.writeFileSync(filePath, resultBuffer);
+
+                    const cleanup = secureState?.cleanup?.transportStatus === 'completed' || secureState?.cleanup?.transportStatus === 'warning'
+                        ? secureState.cleanup
+                        : await cleanupSecureTransportArtifacts({
+                            s3: s3Service,
+                            secureState,
+                            resultStoragePath: transportResult.result_media.storage_path,
+                        });
+
+                    secureState = {
+                        ...secureState,
+                        phase: 'completed',
+                        activeAttempt: {
+                            ...secureState.activeAttempt,
+                            finalization: {
+                                status: 'completed',
+                                localResultPath: filePath,
+                                localResultUrl: relativePath,
+                                completedAt: new Date().toISOString(),
+                            },
+                        },
+                        cleanup,
+                    };
+
+                    await prisma.job.update({
+                        where: { id: jobId },
+                        data: {
                             status: 'completed',
-                            localResultPath: filePath,
-                            localResultUrl: relativePath,
-                            completedAt: new Date().toISOString(),
+                            resultUrl: relativePath,
+                            secureState: JSON.stringify(secureState),
+                            options: JSON.stringify({
+                                ...options,
+                                transportResultStatus: transportResult.status,
+                            }),
                         },
-                    },
-                    cleanup,
-                };
+                    });
 
-                await prisma.job.update({
-                    where: { id: jobId },
-                    data: {
-                        status: 'completed',
-                        resultUrl: relativePath,
-                        secureState: JSON.stringify(secureState),
-                        options: JSON.stringify({
-                            ...options,
-                            transportResultStatus: transportResult.status,
-                        }),
-                    },
-                });
-
-                return NextResponse.json({
-                    success: true,
-                    status: 'COMPLETED',
-                    output: {
-                        url: relativePath,
-                        image_url: transportResult.result_media.kind === 'image' ? relativePath : undefined,
-                        video_url: transportResult.result_media.kind === 'video' ? relativePath : undefined,
-                        transport_result: {
-                            status: transportResult.status,
+                    return NextResponse.json({
+                        success: true,
+                        status: 'COMPLETED',
+                        output: {
+                            url: relativePath,
+                            image_url: transportResult.result_media.kind === 'image' ? relativePath : undefined,
+                            video_url: transportResult.result_media.kind === 'video' ? relativePath : undefined,
+                            transport_result: {
+                                status: transportResult.status,
+                            },
                         },
-                    },
-                    meta: {
-                        secureFinalized: true,
-                        cleanupStatus: cleanup?.transportStatus || 'pending',
-                        cleanupWarning: cleanup?.warning || null,
-                    },
-                });
+                        meta: {
+                            secureFinalized: true,
+                            cleanupStatus: cleanup?.transportStatus || 'pending',
+                            cleanupWarning: cleanup?.warning || null,
+                        },
+                    });
+                } catch (finalizationError: any) {
+                    const failure = normalizeSecureFailure(
+                        'engui.finalization',
+                        finalizationError,
+                        'FINALIZATION_FAILED',
+                        'Secure finalization failed'
+                    );
+
+                    secureState = {
+                        ...secureState,
+                        phase: 'failed',
+                        failure,
+                        activeAttempt: {
+                            ...secureState.activeAttempt,
+                            finalization: {
+                                status: 'failed',
+                                failedAt: new Date().toISOString(),
+                                error: failure.error,
+                            },
+                        },
+                    };
+
+                    await prisma.job.update({
+                        where: { id: jobId },
+                        data: {
+                            status: 'failed',
+                            secureState: JSON.stringify(secureState),
+                            options: JSON.stringify({
+                                ...options,
+                                transportResultStatus: transportResult.status,
+                                error: failure.error.message,
+                            }),
+                        },
+                    });
+
+                    return NextResponse.json({
+                        success: true,
+                        status: 'FAILED',
+                        error: failure.error.message,
+                        meta: {
+                            secureFailure: failure,
+                        },
+                    });
+                }
             }
 
             if (transportResult.status === 'failed') {
+                const failure = normalizeSecureFailure(
+                    'endpoint.transport_result',
+                    transportResult.error,
+                    'TRANSPORT_FAILED',
+                    'Secure transport failed'
+                );
+
                 await prisma.job.update({
                     where: { id: jobId },
                     data: {
                         status: 'failed',
                         secureState: JSON.stringify({
                             ...secureState,
-                            failure: transportResult.error || { code: 'TRANSPORT_FAILED', message: 'Secure transport failed' },
+                            failure,
                         }),
                         options: JSON.stringify({
                             ...options,
-                            error: transportResult.error?.message || 'Secure transport failed',
+                            error: failure.error.message,
                         }),
                     },
                 });
@@ -319,7 +385,10 @@ export async function GET(request: Request) {
                 return NextResponse.json({
                     success: true,
                     status: 'FAILED',
-                    error: transportResult.error?.message || 'Secure transport failed',
+                    error: failure.error.message,
+                    meta: {
+                        secureFailure: failure,
+                    },
                 });
             }
         }
