@@ -6,6 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ArrowLeftRight } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
@@ -347,6 +348,74 @@ export default function VideoGenerationForm() {
             ...prev,
             [paramName]: value
         }));
+    };
+
+    const swapDimensionParameters = (widthParam: any, heightParam: any) => {
+        const currentWidth = parameterValues[widthParam.name] ?? widthParam.default;
+        const currentHeight = parameterValues[heightParam.name] ?? heightParam.default;
+
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParam.name]: currentHeight,
+            [heightParam.name]: currentWidth,
+        }));
+    };
+
+    const renderDimensionPair = (params: any[]) => {
+        const widthParam = params.find(param => param.name === 'width');
+        const heightParam = params.find(param => param.name === 'height');
+
+        if (!widthParam || !heightParam || !isParameterVisible(widthParam) || !isParameterVisible(heightParam)) {
+            return null;
+        }
+
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs">Width × Height</Label>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => swapDimensionParameters(widthParam, heightParam)}
+                        title="Swap width and height"
+                        aria-label="Swap width and height"
+                    >
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                    <div className="space-y-2">
+                        <Label className="text-xs">{widthParam.label}</Label>
+                        <Input
+                            type="number"
+                            name={widthParam.name}
+                            value={parameterValues[widthParam.name] ?? widthParam.default}
+                            min={widthParam.min}
+                            max={widthParam.max}
+                            step={widthParam.step}
+                            className="h-8 text-sm"
+                            onChange={(e) => handleParameterChange(widthParam.name, parseFloat(e.target.value))}
+                        />
+                    </div>
+                    <div className="pb-2 text-xs text-muted-foreground">×</div>
+                    <div className="space-y-2">
+                        <Label className="text-xs">{heightParam.label}</Label>
+                        <Input
+                            type="number"
+                            name={heightParam.name}
+                            value={parameterValues[heightParam.name] ?? heightParam.default}
+                            min={heightParam.min}
+                            max={heightParam.max}
+                            step={heightParam.step}
+                            className="h-8 text-sm"
+                            onChange={(e) => handleParameterChange(heightParam.name, parseFloat(e.target.value))}
+                        />
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // Check if a parameter should be visible based on dependsOn
@@ -880,7 +949,8 @@ export default function VideoGenerationForm() {
                 )}
 
                 {/* Basic Parameters */}
-                {currentModel.parameters.filter(p => p.group === 'basic' && isParameterVisible(p)).map(param => (
+                {renderDimensionPair(currentModel.parameters.filter(p => p.group === 'basic'))}
+                {currentModel.parameters.filter(p => p.group === 'basic' && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height').map(param => (
                     <div key={`${param.name}-${param.default}`} className="space-y-2">
                         <Label className="text-xs">{param.label}</Label>
                         {param.type === 'boolean' ? (
@@ -890,7 +960,7 @@ export default function VideoGenerationForm() {
                                     name={param.name}
                                     id={param.name}
                                     className="rounded border-border"
-                                    defaultChecked={param.default}
+                                    checked={parameterValues[param.name] ?? param.default}
                                     onChange={(e) => handleParameterChange(param.name, e.target.checked)}
                                 />
                                 <label htmlFor={param.name} className="text-xs text-muted-foreground">{t('generationForm.enable')}</label>
@@ -899,7 +969,7 @@ export default function VideoGenerationForm() {
                             <select
                                 name={param.name}
                                 className="w-full p-2 rounded-md border border-border bg-background text-sm"
-                                defaultValue={param.default}
+                                value={parameterValues[param.name] ?? param.default}
                                 onChange={(e) => handleParameterChange(param.name, e.target.value)}
                             >
                                 {param.options?.map(opt => (
@@ -910,7 +980,7 @@ export default function VideoGenerationForm() {
                             <Input
                                 type="text"
                                 name={param.name}
-                                defaultValue={param.default}
+                                value={parameterValues[param.name] ?? param.default}
                                 className="h-8 text-sm"
                                 onChange={(e) => handleParameterChange(param.name, e.target.value)}
                             />
@@ -918,7 +988,7 @@ export default function VideoGenerationForm() {
                             <Input
                                 type="number"
                                 name={param.name}
-                                defaultValue={param.default}
+                                value={parameterValues[param.name] ?? param.default}
                                 min={param.min}
                                 max={param.max}
                                 step={param.step}
@@ -1036,6 +1106,7 @@ export default function VideoGenerationForm() {
                             </>
                         )}
 
+                        {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
                         {currentModel.parameters.filter(p => {
                             // Filter out LoRA parameters for WAN 2.2 (handled by LoRAPairSelector)
                             if (currentModel.id === 'wan22' && (
@@ -1044,6 +1115,9 @@ export default function VideoGenerationForm() {
                                 p.name === 'lora_high_3' || p.name === 'lora_low_3' ||
                                 p.name === 'lora_high_4' || p.name === 'lora_low_4'
                             )) {
+                                return false;
+                            }
+                            if (p.name === 'width' || p.name === 'height') {
                                 return false;
                             }
                             return (!p.group || p.group === 'advanced') && isParameterVisible(p);
@@ -1068,7 +1142,7 @@ export default function VideoGenerationForm() {
                                                     name={param.name}
                                                     id={param.name}
                                                     className="rounded border-border"
-                                                    defaultChecked={param.default}
+                                                    checked={parameterValues[param.name] ?? param.default}
                                                     onChange={(e) => handleParameterChange(param.name, e.target.checked)}
                                                 />
                                                 <label htmlFor={param.name} className="text-xs text-muted-foreground">{t('generationForm.enable')}</label>
@@ -1077,7 +1151,7 @@ export default function VideoGenerationForm() {
                                             <select
                                                 name={param.name}
                                                 className="w-full p-2 rounded-md border border-border bg-background text-sm"
-                                                defaultValue={param.default}
+                                                value={parameterValues[param.name] ?? param.default}
                                                 onChange={(e) => handleParameterChange(param.name, e.target.value)}
                                             >
                                                 {param.options?.map(opt => (
@@ -1088,7 +1162,7 @@ export default function VideoGenerationForm() {
                                             <Input
                                                 type="text"
                                                 name={param.name}
-                                                defaultValue={param.default}
+                                                value={parameterValues[param.name] ?? param.default}
                                                 className="h-8 text-sm"
                                                 onChange={(e) => handleParameterChange(param.name, e.target.value)}
                                             />
@@ -1096,7 +1170,7 @@ export default function VideoGenerationForm() {
                                             <Input
                                                 type="number"
                                                 name={param.name}
-                                                defaultValue={param.default}
+                                                value={parameterValues[param.name] ?? param.default}
                                                 min={param.min}
                                                 max={param.max}
                                                 step={param.step}

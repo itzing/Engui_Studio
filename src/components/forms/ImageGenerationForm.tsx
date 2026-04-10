@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PhotoIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftRight, PhotoIcon } from 'lucide-react';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
@@ -347,6 +347,74 @@ export default function ImageGenerationForm() {
             ...prev,
             [paramName]: value
         }));
+    };
+
+    const swapDimensionParameters = (widthParam: any, heightParam: any) => {
+        const currentWidth = parameterValues[widthParam.name] ?? widthParam.default;
+        const currentHeight = parameterValues[heightParam.name] ?? heightParam.default;
+
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParam.name]: currentHeight,
+            [heightParam.name]: currentWidth,
+        }));
+    };
+
+    const renderDimensionPair = (params: any[]) => {
+        const widthParam = params.find(param => param.name === 'width');
+        const heightParam = params.find(param => param.name === 'height');
+
+        if (!widthParam || !heightParam || !isParameterVisible(widthParam) || !isParameterVisible(heightParam)) {
+            return null;
+        }
+
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs">Width × Height</Label>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => swapDimensionParameters(widthParam, heightParam)}
+                        title="Swap width and height"
+                        aria-label="Swap width and height"
+                    >
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                    <div className="space-y-2">
+                        <Label className="text-xs">{widthParam.label}</Label>
+                        <Input
+                            type="number"
+                            name={widthParam.name}
+                            value={parameterValues[widthParam.name] ?? widthParam.default}
+                            onChange={(e) => handleParameterChange(widthParam.name, parseFloat(e.target.value))}
+                            min={widthParam.min}
+                            max={widthParam.max}
+                            step={widthParam.step}
+                            className="h-8 text-sm"
+                        />
+                    </div>
+                    <div className="pb-2 text-xs text-muted-foreground">×</div>
+                    <div className="space-y-2">
+                        <Label className="text-xs">{heightParam.label}</Label>
+                        <Input
+                            type="number"
+                            name={heightParam.name}
+                            value={parameterValues[heightParam.name] ?? heightParam.default}
+                            onChange={(e) => handleParameterChange(heightParam.name, parseFloat(e.target.value))}
+                            min={heightParam.min}
+                            max={heightParam.max}
+                            step={heightParam.step}
+                            className="h-8 text-sm"
+                        />
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // Check if a parameter should be visible based on dependsOn
@@ -799,7 +867,8 @@ export default function ImageGenerationForm() {
                 )}
 
                 {/* Basic Parameters */}
-                {currentModel.parameters.filter(p => p.group === 'basic' && isParameterVisible(p)).map(param => (
+                {renderDimensionPair(currentModel.parameters.filter(p => p.group === 'basic'))}
+                {currentModel.parameters.filter(p => p.group === 'basic' && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height').map(param => (
                     <div key={`${param.name}-${param.default}`} className="space-y-2">
                         {param.type !== 'boolean' && <Label className="text-xs">{param.label}</Label>}
                         {param.type === 'boolean' ? (
@@ -898,7 +967,8 @@ export default function ImageGenerationForm() {
                     </button>
 
                     <div className={`space-y-4 animate-in slide-in-from-top-2 duration-200 ${showAdvanced ? '' : 'hidden'}`}>
-                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p)).map(param => (
+                        {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
+                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height').map(param => (
                             <div key={`${param.name}-${param.default}`} className="space-y-2">
                                 {param.type !== 'boolean' && param.type !== 'lora-selector' && <Label className="text-xs">{param.label}</Label>}
                                 {param.type === 'lora-selector' ? (
