@@ -79,18 +79,6 @@ export default function CenterPanel() {
       setHoverPreview(detail);
 
       if (detail && detail.type === 'image' && detail.status === 'completed' && detail.url) {
-        setGalleryItems(prev => {
-          const next = [...prev.filter(item => item.id !== detail.id), {
-            id: detail.id,
-            url: detail.url,
-            prompt: detail.prompt,
-            modelId: detail.modelId,
-            workspaceId: detail.workspaceId,
-            createdAt: detail.createdAt,
-          }];
-          return next.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        });
-
         if (detail.modelId === 'gallery') {
           setSelectedGalleryItemId(detail.id);
         } else {
@@ -107,6 +95,22 @@ export default function CenterPanel() {
       }
     };
 
+    const galleryItemsHandler = (event: Event) => {
+      const custom = event as CustomEvent;
+      const detail = Array.isArray(custom.detail) ? custom.detail : [];
+      const nextItems = detail
+        .filter((item: any) => item?.type === 'image' && typeof item?.url === 'string' && item.url)
+        .map((item: any) => ({
+          id: item.id,
+          url: item.url,
+          prompt: item.prompt,
+          modelId: item.modelId,
+          workspaceId: item.workspaceId,
+          createdAt: item.createdAt,
+        } as GalleryItem));
+      setGalleryItems(nextItems);
+    };
+
     if (typeof window !== 'undefined') {
       const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
       if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
@@ -116,14 +120,16 @@ export default function CenterPanel() {
 
     window.addEventListener('jobHoverPreview', handler as EventListener);
     window.addEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
+    window.addEventListener('rightPanelGalleryItemsChanged', galleryItemsHandler as EventListener);
     return () => {
       window.removeEventListener('jobHoverPreview', handler as EventListener);
       window.removeEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
+      window.removeEventListener('rightPanelGalleryItemsChanged', galleryItemsHandler as EventListener);
     };
   }, []);
 
-  useEffect(() => {
-    const fromJobs: GalleryItem[] = [...jobs]
+  const completedImageJobs = useMemo(() => {
+    return [...jobs]
       .filter((job: Job) => job.status === 'completed' && !!job.resultUrl && job.type === 'image')
       .map(job => ({
         id: job.id,
@@ -133,18 +139,7 @@ export default function CenterPanel() {
         workspaceId: job.workspaceId,
         createdAt: job.createdAt,
       }));
-
-    if (fromJobs.length === 0) return;
-
-    setGalleryItems(prev => {
-      const map = new Map<string, GalleryItem>();
-      for (const item of prev) map.set(item.id, item);
-      for (const item of fromJobs) map.set(item.id, item);
-      return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    });
   }, [jobs]);
-
-  const completedImageJobs = useMemo(() => galleryItems, [galleryItems]);
 
   const latestSuccessfulJob = completedImageJobs[0] || null;
 
@@ -157,6 +152,16 @@ export default function CenterPanel() {
       setSelectedImageJobId(latestSuccessfulJob?.id || null);
     }
   }, [selectedImageJobId, latestSuccessfulJob, completedImageJobs]);
+
+  useEffect(() => {
+    if (!selectedGalleryItemId && galleryItems.length > 0) {
+      setSelectedGalleryItemId(galleryItems[0].id);
+      return;
+    }
+    if (selectedGalleryItemId && !galleryItems.some(item => item.id === selectedGalleryItemId)) {
+      setSelectedGalleryItemId(galleryItems[0]?.id || null);
+    }
+  }, [selectedGalleryItemId, galleryItems]);
 
   useEffect(() => {
     try {
@@ -181,25 +186,31 @@ export default function CenterPanel() {
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
       if (target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (completedImageJobs.length === 0) return;
 
-      const baseId = (hoverPreview && hoverPreview.id) ? hoverPreview.id : (selectedImageJobId || completedImageJobs[0].id);
-      const currentIndex = completedImageJobs.findIndex(job => job.id === baseId);
+      const navigationItems = rightPanelMode === 'gallery' ? galleryItems : completedImageJobs;
+      if (navigationItems.length === 0) return;
+
+      const selectedId = rightPanelMode === 'gallery' ? selectedGalleryItemId : selectedImageJobId;
+      const baseId = (hoverPreview && hoverPreview.id) ? hoverPreview.id : (selectedId || navigationItems[0].id);
+      const currentIndex = navigationItems.findIndex(item => item.id === baseId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
 
-      // ArrowRight -> older (next index), ArrowLeft -> newer (prev index)
       const nextIndex = event.key === 'ArrowRight'
-        ? (safeIndex + 1) % completedImageJobs.length
-        : (safeIndex - 1 + completedImageJobs.length) % completedImageJobs.length;
+        ? (safeIndex + 1) % navigationItems.length
+        : (safeIndex - 1 + navigationItems.length) % navigationItems.length;
 
       setHoverPreview(null);
-      setSelectedImageJobId(completedImageJobs[nextIndex].id);
+      if (rightPanelMode === 'gallery') {
+        setSelectedGalleryItemId(navigationItems[nextIndex].id);
+      } else {
+        setSelectedImageJobId(navigationItems[nextIndex].id);
+      }
       event.preventDefault();
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [mode, hoverPreview, selectedImageJobId, completedImageJobs]);
+  }, [mode, hoverPreview, rightPanelMode, selectedImageJobId, selectedGalleryItemId, completedImageJobs, galleryItems]);
 
   const selectedImageJob = useMemo(() => {
     if (!selectedImageJobId) return latestSuccessfulJob;

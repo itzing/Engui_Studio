@@ -400,6 +400,22 @@ export default function RightPanel() {
     const filteredJobs = loadedJobs;
     const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
     const filteredGalleryAssets = galleryAssets;
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('rightPanelGalleryItemsChanged', {
+            detail: filteredGalleryAssets.map(asset => ({
+                id: asset.id,
+                type: asset.type,
+                url: asset.previewUrl || asset.originalUrl,
+                prompt: (asset.userTags || asset.autoTags || []).join(', '),
+                modelId: 'gallery',
+                workspaceId: asset.workspaceId,
+                status: 'completed',
+                createdAt: new Date(asset.addedToGalleryAt).getTime(),
+            })),
+        }));
+    }, [filteredGalleryAssets]);
     const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const activeGalleryPreset = showTrashed
         ? 'trash'
