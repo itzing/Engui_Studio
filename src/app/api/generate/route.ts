@@ -307,7 +307,10 @@ export async function POST(request: NextRequest) {
                 inputData['zImageLora'] = lora;
                 inputData['zImageLoraWeight'] = weight;
 
-                console.log(`🔍 Z-Image LoRA: [["${loraFileName}", ${weight}]]`);
+                console.log('Z-Image LoRA attached', {
+                    fileName: loraFileName,
+                    weight,
+                });
             }
 
             // Remove lora and loraWeight from parameters to prevent overwriting inputData.lora
@@ -366,11 +369,11 @@ export async function POST(request: NextRequest) {
             } as any, // Prisma client type may be out of sync
         });
 
-        console.log(`📝 Created job record: ${job.id}`);
-        console.log(`📁 Media input paths stored:`, {
-            imageInputPath,
-            videoInputPath,
-            audioInputPath,
+        console.log('Created job record', {
+            jobId: job.id,
+            hasImageInput: !!imageInputPath,
+            hasVideoInput: !!videoInputPath,
+            hasAudioInput: !!audioInputPath,
         });
 
         // Handle RunPod API
@@ -540,18 +543,17 @@ export async function POST(request: NextRequest) {
                 runpodInput.__encryptSensitiveUpscale = true;
             }
 
-            console.log('📤 Sending to RunPod:', {
+            console.log('Sending job to RunPod', {
+                jobId: job.id,
                 modelId,
                 endpointId,
-                input: {
-                    ...runpodInput,
-                    prompt: runpodInput.prompt ? '[REDACTED]' : undefined,
-                    negativePrompt: runpodInput.negativePrompt ? '[REDACTED]' : undefined,
-                    image_base64: runpodInput.image_base64 ? '[REDACTED]' : undefined,
-                    video_base64: runpodInput.video_base64 ? '[REDACTED]' : undefined,
-                    image_url: runpodInput.image_url ? '[REDACTED]' : undefined,
-                    video_url: runpodInput.video_url ? '[REDACTED]' : undefined,
-                }
+                secureMode: requiresSecureKey,
+                hasSecureEnvelope: !!runpodInput._secure,
+                mediaInputsCount: Array.isArray(runpodInput.media_inputs) ? runpodInput.media_inputs.length : 0,
+                hasTransportRequest: !!runpodInput.transport_request,
+                hasPrompt: typeof runpodInput.prompt === 'string' && runpodInput.prompt.trim() !== '',
+                hasNegativePrompt: typeof runpodInput.negativePrompt === 'string' && runpodInput.negativePrompt.trim() !== '',
+                loraCount: Array.isArray(runpodInput.lora) ? runpodInput.lora.length : 0,
             });
 
             try {

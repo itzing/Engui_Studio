@@ -70,6 +70,12 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   const [previewKey, setPreviewKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<{ total: number; completed: number; currentKey: string | null; cancelled: boolean }>({
+    total: 0,
+    completed: 0,
+    currentKey: null,
+    cancelled: false,
+  });
   const [error, setError] = useState<string>('');
 
   const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
@@ -216,13 +222,36 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     const confirmed = confirm(`Delete ${selectedKeys.length} selected item(s)?`);
     if (!confirmed) return;
 
+    const keysToDelete = [...selectedKeys];
     setIsDeleting(true);
     setError('');
+    setDeleteProgress({
+      total: keysToDelete.length,
+      completed: 0,
+      currentKey: null,
+      cancelled: false,
+    });
 
     try {
       const failures: string[] = [];
+      let completed = 0;
+      let cancelled = false;
 
-      for (const key of selectedKeys) {
+      for (const key of keysToDelete) {
+        setDeleteProgress((previous) => {
+          if (previous.cancelled) {
+            cancelled = true;
+          }
+          return {
+            ...previous,
+            currentKey: key,
+          };
+        });
+
+        if (cancelled) {
+          break;
+        }
+
         const response = await fetch('/api/s3-storage/delete', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
@@ -232,23 +261,44 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
           failures.push(data.error || key);
+        } else {
+          completed += 1;
+          setDeleteProgress((previous) => ({
+            ...previous,
+            completed,
+          }));
         }
       }
 
-      if (failures.length > 0) {
-        throw new Error(`Failed to delete ${failures.length} item(s).`);
-      }
-
-      setSelectedKeys([]);
-      if (previewKey && selectedSet.has(previewKey)) {
+      const remainingKeys = keysToDelete.slice(completed + failures.length);
+      setSelectedKeys(cancelled ? remainingKeys : []);
+      if (previewKey && keysToDelete.includes(previewKey)) {
         setPreviewKey('');
       }
+
       await loadItems(activeVolume, currentPath);
+
+      if (cancelled) {
+        setError(`Deletion cancelled. Removed ${completed} of ${keysToDelete.length} item(s).`);
+      } else if (failures.length > 0) {
+        throw new Error(`Failed to delete ${failures.length} item(s).`);
+      }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Delete failed.');
     } finally {
+      setDeleteProgress((previous) => ({
+        ...previous,
+        currentKey: null,
+      }));
       setIsDeleting(false);
     }
+  }
+
+  function handleCancelDelete() {
+    setDeleteProgress((previous) => ({
+      ...previous,
+      cancelled: true,
+    }));
   }
 
   return (
@@ -262,7 +312,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 variant="outline"
                 size="sm"
                 onClick={() => activeVolume && loadItems(activeVolume, currentPath)}
-                disabled={!activeVolume || isLoading}
+                disabled={!activeVolume || isLoading || isDeleting}
               >
                 <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -276,15 +326,37 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 <Trash2 className="w-4 h-4 mr-1" />
                 Delete ({selectedKeys.length})
               </Button>
+              {isDeleting && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelDelete}
+                  disabled={deleteProgress.cancelled}
+                >
+                  {deleteProgress.cancelled ? 'Cancelling...' : 'Cancel'}
+                </Button>
+              )}
             </div>
           </div>
           <DialogDescription className="flex flex-col gap-2 text-xs">
+            {isDeleting && (
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span>
+                    Deleting {deleteProgress.completed}/{deleteProgress.total}
+                    {deleteProgress.currentKey ? `, current: ${getFileName(deleteProgress.currentKey)}` : ''}
+                  </span>
+                  <span>{deleteProgress.cancelled ? 'Stopping after current item...' : 'In progress'}</span>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span>Bucket:</span>
               <select
                 value={activeVolume}
                 onChange={(event) => handleVolumeChange(event.target.value)}
                 className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                disabled={isDeleting}
               >
                 {volumes.map((volume) => (
                   <option key={volume.name} value={volume.name}>
@@ -303,7 +375,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   setSelectedKeys([]);
                   setPreviewKey('');
                 }}
-                disabled={!activeVolume}
+                disabled={!activeVolume || isDeleting}
               >
                 Root
               </Button>
@@ -319,6 +391,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                       setSelectedKeys([]);
                       setPreviewKey('');
                     }}
+                    disabled={isDeleting}
                   >
                     {segment.label}
                   </Button>
@@ -337,7 +410,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 size="sm"
                 className="h-7 px-2 text-xs"
                 onClick={handleGoUp}
-                disabled={!currentPath}
+                disabled={!currentPath || isDeleting}
               >
                 <ArrowUp className="w-3 h-3 mr-1" />
                 Up
@@ -370,12 +443,14 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                           checked={isChecked}
                           onChange={(event) => toggleSelect(item.key, event.target.checked)}
                           className="h-3.5 w-3.5 rounded border-border"
+                          disabled={isDeleting}
                         />
 
                         <button
                           type="button"
                           className="flex items-center gap-2 flex-1 min-w-0 text-left"
                           onClick={() => {
+                            if (isDeleting) return;
                             if (item.type === 'directory') {
                               handleOpenFolder(item.key);
                             } else {

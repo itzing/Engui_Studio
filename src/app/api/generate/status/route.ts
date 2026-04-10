@@ -30,6 +30,41 @@ function detectResultExtension(mime?: string | null, kind?: string | null): stri
     return '.png';
 }
 
+async function deleteS3PrefixRecursive(s3: S3Service, prefix: string, warnings: string[]) {
+    const normalizedPrefix = prefix.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!normalizedPrefix) return;
+
+    try {
+        const items = await s3.listFiles(`${normalizedPrefix}/`);
+        for (const item of items) {
+            if (item.type === 'directory') {
+                await deleteS3PrefixRecursive(s3, item.key, warnings);
+            } else {
+                try {
+                    await s3.deleteFile(item.key.replace(/^\/+/, ''));
+                } catch (error: any) {
+                    warnings.push(`prefix-file:${item.key}:${error.message}`);
+                }
+            }
+        }
+    } catch (error: any) {
+        warnings.push(`prefix-list:${normalizedPrefix}:${error.message}`);
+    }
+
+    const markerCandidates = [
+        `${normalizedPrefix}/`,
+        `${normalizedPrefix}/folder-marker.txt`,
+    ];
+
+    for (const markerKey of markerCandidates) {
+        try {
+            await s3.deleteFile(markerKey.replace(/^\/+/, ''));
+        } catch {
+            // Ignore missing marker objects.
+        }
+    }
+}
+
 async function cleanupSecureTransportArtifacts(params: {
     s3: S3Service;
     secureState: any;
@@ -54,6 +89,15 @@ async function cleanupSecureTransportArtifacts(params: {
         } catch (error: any) {
             cleanupWarnings.push(`result:${params.resultStoragePath}:${error.message}`);
         }
+    }
+
+    const outputDir = params.secureState?.activeAttempt?.outputDir;
+    const attemptPrefix = typeof outputDir === 'string'
+        ? outputDir.replace(/\/+$/, '').replace(/\/outputs$/, '')
+        : null;
+
+    if (attemptPrefix) {
+        await deleteS3PrefixRecursive(params.s3, attemptPrefix, cleanupWarnings);
     }
 
     return {

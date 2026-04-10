@@ -27,7 +27,10 @@ class RunPodService {
     // Use provided credentials or fall back to environment variables
     this.apiKey = apiKey || process.env.RUNPOD_API_KEY!;
     this.endpointId = endpointId || process.env.RUNPOD_ENDPOINT_ID!;
-    this.baseUrl = `https://api.runpod.ai/v2/${this.endpointId}`;
+    const baseUrlOverride = process.env.RUNPOD_BASE_URL?.trim();
+    this.baseUrl = baseUrlOverride
+      ? `${baseUrlOverride.replace(/\/$/, '')}/${this.endpointId}`
+      : `https://api.runpod.ai/v2/${this.endpointId}`;
     this.generateTimeout = (generateTimeout || 3600) * 1000; // 초를 밀리초로 변환
     this.fieldEncKeyB64 = fieldEncKeyB64;
     
@@ -173,8 +176,6 @@ class RunPodService {
    * Each model has its own payload structure
    */
   private createPayload(modelId: string, input: RunPodInput): { input: Record<string, any> } {
-    console.log(`🎭 Creating payload for model: ${modelId}`);
-    
     switch (modelId) {
       case 'multitalk':
         return {
@@ -394,7 +395,6 @@ class RunPodService {
         // Format: lora: [["style_lora.safetensors", 0.8]]
         if (input.lora && Array.isArray(input.lora) && input.lora.length > 0) {
           zImageInput.lora = input.lora;
-          console.log(`🔍 Z-Image LoRA array:`, JSON.stringify(input.lora));
         }
 
         if (input.__encryptSensitiveZImage === true) {
@@ -428,26 +428,28 @@ class RunPodService {
    */
   private logPayload(modelId: string, payload: { input: Record<string, any> }): void {
     const input = payload.input;
-    
-    console.log(`📋 ${modelId} payload:`);
-    
-    for (const [key, value] of Object.entries(input)) {
-      if (value === undefined || value === null) continue;
-      
-      // Truncate long base64 strings
-      if (typeof value === 'string' && value.length > 100) {
-        console.log(`  - ${key}: [data] (${value.length} characters)`);
-      } else if (typeof value === 'object') {
-        console.log(`  - ${key}:`, JSON.stringify(value).substring(0, 100));
-      } else {
-        console.log(`  - ${key}:`, value);
-      }
-    }
+    const summary = {
+      keys: Object.keys(input),
+      hasSecureEnvelope: !!input._secure,
+      mediaInputsCount: Array.isArray(input.media_inputs) ? input.media_inputs.length : 0,
+      hasTransportRequest: !!input.transport_request,
+      hasPrompt: typeof input.prompt === 'string' && input.prompt.trim() !== '',
+      hasNegativePrompt: typeof input.negativePrompt === 'string' && input.negativePrompt.trim() !== '',
+      hasImageUrl: typeof input.image_url === 'string' && input.image_url.trim() !== '',
+      hasVideoUrl: typeof input.video_url === 'string' && input.video_url.trim() !== '',
+      hasImageBase64: typeof input.image_base64 === 'string' && input.image_base64.trim() !== '',
+      hasVideoBase64: typeof input.video_base64 === 'string' && input.video_base64.trim() !== '',
+      loraCount: Array.isArray(input.lora) ? input.lora.length : 0,
+    };
+
+    console.log(`Payload summary for ${modelId}:`, summary);
   }
 
   async submitJob(input: RunPodInput, modelId?: string): Promise<string> {
-    console.log('🚀 Submitting job to RunPod...');
-    console.log('📋 Endpoint ID:', this.endpointId);
+    console.log('Submitting job to RunPod', {
+      modelId: modelId || 'unknown',
+      endpointId: this.endpointId,
+    });
 
     // Create model-specific payload
     const payload = modelId 
@@ -472,7 +474,9 @@ class RunPodService {
       }
 
       const data = JSON.parse(responseText);
-      console.log('✅ Job submitted successfully, ID:', data.id);
+      console.log('RunPod job submitted successfully', {
+        jobId: data.id,
+      });
 
       if (!data.id) {
         throw new Error('RunPod API did not return a job ID');

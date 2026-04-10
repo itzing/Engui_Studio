@@ -840,7 +840,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                         }
 
                         if (data.status === 'COMPLETED') {
-                            console.log('Job Completed. Output:', data.output); // Debug logging
+                            console.log('Job completed:', {
+                                jobId: job.id,
+                                hasOutput: !!data.output,
+                                secureFinalized: data?.meta?.secureFinalized === true,
+                            });
 
                             // RunPod often returns output as an object with 'image_url' or similar, or just a string.
                             // Adjust based on actual model output.
@@ -872,7 +876,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             }
 
                             if (!resultUrl) {
-                                console.warn('Unknown output format:', data.output);
+                                console.warn('Unknown output format for completed job', {
+                                    jobId: job.id,
+                                    outputType: Array.isArray(data.output) ? 'array' : typeof data.output,
+                                    outputKeys: data.output && typeof data.output === 'object' && !Array.isArray(data.output)
+                                        ? Object.keys(data.output)
+                                        : undefined,
+                                });
                             }
 
                             // Add base64 prefix if missing and looks like base64
@@ -892,7 +902,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             // Download the result to local workspace only for legacy non-secure jobs.
                             if (resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
                                 if (secureMode) {
-                                    console.warn('Secure job returned non-local completed URL, skipping legacy download fallback:', resultUrl);
+                                    console.warn('Secure job returned non-local completed URL, skipping legacy download fallback', {
+                                        jobId: job.id,
+                                    });
                                 } else {
                                     try {
                                         const ext = job.type === 'video' ? '.mp4' : '.png';
@@ -923,7 +935,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             }
 
                             if (secureMode && resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
-                                console.warn('Secure completed job is missing a local finalized result URL:', job.id, resultUrl);
+                                console.warn('Secure completed job is missing a local finalized result URL', {
+                                    jobId: job.id,
+                                });
                             }
 
                             const rawOptions = (job as any).options;
