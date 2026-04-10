@@ -97,7 +97,14 @@ export function decodeMasterKey(keyBase64?: string | null): Buffer {
 }
 
 function serializeBinding(binding: StructuredBinding | MediaBinding): Buffer {
-  return Buffer.from(JSON.stringify(binding), 'utf8');
+  const canonical = Object.keys(binding)
+    .sort()
+    .reduce<Record<string, unknown>>((accumulator, key) => {
+      accumulator[key] = (binding as Record<string, unknown>)[key];
+      return accumulator;
+    }, {});
+
+  return Buffer.from(JSON.stringify(canonical), 'utf8');
 }
 
 function randomDek(): Buffer {

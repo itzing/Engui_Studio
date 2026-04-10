@@ -223,6 +223,12 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         }
     };
 
+    const handleCopyError = () => {
+        if (job?.error) {
+            navigator.clipboard.writeText(job.error);
+        }
+    };
+
     const getExecutionLabel = () => {
         if (!job) return null;
         try {
@@ -428,7 +434,14 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             {/* Error Message */}
                             {job.error && (
                                 <div className={`rounded-lg p-3 text-xs border ${job.error === 'cancelled' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
-                                    <span className="font-bold">{job.error === 'cancelled' ? 'Cancelled:' : 'Error:'}</span> {job.error}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 whitespace-pre-wrap break-words">
+                                            <span className="font-bold">{job.error === 'cancelled' ? 'Cancelled:' : 'Error:'}</span> {job.error}
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCopyError} title="Copy error">
+                                            <Copy className="w-3 h-3" />
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </div>
