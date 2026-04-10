@@ -1100,6 +1100,9 @@ export default function RightPanel() {
                                             {job.status === 'processing' && (
                                                 <span className="text-[9px] text-blue-500 font-medium">Running</span>
                                             )}
+                                            {job.status === 'finalizing' && (
+                                                <span className="text-[9px] text-sky-500 font-medium">Finalizing</span>
+                                            )}
                                             {job.status === 'failed' && (
                                                 <span className="text-[9px] text-red-500 font-medium">{job.error === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
                                             )}

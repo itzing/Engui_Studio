@@ -25,10 +25,7 @@ export interface StudioSettings {
     };
     runpod: {
         endpoints: Record<string, string>; // modelId -> endpointId
-        encryptSensitiveZImage?: boolean;
-        zImageFieldEncKeyB64?: string;
-        encryptSensitiveUpscale?: boolean;
-        upscaleFieldEncKeyB64?: string;
+        fieldEncKeyB64?: string;
     };
     elevenlabs?: {
         apiKey?: string;
@@ -62,7 +59,7 @@ export interface Job {
     id: string;
     modelId: string;
     type: 'image' | 'video' | 'audio' | 'tts' | 'music';
-    status: 'queued' | 'processing' | 'completed' | 'failed';
+    status: 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
     prompt: string;
     createdAt: number;
     resultUrl?: string;
@@ -130,10 +127,7 @@ const defaultSettings: StudioSettings = {
     apiKeys: {},
     runpod: {
         endpoints: {},
-        encryptSensitiveZImage: false,
-        zImageFieldEncKeyB64: '',
-        encryptSensitiveUpscale: false,
-        upscaleFieldEncKeyB64: ''
+        fieldEncKeyB64: ''
     },
     upscale: {},
     storage: {}
@@ -794,7 +788,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     // Polling Logic
     useEffect(() => {
         const interval = setInterval(async () => {
-            const activeJobs = jobs.filter(job => job.status === 'queued' || job.status === 'processing');
+            const activeJobs = jobs.filter(job => job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing');
 
             if (activeJobs.length === 0) return;
 
@@ -890,7 +884,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             }
 
                             // Download the result to local workspace
-                            if (resultUrl) {
+                            if (resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
                                 try {
                                     const ext = job.type === 'video' ? '.mp4' : '.png';
                                     // Sanitize modelId to remove slashes and other unsafe characters

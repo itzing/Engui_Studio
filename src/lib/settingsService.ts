@@ -49,10 +49,7 @@ interface UIConfig {
 interface RunPodConfig {
   apiKey: string;
   generateTimeout?: number;
-  zImageFieldEncKeyB64?: string;
-  encryptSensitiveZImage?: boolean;
-  upscaleFieldEncKeyB64?: string;
-  encryptSensitiveUpscale?: boolean;
+  fieldEncKeyB64?: string;
   endpoints: {
     image: string;
     video: string;
@@ -162,10 +159,7 @@ class SettingsService {
             ltx2: '' // LTX2 endpoint 추가
           },
           generateTimeout: 3600, // default: 1 hour
-          encryptSensitiveZImage: false,
-          zImageFieldEncKeyB64: '',
-          encryptSensitiveUpscale: false,
-          upscaleFieldEncKeyB64: ''
+          fieldEncKeyB64: ''
         },
 
         elevenlabs: {
@@ -232,14 +226,8 @@ class SettingsService {
               }
             } else if (setting.configKey === 'generateTimeout') {
               settings.runpod.generateTimeout = parseInt(value) || 3600;
-            } else if (setting.configKey === 'encryptSensitiveZImage') {
-              settings.runpod.encryptSensitiveZImage = value === 'true';
-            } else if (setting.configKey === 'zImageFieldEncKeyB64') {
-              settings.runpod.zImageFieldEncKeyB64 = value;
-            } else if (setting.configKey === 'encryptSensitiveUpscale') {
-              settings.runpod.encryptSensitiveUpscale = value === 'true';
-            } else if (setting.configKey === 'upscaleFieldEncKeyB64') {
-              settings.runpod.upscaleFieldEncKeyB64 = value;
+            } else if (setting.configKey === 'fieldEncKeyB64') {
+              settings.runpod.fieldEncKeyB64 = value;
             }
           } else if (setting.serviceName === 'elevenlabs') {
             if (setting.configKey === 'apiKey') {
@@ -459,38 +447,11 @@ class SettingsService {
           });
         }
 
-        if (settings.runpod.encryptSensitiveZImage !== undefined) {
+        if (settings.runpod.fieldEncKeyB64 !== undefined) {
           flatSettings.push({
             serviceName: 'runpod',
-            configKey: 'encryptSensitiveZImage',
-            configValue: String(settings.runpod.encryptSensitiveZImage),
-            isEncrypted: false
-          });
-        }
-
-        if (settings.runpod.zImageFieldEncKeyB64 !== undefined) {
-          flatSettings.push({
-            serviceName: 'runpod',
-            configKey: 'zImageFieldEncKeyB64',
-            configValue: settings.runpod.zImageFieldEncKeyB64,
-            isEncrypted: false
-          });
-        }
-
-        if (settings.runpod.encryptSensitiveUpscale !== undefined) {
-          flatSettings.push({
-            serviceName: 'runpod',
-            configKey: 'encryptSensitiveUpscale',
-            configValue: String(settings.runpod.encryptSensitiveUpscale),
-            isEncrypted: false
-          });
-        }
-
-        if (settings.runpod.upscaleFieldEncKeyB64 !== undefined) {
-          flatSettings.push({
-            serviceName: 'runpod',
-            configKey: 'upscaleFieldEncKeyB64',
-            configValue: settings.runpod.upscaleFieldEncKeyB64,
+            configKey: 'fieldEncKeyB64',
+            configValue: settings.runpod.fieldEncKeyB64,
             isEncrypted: false
           });
         }
@@ -553,6 +514,21 @@ class SettingsService {
       }
 
       logger.emoji.testing(`Flattened ${flatSettings.length} settings to save`);
+
+      await prisma.userSetting.deleteMany({
+        where: {
+          userId,
+          serviceName: 'runpod',
+          configKey: {
+            in: [
+              'encryptSensitiveZImage',
+              'zImageFieldEncKeyB64',
+              'encryptSensitiveUpscale',
+              'upscaleFieldEncKeyB64'
+            ]
+          }
+        }
+      });
 
       // Save each setting using upsert
       for (const setting of flatSettings) {
@@ -752,12 +728,8 @@ class SettingsService {
       masked.runpod.apiKey = this.encryption.maskSensitiveData(masked.runpod.apiKey);
     }
 
-    if (masked.runpod?.zImageFieldEncKeyB64) {
-      masked.runpod.zImageFieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.zImageFieldEncKeyB64);
-    }
-
-    if (masked.runpod?.upscaleFieldEncKeyB64) {
-      masked.runpod.upscaleFieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.upscaleFieldEncKeyB64);
+    if (masked.runpod?.fieldEncKeyB64) {
+      masked.runpod.fieldEncKeyB64 = this.encryption.maskSensitiveData(masked.runpod.fieldEncKeyB64);
     }
 
     // Mask Eleven Labs API key

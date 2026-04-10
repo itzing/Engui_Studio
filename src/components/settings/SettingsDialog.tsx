@@ -230,42 +230,12 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
         }));
     };
 
-    const updateRunPodSecureMode = (enabled: boolean) => {
+    const updateRunPodFieldEncKey = (value: string) => {
         setFormData(prev => ({
             ...prev,
             runpod: {
                 ...prev.runpod,
-                encryptSensitiveZImage: enabled,
-            }
-        }));
-    };
-
-    const updateRunPodZImageKey = (value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            runpod: {
-                ...prev.runpod,
-                zImageFieldEncKeyB64: value,
-            }
-        }));
-    };
-
-    const updateRunPodUpscaleSecureMode = (enabled: boolean) => {
-        setFormData(prev => ({
-            ...prev,
-            runpod: {
-                ...prev.runpod,
-                encryptSensitiveUpscale: enabled,
-            }
-        }));
-    };
-
-    const updateRunPodUpscaleKey = (value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            runpod: {
-                ...prev.runpod,
-                upscaleFieldEncKeyB64: value,
+                fieldEncKeyB64: value,
             }
         }));
     };
@@ -550,60 +520,18 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                     </div>
 
                                     <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                id="zimage-secure-toggle"
-                                                type="checkbox"
-                                                checked={!!formData.runpod.encryptSensitiveZImage}
-                                                onChange={(e) => updateRunPodSecureMode(e.target.checked)}
-                                                className="h-4 w-4 rounded border-border"
-                                            />
-                                            <Label htmlFor="zimage-secure-toggle" className="text-sm">
-                                                Encrypt Z-Image sensitive fields
-                                            </Label>
-                                        </div>
-
                                         <div className="space-y-2">
-                                            <Label className="text-xs">Z-Image Encryption Key (Base64, 32 bytes)</Label>
+                                            <Label className="text-sm">Global RunPod Field Encryption Key (Base64, 32 bytes)</Label>
                                             <Input
                                                 type="password"
-                                                value={formData.runpod.zImageFieldEncKeyB64 || ''}
-                                                onChange={(e) => updateRunPodZImageKey(e.target.value)}
+                                                value={formData.runpod.fieldEncKeyB64 || ''}
+                                                onChange={(e) => updateRunPodFieldEncKey(e.target.value)}
                                                 placeholder="FIELD_ENC_KEY_B64"
                                             />
                                         </div>
 
                                         <p className="text-xs text-muted-foreground">
-                                            Encrypts prompt, negative prompt, and LoRA names before sending to RunPod. Set the same key in RunPod endpoint secret FIELD_ENC_KEY_B64.
-                                        </p>
-                                    </div>
-
-                                    <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                id="upscale-secure-toggle"
-                                                type="checkbox"
-                                                checked={!!formData.runpod.encryptSensitiveUpscale}
-                                                onChange={(e) => updateRunPodUpscaleSecureMode(e.target.checked)}
-                                                className="h-4 w-4 rounded border-border"
-                                            />
-                                            <Label htmlFor="upscale-secure-toggle" className="text-sm">
-                                                Encrypt Upscale sensitive fields
-                                            </Label>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Upscale Encryption Key (Base64, 32 bytes)</Label>
-                                            <Input
-                                                type="password"
-                                                value={formData.runpod.upscaleFieldEncKeyB64 || ''}
-                                                onChange={(e) => updateRunPodUpscaleKey(e.target.value)}
-                                                placeholder="UPSCALE_FIELD_ENC_KEY_B64"
-                                            />
-                                        </div>
-
-                                        <p className="text-xs text-muted-foreground">
-                                            Encrypts inline image and video payloads before sending to the upscale endpoint. Set the same key in RunPod endpoint secret UPSCALE_FIELD_ENC_KEY_B64.
+                                            Shared secure transport key for all secure RunPod endpoints. Set the same value in each endpoint secret named FIELD_ENC_KEY_B64.
                                         </p>
                                     </div>
 

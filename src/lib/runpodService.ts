@@ -21,17 +21,15 @@ class RunPodService {
   private endpointId: string;
   private baseUrl: string;
   private generateTimeout: number; // AI 생성 작업 타임아웃 (밀리초)
-  private zImageFieldEncKeyB64?: string;
-  private upscaleFieldEncKeyB64?: string;
+  private fieldEncKeyB64?: string;
 
-  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number, zImageFieldEncKeyB64?: string, upscaleFieldEncKeyB64?: string) {
+  constructor(apiKey?: string, endpointId?: string, generateTimeout?: number, fieldEncKeyB64?: string) {
     // Use provided credentials or fall back to environment variables
     this.apiKey = apiKey || process.env.RUNPOD_API_KEY!;
     this.endpointId = endpointId || process.env.RUNPOD_ENDPOINT_ID!;
     this.baseUrl = `https://api.runpod.ai/v2/${this.endpointId}`;
     this.generateTimeout = (generateTimeout || 3600) * 1000; // 초를 밀리초로 변환
-    this.zImageFieldEncKeyB64 = zImageFieldEncKeyB64;
-    this.upscaleFieldEncKeyB64 = upscaleFieldEncKeyB64;
+    this.fieldEncKeyB64 = fieldEncKeyB64;
     
     if (!this.apiKey || !this.endpointId) {
       throw new Error('RunPod API key and endpoint ID are required');
@@ -46,7 +44,7 @@ class RunPodService {
   }
 
   private getZImageEncryptionKey(): Buffer | null {
-    const keyBase64 = this.zImageFieldEncKeyB64 || process.env.ZIMAGE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    const keyBase64 = this.fieldEncKeyB64 || process.env.FIELD_ENC_KEY_B64;
     if (!keyBase64) {
       return null;
     }
@@ -63,7 +61,7 @@ class RunPodService {
   }
 
   private getUpscaleEncryptionKey(): Buffer | null {
-    const keyBase64 = this.upscaleFieldEncKeyB64 || process.env.UPSCALE_FIELD_ENC_KEY_B64 || process.env.FIELD_ENC_KEY_B64;
+    const keyBase64 = this.fieldEncKeyB64 || process.env.FIELD_ENC_KEY_B64;
     if (!keyBase64) {
       return null;
     }
@@ -215,8 +213,11 @@ class RunPodService {
 
       case 'wan22':
         const wan22Input: Record<string, any> = {
-          prompt: input.prompt,
-          image_path: input.image_path,
+          ...(input.prompt && { prompt: input.prompt }),
+          ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
+          ...(input._secure && { _secure: input._secure }),
+          ...(input.media_inputs && { media_inputs: input.media_inputs }),
+          ...(input.transport_request && { transport_request: input.transport_request }),
           width: input.width,
           height: input.height,
           seed: input.seed,
@@ -224,7 +225,7 @@ class RunPodService {
           length: input.length,
           steps: input.steps,
           context_overlap: input.context_overlap,
-          ...(input.end_image_path && { end_image_path: input.end_image_path })
+          ...(!input.media_inputs && input.end_image_path ? { end_image_path: input.end_image_path } : {})
         };
 
         // Build lora_pairs array from individual LoRA parameters
@@ -264,8 +265,11 @@ class RunPodService {
       case 'wan-animate':
         return {
           input: {
-            prompt: input.prompt,
-            positive_prompt: input.positive_prompt || input.prompt,
+            ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
+            ...(!input._secure && (input.positive_prompt || input.prompt) ? { positive_prompt: input.positive_prompt || input.prompt } : {}),
+            ...(input._secure && { _secure: input._secure }),
+            ...(input.media_inputs && { media_inputs: input.media_inputs }),
+            ...(input.transport_request && { transport_request: input.transport_request }),
             seed: input.seed,
             cfg: input.cfg,
             steps: input.steps,
@@ -276,8 +280,8 @@ class RunPodService {
             ...(input.points_store && { points_store: input.points_store }),
             ...(input.coordinates && { coordinates: input.coordinates }),
             ...(input.neg_coordinates && { neg_coordinates: input.neg_coordinates }),
-            ...(input.image_path && { image_path: input.image_path }),
-            ...(input.video_path && { video_path: input.video_path })
+            ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
+            ...(!input.media_inputs && input.video_path ? { video_path: input.video_path } : {})
           }
         };
 
@@ -299,15 +303,18 @@ class RunPodService {
 
       case 'video-upscale': {
         const videoUpscaleInput: Record<string, any> = {
-          ...(input.video_path && { video_path: input.video_path }),
+          ...(!input.media_inputs && input.video_path ? { video_path: input.video_path } : {}),
           ...(input.video_url && { video_url: input.video_url }),
           ...(input.video_base64 && { video_base64: input.video_base64 }),
+          ...(input._secure && { _secure: input._secure }),
+          ...(input.media_inputs && { media_inputs: input.media_inputs }),
+          ...(input.transport_request && { transport_request: input.transport_request }),
           task_type: input.task_type,
           output: input.output || 'base64',
           network_volume: true
         };
 
-        if (input.__encryptSensitiveUpscale === true) {
+        if (input.__encryptSensitiveUpscale === true && !input._secure) {
           const secureBlock = this.encryptUpscaleSensitiveFields(input);
           if (secureBlock) {
             videoUpscaleInput._secure = secureBlock;
@@ -321,18 +328,21 @@ class RunPodService {
 
       case 'upscale': {
         const upscaleInput: Record<string, any> = {
-          ...(input.image_path && { image_path: input.image_path }),
+          ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
           ...(input.image_url && { image_url: input.image_url }),
           ...(input.image_base64 && { image_base64: input.image_base64 }),
-          ...(input.video_path && { video_path: input.video_path }),
+          ...(!input.media_inputs && input.video_path ? { video_path: input.video_path } : {}),
           ...(input.video_url && { video_url: input.video_url }),
           ...(input.video_base64 && { video_base64: input.video_base64 }),
+          ...(input._secure && { _secure: input._secure }),
+          ...(input.media_inputs && { media_inputs: input.media_inputs }),
+          ...(input.transport_request && { transport_request: input.transport_request }),
           task_type: input.task_type,
           output: input.output || 'base64',
           network_volume: true
         };
 
-        if (input.__encryptSensitiveUpscale === true) {
+        if (input.__encryptSensitiveUpscale === true && !input._secure) {
           const secureBlock = this.encryptUpscaleSensitiveFields(input);
           if (secureBlock) {
             upscaleInput._secure = secureBlock;
@@ -349,9 +359,12 @@ class RunPodService {
       case 'qwen-image-edit':
         return {
           input: {
-            prompt: input.prompt,
-            image_path: input.image_path,
-            ...(input.image_path_2 && { image_path_2: input.image_path_2 }),
+            ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
+            ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
+            ...(!input.media_inputs && input.image_path_2 ? { image_path_2: input.image_path_2 } : {}),
+            ...(input._secure && { _secure: input._secure }),
+            ...(input.media_inputs && { media_inputs: input.media_inputs }),
+            ...(input.transport_request && { transport_request: input.transport_request }),
             seed: input.seed,
             width: input.width,
             height: input.height,
@@ -370,7 +383,10 @@ class RunPodService {
           cfg: input.cfg,
           ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
           ...(input.negativePrompt && { negative_prompt: input.negativePrompt }),
-          ...(input.condition_image && { condition_image: input.condition_image }),
+          ...(!input.media_inputs && input.condition_image ? { condition_image: input.condition_image } : {}),
+          ...(input._secure && { _secure: input._secure }),
+          ...(input.media_inputs && { media_inputs: input.media_inputs }),
+          ...(input.transport_request && { transport_request: input.transport_request }),
           ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet })
         };
 
@@ -382,13 +398,14 @@ class RunPodService {
         }
 
         if (input.__encryptSensitiveZImage === true) {
-          const { secureBlock, loraWeights } = this.encryptZImageSensitiveFields(input);
+          if (!input._secure) {
+            const { secureBlock, loraWeights } = this.encryptZImageSensitiveFields(input);
+            zImageInput._secure = secureBlock;
 
-          zImageInput._secure = secureBlock;
-
-          // Keep only non-sensitive LoRA metadata in plain text.
-          if (loraWeights.length > 0) {
-            zImageInput.lora_weights = loraWeights;
+            // Keep only non-sensitive LoRA metadata in plain text.
+            if (loraWeights.length > 0) {
+              zImageInput.lora_weights = loraWeights;
+            }
           }
 
           delete zImageInput.prompt;

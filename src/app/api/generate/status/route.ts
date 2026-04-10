@@ -2,11 +2,66 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
+import S3Service from '@/lib/s3Service';
 import { getModelById } from '@/lib/models/modelConfig';
+import { decodeMasterKey, downloadAndDecryptResultMedia } from '@/lib/secureTransport';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
+const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
+
+function ensureGenerationsDir() {
+    if (!fs.existsSync(GENERATIONS_DIR)) {
+        fs.mkdirSync(GENERATIONS_DIR, { recursive: true });
+    }
+}
+
+function detectResultExtension(mime?: string | null, kind?: string | null): string {
+    if (mime === 'video/mp4') return '.mp4';
+    if (mime === 'image/jpeg') return '.jpg';
+    if (mime === 'image/webp') return '.webp';
+    if (mime === 'image/gif') return '.gif';
+    if (mime === 'audio/mpeg') return '.mp3';
+    if (mime === 'audio/wav') return '.wav';
+    if (kind === 'video') return '.mp4';
+    return '.png';
+}
+
+async function cleanupSecureTransportArtifacts(params: {
+    s3: S3Service;
+    secureState: any;
+    resultStoragePath?: string | null;
+}) {
+    const cleanupWarnings: string[] = [];
+    const mediaInputs = params.secureState?.activeAttempt?.request?.mediaInputs || [];
+
+    for (const media of mediaInputs) {
+        const storagePath = media?.storagePath;
+        if (!storagePath) continue;
+        try {
+            await params.s3.deleteFile(storagePath.replace(/^\/+/, ''));
+        } catch (error: any) {
+            cleanupWarnings.push(`input:${storagePath}:${error.message}`);
+        }
+    }
+
+    if (params.resultStoragePath) {
+        try {
+            await params.s3.deleteFile(params.resultStoragePath.replace(/^\/+/, ''));
+        } catch (error: any) {
+            cleanupWarnings.push(`result:${params.resultStoragePath}:${error.message}`);
+        }
+    }
+
+    return {
+        transportStatus: cleanupWarnings.length === 0 ? 'completed' : 'warning',
+        warning: cleanupWarnings.length > 0 ? cleanupWarnings.join(' | ') : null,
+        completedAt: new Date().toISOString(),
+    };
+}
 
 function getConfiguredEncryptionKey(keyBase64: string | undefined | null, fallbackEnv?: string): Buffer | null {
     const rawKey = keyBase64 || (fallbackEnv ? process.env[fallbackEnv] : undefined) || process.env.FIELD_ENC_KEY_B64;
@@ -23,11 +78,11 @@ function getConfiguredEncryptionKey(keyBase64: string | undefined | null, fallba
 }
 
 function getZImageResultEncryptionKey(settings: any): Buffer | null {
-    return getConfiguredEncryptionKey(settings?.runpod?.zImageFieldEncKeyB64, 'ZIMAGE_FIELD_ENC_KEY_B64');
+    return getConfiguredEncryptionKey(settings?.runpod?.fieldEncKeyB64);
 }
 
 function getUpscaleResultEncryptionKey(settings: any): Buffer | null {
-    return getConfiguredEncryptionKey(settings?.runpod?.upscaleFieldEncKeyB64, 'UPSCALE_FIELD_ENC_KEY_B64');
+    return getConfiguredEncryptionKey(settings?.runpod?.fieldEncKeyB64);
 }
 
 function decryptEncryptedMediaBlock(block: any, key: Buffer, aad: string): string {
@@ -90,9 +145,31 @@ export async function GET(request: Request) {
                 success: true,
                 status: job.status === 'completed' ? 'COMPLETED' : 
                         job.status === 'failed' ? 'FAILED' : 
-                        job.status === 'processing' ? 'IN_PROGRESS' : job.status.toUpperCase(),
+                        job.status === 'processing' || job.status === 'finalizing' ? 'IN_PROGRESS' : job.status.toUpperCase(),
                 output: job.resultUrl ? { audioUrl: job.resultUrl, ...jobOptions } : undefined,
                 error: job.status === 'failed' ? (jobOptions.error || 'Job failed') : undefined
+            });
+        }
+
+        const existingSecureState = typeof (job as any).secureState === 'string'
+            ? (() => { try { return JSON.parse((job as any).secureState); } catch { return null; } })()
+            : ((job as any).secureState || null);
+
+        if (job.status === 'completed' && job.resultUrl && existingSecureState?.activeAttempt?.finalization?.status === 'completed') {
+            return NextResponse.json({
+                success: true,
+                status: 'COMPLETED',
+                output: {
+                    url: job.resultUrl,
+                    image_url: job.type === 'image' ? job.resultUrl : undefined,
+                    video_url: job.type === 'video' ? job.resultUrl : undefined,
+                    audioUrl: job.type === 'audio' || job.type === 'tts' || job.type === 'music' ? job.resultUrl : undefined,
+                },
+                meta: {
+                    secureFinalized: true,
+                    cleanupStatus: existingSecureState?.cleanup?.transportStatus || 'pending',
+                    cleanupWarning: existingSecureState?.cleanup?.warning || null,
+                },
             });
         }
 
@@ -123,6 +200,129 @@ export async function GET(request: Request) {
         const status = await runpodService.getJobStatus(runpodJobId);
 
         let normalizedOutput: any = status.output;
+        let secureState = existingSecureState;
+
+        if (normalizedOutput && typeof normalizedOutput === 'object' && normalizedOutput.transport_result && secureState?.activeAttempt?.attemptId) {
+            const transportResult = normalizedOutput.transport_result;
+            const attemptId = secureState.activeAttempt.attemptId;
+            const masterKey = decodeMasterKey(settings.runpod.fieldEncKeyB64);
+            const s3Service = new S3Service({
+                endpointUrl: settings.s3?.endpointUrl,
+                accessKeyId: settings.s3?.accessKeyId,
+                secretAccessKey: settings.s3?.secretAccessKey,
+                bucketName: settings.s3?.bucketName,
+                region: settings.s3?.region || 'us-east-1',
+            });
+
+            secureState = {
+                ...secureState,
+                phase: transportResult.status === 'completed' ? 'finalizing' : 'failed',
+                activeAttempt: {
+                    ...secureState.activeAttempt,
+                    response: {
+                        ...secureState.activeAttempt.response,
+                        transportResultSecureReceived: true,
+                        transportResultStatus: transportResult.status,
+                    },
+                },
+            };
+
+            if (transportResult.status === 'completed' && transportResult.result_media) {
+                ensureGenerationsDir();
+                const resultBuffer = await downloadAndDecryptResultMedia({
+                    s3: s3Service,
+                    masterKey,
+                    jobId,
+                    modelId: model.id,
+                    attemptId,
+                    media: transportResult.result_media,
+                });
+
+                const ext = detectResultExtension(transportResult.result_media.mime, transportResult.result_media.kind);
+                const safeModelId = model.id.replace(/[^a-zA-Z0-9-_]/g, '_');
+                const fileName = `${safeModelId}-${jobId}${ext}`;
+                const filePath = path.join(GENERATIONS_DIR, fileName);
+                const relativePath = `/generations/${fileName}`;
+                fs.writeFileSync(filePath, resultBuffer);
+
+                const cleanup = secureState?.cleanup?.transportStatus === 'completed' || secureState?.cleanup?.transportStatus === 'warning'
+                    ? secureState.cleanup
+                    : await cleanupSecureTransportArtifacts({
+                        s3: s3Service,
+                        secureState,
+                        resultStoragePath: transportResult.result_media.storage_path,
+                    });
+
+                secureState = {
+                    ...secureState,
+                    phase: 'completed',
+                    activeAttempt: {
+                        ...secureState.activeAttempt,
+                        finalization: {
+                            status: 'completed',
+                            localResultPath: filePath,
+                            localResultUrl: relativePath,
+                            completedAt: new Date().toISOString(),
+                        },
+                    },
+                    cleanup,
+                };
+
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        status: 'completed',
+                        resultUrl: relativePath,
+                        secureState: JSON.stringify(secureState),
+                        options: JSON.stringify({
+                            ...options,
+                            transportResultStatus: transportResult.status,
+                        }),
+                    },
+                });
+
+                return NextResponse.json({
+                    success: true,
+                    status: 'COMPLETED',
+                    output: {
+                        url: relativePath,
+                        image_url: transportResult.result_media.kind === 'image' ? relativePath : undefined,
+                        video_url: transportResult.result_media.kind === 'video' ? relativePath : undefined,
+                        transport_result: {
+                            status: transportResult.status,
+                        },
+                    },
+                    meta: {
+                        secureFinalized: true,
+                        cleanupStatus: cleanup?.transportStatus || 'pending',
+                        cleanupWarning: cleanup?.warning || null,
+                    },
+                });
+            }
+
+            if (transportResult.status === 'failed') {
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        status: 'failed',
+                        secureState: JSON.stringify({
+                            ...secureState,
+                            failure: transportResult.error || { code: 'TRANSPORT_FAILED', message: 'Secure transport failed' },
+                        }),
+                        options: JSON.stringify({
+                            ...options,
+                            error: transportResult.error?.message || 'Secure transport failed',
+                        }),
+                    },
+                });
+
+                return NextResponse.json({
+                    success: true,
+                    status: 'FAILED',
+                    error: transportResult.error?.message || 'Secure transport failed',
+                });
+            }
+        }
 
         if (model.id === 'z-image' && normalizedOutput && typeof normalizedOutput === 'object' && normalizedOutput.image_encrypted) {
             const key = getZImageResultEncryptionKey(settings);
@@ -130,7 +330,7 @@ export async function GET(request: Request) {
                 return NextResponse.json({
                     success: true,
                     status: 'FAILED',
-                    error: 'Missing result decryption key (zImageFieldEncKeyB64)',
+                    error: 'Missing result decryption key (fieldEncKeyB64)',
                 });
             }
 
@@ -157,7 +357,7 @@ export async function GET(request: Request) {
                     return NextResponse.json({
                         success: true,
                         status: 'FAILED',
-                        error: 'Missing result decryption key (upscaleFieldEncKeyB64)',
+                        error: 'Missing result decryption key (fieldEncKeyB64)',
                     });
                 }
 
@@ -181,7 +381,7 @@ export async function GET(request: Request) {
                     return NextResponse.json({
                         success: true,
                         status: 'FAILED',
-                        error: 'Missing result decryption key (upscaleFieldEncKeyB64)',
+                        error: 'Missing result decryption key (fieldEncKeyB64)',
                     });
                 }
 

@@ -5,6 +5,7 @@ import SettingsService from '@/lib/settingsService';
 import ElevenLabsService from '@/lib/elevenlabsService';
 import S3Service from '@/lib/s3Service';
 import { processFileUpload } from '@/lib/serverFileUtils';
+import { createSecureStateSkeleton, createStructuredEnvelope, decodeMasterKey, uploadEncryptedMediaInput, buildAttemptPaths } from '@/lib/secureTransport';
 import { mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -88,11 +89,15 @@ export async function POST(request: NextRequest) {
         let imageInputPath: string | undefined;
         let videoInputPath: string | undefined;
         let audioInputPath: string | undefined;
+        let primaryImageFile: File | undefined;
+        let secondaryImageFile: File | undefined;
+        let primaryVideoFile: File | undefined;
 
         // Handle image input
         if (model.inputs.includes('image')) {
             const imageKey = model.imageInputKey || 'image';
             const imageFile = formData.get('image') as File; // Always get from 'image' field in formData
+            primaryImageFile = imageFile && imageFile.size > 0 ? imageFile : undefined;
 
             console.log(`🔍 Checking for image input (key: ${imageKey})`);
             console.log(`📁 Image file from formData:`, imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'null');
@@ -126,6 +131,7 @@ export async function POST(request: NextRequest) {
             // Handle second image input (based on model config)
             const image2Key = model.imageInput2Key;
             const imageFile2 = formData.get('image2') as File;
+            secondaryImageFile = imageFile2 && imageFile2.size > 0 ? imageFile2 : undefined;
 
             if (model.inputs.includes('image2') && image2Key && imageFile2 && imageFile2.size > 0) {
                 console.log(`🔍 Checking for second image input (key: ${image2Key})`);
@@ -157,6 +163,7 @@ export async function POST(request: NextRequest) {
         if (model.inputs.includes('video')) {
             const videoKey = model.videoInputKey || 'video';
             const videoFile = formData.get('video') as File;
+            primaryVideoFile = videoFile && videoFile.size > 0 ? videoFile : undefined;
 
             console.log(`🔍 Checking for video input (key: ${videoKey})`);
             console.log(`📁 Video file from formData:`, videoFile ? `${videoFile.name} (${videoFile.size} bytes)` : 'null');
@@ -313,6 +320,33 @@ export async function POST(request: NextRequest) {
             inputData.prompt = prompt;
         }
 
+        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'];
+        const buildPersistedOptions = (params: Record<string, any>, input: Record<string, any>, extra: Record<string, any> = {}) => {
+            const merged = { ...params, ...input, ...extra } as Record<string, any>;
+
+            if (!secureModelIds.includes(modelId)) {
+                return merged;
+            }
+
+            delete merged.image_path;
+            delete merged.image_path_2;
+            delete merged.video_path;
+            delete merged.condition_image;
+            delete merged.output_path;
+            delete merged.s3_path;
+            delete merged.image_url;
+            delete merged.video_url;
+            delete merged.image_base64;
+            delete merged.video_base64;
+            delete merged._secure;
+            delete merged.media_inputs;
+            delete merged.transport_request;
+            delete merged.__encryptSensitiveZImage;
+            delete merged.__encryptSensitiveUpscale;
+
+            return merged;
+        };
+
         // Create job in database with media input paths
         const jobId = (formData.get('jobId') as string) || uuidv4();
         const job = await prisma.job.create({
@@ -324,7 +358,7 @@ export async function POST(request: NextRequest) {
                 type: model.type,
                 modelId: model.id,
                 prompt: prompt || null,
-                options: JSON.stringify({ ...parameters, ...inputData }),
+                options: JSON.stringify(buildPersistedOptions(parameters, inputData)),
                 imageInputPath: imageInputPath || null,
                 videoInputPath: videoInputPath || null,
                 audioInputPath: audioInputPath || null,
@@ -360,25 +394,133 @@ export async function POST(request: NextRequest) {
                 }, { status: 400 });
             }
 
+            const requiresSecureKey = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'].includes(modelId);
+            if (requiresSecureKey && !settings.runpod.fieldEncKeyB64?.trim()) {
+                return NextResponse.json({
+                    error: 'RunPod field encryption key is not configured',
+                    requiresSetup: true,
+                }, { status: 400 });
+            }
+
             const runpodService = new RunPodService(
                 settings.runpod.apiKey,
                 endpointId,
                 settings.runpod.generateTimeout,
-                settings.runpod.zImageFieldEncKeyB64,
-                settings.runpod.upscaleFieldEncKeyB64
+                settings.runpod.fieldEncKeyB64
             );
 
-            // Prepare RunPod input
+            const attemptId = uuidv4();
             const runpodInput = {
                 ...inputData,
                 ...parameters,
             } as Record<string, any>;
 
-            if (modelId === 'z-image' && settings.runpod?.encryptSensitiveZImage) {
+            let secureState: any = null;
+            if (requiresSecureKey) {
+                const masterKey = decodeMasterKey(settings.runpod.fieldEncKeyB64);
+                const { settings: latestSettings } = await settingsService.getSettings(userId);
+                const s3Service = new S3Service({
+                    endpointUrl: latestSettings.s3?.endpointUrl,
+                    accessKeyId: latestSettings.s3?.accessKeyId,
+                    secretAccessKey: latestSettings.s3?.secretAccessKey,
+                    bucketName: latestSettings.s3?.bucketName,
+                    region: latestSettings.s3?.region,
+                });
+
+                const mediaInputs: any[] = [];
+                const imageRole = modelId === 'z-image' ? 'condition_image' : 'source_image';
+                if (primaryImageFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: imageRole,
+                        kind: 'image',
+                        mime: primaryImageFile.type || 'image/png',
+                        plaintext: Buffer.from(await primaryImageFile.arrayBuffer()),
+                        fileName: `${imageRole}.bin`,
+                    }));
+                }
+                if (secondaryImageFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: 'secondary_image',
+                        kind: 'image',
+                        mime: secondaryImageFile.type || 'image/png',
+                        plaintext: Buffer.from(await secondaryImageFile.arrayBuffer()),
+                        fileName: 'secondary_image.bin',
+                    }));
+                }
+                if (primaryVideoFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: 'source_video',
+                        kind: 'video',
+                        mime: primaryVideoFile.type || 'video/mp4',
+                        plaintext: Buffer.from(await primaryVideoFile.arrayBuffer()),
+                        fileName: 'source_video.bin',
+                    }));
+                }
+
+                const securePayload: Record<string, any> = {};
+                if (typeof runpodInput.prompt === 'string' && runpodInput.prompt.trim() !== '') {
+                    securePayload.prompt = runpodInput.prompt;
+                }
+                if (typeof runpodInput.positive_prompt === 'string' && runpodInput.positive_prompt.trim() !== '') {
+                    securePayload.positive_prompt = runpodInput.positive_prompt;
+                }
+                if (typeof runpodInput.negativePrompt === 'string' && runpodInput.negativePrompt.trim() !== '') {
+                    securePayload.negativePrompt = runpodInput.negativePrompt;
+                }
+                if (typeof runpodInput.negative_prompt === 'string' && runpodInput.negative_prompt.trim() !== '') {
+                    securePayload.negative_prompt = runpodInput.negative_prompt;
+                }
+                if (Array.isArray(runpodInput.lora) && runpodInput.lora.length > 0) {
+                    securePayload.lora = runpodInput.lora;
+                }
+
+                if (Object.keys(securePayload).length > 0) {
+                    runpodInput._secure = createStructuredEnvelope(masterKey, {
+                        job_id: job.id,
+                        model_id: modelId,
+                        attempt_id: attemptId,
+                        direction: 'engui_to_endpoint',
+                    }, securePayload);
+                }
+
+                runpodInput.media_inputs = mediaInputs;
+                runpodInput.transport_request = {
+                    output_dir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`
+                };
+
+                secureState = createSecureStateSkeleton({
+                    attemptId,
+                    outputDir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`,
+                    secureBlockPresent: !!runpodInput._secure,
+                    mediaInputs: mediaInputs.map(media => ({
+                        role: media.role,
+                        kind: media.kind,
+                        mime: media.mime,
+                        storage_path: media.storage_path,
+                    })),
+                });
+            }
+
+            if (modelId === 'z-image') {
                 runpodInput.__encryptSensitiveZImage = true;
             }
 
-            if ((modelId === 'upscale' || modelId === 'video-upscale') && settings.runpod?.encryptSensitiveUpscale) {
+            if (modelId === 'upscale' || modelId === 'video-upscale') {
                 runpodInput.__encryptSensitiveUpscale = true;
             }
 
@@ -405,11 +547,19 @@ export async function POST(request: NextRequest) {
                 await prisma.job.update({
                     where: { id: job.id },
                     data: {
-                        options: JSON.stringify({
-                            ...parameters,
-                            ...inputData,
-                            runpodJobId
-                        })
+                        options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            runpodJobId,
+                            attemptId: requiresSecureKey ? attemptId : undefined,
+                            secureMode: requiresSecureKey || undefined,
+                        })),
+                        secureState: secureState ? JSON.stringify({
+                            ...secureState,
+                            phase: 'runpod_queued',
+                            activeAttempt: {
+                                ...secureState.activeAttempt,
+                                runpodJobId,
+                            },
+                        }) : null,
                     }
                 });
 
@@ -427,11 +577,10 @@ export async function POST(request: NextRequest) {
                     where: { id: job.id },
                     data: {
                         status: 'failed',
-                        options: JSON.stringify({
-                            ...parameters,
-                            ...inputData,
-                            error: error.message
-                        })
+                        options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            error: error.message,
+                            secureMode: requiresSecureKey || undefined,
+                        }))
                     },
                 });
 

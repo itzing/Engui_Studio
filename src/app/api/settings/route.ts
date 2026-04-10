@@ -127,41 +127,18 @@ function validateSettings(settings: any): string | null {
       }
     }
 
-    if (settings.runpod.encryptSensitiveZImage !== undefined && typeof settings.runpod.encryptSensitiveZImage !== 'boolean') {
-      return 'RunPod encryptSensitiveZImage must be a boolean';
+    if (settings.runpod.fieldEncKeyB64 !== undefined && typeof settings.runpod.fieldEncKeyB64 !== 'string') {
+      return 'RunPod fieldEncKeyB64 must be a string';
     }
 
-    if (settings.runpod.zImageFieldEncKeyB64 !== undefined && typeof settings.runpod.zImageFieldEncKeyB64 !== 'string') {
-      return 'RunPod zImageFieldEncKeyB64 must be a string';
-    }
-
-    if (typeof settings.runpod.zImageFieldEncKeyB64 === 'string' && settings.runpod.zImageFieldEncKeyB64.trim() !== '') {
+    if (typeof settings.runpod.fieldEncKeyB64 === 'string' && settings.runpod.fieldEncKeyB64.trim() !== '') {
       try {
-        const decoded = Buffer.from(settings.runpod.zImageFieldEncKeyB64, 'base64');
+        const decoded = Buffer.from(settings.runpod.fieldEncKeyB64, 'base64');
         if (decoded.length !== 32) {
-          return 'RunPod zImageFieldEncKeyB64 must be base64 for 32-byte key';
+          return 'RunPod fieldEncKeyB64 must be base64 for 32-byte key';
         }
       } catch {
-        return 'RunPod zImageFieldEncKeyB64 must be valid base64';
-      }
-    }
-
-    if (settings.runpod.encryptSensitiveUpscale !== undefined && typeof settings.runpod.encryptSensitiveUpscale !== 'boolean') {
-      return 'RunPod encryptSensitiveUpscale must be a boolean';
-    }
-
-    if (settings.runpod.upscaleFieldEncKeyB64 !== undefined && typeof settings.runpod.upscaleFieldEncKeyB64 !== 'string') {
-      return 'RunPod upscaleFieldEncKeyB64 must be a string';
-    }
-
-    if (typeof settings.runpod.upscaleFieldEncKeyB64 === 'string' && settings.runpod.upscaleFieldEncKeyB64.trim() !== '') {
-      try {
-        const decoded = Buffer.from(settings.runpod.upscaleFieldEncKeyB64, 'base64');
-        if (decoded.length !== 32) {
-          return 'RunPod upscaleFieldEncKeyB64 must be base64 for 32-byte key';
-        }
-      } catch {
-        return 'RunPod upscaleFieldEncKeyB64 must be valid base64';
+        return 'RunPod fieldEncKeyB64 must be valid base64';
       }
     }
   }

@@ -29,21 +29,24 @@ function normalizeUrlCandidate(value: unknown): string | null {
 function buildNormalizedOutputs(job: any): NormalizedJobOutput[] {
   const options = parseJobOptions(job.options);
   const mediaType = job.type === 'video' ? 'video' : (job.type === 'audio' || job.type === 'tts' || job.type === 'music') ? 'audio' : 'image';
+  const secureMode = options.secureMode === true;
 
-  const directCandidates = [
-    normalizeUrlCandidate(job.resultUrl),
-    normalizeUrlCandidate(options.url),
-    normalizeUrlCandidate(options.resultUrl),
-    normalizeUrlCandidate(options.image),
-    normalizeUrlCandidate(options.image_url),
-    normalizeUrlCandidate(options.image_path),
-    normalizeUrlCandidate(options.video),
-    normalizeUrlCandidate(options.video_url),
-    normalizeUrlCandidate(options.video_path),
-    normalizeUrlCandidate(options.audioUrl),
-    normalizeUrlCandidate(options.output_path),
-    normalizeUrlCandidate(options.s3_path),
-  ].filter(Boolean) as string[];
+  const directCandidates = secureMode
+    ? [normalizeUrlCandidate(job.resultUrl)].filter(Boolean) as string[]
+    : [
+        normalizeUrlCandidate(job.resultUrl),
+        normalizeUrlCandidate(options.url),
+        normalizeUrlCandidate(options.resultUrl),
+        normalizeUrlCandidate(options.image),
+        normalizeUrlCandidate(options.image_url),
+        normalizeUrlCandidate(options.image_path),
+        normalizeUrlCandidate(options.video),
+        normalizeUrlCandidate(options.video_url),
+        normalizeUrlCandidate(options.video_path),
+        normalizeUrlCandidate(options.audioUrl),
+        normalizeUrlCandidate(options.output_path),
+        normalizeUrlCandidate(options.s3_path),
+      ].filter(Boolean) as string[];
 
   const listCandidates: string[] = [];
   for (const key of ['images', 'videos', 'outputs', 'resultUrls'] as const) {
