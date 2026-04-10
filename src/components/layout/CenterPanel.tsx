@@ -29,6 +29,8 @@ type HoverPreview = {
   createdAt?: number;
 } | null;
 
+type RightPanelMode = 'jobs' | 'gallery';
+
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 
 export default function CenterPanel() {
@@ -38,6 +40,8 @@ export default function CenterPanel() {
   const [hoverPreview, setHoverPreview] = useState<HoverPreview>(null);
   const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('native');
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
+  const [selectedGalleryItemId, setSelectedGalleryItemId] = useState<string | null>(null);
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('jobs');
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [isPreviewAlreadyInGallery, setIsPreviewAlreadyInGallery] = useState(false);
   const [isSavingToGallery, setIsSavingToGallery] = useState(false);
@@ -86,11 +90,36 @@ export default function CenterPanel() {
           }];
           return next.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         });
+
+        if (detail.modelId === 'gallery') {
+          setSelectedGalleryItemId(detail.id);
+        } else {
+          setSelectedImageJobId(detail.id);
+        }
       }
     };
 
+    const panelModeHandler = (event: Event) => {
+      const custom = event as CustomEvent;
+      const detail = custom.detail;
+      if (detail === 'jobs' || detail === 'gallery') {
+        setRightPanelMode(detail);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
+      if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
+        setRightPanelMode(savedPanelMode);
+      }
+    }
+
     window.addEventListener('jobHoverPreview', handler as EventListener);
-    return () => window.removeEventListener('jobHoverPreview', handler as EventListener);
+    window.addEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
+    return () => {
+      window.removeEventListener('jobHoverPreview', handler as EventListener);
+      window.removeEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -177,12 +206,31 @@ export default function CenterPanel() {
     return completedImageJobs.find(job => job.id === selectedImageJobId) || latestSuccessfulJob;
   }, [selectedImageJobId, completedImageJobs, latestSuccessfulJob]);
 
+  const selectedGalleryItem = useMemo(() => {
+    if (!selectedGalleryItemId) return null;
+    return galleryItems.find(item => item.id === selectedGalleryItemId) || null;
+  }, [selectedGalleryItemId, galleryItems]);
+
   const previewJob = useMemo(() => {
     if (hoverPreview && hoverPreview.status === 'completed' && hoverPreview.url && hoverPreview.type === 'image') {
       return hoverPreview;
     }
+
+    if (rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
+      return {
+        id: selectedGalleryItem.id,
+        type: 'image',
+        url: selectedGalleryItem.url,
+        prompt: selectedGalleryItem.prompt,
+        modelId: selectedGalleryItem.modelId,
+        workspaceId: selectedGalleryItem.workspaceId,
+        status: 'completed',
+        createdAt: selectedGalleryItem.createdAt,
+      };
+    }
+
     return selectedImageJob;
-  }, [hoverPreview, selectedImageJob]);
+  }, [hoverPreview, rightPanelMode, selectedGalleryItem, selectedImageJob]);
 
   const isGalleryPreview = previewJob?.modelId === 'gallery';
   const shouldShowAddToGallery = !!previewJob && !isGalleryPreview && !isPreviewAlreadyInGallery;
@@ -387,7 +435,11 @@ export default function CenterPanel() {
               </Button>
             </div>
             <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-black/60 text-white text-xs rounded-md truncate pointer-events-none">
-              {hoverPreview ? (previewJob.modelId === 'gallery' ? 'Hovered gallery preview' : 'Hovered job preview') : 'Latest successful image'}
+              {hoverPreview
+                ? (previewJob.modelId === 'gallery' ? 'Hovered gallery preview' : 'Hovered job preview')
+                : rightPanelMode === 'gallery' && previewJob?.modelId === 'gallery'
+                  ? 'Last gallery preview'
+                  : 'Last job preview'}
               {previewJob.modelId ? ` · ${previewJob.modelId}` : ''}
             </div>
           </div>

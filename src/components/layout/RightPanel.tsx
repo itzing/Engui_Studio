@@ -106,6 +106,9 @@ export default function RightPanel() {
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined') return;
         window.localStorage.setItem('engui.rightPanel.mode', panelMode);
+        window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
+            detail: panelMode,
+        }));
     }, [isMounted, panelMode]);
 
     useEffect(() => {
