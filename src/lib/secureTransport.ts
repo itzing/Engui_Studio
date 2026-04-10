@@ -168,7 +168,9 @@ export function buildOutputStoragePath(jobId: string, attemptId: string, fileNam
 }
 
 export function storagePathToS3Key(storagePath: string): string {
-  return storagePath.replace(/^\/+/, '');
+  return storagePath
+    .replace(/^\/+/, '')
+    .replace(/^runpod-volume\//, '');
 }
 
 export function createStructuredEnvelope(masterKey: Buffer, binding: StructuredBinding, payload: unknown): StructuredEnvelope {
