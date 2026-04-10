@@ -213,7 +213,7 @@ class RunPodService {
 
       case 'wan22':
         const wan22Input: Record<string, any> = {
-          ...(input.prompt && { prompt: input.prompt }),
+          ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
           ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
           ...(input._secure && { _secure: input._secure }),
           ...(input.media_inputs && { media_inputs: input.media_inputs }),

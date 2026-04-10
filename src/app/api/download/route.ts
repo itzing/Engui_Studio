@@ -14,6 +14,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: 'Missing URL' }, { status: 400 });
         }
 
+        if (typeof url === 'string' && url.startsWith('/runpod-volume/secure-jobs/')) {
+            return NextResponse.json({
+                success: false,
+                error: 'Secure transport artifacts must be finalized through the secure status flow, not /api/download'
+            }, { status: 409 });
+        }
+
         // Determine filename
         let finalFilename = filename;
         if (!finalFilename) {
@@ -58,7 +65,8 @@ export async function POST(request: Request) {
             });
         }
 
-        // Handle RunPod volume paths - download from S3 with authentication
+        // Handle legacy RunPod volume paths - download from S3 with authentication.
+        // Secure transport paths under /runpod-volume/secure-jobs/... are intentionally rejected above.
         if (url.startsWith('/runpod-volume/')) {
             const SettingsService = (await import('@/lib/settingsService')).default;
             const S3Service = (await import('@/lib/s3Service')).default;

@@ -503,6 +503,22 @@ export async function POST(request: NextRequest) {
                     output_dir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`
                 };
 
+                delete runpodInput.image_path;
+                delete runpodInput.image_path_2;
+                delete runpodInput.video_path;
+                delete runpodInput.condition_image;
+                delete runpodInput.image_url;
+                delete runpodInput.video_url;
+                delete runpodInput.image_base64;
+                delete runpodInput.video_base64;
+
+                if (runpodInput._secure) {
+                    delete runpodInput.prompt;
+                    delete runpodInput.positive_prompt;
+                    delete runpodInput.negativePrompt;
+                    delete runpodInput.negative_prompt;
+                }
+
                 secureState = createSecureStateSkeleton({
                     attemptId,
                     outputDir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`,

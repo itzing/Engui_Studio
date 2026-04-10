@@ -883,33 +883,47 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                                 }
                             }
 
-                            // Download the result to local workspace
+                            const rawJobOptions = (job as any).options;
+                            const parsedJobOptions = typeof rawJobOptions === 'string'
+                                ? (() => { try { return JSON.parse(rawJobOptions); } catch { return {}; } })()
+                                : (rawJobOptions || {});
+                            const secureMode = parsedJobOptions.secureMode === true || data?.meta?.secureFinalized === true;
+
+                            // Download the result to local workspace only for legacy non-secure jobs.
                             if (resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
-                                try {
-                                    const ext = job.type === 'video' ? '.mp4' : '.png';
-                                    // Sanitize modelId to remove slashes and other unsafe characters
-                                    const safeModelId = job.modelId.replace(/[^a-zA-Z0-9-_]/g, '_');
-                                    const filename = `${safeModelId}-${job.id}${ext}`;
+                                if (secureMode) {
+                                    console.warn('Secure job returned non-local completed URL, skipping legacy download fallback:', resultUrl);
+                                } else {
+                                    try {
+                                        const ext = job.type === 'video' ? '.mp4' : '.png';
+                                        // Sanitize modelId to remove slashes and other unsafe characters
+                                        const safeModelId = job.modelId.replace(/[^a-zA-Z0-9-_]/g, '_');
+                                        const filename = `${safeModelId}-${job.id}${ext}`;
 
-                                    const downloadRes = await fetch('/api/download', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            url: resultUrl,
-                                            filename: filename,
-                                            folder: 'generations'
-                                        })
-                                    });
+                                        const downloadRes = await fetch('/api/download', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                url: resultUrl,
+                                                filename: filename,
+                                                folder: 'generations'
+                                            })
+                                        });
 
-                                    const downloadData = await downloadRes.json();
-                                    if (downloadData.success) {
-                                        resultUrl = downloadData.path;
-                                    } else {
-                                        console.error('Failed to download result:', downloadData.error);
+                                        const downloadData = await downloadRes.json();
+                                        if (downloadData.success) {
+                                            resultUrl = downloadData.path;
+                                        } else {
+                                            console.error('Failed to download result:', downloadData.error);
+                                        }
+                                    } catch (err) {
+                                        console.error('Error calling download API:', err);
                                     }
-                                } catch (err) {
-                                    console.error('Error calling download API:', err);
                                 }
+                            }
+
+                            if (secureMode && resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
+                                console.warn('Secure completed job is missing a local finalized result URL:', job.id, resultUrl);
                             }
 
                             const rawOptions = (job as any).options;
