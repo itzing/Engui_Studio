@@ -317,7 +317,7 @@ export default function RightPanel() {
             detail: asset ? {
                 id: asset.id,
                 type: asset.type,
-                url: asset.previewUrl || asset.originalUrl,
+                url: asset.originalUrl,
                 prompt: (asset.userTags || asset.autoTags || []).join(', '),
                 modelId: 'gallery',
                 workspaceId: asset.workspaceId,
@@ -407,7 +407,7 @@ export default function RightPanel() {
             detail: filteredGalleryAssets.map(asset => ({
                 id: asset.id,
                 type: asset.type,
-                url: asset.previewUrl || asset.originalUrl,
+                url: asset.originalUrl,
                 prompt: (asset.userTags || asset.autoTags || []).join(', '),
                 modelId: 'gallery',
                 workspaceId: asset.workspaceId,
