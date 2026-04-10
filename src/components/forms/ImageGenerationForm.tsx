@@ -6,7 +6,8 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight, PhotoIcon } from 'lucide-react';
+import { ArrowLeftRight } from 'lucide-react';
+import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
