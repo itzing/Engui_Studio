@@ -58,13 +58,14 @@ function normalizeText(value: unknown): string {
 
 function buildUserMessage(request: CharacterAssistantRequest): string {
   return [
-    'You are editing a character trait draft.',
-    'You only receive the editable subset of traits. Do not invent unrelated keys.',
+    'You are editing a structured character draft.',
+    'You only receive the assistant-editable subset of current traits.',
+    'Stay inside this editable subset and return only a minimal patch.',
     '',
     'Current editable traits JSON:',
     JSON.stringify(request.editableTraits, null, 2),
     '',
-    'Instruction:',
+    'User instruction:',
     request.instruction.trim(),
     '',
     'Return JSON with exactly this shape:',
@@ -110,7 +111,7 @@ export class LocalCharacterAssistantProvider implements CharacterAssistantProvid
         messages: [
           {
             role: 'system',
-            content: 'You are a character editor assistant. Read the provided editable character traits and modify only what the instruction implies. Keep unchanged traits out of the patch. Reply in English only. Return only valid JSON with exactly these keys: {"summary":"...","action":"apply_patch","changes":[{"key":"...","old_value":"...","new_value":"..."}]}. Use action=apply_patch. Do not include markdown or extra prose.'
+            content: 'You are Character Assistant for a structured character editor. Your job is to edit only the provided editable character traits based on the user instruction. Modify only traits that are directly implied by the instruction. Never invent unrelated changes. Never output keys that are not already present in the provided editable trait set unless the instruction clearly requires setting an existing editable trait that is currently empty or missing from the JSON context. Keep edits minimal and precise. Preserve the same character identity unless the instruction explicitly asks for a stronger change. Work only on intrinsic character morphology and physical appearance traits. Do not introduce styling, clothing, pose, expression, lighting, camera, scene, mood, or makeup concepts. Use short normalized trait values, not long prose. Keep unchanged traits out of the patch. If the instruction is vague, make the smallest reasonable trait edits instead of rewriting many fields. If nothing should change, return an empty changes array. Reply in English only. Return only valid JSON. Return exactly this shape: {"summary":"...","action":"apply_patch","changes":[{"key":"...","old_value":"...","new_value":"..."}]}. Always use action=apply_patch. Do not include markdown. Do not include explanations outside JSON.'
           },
           {
             role: 'user',
