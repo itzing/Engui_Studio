@@ -915,7 +915,7 @@ export default function CharacterManagerPanel() {
       </div>
 
       <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
-        <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+        <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="text-sm font-semibold">{draft?.name || 'Unsaved character draft'}</div>
@@ -936,29 +936,31 @@ export default function CharacterManagerPanel() {
               {draft ? ` • ${draftTraitCount} saved-or-draft trait${draftTraitCount === 1 ? '' : 's'}` : ''}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {selectedCharacter?.deletedAt ? (
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/20 p-1">
+              {selectedCharacter?.deletedAt ? (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
+                  <Undo2 className="w-3.5 h-3.5 mr-1" />
+                  {isTrashMutating ? 'Restoring...' : 'Restore'}
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
+                    <CopyPlus className="w-3.5 h-3.5 mr-1" />
+                    Clone
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs text-red-300 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    {isTrashMutating ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </>
+              )}
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
                 <Undo2 className="w-3.5 h-3.5 mr-1" />
-                {isTrashMutating ? 'Restoring...' : 'Restore'}
+                Cancel
               </Button>
-            ) : (
-              <>
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
-                  <CopyPlus className="w-3.5 h-3.5 mr-1" />
-                  Clone
-                </Button>
-                <Button variant="outline" size="sm" className="h-8 text-xs text-red-300 border-red-500/30 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
-                  <Trash2 className="w-3.5 h-3.5 mr-1" />
-                  {isTrashMutating ? 'Deleting...' : 'Delete'}
-                </Button>
-              </>
-            )}
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
-              <Undo2 className="w-3.5 h-3.5 mr-1" />
-              Cancel
-            </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
+            </div>
+            <Button size="sm" className="h-8 text-xs min-w-[88px]" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
               <Save className="w-3.5 h-3.5 mr-1" />
               {isSaving ? 'Saving...' : 'Save'}
             </Button>
