@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import {
+  buildChangeSummary,
+  normalizeEditorState,
+  normalizeTraits,
+  serializeEditorState,
+  serializeTraits,
+  toCharacterSummary,
+} from '@/lib/characters/utils';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    const body = await request.json();
+
+    const existing = await prisma.character.findUnique({
+      where: { id },
+    });
+
+    if (!existing || existing.deletedAt) {
+      return NextResponse.json({ success: false, error: 'Character not found' }, { status: 404 });
+    }
+
+    const name = typeof body?.name === 'string' ? body.name.trim() : existing.name;
+    const gender = typeof body?.gender === 'string'
+      ? (body.gender.trim() || null)
+      : existing.gender;
+    const nextTraits = normalizeTraits(body?.traits);
+    const nextEditorState = normalizeEditorState(body?.editorState);
+    const previewStatusSummary = typeof body?.previewStatusSummary === 'string'
+      ? (body.previewStatusSummary.trim() || null)
+      : existing.previewStatusSummary;
+
+    if (!name) {
+      return NextResponse.json({ success: false, error: 'name is required' }, { status: 400 });
+    }
+
+    const previousTraits = normalizeTraits(JSON.parse(existing.traits || '{}'));
+    const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits);
+
+    if (!traitsChanged) {
+      return NextResponse.json({
+        success: true,
+        character: toCharacterSummary({ ...existing, _count: { versions: 0 } }),
+        persisted: false,
+      });
+    }
+
+    const serializedTraits = serializeTraits(nextTraits);
+    const serializedEditorState = serializeEditorState(nextEditorState);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const lastVersion = await tx.characterVersion.findFirst({
+        where: { characterId: id },
+        orderBy: { versionNumber: 'desc' },
+      });
+
+      const nextVersionNumber = (lastVersion?.versionNumber || 0) + 1;
+      const changeSummary = typeof body?.changeSummary === 'string' && body.changeSummary.trim()
+        ? body.changeSummary.trim()
+        : buildChangeSummary(previousTraits, nextTraits);
+
+      const version = await tx.characterVersion.create({
+        data: {
+          characterId: id,
+          traitsSnapshot: serializedTraits,
+          editorStateSnapshot: serializedEditorState,
+          versionNumber: nextVersionNumber,
+          changeSummary,
+        },
+      });
+
+      return tx.character.update({
+        where: { id },
+        data: {
+          name,
+          gender,
+          traits: serializedTraits,
+          editorState: serializedEditorState,
+          previewStatusSummary,
+          currentVersionId: version.id,
+        },
+        include: {
+          _count: {
+            select: {
+              versions: true,
+            },
+          },
+        },
+      });
+    });
+
+    return NextResponse.json({
+      success: true,
+      character: toCharacterSummary(updated),
+      persisted: true,
+    });
+  } catch (error: any) {
+    console.error('Failed to update character:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
+  }
+}

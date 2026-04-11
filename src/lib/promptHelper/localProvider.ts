@@ -47,33 +47,40 @@ function normalizeModelText(value: string): string {
   return unwrapQuotedText(stripCodeFences(value)).trim();
 }
 
+function extractJsonObject(value: string): string {
+  const trimmed = stripCodeFences(value).trim();
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return trimmed;
+  }
+
+  return trimmed.slice(firstBrace, lastBrace + 1);
+}
+
 function buildUserMessage(request: PromptHelperRequest): string {
   const instruction = request.instruction.trim();
   const currentPrompt = request.prompt.trim();
-
-  if (currentPrompt) {
-    return [
-      'Rewrite this image generation prompt according to the instruction.',
-      request.modelId ? `Target model: ${request.modelId}` : null,
-      '',
-      'Current prompt:',
-      currentPrompt,
-      '',
-      'Instruction:',
-      instruction,
-      '',
-      'Return only the final rewritten prompt.'
-    ].filter(Boolean).join('\n');
-  }
+  const currentNegativePrompt = request.negativePrompt?.trim() || '';
 
   return [
-    'Create a new image generation prompt from the instruction below.',
+    currentPrompt
+      ? 'Rewrite the current image prompts according to the instruction.'
+      : 'Create new image prompts from the instruction below.',
     request.modelId ? `Target model: ${request.modelId}` : null,
+    '',
+    'Current positive prompt:',
+    currentPrompt || '(empty)',
+    '',
+    'Current negative prompt:',
+    currentNegativePrompt || '(empty)',
     '',
     'Instruction:',
     instruction,
     '',
-    'Return only the final prompt.'
+    'Return JSON with exactly these keys:',
+    '{"prompt":"...","negativePrompt":"..."}'
   ].filter(Boolean).join('\n');
 }
 
@@ -97,23 +104,23 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
   }
 
   async improve(request: PromptHelperRequest): Promise<PromptHelperResult> {
-    const response = await this.callModel(request);
-    return { improvedPrompt: response };
+    return this.callModel(request);
   }
 
   async testConnection(): Promise<void> {
     const result = await this.callModel({
       prompt: '',
+      negativePrompt: '',
       instruction: 'Write a short cinematic image prompt about neon rain in a futuristic city.',
       modelId: 'z-image',
     });
 
-    if (!result.trim()) {
-      throw new Error('Prompt Helper test returned empty text');
+    if (!result.improvedPrompt.trim()) {
+      throw new Error('Prompt Helper test returned empty prompt text');
     }
   }
 
-  private async callModel(request: PromptHelperRequest): Promise<string> {
+  private async callModel(request: PromptHelperRequest): Promise<PromptHelperResult> {
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -128,7 +135,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
         messages: [
           {
             role: 'system',
-            content: 'You improve prompts for image generation. Reply in English only. Reply with only the final prompt text. Do not add explanations, markdown, labels, or surrounding quotes.'
+            content: 'You are an expert prompt engineer for image generation. Improve both the positive prompt and the negative prompt while preserving the user\'s core intent. Make the positive prompt clearer, more vivid, better structured, and more useful for image models. Improve composition, subject clarity, style, lighting, camera, materials, color, environment, mood, and quality cues only when they help. Make the negative prompt concise and focused on unwanted artifacts, defects, low-quality traits, and content the user wants avoided. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.'
           },
           {
             role: 'user',
@@ -151,6 +158,23 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       throw new Error('Prompt Helper provider returned empty text');
     }
 
-    return normalizedText;
+    let parsed: { prompt?: unknown; negativePrompt?: unknown };
+    try {
+      parsed = JSON.parse(extractJsonObject(normalizedText));
+    } catch {
+      throw new Error('Prompt Helper provider returned invalid JSON');
+    }
+
+    const improvedPrompt = typeof parsed.prompt === 'string' ? normalizeModelText(parsed.prompt) : '';
+    const improvedNegativePrompt = typeof parsed.negativePrompt === 'string' ? normalizeModelText(parsed.negativePrompt) : '';
+
+    if (!improvedPrompt) {
+      throw new Error('Prompt Helper provider returned empty prompt text');
+    }
+
+    return {
+      improvedPrompt,
+      improvedNegativePrompt,
+    };
   }
 }

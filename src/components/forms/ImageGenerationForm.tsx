@@ -79,6 +79,13 @@ export default function ImageGenerationForm() {
         && !!settings.promptHelper?.local?.baseUrl?.trim()
         && !!settings.promptHelper?.local?.model?.trim();
 
+    const negativePromptParameterName = currentModel?.parameters.find(
+        (param) => param.name === 'negativePrompt' || param.name === 'negative_prompt'
+    )?.name;
+    const currentNegativePrompt = negativePromptParameterName
+        ? String(parameterValues[negativePromptParameterName] ?? currentModel?.parameters.find((param) => param.name === negativePromptParameterName)?.default ?? '')
+        : '';
+
     const submitPromptHelper = async () => {
         const instruction = promptHelperInstruction.trim();
 
@@ -95,6 +102,7 @@ export default function ImageGenerationForm() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt,
+                    negativePrompt: currentNegativePrompt,
                     instruction,
                     modelId: currentModel.id,
                 }),
@@ -107,6 +115,14 @@ export default function ImageGenerationForm() {
             }
 
             setPrompt(data.improvedPrompt);
+
+            if (negativePromptParameterName && typeof data.improvedNegativePrompt === 'string') {
+                setParameterValues((prev) => ({
+                    ...prev,
+                    [negativePromptParameterName]: data.improvedNegativePrompt,
+                }));
+            }
+
             setPromptHelperError(null);
             setIsPromptHelperOpen(false);
         } catch (error) {
@@ -116,11 +132,8 @@ export default function ImageGenerationForm() {
         }
     };
 
-    const handlePromptHelperKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-            event.preventDefault();
-            void submitPromptHelper();
-        }
+    const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
+        return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
     };
 
     // Check if current model has LoRA parameters
@@ -741,8 +754,14 @@ export default function ImageGenerationForm() {
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            const isSubmitShortcut = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
-            if (!isSubmitShortcut) return;
+            if (!isSubmitShortcut(event)) return;
+
+            if (isPromptHelperOpen) {
+                event.preventDefault();
+                void submitPromptHelper();
+                return;
+            }
+
             if (isGenerating) return;
             if (!formElementRef.current) return;
 
@@ -753,7 +772,7 @@ export default function ImageGenerationForm() {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isGenerating]);
+    }, [isGenerating, isPromptHelperOpen, promptHelperInstruction, isPromptHelperLoading, prompt, currentModel.id, currentNegativePrompt, negativePromptParameterName]);
 
     if (!currentModel) return <div>{t('generationForm.loading')}</div>;
 
@@ -1198,7 +1217,6 @@ export default function ImageGenerationForm() {
                             placeholder="Describe how to improve or generate the prompt"
                             value={promptHelperInstruction}
                             onChange={(e) => setPromptHelperInstruction(e.target.value)}
-                            onKeyDown={handlePromptHelperKeyDown}
                         />
                         {promptHelperError && (
                             <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">

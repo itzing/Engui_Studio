@@ -11,12 +11,14 @@ export interface PromptHelperSettings {
 
 export interface PromptHelperRequest {
   prompt: string;
+  negativePrompt?: string;
   instruction: string;
   modelId?: string;
 }
 
 export interface PromptHelperResult {
   improvedPrompt: string;
+  improvedNegativePrompt: string;
 }
 
 export interface PromptHelperProvider {

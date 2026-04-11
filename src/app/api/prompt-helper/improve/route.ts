@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
+    const negativePrompt = typeof body?.negativePrompt === 'string' ? body.negativePrompt : '';
     const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
     const modelId = typeof body?.modelId === 'string' ? body.modelId : undefined;
 
@@ -18,11 +19,12 @@ export async function POST(request: NextRequest) {
 
     const settingsResult = await settingsService.getSettings(userId);
     const provider = getPromptHelperProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
-    const result = await provider.improve({ prompt, instruction, modelId });
+    const result = await provider.improve({ prompt, negativePrompt, instruction, modelId });
 
     return NextResponse.json({
       success: true,
       improvedPrompt: result.improvedPrompt,
+      improvedNegativePrompt: result.improvedNegativePrompt,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Prompt Helper request failed';

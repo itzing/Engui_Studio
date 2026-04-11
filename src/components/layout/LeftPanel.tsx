@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { useStudio } from '@/lib/context/StudioContext';
-import { CogIcon, FolderOpenIcon } from '@heroicons/react/24/outline';
+import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
 import AudioGenerationForm from '../forms/AudioGenerationForm';
@@ -11,6 +10,7 @@ import MusicGenerationForm from '../forms/MusicGenerationForm';
 import GenerationTabs, { GenerationMode } from '../forms/GenerationTabs';
 import SettingsDialog from '../settings/SettingsDialog';
 import { S3BucketViewerDialog } from '../storage/S3BucketViewerDialog';
+import CharacterManagerPanel from '../characters/CharacterManagerPanel';
 
 // Simple icons for social media
 const DiscordIcon = ({ className }: { className?: string }) => (
@@ -31,8 +31,10 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
+type LeftPanelMode = 'generate' | 'characters';
+
 export default function LeftPanel() {
-    const { activeTool, setActiveTool } = useStudio();
+    const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('generate');
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isStorageOpen, setIsStorageOpen] = useState(false);
@@ -139,11 +141,42 @@ export default function LeftPanel() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                    <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} />
-                    {generationMode === 'image' && <ImageGenerationForm />}
-                    {generationMode === 'video' && <VideoGenerationForm />}
-                    {generationMode === 'tts' && <AudioGenerationForm />}
-                    {generationMode === 'music' && <MusicGenerationForm />}
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-muted/20 rounded-lg mb-4">
+                        <button
+                            type="button"
+                            onClick={() => setLeftPanelMode('generate')}
+                            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${leftPanelMode === 'generate'
+                                ? 'bg-muted text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            <SparklesIcon className="w-4 h-4" />
+                            Generate
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setLeftPanelMode('characters')}
+                            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${leftPanelMode === 'characters'
+                                ? 'bg-muted text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            <UserGroupIcon className="w-4 h-4" />
+                            Characters
+                        </button>
+                    </div>
+
+                    {leftPanelMode === 'generate' ? (
+                        <>
+                            <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} />
+                            {generationMode === 'image' && <ImageGenerationForm />}
+                            {generationMode === 'video' && <VideoGenerationForm />}
+                            {generationMode === 'tts' && <AudioGenerationForm />}
+                            {generationMode === 'music' && <MusicGenerationForm />}
+                        </>
+                    ) : (
+                        <CharacterManagerPanel />
+                    )}
                 </div>
             </div>
 

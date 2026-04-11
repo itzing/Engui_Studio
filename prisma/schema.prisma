@@ -259,3 +259,40 @@ model LoRA {
   @@index([uploadedAt])
   @@map("loras")
 }
+
+model Character {
+  id                   String             @id @default(uuid())
+  name                 String
+  gender               String?
+  traits               String             @default("{}")
+  editorState          String             @default("{}")
+  currentVersionId     String?
+  previewStatusSummary String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?
+
+  versions             CharacterVersion[] @relation("CharacterVersions")
+  currentVersion       CharacterVersion?  @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([updatedAt(sort: Desc)])
+  @@index([deletedAt, updatedAt(sort: Desc)])
+  @@map("characters")
+}
+
+model CharacterVersion {
+  id                  String      @id @default(uuid())
+  characterId         String
+  traitsSnapshot      String      @default("{}")
+  editorStateSnapshot String      @default("{}")
+  versionNumber       Int
+  changeSummary       String
+  createdAt           DateTime    @default(now())
+
+  character           Character   @relation("CharacterVersions", fields: [characterId], references: [id], onDelete: Cascade)
+  currentForCharacter Character[] @relation("CharacterCurrentVersion")
+
+  @@unique([characterId, versionNumber])
+  @@index([characterId, createdAt(sort: Desc)])
+  @@map("character_versions")
+}
