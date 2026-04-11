@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyPlus, Download, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -199,6 +199,7 @@ export default function CharacterManagerPanel() {
   const [listMode, setListMode] = useState<CharacterListMode>('active');
   const [sortMode, setSortMode] = useState<CharacterSortMode>('updated_desc');
   const [isTrashMutating, setIsTrashMutating] = useState(false);
+  const characterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
@@ -308,6 +309,27 @@ export default function CharacterManagerPanel() {
     () => characters.find((character) => character.id === selectedCharacterId) || null,
     [characters, selectedCharacterId]
   );
+
+  const focusCharacterButton = (characterId: string) => {
+    window.requestAnimationFrame(() => {
+      characterButtonRefs.current[characterId]?.focus();
+    });
+  };
+
+  const moveSelectionByOffset = (offset: number) => {
+    if (filteredCharacters.length === 0) return;
+
+    const currentIndex = filteredCharacters.findIndex((character) => character.id === selectedCharacterId);
+    const fallbackIndex = offset > 0 ? -1 : filteredCharacters.length;
+    const baseIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
+    const nextIndex = Math.min(filteredCharacters.length - 1, Math.max(0, baseIndex + offset));
+    const nextCharacter = filteredCharacters[nextIndex];
+
+    if (!nextCharacter) return;
+
+    selectCharacter(nextCharacter);
+    focusCharacterButton(nextCharacter.id);
+  };
 
   const activeCharacters = useMemo(() => characters.filter((character) => !character.deletedAt), [characters]);
   const trashedCharacters = useMemo(() => characters.filter((character) => !!character.deletedAt), [characters]);
@@ -850,9 +872,21 @@ export default function CharacterManagerPanel() {
               return (
                 <button
                   key={character.id}
+                  ref={(node) => {
+                    characterButtonRefs.current[character.id] = node;
+                  }}
                   type="button"
                   onClick={() => selectCharacter(character)}
-                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${isSelected
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      moveSelectionByOffset(1);
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      moveSelectionByOffset(-1);
+                    }
+                  }}
+                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 focus-visible:ring-inset ${isSelected
                     ? 'border-l-blue-400 bg-blue-500/10 ring-1 ring-inset ring-blue-500/20'
                     : 'border-l-transparent hover:bg-muted/20'
                     }`}
