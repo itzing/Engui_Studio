@@ -86,6 +86,14 @@ function traitLabel(key: string) {
   return characterTraitDefinitionMap.get(key)?.label || key;
 }
 
+function formatDateTime(value: string) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
 function normalizeImportKey(rawKey: string) {
   return rawKey
     .trim()
@@ -360,6 +368,8 @@ export default function CharacterManagerPanel() {
   };
 
   const selectCharacter = (character: CharacterSummary) => {
+    setAssistantError(null);
+    setAssistantNote(null);
     setSelectedCharacterId(character.id);
     setDraft(buildDraft(character));
   };
@@ -380,6 +390,8 @@ export default function CharacterManagerPanel() {
   };
 
   const startNewCharacter = () => {
+    setAssistantError(null);
+    setAssistantNote(null);
     setSelectedCharacterId(null);
     setDraft(createEmptyDraft());
   };
@@ -614,6 +626,12 @@ export default function CharacterManagerPanel() {
     return Object.entries(draft.traits).filter(([key]) => !characterTraitDefinitionMap.has(key));
   }, [draft]);
 
+  const draftTraitCount = draft ? Object.keys(draft.traits).length : 0;
+  const dirtyTraitCount = changedTraitKeys.size;
+  const currentVersion = selectedCharacter?.currentVersionId
+    ? versions.find((version) => version.id === selectedCharacter.currentVersionId) || null
+    : versions[0] || null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -644,6 +662,21 @@ export default function CharacterManagerPanel() {
         placeholder="Search characters by name, gender, or trait values..."
         className="h-9 text-xs"
       />
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Library</div>
+          <div className="mt-1 text-lg font-semibold">{characters.length}</div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Versions</div>
+          <div className="mt-1 text-lg font-semibold">{versions.length}</div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Dirty traits</div>
+          <div className="mt-1 text-lg font-semibold">{dirtyTraitCount}</div>
+        </div>
+      </div>
 
       <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
         <div className="border-b border-border px-3 py-2 flex items-center justify-between gap-2">
@@ -685,9 +718,18 @@ export default function CharacterManagerPanel() {
       <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
         <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
           <div>
-            <div className="text-sm font-semibold">{draft?.name || 'Unsaved character draft'}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-sm font-semibold">{draft?.name || 'Unsaved character draft'}</div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
+                ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                : 'border-border bg-background/70 text-muted-foreground'
+                }`}>
+                {dirtyTraitCount > 0 ? `${dirtyTraitCount} unsaved change${dirtyTraitCount === 1 ? '' : 's'}` : 'No unsaved trait changes'}
+              </span>
+            </div>
             <div className="text-[11px] text-muted-foreground">
               {draft?.id ? 'Editing current saved character' : 'Nothing is persisted until Save'}
+              {draft ? ` • ${draftTraitCount} saved-or-draft trait${draftTraitCount === 1 ? '' : 's'}` : ''}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -804,6 +846,45 @@ export default function CharacterManagerPanel() {
               )}
             </div>
 
+            {selectedCharacter && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-medium">Version history</div>
+                    <div className="text-[11px] text-muted-foreground">Current version is visible here, clone still uses explicit dialog flow.</div>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {isLoadingVersions ? 'Loading...' : `${versions.length} version${versions.length === 1 ? '' : 's'}`}
+                  </div>
+                </div>
+
+                {currentVersion && (
+                  <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[11px] text-blue-200">
+                    Current version: v{currentVersion.versionNumber} • {formatDateTime(currentVersion.createdAt)}
+                    <div className="mt-1 text-blue-100/90">{currentVersion.changeSummary}</div>
+                  </div>
+                )}
+
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {versions.map((version) => (
+                    <div key={version.id} className={`rounded-md border px-3 py-2 ${selectedCharacter.currentVersionId === version.id
+                      ? 'border-blue-500/30 bg-blue-500/5'
+                      : 'border-border bg-background/60'
+                      }`}>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-medium">Version {version.versionNumber}</span>
+                        <span className="text-muted-foreground">{formatDateTime(version.createdAt)}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">{version.changeSummary}</div>
+                    </div>
+                  ))}
+                  {!isLoadingVersions && versions.length === 0 && (
+                    <div className="text-[11px] text-muted-foreground">No saved versions yet.</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {legacyTraits.length > 0 && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                 <div className="text-xs font-medium text-amber-200">Legacy or unsupported traits</div>
@@ -818,7 +899,7 @@ export default function CharacterManagerPanel() {
             )}
 
             <div className="rounded-lg border border-border bg-muted/10 p-3 text-[11px] text-muted-foreground">
-              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot.
+              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Version history is read-only here in v1.
             </div>
           </div>
         )}
