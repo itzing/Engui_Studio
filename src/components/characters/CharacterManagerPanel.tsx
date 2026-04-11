@@ -192,6 +192,7 @@ export default function CharacterManagerPanel() {
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
+  const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
@@ -252,6 +253,7 @@ export default function CharacterManagerPanel() {
       const nextVersions = Array.isArray(data.versions) ? data.versions : [];
       setVersions(nextVersions);
       setSelectedCloneVersionId(nextVersions[0]?.id || null);
+      setSelectedHistoryVersionId(nextVersions[0]?.id || null);
       return nextVersions;
     } catch (nextError: any) {
       console.error('Failed to load character versions:', nextError);
@@ -301,6 +303,11 @@ export default function CharacterManagerPanel() {
   const selectedCloneVersion = useMemo(
     () => versions.find((version) => version.id === selectedCloneVersionId) || null,
     [versions, selectedCloneVersionId]
+  );
+
+  const selectedHistoryVersion = useMemo(
+    () => versions.find((version) => version.id === selectedHistoryVersionId) || null,
+    [versions, selectedHistoryVersionId]
   );
 
   const groupLocks = useMemo(() => getGroupLocks(draft), [draft]);
@@ -577,6 +584,21 @@ export default function CharacterManagerPanel() {
     } finally {
       setIsCloning(false);
     }
+  };
+
+  const applyHistoryVersionToDraft = (version: CharacterVersionSummary) => {
+    if (!draft || !selectedCharacter) return;
+
+    setAssistantError(null);
+    setAssistantNote(`Applied version ${version.versionNumber} to draft. Save to create a new version if you want to keep it.`);
+    setSelectedHistoryVersionId(version.id);
+    setDraft({
+      ...draft,
+      name: selectedCharacter.name,
+      gender: selectedCharacter.gender || draft.gender,
+      traits: version.traitsSnapshot,
+      editorState: version.editorStateSnapshot,
+    });
   };
 
   const applyAssistantPatch = async () => {
@@ -921,22 +943,47 @@ export default function CharacterManagerPanel() {
 
                 {currentVersion && (
                   <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[11px] text-blue-200">
-                    Current version: v{currentVersion.versionNumber} • {formatDateTime(currentVersion.createdAt)}
+                    Current saved version: v{currentVersion.versionNumber} • {formatDateTime(currentVersion.createdAt)}
                     <div className="mt-1 text-blue-100/90">{currentVersion.changeSummary}</div>
                   </div>
                 )}
 
-                <div className="max-h-48 overflow-y-auto space-y-2">
+                {selectedHistoryVersion && (
+                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+                    Selected history snapshot: v{selectedHistoryVersion.versionNumber} • {formatDateTime(selectedHistoryVersion.createdAt)}
+                    <div className="mt-1 text-emerald-100/90">{selectedHistoryVersion.changeSummary}</div>
+                  </div>
+                )}
+
+                <div className="max-h-56 overflow-y-auto space-y-2">
                   {versions.map((version) => (
                     <div key={version.id} className={`rounded-md border px-3 py-2 ${selectedCharacter.currentVersionId === version.id
                       ? 'border-blue-500/30 bg-blue-500/5'
-                      : 'border-border bg-background/60'
+                      : selectedHistoryVersionId === version.id
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : 'border-border bg-background/60'
                       }`}>
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-medium">Version {version.versionNumber}</span>
                         <span className="text-muted-foreground">{formatDateTime(version.createdAt)}</span>
                       </div>
                       <div className="mt-1 text-[11px] text-muted-foreground">{version.changeSummary}</div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px]"
+                          onClick={() => {
+                            setSelectedHistoryVersionId(version.id);
+                            applyHistoryVersionToDraft(version);
+                          }}
+                        >
+                          Apply to draft
+                        </Button>
+                        {selectedCharacter.currentVersionId === version.id && (
+                          <span className="text-[10px] text-blue-300">Current saved</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {!isLoadingVersions && versions.length === 0 && (
@@ -960,7 +1007,7 @@ export default function CharacterManagerPanel() {
             )}
 
             <div className="rounded-lg border border-border bg-muted/10 p-3 text-[11px] text-muted-foreground">
-              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Version history is read-only here in v1. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
+              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Applying a history snapshot only updates the transient draft until you save. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
             </div>
           </div>
         )}
