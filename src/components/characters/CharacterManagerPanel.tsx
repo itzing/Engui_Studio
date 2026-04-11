@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CopyPlus, Download, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2 } from 'lucide-react';
+import { CopyPlus, Download, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -119,6 +119,14 @@ function getEditableTraits(draft: DraftCharacter): CharacterTraitMap {
   });
 
   return Object.fromEntries(editableEntries);
+}
+
+function getGroupLocks(draft: DraftCharacter | null): Record<string, boolean> {
+  return (draft?.editorState?.groupLocks as Record<string, boolean> | undefined) || {};
+}
+
+function getTraitLocks(draft: DraftCharacter | null): Record<string, boolean> {
+  return (draft?.editorState?.uiTraitLocks as Record<string, boolean> | undefined) || {};
 }
 
 function parseImportText(input: string): ImportPreview {
@@ -295,6 +303,9 @@ export default function CharacterManagerPanel() {
     [versions, selectedCloneVersionId]
   );
 
+  const groupLocks = useMemo(() => getGroupLocks(draft), [draft]);
+  const traitLocks = useMemo(() => getTraitLocks(draft), [draft]);
+
   const changedTraitKeys = useMemo(() => {
     if (!draft) return new Set<string>();
     const keys = new Set<string>([...Object.keys(draft.baseTraits), ...Object.keys(draft.traits)]);
@@ -309,6 +320,30 @@ export default function CharacterManagerPanel() {
     if (!draft.id) return true;
     return !traitsEqual(draft.baseTraits, draft.traits);
   }, [draft]);
+
+  const toggleGroupLock = (groupId: string) => {
+    if (!draft) return;
+    const nextGroupLocks = { ...groupLocks, [groupId]: !groupLocks[groupId] };
+    setDraft({
+      ...draft,
+      editorState: {
+        ...draft.editorState,
+        groupLocks: nextGroupLocks,
+      },
+    });
+  };
+
+  const toggleTraitLock = (traitKey: string) => {
+    if (!draft) return;
+    const nextTraitLocks = { ...traitLocks, [traitKey]: !traitLocks[traitKey] };
+    setDraft({
+      ...draft,
+      editorState: {
+        ...draft.editorState,
+        uiTraitLocks: nextTraitLocks,
+      },
+    });
+  };
 
   const openBasicsModal = () => {
     if (!draft) return;
@@ -776,15 +811,32 @@ export default function CharacterManagerPanel() {
             </div>
 
             {characterTraitDefinitionsByGroup.map(({ group, traits }) => {
-              const filledCount = traits.filter((trait) => draft.traits[trait.key]).length;
+              const filledTraits = traits.filter((trait) => draft.traits[trait.key]);
+              const filledCount = filledTraits.length;
               const groupChanged = traits.some((trait) => changedTraitKeys.has(trait.key));
+              const groupLocked = !!groupLocks[group.id];
+              const groupEditableCount = traits.filter((trait) => draft.traits[trait.key] && !traitLocks[trait.key]).length;
 
               return (
-                <div key={group.id} className={`rounded-lg border p-3 ${groupChanged ? 'border-blue-500/40 bg-blue-500/5' : 'border-border bg-muted/20'}`}>
+                <div key={group.id} className={`rounded-lg border p-3 ${groupChanged ? 'border-blue-500/40 bg-blue-500/5' : 'border-border bg-muted/20'} ${groupLocked ? 'opacity-80' : ''}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <div className="text-xs font-medium">{group.label}</div>
-                      <div className="text-[11px] text-muted-foreground">{filledCount}/{traits.length} traits filled</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-xs font-medium">{group.label}</div>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupLock(group.id)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${groupLocked
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                            }`}
+                          title={groupLocked ? 'Unlock group for assistant editing' : 'Lock group from assistant editing'}
+                        >
+                          {groupLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                          {groupLocked ? 'Group locked' : 'Group editable'}
+                        </button>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{filledCount}/{traits.length} traits filled • {groupEditableCount} assistant-editable</div>
                     </div>
                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openGroupModal(group.id)}>
                       <Pencil className="w-3.5 h-3.5 mr-1" />
@@ -792,17 +844,26 @@ export default function CharacterManagerPanel() {
                     </Button>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {traits.filter((trait) => draft.traits[trait.key]).map((trait) => (
-                      <span
-                        key={trait.key}
-                        className={`rounded-full border px-2 py-0.5 text-[10px] ${changedTraitKeys.has(trait.key)
-                          ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
-                          : 'border-border bg-background/70 text-muted-foreground'
-                          }`}
-                      >
-                        {trait.label}: {draft.traits[trait.key]}
-                      </span>
-                    ))}
+                    {filledTraits.map((trait) => {
+                      const traitLocked = !!traitLocks[trait.key];
+                      const traitBlockedByGroup = groupLocked;
+                      const traitEditable = !traitLocked && !traitBlockedByGroup;
+
+                      return (
+                        <span
+                          key={trait.key}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${traitEditable
+                            ? changedTraitKeys.has(trait.key)
+                              ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                              : 'border-border bg-background/70 text-muted-foreground'
+                            : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                            }`}
+                        >
+                          {trait.label}: {draft.traits[trait.key]}
+                          {!traitEditable ? ' 🔒' : ''}
+                        </span>
+                      );
+                    })}
                     {filledCount === 0 && (
                       <span className="text-[11px] text-muted-foreground">No saved values in this group yet.</span>
                     )}
@@ -830,7 +891,7 @@ export default function CharacterManagerPanel() {
               />
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(editableTraits).map(([key, value]) => (
-                  <span key={key} className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  <span key={key} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
                     {traitLabel(key)}: {value}
                   </span>
                 ))}
@@ -899,7 +960,7 @@ export default function CharacterManagerPanel() {
             )}
 
             <div className="rounded-lg border border-border bg-muted/10 p-3 text-[11px] text-muted-foreground">
-              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Version history is read-only here in v1.
+              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Version history is read-only here in v1. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
             </div>
           </div>
         )}
@@ -930,19 +991,40 @@ export default function CharacterManagerPanel() {
 
             {modalState.kind === 'group' && characterTraitDefinitionsByGroup
               .find((item) => item.group.id === modalState.groupId)
-              ?.traits.map((trait) => (
-                <div key={trait.key} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-medium">{trait.label}</div>
-                    <div className="text-[10px] uppercase text-muted-foreground">{trait.volatility}</div>
+              ?.traits.map((trait) => {
+                const traitLocked = !!traitLocks[trait.key];
+                const groupLocked = !!groupLocks[modalState.groupId];
+
+                return (
+                  <div key={trait.key} className="space-y-1.5 rounded-md border border-border/60 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-medium">{trait.label}</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleTraitLock(trait.key)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${traitLocked
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                            }`}
+                          title={traitLocked ? 'Unlock trait for assistant editing' : 'Lock trait from assistant editing'}
+                        >
+                          {traitLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                          {traitLocked ? 'Trait locked' : 'Trait editable'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {groupLocked ? 'Blocked by group lock' : traitLocked ? 'Excluded from assistant editing' : 'Available to assistant'}
+                    </div>
+                    <Input
+                      value={modalValues[trait.key] || ''}
+                      onChange={(event) => setModalValues((prev) => ({ ...prev, [trait.key]: event.target.value }))}
+                      placeholder={`Enter ${trait.label.toLowerCase()}...`}
+                    />
                   </div>
-                  <Input
-                    value={modalValues[trait.key] || ''}
-                    onChange={(event) => setModalValues((prev) => ({ ...prev, [trait.key]: event.target.value }))}
-                    placeholder={`Enter ${trait.label.toLowerCase()}...`}
-                  />
-                </div>
-              ))}
+                );
+              })}
           </div>
 
           <DialogFooter>
