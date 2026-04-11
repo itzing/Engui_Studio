@@ -844,27 +844,38 @@ export default function CharacterManagerPanel() {
                 : (listMode === 'trash' ? 'Trash is empty.' : 'No saved characters yet.')}
             </div>
           ) : (
-            filteredCharacters.map((character) => (
-              <button
-                key={character.id}
-                type="button"
-                onClick={() => selectCharacter(character)}
-                className={`w-full px-4 py-3 text-left transition-colors ${selectedCharacterId === character.id
-                  ? 'bg-muted/40'
-                  : 'hover:bg-muted/20'
-                  }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{character.name}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      {character.gender || 'Unspecified gender'} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
-                      {character.deletedAt ? ` • trashed ${formatDateTime(character.deletedAt)}` : ''}
+            filteredCharacters.map((character) => {
+              const isSelected = selectedCharacterId === character.id;
+
+              return (
+                <button
+                  key={character.id}
+                  type="button"
+                  onClick={() => selectCharacter(character)}
+                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${isSelected
+                    ? 'border-l-blue-400 bg-blue-500/10 ring-1 ring-inset ring-blue-500/20'
+                    : 'border-l-transparent hover:bg-muted/20'
+                    }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
+                        {isSelected && (
+                          <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-200">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
+                        {character.gender || 'Unspecified gender'} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                        {character.deletedAt ? ` • trashed ${formatDateTime(character.deletedAt)}` : ''}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       </div>
