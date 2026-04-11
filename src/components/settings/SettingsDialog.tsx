@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { Download, Upload } from 'lucide-react';
+import { Download, Loader2, Upload } from 'lucide-react';
 import { MODELS } from '@/lib/models/modelConfig';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { downloadProjectAsJSON, parseProjectFile } from '@/lib/videoProjectIO';
@@ -40,6 +40,7 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
     const [activeTab, setActiveTab] = useState<SettingsTab>('video-project');
     const [formData, setFormData] = useState<StudioSettings>(settings);
     const [isSaving, setIsSaving] = useState(false);
+    const [isTestingPromptHelper, setIsTestingPromptHelper] = useState(false);
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     
     // Video project settings state
@@ -238,6 +239,61 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                 fieldEncKeyB64: value,
             }
         }));
+    };
+
+    const updatePromptHelperProvider = (value: 'disabled' | 'local') => {
+        setFormData(prev => ({
+            ...prev,
+            promptHelper: {
+                provider: value,
+                local: {
+                    baseUrl: prev.promptHelper?.local?.baseUrl || '',
+                    model: prev.promptHelper?.local?.model || '',
+                    apiKey: prev.promptHelper?.local?.apiKey || '',
+                }
+            }
+        }));
+    };
+
+    const updatePromptHelperLocal = (key: 'baseUrl' | 'model' | 'apiKey', value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            promptHelper: {
+                provider: prev.promptHelper?.provider || 'disabled',
+                local: {
+                    baseUrl: prev.promptHelper?.local?.baseUrl || '',
+                    model: prev.promptHelper?.local?.model || '',
+                    apiKey: prev.promptHelper?.local?.apiKey || '',
+                    [key]: value,
+                }
+            }
+        }));
+    };
+
+    const handleTestPromptHelper = async () => {
+        setIsTestingPromptHelper(true);
+        try {
+            const response = await fetch('/api/prompt-helper/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: formData.promptHelper?.provider,
+                    local: formData.promptHelper?.local,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Prompt Helper connection successful', 'success');
+            } else {
+                showToast(data.error || data.message || 'Prompt Helper connection failed', 'error');
+            }
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Prompt Helper connection failed', 'error');
+        } finally {
+            setIsTestingPromptHelper(false);
+        }
     };
 
     return (
@@ -551,6 +607,70 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    <div className="pt-4 space-y-4 border-t border-border">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <h4 className="text-sm font-medium">Prompt Helper</h4>
+                                                <p className="text-xs text-muted-foreground">Local prompt rewrite/generate settings for the image form.</p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleTestPromptHelper}
+                                                disabled={isTestingPromptHelper || formData.promptHelper?.provider !== 'local'}
+                                            >
+                                                {isTestingPromptHelper ? (
+                                                    <span className="inline-flex items-center gap-2">
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                        Testing...
+                                                    </span>
+                                                ) : 'Test'}
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Provider</Label>
+                                            <select
+                                                value={formData.promptHelper?.provider || 'disabled'}
+                                                onChange={(e) => updatePromptHelperProvider(e.target.value as 'disabled' | 'local')}
+                                                className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                                            >
+                                                <option value="disabled">Disabled</option>
+                                                <option value="local">Local</option>
+                                            </select>
+                                        </div>
+
+                                        {formData.promptHelper?.provider === 'local' && (
+                                            <div className="grid grid-cols-1 gap-4 rounded-md border border-border/60 bg-muted/20 p-3">
+                                                <div className="space-y-2">
+                                                    <Label>Base URL</Label>
+                                                    <Input
+                                                        value={formData.promptHelper?.local?.baseUrl || ''}
+                                                        onChange={(e) => updatePromptHelperLocal('baseUrl', e.target.value)}
+                                                        placeholder="http://127.0.0.1:8080"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Model</Label>
+                                                    <Input
+                                                        value={formData.promptHelper?.local?.model || ''}
+                                                        onChange={(e) => updatePromptHelperLocal('model', e.target.value)}
+                                                        placeholder="TrevorJS/gemma-4-E2B-it-uncensored-GGUF"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>API Key (optional)</Label>
+                                                    <Input
+                                                        type="password"
+                                                        value={formData.promptHelper?.local?.apiKey || ''}
+                                                        onChange={(e) => updatePromptHelperLocal('apiKey', e.target.value)}
+                                                        placeholder="Optional"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

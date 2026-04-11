@@ -6,12 +6,13 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Loader2, Sparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
@@ -73,6 +74,54 @@ export default function ImageGenerationForm() {
     }, [selectedModel, setSelectedModel, imageModels]);
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
+    const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
+    const isPromptHelperConfigured = promptHelperProvider === 'local'
+        && !!settings.promptHelper?.local?.baseUrl?.trim()
+        && !!settings.promptHelper?.local?.model?.trim();
+
+    const submitPromptHelper = async () => {
+        const instruction = promptHelperInstruction.trim();
+
+        if (!instruction || isPromptHelperLoading) {
+            return;
+        }
+
+        setPromptHelperError(null);
+        setIsPromptHelperLoading(true);
+
+        try {
+            const response = await fetch('/api/prompt-helper/improve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    instruction,
+                    modelId: currentModel.id,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success || !data.improvedPrompt) {
+                throw new Error(data.error || 'Prompt Helper request failed');
+            }
+
+            setPrompt(data.improvedPrompt);
+            setPromptHelperError(null);
+            setIsPromptHelperOpen(false);
+        } catch (error) {
+            setPromptHelperError(error instanceof Error ? error.message : 'Prompt Helper request failed');
+        } finally {
+            setIsPromptHelperLoading(false);
+        }
+    };
+
+    const handlePromptHelperKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault();
+            void submitPromptHelper();
+        }
+    };
 
     // Check if current model has LoRA parameters
     const hasLoRAParameter = (model: typeof currentModel) => {
@@ -353,6 +402,10 @@ export default function ImageGenerationForm() {
     }, [setSelectedModel, selectedModel]);
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
+    const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+    const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
+    const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // Handler for parameter changes
@@ -881,13 +934,37 @@ export default function ImageGenerationForm() {
 
                 {/* Prompt - only show if model accepts text input */}
                 {currentModel.inputs.includes('text') && (
-                    <div className="relative">
-                        <textarea
-                            className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
-                            placeholder={t('generationForm.describeYourImage')}
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                        />
+                    <div className="space-y-2">
+                        <div className="relative">
+                            <textarea
+                                className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                                placeholder={t('generationForm.describeYourImage')}
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setPromptHelperError(null);
+                                setIsPromptHelperOpen(true);
+                            }}
+                            disabled={!isPromptHelperConfigured || isPromptHelperLoading}
+                            className="w-full justify-center gap-2"
+                        >
+                            {isPromptHelperLoading ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Prompt Helper is working...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="h-4 w-4" />
+                                    Prompt Helper
+                                </>
+                            )}
+                        </Button>
                     </div>
                 )}
 
@@ -1100,6 +1177,52 @@ export default function ImageGenerationForm() {
             </form >
 
             {/* LoRA Management Dialog */}
+            <Dialog
+                open={isPromptHelperOpen}
+                onOpenChange={(open) => {
+                    setIsPromptHelperOpen(open);
+                    if (!open) {
+                        setPromptHelperError(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Prompt Helper</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <Label htmlFor="prompt-helper-instruction">Instruction</Label>
+                        <textarea
+                            id="prompt-helper-instruction"
+                            className="w-full min-h-[140px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                            placeholder="Describe how to improve or generate the prompt"
+                            value={promptHelperInstruction}
+                            onChange={(e) => setPromptHelperInstruction(e.target.value)}
+                            onKeyDown={handlePromptHelperKeyDown}
+                        />
+                        {promptHelperError && (
+                            <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">
+                                {promptHelperError}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsPromptHelperOpen(false)} disabled={isPromptHelperLoading}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => void submitPromptHelper()}
+                            disabled={isPromptHelperLoading || !promptHelperInstruction.trim() || !isPromptHelperConfigured}
+                            className="gap-2"
+                        >
+                            {isPromptHelperLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isPromptHelperLoading ? 'Applying...' : 'Apply'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {showLoRADialog && (
                 <LoRAManagementDialog
                     open={showLoRADialog}

@@ -19,6 +19,7 @@ interface ServiceConfig {
   runpod: RunPodConfig;
   elevenlabs: ElevenLabsConfig;
   s3: S3Config;
+  promptHelper?: PromptHelperConfig;
   workspace?: WorkspaceConfig;
   ui?: UIConfig;
   qwenImageEditHandler?: QwenImageEditHandlerConfig;
@@ -44,6 +45,15 @@ interface WorkspaceConfig {
 
 interface UIConfig {
   language?: 'ko' | 'en';
+}
+
+interface PromptHelperConfig {
+  provider?: 'disabled' | 'local';
+  local?: {
+    baseUrl?: string;
+    model?: string;
+    apiKey?: string;
+  };
 }
 
 interface RunPodConfig {
@@ -180,6 +190,14 @@ class SettingsService {
           timeout: 3600, // 기본값 3600초 (1시간)
           useGlobalNetworking: false // 기본값 false (Local network mode)
         },
+        promptHelper: {
+          provider: 'disabled',
+          local: {
+            baseUrl: '',
+            model: '',
+            apiKey: ''
+          }
+        },
         workspace: {
           currentWorkspaceId: '',
           defaultWorkspaceId: ''
@@ -256,6 +274,16 @@ class SettingsService {
             } else if (setting.configKey === 'useGlobalNetworking') {
               // useGlobalNetworking은 boolean으로 변환
               settings.s3.useGlobalNetworking = value === 'true';
+            }
+          } else if (setting.serviceName === 'promptHelper') {
+            if (setting.configKey === 'provider') {
+              settings.promptHelper.provider = value === 'local' ? 'local' : 'disabled';
+            } else if (setting.configKey === 'local.baseUrl') {
+              settings.promptHelper.local.baseUrl = value;
+            } else if (setting.configKey === 'local.model') {
+              settings.promptHelper.local.model = value;
+            } else if (setting.configKey === 'local.apiKey') {
+              settings.promptHelper.local.apiKey = value;
             }
           } else if (setting.serviceName === 'workspace') {
             if (setting.configKey === 'currentWorkspaceId') {
@@ -469,6 +497,45 @@ class SettingsService {
             });
           }
         });
+      }
+
+      // Process Prompt Helper settings
+      if (settings.promptHelper) {
+        if (settings.promptHelper.provider) {
+          flatSettings.push({
+            serviceName: 'promptHelper',
+            configKey: 'provider',
+            configValue: settings.promptHelper.provider,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.promptHelper.local?.baseUrl !== undefined) {
+          flatSettings.push({
+            serviceName: 'promptHelper',
+            configKey: 'local.baseUrl',
+            configValue: settings.promptHelper.local.baseUrl,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.promptHelper.local?.model !== undefined) {
+          flatSettings.push({
+            serviceName: 'promptHelper',
+            configKey: 'local.model',
+            configValue: settings.promptHelper.local.model,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.promptHelper.local?.apiKey !== undefined) {
+          flatSettings.push({
+            serviceName: 'promptHelper',
+            configKey: 'local.apiKey',
+            configValue: settings.promptHelper.local.apiKey,
+            isEncrypted: false
+          });
+        }
       }
 
       // Process workspace settings
@@ -740,6 +807,10 @@ class SettingsService {
     // Mask S3 secret access key
     if (masked.s3?.secretAccessKey) {
       masked.s3.secretAccessKey = this.encryption.maskSensitiveData(masked.s3.secretAccessKey);
+    }
+
+    if (masked.promptHelper?.local?.apiKey) {
+      masked.promptHelper.local.apiKey = this.encryption.maskSensitiveData(masked.promptHelper.local.apiKey);
     }
 
     return masked;

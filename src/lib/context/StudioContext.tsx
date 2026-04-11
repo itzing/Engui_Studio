@@ -23,6 +23,14 @@ export interface StudioSettings {
         runpod?: string;
         elevenlabs?: string;
     };
+    promptHelper?: {
+        provider?: 'disabled' | 'local';
+        local?: {
+            baseUrl?: string;
+            model?: string;
+            apiKey?: string;
+        };
+    };
     runpod: {
         endpoints: Record<string, string>; // modelId -> endpointId
         fieldEncKeyB64?: string;
@@ -125,6 +133,14 @@ export type PlayerRef = any; // Will be properly typed when Remotion is installe
 
 const defaultSettings: StudioSettings = {
     apiKeys: {},
+    promptHelper: {
+        provider: 'disabled',
+        local: {
+            baseUrl: '',
+            model: '',
+            apiKey: ''
+        }
+    },
     runpod: {
         endpoints: {},
         fieldEncKeyB64: ''
@@ -314,6 +330,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             if (data.settings.runpod.endpoints) {
                                 merged.runpod.endpoints = { ...prev.runpod.endpoints, ...data.settings.runpod.endpoints };
                             }
+                        }
+
+                        if (data.settings.promptHelper) {
+                            merged.promptHelper = {
+                                ...prev.promptHelper,
+                                ...data.settings.promptHelper,
+                                local: {
+                                    ...prev.promptHelper?.local,
+                                    ...data.settings.promptHelper.local,
+                                }
+                            };
                         }
 
                         if (typeof window !== 'undefined') {

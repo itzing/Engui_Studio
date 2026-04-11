@@ -188,6 +188,26 @@ function validateSettings(settings: any): string | null {
       return 'Eleven Labs useStreaming must be a boolean';
     }
   }
+
+  if (settings.promptHelper) {
+    if (settings.promptHelper.provider !== undefined && !['disabled', 'local'].includes(settings.promptHelper.provider)) {
+      return 'Prompt Helper provider must be disabled or local';
+    }
+
+    if (settings.promptHelper.local) {
+      if (settings.promptHelper.local.baseUrl !== undefined && typeof settings.promptHelper.local.baseUrl !== 'string') {
+        return 'Prompt Helper local baseUrl must be a string';
+      }
+
+      if (settings.promptHelper.local.model !== undefined && typeof settings.promptHelper.local.model !== 'string') {
+        return 'Prompt Helper local model must be a string';
+      }
+
+      if (settings.promptHelper.local.apiKey !== undefined && typeof settings.promptHelper.local.apiKey !== 'string') {
+        return 'Prompt Helper local apiKey must be a string';
+      }
+    }
+  }
   
   return null;
 }
