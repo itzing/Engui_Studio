@@ -360,16 +360,16 @@ export function createSecureStateSkeleton(params: {
 }
 
 export function assertStructuredBinding(actual: StructuredBinding, expected: StructuredBinding) {
-  const actualJson = JSON.stringify(actual);
-  const expectedJson = JSON.stringify(expected);
+  const actualJson = serializeBinding(actual).toString('utf8');
+  const expectedJson = serializeBinding(expected).toString('utf8');
   if (actualJson !== expectedJson) {
     throw new SecureTransportError('SECURE_BINDING_MISMATCH', `Structured binding mismatch: expected ${expectedJson}, got ${actualJson}`);
   }
 }
 
 export function assertMediaBinding(actual: MediaBinding, expected: MediaBinding) {
-  const actualJson = JSON.stringify(actual);
-  const expectedJson = JSON.stringify(expected);
+  const actualJson = serializeBinding(actual).toString('utf8');
+  const expectedJson = serializeBinding(expected).toString('utf8');
   if (actualJson !== expectedJson) {
     throw new SecureTransportError('MEDIA_INPUT_ENVELOPE_INVALID', `Media binding mismatch: expected ${expectedJson}, got ${actualJson}`);
   }
