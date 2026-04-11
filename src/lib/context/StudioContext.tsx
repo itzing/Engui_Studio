@@ -681,13 +681,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                     console.log('⏰ Scheduling reuseJobInput event dispatch in 100ms...');
                     setTimeout(() => {
                         try {
+                            const shouldReuseImageInput = !(job.modelId === 'z-image' && options.use_controlnet !== true);
+                            const resolvedImageInputPath = shouldReuseImageInput ? data.job.imageInputPath : null;
+
                             console.log('📤 Dispatching reuseJobInput event:', {
                                 modelId: job.modelId,
                                 type: job.type,
                                 hasOptions: !!options,
-                                imageInputPath: data.job.imageInputPath,
+                                imageInputPath: resolvedImageInputPath,
                                 videoInputPath: data.job.videoInputPath,
-                                audioInputPath: data.job.audioInputPath
+                                audioInputPath: data.job.audioInputPath,
+                                shouldReuseImageInput,
                             });
                             window.dispatchEvent(new CustomEvent('reuseJobInput', {
                                 detail: {
@@ -695,7 +699,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                                     prompt: job.prompt,
                                     type: job.type,
                                     options: options,
-                                    imageInputPath: data.job.imageInputPath,
+                                    imageInputPath: resolvedImageInputPath,
                                     videoInputPath: data.job.videoInputPath,
                                     audioInputPath: data.job.audioInputPath
                                 }

@@ -226,9 +226,13 @@ export default function ImageGenerationForm() {
                     }
                 }
 
-                // Load image file from path if exists
+                const model = getModelById(modelId);
+                const shouldReusePrimaryImage = !!(model && isInputVisible(model, 'image', parsedOptions));
+                const shouldReuseSecondaryImage = !!(model && isInputVisible(model, 'image2', parsedOptions));
+
+                // Load image file from path only when the model currently expects it
                 const imagePath = imageInputPath || parsedOptions.image_path;
-                if (imagePath) {
+                if (shouldReusePrimaryImage && imagePath) {
                     console.log('📥 Loading image from path:', imagePath);
                     const file = await loadFileFromPath(imagePath);
                     if (file) {
@@ -237,12 +241,17 @@ export default function ImageGenerationForm() {
                         console.log('✅ Image file loaded successfully');
                     } else {
                         console.warn('⚠️ Failed to load image file');
+                        setImageFile(null);
+                        setPreviewUrl('');
                     }
+                } else {
+                    setImageFile(null);
+                    setPreviewUrl('');
                 }
 
-                // Load second image file (image_path_2) if exists
+                // Load second image file only when the model currently expects it
                 const imagePath2 = parsedOptions.image_path_2;
-                if (currentModel && currentModel.inputs.includes('image2') && imagePath2) {
+                if (shouldReuseSecondaryImage && imagePath2) {
                     console.log('📥 Loading second image from path:', imagePath2);
                     const file2 = await loadFileFromPath(imagePath2);
                     if (file2) {
@@ -251,7 +260,12 @@ export default function ImageGenerationForm() {
                         console.log('✅ Second image file loaded successfully');
                     } else {
                         console.warn('⚠️ Failed to load second image file');
+                        setImageFile2(null);
+                        setPreviewUrl2('');
                     }
+                } else {
+                    setImageFile2(null);
+                    setPreviewUrl2('');
                 }
 
                 // Apply parameter values in parent-first order
@@ -265,7 +279,6 @@ export default function ImageGenerationForm() {
                 });
 
                 // Get model configuration to identify dependencies
-                const model = getModelById(modelId);
                 if (model) {
                     // Separate parameters into parent and dependent
                     const parentParams: string[] = [];
