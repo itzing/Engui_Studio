@@ -287,17 +287,7 @@ export default function CharacterManagerPanel() {
     const scopedCharacters = characters.filter((character) => listMode === 'trash' ? !!character.deletedAt : !character.deletedAt);
     if (!query) return scopedCharacters;
 
-    return scopedCharacters.filter((character) => {
-      const haystack = [
-        character.name,
-        character.gender || '',
-        Object.entries(character.traits || {})
-          .map(([key, value]) => `${key} ${value}`)
-          .join(' '),
-      ].join(' ').toLowerCase();
-
-      return haystack.includes(query);
-    });
+    return scopedCharacters.filter((character) => character.name.toLowerCase().includes(query));
   }, [characters, search, listMode]);
 
   const selectedCharacter = useMemo(
@@ -778,7 +768,7 @@ export default function CharacterManagerPanel() {
       <Input
         value={search}
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search characters by name, gender, or trait values..."
+        placeholder="Search characters by name..."
         className="h-9 text-xs"
       />
 
@@ -822,7 +812,11 @@ export default function CharacterManagerPanel() {
           ) : error ? (
             <div className="px-4 py-6 text-xs text-red-400">{error}</div>
           ) : filteredCharacters.length === 0 ? (
-            <div className="px-4 py-6 text-xs text-muted-foreground">No saved characters yet.</div>
+            <div className="px-4 py-6 text-xs text-muted-foreground">
+              {search.trim()
+                ? (listMode === 'trash' ? 'No trashed characters match this name.' : 'No characters match this name.')
+                : (listMode === 'trash' ? 'Trash is empty.' : 'No saved characters yet.')}
+            </div>
           ) : (
             filteredCharacters.map((character) => (
               <button
