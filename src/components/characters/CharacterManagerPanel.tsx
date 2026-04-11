@@ -168,6 +168,7 @@ function parseImportText(input: string): ImportPreview {
 }
 
 type CharacterListMode = 'active' | 'trash';
+type CharacterSortMode = 'updated_desc' | 'name_asc' | 'name_desc';
 
 export default function CharacterManagerPanel() {
   const { showToast } = useToast();
@@ -196,6 +197,7 @@ export default function CharacterManagerPanel() {
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
   const [listMode, setListMode] = useState<CharacterListMode>('active');
+  const [sortMode, setSortMode] = useState<CharacterSortMode>('updated_desc');
   const [isTrashMutating, setIsTrashMutating] = useState(false);
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
@@ -285,10 +287,22 @@ export default function CharacterManagerPanel() {
   const filteredCharacters = useMemo(() => {
     const query = search.trim().toLowerCase();
     const scopedCharacters = characters.filter((character) => listMode === 'trash' ? !!character.deletedAt : !character.deletedAt);
-    if (!query) return scopedCharacters;
+    const searchedCharacters = query
+      ? scopedCharacters.filter((character) => character.name.toLowerCase().includes(query))
+      : scopedCharacters;
 
-    return scopedCharacters.filter((character) => character.name.toLowerCase().includes(query));
-  }, [characters, search, listMode]);
+    return [...searchedCharacters].sort((left, right) => {
+      if (sortMode === 'name_asc') {
+        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      }
+
+      if (sortMode === 'name_desc') {
+        return right.name.localeCompare(left.name, undefined, { sensitivity: 'base' });
+      }
+
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+  }, [characters, search, listMode, sortMode]);
 
   const selectedCharacter = useMemo(
     () => characters.find((character) => character.id === selectedCharacterId) || null,
@@ -765,12 +779,24 @@ export default function CharacterManagerPanel() {
         </div>
       </div>
 
-      <Input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search characters by name..."
-        className="h-9 text-xs"
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search characters by name..."
+          className="h-9 text-xs"
+        />
+        <select
+          value={sortMode}
+          onChange={(event) => setSortMode(event.target.value as CharacterSortMode)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Sort characters"
+        >
+          <option value="updated_desc">Recently updated</option>
+          <option value="name_asc">Name A-Z</option>
+          <option value="name_desc">Name Z-A</option>
+        </select>
+      </div>
 
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -804,7 +830,7 @@ export default function CharacterManagerPanel() {
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-muted-foreground">{filteredCharacters.length} shown</div>
+          <div className="text-[10px] text-muted-foreground">{filteredCharacters.length} shown • {sortMode === 'updated_desc' ? 'Recently updated' : sortMode === 'name_asc' ? 'Name A-Z' : 'Name Z-A'}</div>
         </div>
         <div className="max-h-48 overflow-y-auto divide-y divide-border/70">
           {isLoading ? (
