@@ -104,3 +104,75 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    const body = await request.json();
+    const action = typeof body?.action === 'string' ? body.action : '';
+
+    const existing = await prisma.character.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            versions: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: 'Character not found' }, { status: 404 });
+    }
+
+    if (action === 'soft_delete') {
+      if (existing.deletedAt) {
+        return NextResponse.json({ success: false, error: 'Character already in trash' }, { status: 409 });
+      }
+
+      const updated = await prisma.character.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+        },
+        include: {
+          _count: {
+            select: {
+              versions: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json({ success: true, character: toCharacterSummary(updated) });
+    }
+
+    if (action === 'restore') {
+      if (!existing.deletedAt) {
+        return NextResponse.json({ success: false, error: 'Character is not in trash' }, { status: 409 });
+      }
+
+      const updated = await prisma.character.update({
+        where: { id },
+        data: {
+          deletedAt: null,
+        },
+        include: {
+          _count: {
+            select: {
+              versions: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json({ success: true, character: toCharacterSummary(updated) });
+    }
+
+    return NextResponse.json({ success: false, error: 'Unsupported action' }, { status: 400 });
+  } catch (error: any) {
+    console.error('Failed to update character trash state:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
+  }
+}

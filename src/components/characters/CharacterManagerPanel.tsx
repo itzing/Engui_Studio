@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CopyPlus, Download, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2 } from 'lucide-react';
+import { CopyPlus, Download, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -167,6 +167,8 @@ function parseImportText(input: string): ImportPreview {
   return parsed;
 }
 
+type CharacterListMode = 'active' | 'trash';
+
 export default function CharacterManagerPanel() {
   const { showToast } = useToast();
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
@@ -193,6 +195,8 @@ export default function CharacterManagerPanel() {
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
+  const [listMode, setListMode] = useState<CharacterListMode>('active');
+  const [isTrashMutating, setIsTrashMutating] = useState(false);
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
@@ -202,7 +206,7 @@ export default function CharacterManagerPanel() {
     setError(null);
 
     try {
-      const response = await fetch('/api/characters', { cache: 'no-store' });
+      const response = await fetch(`/api/characters?includeDeleted=true`, { cache: 'no-store' });
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -280,9 +284,10 @@ export default function CharacterManagerPanel() {
 
   const filteredCharacters = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return characters;
+    const scopedCharacters = characters.filter((character) => listMode === 'trash' ? !!character.deletedAt : !character.deletedAt);
+    if (!query) return scopedCharacters;
 
-    return characters.filter((character) => {
+    return scopedCharacters.filter((character) => {
       const haystack = [
         character.name,
         character.gender || '',
@@ -293,12 +298,15 @@ export default function CharacterManagerPanel() {
 
       return haystack.includes(query);
     });
-  }, [characters, search]);
+  }, [characters, search, listMode]);
 
   const selectedCharacter = useMemo(
     () => characters.find((character) => character.id === selectedCharacterId) || null,
     [characters, selectedCharacterId]
   );
+
+  const activeCharacters = useMemo(() => characters.filter((character) => !character.deletedAt), [characters]);
+  const trashedCharacters = useMemo(() => characters.filter((character) => !!character.deletedAt), [characters]);
 
   const selectedCloneVersion = useMemo(
     () => versions.find((version) => version.id === selectedCloneVersionId) || null,
@@ -689,6 +697,60 @@ export default function CharacterManagerPanel() {
     ? versions.find((version) => version.id === selectedCharacter.currentVersionId) || null
     : versions[0] || null;
 
+  const moveCharacterToTrash = async () => {
+    if (!selectedCharacter || selectedCharacter.deletedAt) return;
+    if (!confirm(`Move ${selectedCharacter.name} to trash?`)) return;
+
+    setIsTrashMutating(true);
+    try {
+      const response = await fetch(`/api/characters/${selectedCharacter.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'soft_delete' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to move character to trash');
+      }
+
+      showToast('Character moved to trash', 'success');
+      setSelectedCharacterId(null);
+      setDraft(createEmptyDraft());
+      await fetchCharacters();
+    } catch (nextError: any) {
+      console.error('Failed to move character to trash:', nextError);
+      showToast(nextError?.message || 'Failed to move character to trash', 'error');
+    } finally {
+      setIsTrashMutating(false);
+    }
+  };
+
+  const restoreCharacterFromTrash = async () => {
+    if (!selectedCharacter || !selectedCharacter.deletedAt) return;
+
+    setIsTrashMutating(true);
+    try {
+      const response = await fetch(`/api/characters/${selectedCharacter.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to restore character');
+      }
+
+      showToast('Character restored from trash', 'success');
+      setListMode('active');
+      await fetchCharacters(selectedCharacter.id);
+    } catch (nextError: any) {
+      console.error('Failed to restore character:', nextError);
+      showToast(nextError?.message || 'Failed to restore character', 'error');
+    } finally {
+      setIsTrashMutating(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -722,12 +784,12 @@ export default function CharacterManagerPanel() {
 
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Library</div>
-          <div className="mt-1 text-lg font-semibold">{characters.length}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Active</div>
+          <div className="mt-1 text-lg font-semibold">{activeCharacters.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Versions</div>
-          <div className="mt-1 text-lg font-semibold">{versions.length}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Trash</div>
+          <div className="mt-1 text-lg font-semibold">{trashedCharacters.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-muted/20 p-3">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Dirty traits</div>
@@ -737,8 +799,22 @@ export default function CharacterManagerPanel() {
 
       <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
         <div className="border-b border-border px-3 py-2 flex items-center justify-between gap-2">
-          <div className="text-xs font-medium text-muted-foreground">Library</div>
-          <div className="text-[10px] text-muted-foreground">{characters.length} total</div>
+          <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
+            {(['active', 'trash'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setListMode(mode)}
+                className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${listMode === mode
+                  ? 'bg-background shadow-sm text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-muted-foreground">{filteredCharacters.length} shown</div>
         </div>
         <div className="max-h-48 overflow-y-auto divide-y divide-border/70">
           {isLoading ? (
@@ -763,6 +839,7 @@ export default function CharacterManagerPanel() {
                     <div className="truncate text-sm font-medium">{character.name}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {character.gender || 'Unspecified gender'} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                      {character.deletedAt ? ` • trashed ${formatDateTime(character.deletedAt)}` : ''}
                     </div>
                   </div>
                 </div>
@@ -777,6 +854,11 @@ export default function CharacterManagerPanel() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="text-sm font-semibold">{draft?.name || 'Unsaved character draft'}</div>
+              {selectedCharacter?.deletedAt && (
+                <span className="rounded-full px-2 py-0.5 text-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-200">
+                  In trash
+                </span>
+              )}
               <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
                 ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
                 : 'border-border bg-background/70 text-muted-foreground'
@@ -790,15 +872,28 @@ export default function CharacterManagerPanel() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
-              <CopyPlus className="w-3.5 h-3.5 mr-1" />
-              Clone
-            </Button>
+            {selectedCharacter?.deletedAt ? (
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
+                <Undo2 className="w-3.5 h-3.5 mr-1" />
+                {isTrashMutating ? 'Restoring...' : 'Restore'}
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
+                  <CopyPlus className="w-3.5 h-3.5 mr-1" />
+                  Clone
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 text-xs text-red-300 border-red-500/30 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  {isTrashMutating ? 'Deleting...' : 'Delete'}
+                </Button>
+              </>
+            )}
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
               <Undo2 className="w-3.5 h-3.5 mr-1" />
               Cancel
             </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={saveDraft} disabled={!canSave || isSaving}>
+            <Button size="sm" className="h-8 text-xs" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
               <Save className="w-3.5 h-3.5 mr-1" />
               {isSaving ? 'Saving...' : 'Save'}
             </Button>
@@ -1007,7 +1102,7 @@ export default function CharacterManagerPanel() {
             )}
 
             <div className="rounded-lg border border-border bg-muted/10 p-3 text-[11px] text-muted-foreground">
-              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Applying a history snapshot only updates the transient draft until you save. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
+              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Applying a history snapshot only updates the transient draft until you save. Delete moves a character to Trash via soft delete, and Trash only supports restore in this v1 flow. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
             </div>
           </div>
         )}
