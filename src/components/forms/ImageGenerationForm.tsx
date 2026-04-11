@@ -363,6 +363,17 @@ export default function ImageGenerationForm() {
         }));
     };
 
+    const handleNumericParameterInput = (paramName: string, rawValue: string) => {
+        if (paramName === 'loraWeight') {
+            if (/^-?\d*(\.\d*)?$/.test(rawValue)) {
+                handleParameterChange(paramName, rawValue);
+            }
+            return;
+        }
+
+        handleParameterChange(paramName, parseFloat(rawValue));
+    };
+
     const swapDimensionParameters = (widthParam: any, heightParam: any) => {
         const currentWidth = parameterValues[widthParam.name] ?? widthParam.default;
         const currentHeight = parameterValues[heightParam.name] ?? heightParam.default;
@@ -1044,13 +1055,14 @@ export default function ImageGenerationForm() {
                                 ) : (
                                     <>
                                         <Input
-                                            type="number"
+                                            type={param.name === 'loraWeight' ? 'text' : 'number'}
+                                            inputMode={param.name === 'loraWeight' ? 'decimal' : undefined}
                                             name={param.name}
                                             value={parameterValues[param.name] ?? param.default}
-                                            onChange={(e) => handleParameterChange(param.name, parseFloat(e.target.value))}
-                                            min={param.min}
-                                            max={param.max}
-                                            step={param.step}
+                                            onChange={(e) => handleNumericParameterInput(param.name, e.target.value)}
+                                            min={param.name === 'loraWeight' ? undefined : param.min}
+                                            max={param.name === 'loraWeight' ? undefined : param.max}
+                                            step={param.name === 'loraWeight' ? undefined : param.step}
                                             className="h-8 text-sm"
                                         />
                                         {param.name === 'seed' && (
