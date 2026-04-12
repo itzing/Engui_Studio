@@ -441,49 +441,28 @@ class S3Service {
 
   async listAllObjectKeys(prefix: string = ''): Promise<string[]> {
     const normalizedPrefix = prefix.replace(/^\/+/, '');
+    const visited = new Set<string>();
     const keys: string[] = [];
-    let continuationToken: string | null = null;
 
-    while (true) {
-      const args = [
-        's3api',
-        'list-objects-v2',
-        '--bucket',
-        this.config.bucketName,
-        '--region',
-        this.config.region,
-        '--endpoint-url',
-        this.config.endpointUrl,
-        '--output',
-        'json',
-      ];
-
-      if (normalizedPrefix) {
-        args.push('--prefix', normalizedPrefix);
+    const walk = async (currentPrefix: string) => {
+      const normalizedCurrent = currentPrefix.replace(/^\/+/, '');
+      if (visited.has(normalizedCurrent)) {
+        return;
       }
+      visited.add(normalizedCurrent);
 
-      if (continuationToken) {
-        args.push('--continuation-token', continuationToken);
-      }
-
-      const { stdout } = await this.runAwsCommand(args, { silent: true });
-      const result = stdout && stdout.trim().length > 0 ? JSON.parse(stdout) : {};
-      const contents = Array.isArray(result.Contents) ? result.Contents : [];
-
-      for (const item of contents) {
-        if (item?.Key) {
-          keys.push(item.Key);
+      const items = await this.listFiles(normalizedCurrent);
+      for (const item of items) {
+        if (item.type === 'directory') {
+          await walk(item.key);
+        } else if (item.key) {
+          keys.push(item.key);
         }
       }
+    };
 
-      if (!result.IsTruncated || !result.NextContinuationToken) {
-        break;
-      }
-
-      continuationToken = result.NextContinuationToken;
-    }
-
-    return keys;
+    await walk(normalizedPrefix);
+    return Array.from(new Set(keys));
   }
 
   async deleteFile(key: string): Promise<void> {
