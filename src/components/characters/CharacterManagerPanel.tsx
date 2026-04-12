@@ -1443,22 +1443,17 @@ export default function CharacterManagerPanel() {
       </main>
 
       <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5">
-        <div className="rounded-lg border border-border bg-muted/20 p-2.5">
-          <div className="text-xs font-medium">Preview rail</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {draft?.previewStatusSummary || 'Stable placeholders until real rendered character previews are wired in.'}
-          </div>
-        </div>
-
-        {previewCards.map((card) => (
+        {previewCards.map((card, index) => (
           <div key={card.title} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-2.5">
             <div className="text-xs font-medium">{card.title}</div>
             <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
-            <div className="mt-2 flex h-[132px] items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/80 bg-background/40 px-3 text-center">
-              <div>
+            <div className="mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-1 text-center">
+              <div className={`flex items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/80 bg-background/40 px-3 ${index === 0 ? 'aspect-square w-full max-w-[132px]' : index === 1 ? 'aspect-[832/1216] w-full max-w-[92px]' : 'aspect-[896/1408] w-full max-w-[84px]'}`}>
+                <div>
                 <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Preview scaffold ready' : 'Empty preview state'}</div>
-                <div className="mt-1.5 text-[11px] text-muted-foreground">
-                  {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
+                  <div className="mt-1.5 text-[11px] text-muted-foreground">
+                    {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
+                  </div>
                 </div>
               </div>
             </div>
