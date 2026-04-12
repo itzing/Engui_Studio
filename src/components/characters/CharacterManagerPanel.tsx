@@ -129,7 +129,19 @@ function getTraitLocks(draft: DraftCharacter | null): Record<string, boolean> {
   return (draft?.editorState?.uiTraitLocks as Record<string, boolean> | undefined) || {};
 }
 
-function parseImportText(input: string): ImportPreview {
+function normalizeImportValue(rawValue: string) {
+  return rawValue.replace(/\s+/g, ' ').trim();
+}
+
+function titleCaseName(value: string) {
+  return normalizeImportValue(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function parseStructuredImportText(input: string): ImportPreview {
   const lines = input
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -146,7 +158,7 @@ function parseImportText(input: string): ImportPreview {
     if (separatorIndex <= 0) continue;
 
     const rawKey = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
+    const value = normalizeImportValue(line.slice(separatorIndex + 1));
     if (!rawKey || !value) continue;
 
     const normalizedKey = normalizeImportKey(rawKey);
@@ -165,6 +177,194 @@ function parseImportText(input: string): ImportPreview {
   }
 
   return parsed;
+}
+
+function parseFreeTextImportText(input: string): ImportPreview {
+  const parsed: ImportPreview = {
+    name: '',
+    gender: '',
+    traits: {},
+  };
+
+  const normalizedInput = normalizeImportValue(input);
+  if (!normalizedInput) return parsed;
+
+  const assignTrait = (key: string, value: string | null | undefined) => {
+    const normalized = normalizeImportValue(value || '');
+    if (!normalized || parsed.traits[key]) return;
+    parsed.traits[key] = normalized;
+  };
+
+  const nameMatch = normalizedInput.match(/\bnamed\s+([^,.;]+)/i) || normalizedInput.match(/\bname\s+is\s+([^,.;]+)/i);
+  if (nameMatch) {
+    parsed.name = titleCaseName(nameMatch[1]);
+  }
+
+  if (/\b(female|woman)\b/i.test(normalizedInput)) parsed.gender = 'female';
+  else if (/\b(male|man)\b/i.test(normalizedInput)) parsed.gender = 'male';
+
+  const segments = normalizedInput
+    .split(/[\n,;]+/)
+    .map((segment) => normalizeImportValue(segment.replace(/^and\s+/i, '').replace(/^having\s+/i, '')))
+    .filter(Boolean);
+
+  for (const segment of segments) {
+    if (!parsed.name) {
+      const segmentNameMatch = segment.match(/^named\s+(.+)$/i);
+      if (segmentNameMatch) {
+        parsed.name = titleCaseName(segmentNameMatch[1]);
+        continue;
+      }
+    }
+
+    if (!parsed.gender) {
+      if (/\b(female|woman)\b/i.test(segment)) parsed.gender = 'female';
+      else if (/\b(male|man)\b/i.test(segment)) parsed.gender = 'male';
+    }
+
+    let match: RegExpMatchArray | null = null;
+
+    if ((match = segment.match(/^(.+?)\s+ethnicity$/i))) {
+      assignTrait('ethnicity', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+skin tone$/i))) {
+      assignTrait('skin_tone', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+undertone$/i))) {
+      assignTrait('undertone', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+face shape$/i))) {
+      assignTrait('face_shape', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+hair$/i))) {
+      assignTrait('hair_color', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+(ponytail|braid|bun|bob|pixie cut|waves|curls|curly hair|straight hair)$/i))) {
+      assignTrait('hair_texture', `${match[1]} ${match[2]}`);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+eyes$/i))) {
+      const descriptor = normalizeImportValue(match[1]);
+      const eyeMatch = descriptor.match(/^(.*?)(almond|round|narrow|wide|hooded|monolid|upturned|downturned)$/i);
+      if (eyeMatch) {
+        assignTrait('eye_color', eyeMatch[1]);
+        assignTrait('eye_shape', eyeMatch[2]);
+      } else {
+        assignTrait('eye_shape', descriptor);
+      }
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+eyebrows$/i))) {
+      const descriptor = normalizeImportValue(match[1]);
+      const eyebrowMatch = descriptor.match(/^(.*?)(straight|arched|soft arched|flat)$/i);
+      if (eyebrowMatch) {
+        assignTrait('eyebrow_density', eyebrowMatch[1]);
+        assignTrait('eyebrow_shape', eyebrowMatch[2]);
+      } else {
+        assignTrait('eyebrow_shape', descriptor);
+      }
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+nose$/i))) {
+      assignTrait('nose_shape', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+lips(?:\s+(.+))?$/i))) {
+      assignTrait('lip_color_natural', match[1]);
+      assignTrait('lip_shape', match[2]);
+      assignTrait('lip_fullness', match[2]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+build$/i))) {
+      assignTrait('body_build', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+legs$/i))) {
+      assignTrait('leg_length', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+shoulders$/i))) {
+      assignTrait('shoulder_width', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+waist$/i))) {
+      assignTrait('waist_definition', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+posture$/i))) {
+      assignTrait('posture', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+body proportions$/i))) {
+      assignTrait('body_proportions', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+pelvic structure$/i))) {
+      assignTrait('pelvis_structure', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+torso\s+(.+?)\s+pelvis$/i))) {
+      assignTrait('pelvis_to_torso_ratio', `${match[1]} torso ${match[2]} pelvis`);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+lower abdomen$/i))) {
+      assignTrait('lower_abdomen_shape', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+gluteal structure$/i))) {
+      assignTrait('glute_shape', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+gluteal placement$/i))) {
+      assignTrait('glute_position', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+posterior contour$/i))) {
+      assignTrait('glute_definition', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+neck\s+(.+alignment)$/i))) {
+      assignTrait('neck_length', match[1]);
+      assignTrait('neck_alignment', match[2]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+neck$/i))) {
+      assignTrait('neck_length', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+hip alignment$/i))) {
+      assignTrait('hip_alignment', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+knee alignment$/i))) {
+      assignTrait('knee_alignment', match[1]);
+      continue;
+    }
+    if ((match = segment.match(/^(.+?)\s+leg structure$/i))) {
+      assignTrait('leg_structure', match[1]);
+    }
+  }
+
+  return parsed;
+}
+
+function parseImportText(input: string): ImportPreview {
+  const structured = parseStructuredImportText(input);
+  const freeText = parseFreeTextImportText(input);
+
+  return {
+    name: structured.name || freeText.name,
+    gender: structured.gender || freeText.gender,
+    traits: {
+      ...freeText.traits,
+      ...structured.traits,
+    },
+  };
 }
 
 type CharacterListMode = 'active' | 'trash';
@@ -1326,7 +1526,7 @@ export default function CharacterManagerPanel() {
           <DialogHeader>
             <DialogTitle>Import character from text</DialogTitle>
             <DialogDescription>
-              Confirming import creates a new Character and initial CharacterVersion immediately.
+              Supports both structured `key: value` lines and free descriptive text. Confirming import creates a new Character and initial CharacterVersion immediately.
             </DialogDescription>
           </DialogHeader>
 
@@ -1336,7 +1536,7 @@ export default function CharacterManagerPanel() {
               <textarea
                 value={importText}
                 onChange={(event) => setImportText(event.target.value)}
-                placeholder={['name: Mira', 'gender: female', 'eye_shape: almond', 'hair_color: black'].join('\n')}
+                placeholder={['name: Mira', 'gender: female', 'eye_shape: almond', 'hair_color: black', '', 'or: named Vesper, pale ivory skin tone, diamond face shape, silver gray hair...'].join('\n')}
                 className="min-h-[260px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
