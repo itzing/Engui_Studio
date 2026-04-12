@@ -439,7 +439,7 @@ class S3Service {
     });
   }
 
-  private async listAllObjectKeys(prefix: string = ''): Promise<string[]> {
+  async listAllObjectKeys(prefix: string = ''): Promise<string[]> {
     const normalizedPrefix = prefix.replace(/^\/+/, '');
     const keys: string[] = [];
     let continuationToken: string | null = null;

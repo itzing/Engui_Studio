@@ -19,6 +19,12 @@ type S3Item = {
   extension?: string;
 };
 
+type DeleteLogEntry = {
+  key: string;
+  status: 'queued' | 'deleting' | 'deleted' | 'failed';
+  message?: string;
+};
+
 interface S3BucketViewerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -76,6 +82,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     currentKey: null,
     cancelled: false,
   });
+  const [deleteLogs, setDeleteLogs] = useState<DeleteLogEntry[]>([]);
   const [error, setError] = useState<string>('');
 
   const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
@@ -241,23 +248,68 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
 
     setIsDeleting(true);
     setError('');
-    setDeleteProgress({
-      total: 1,
-      completed: 0,
-      currentKey: currentPath,
-      cancelled: false,
-    });
+    setDeleteLogs([]);
 
     try {
-      const response = await fetch('/api/s3-storage/delete', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ volume: activeVolume, key: currentPath }),
+      const listParams = new URLSearchParams({ volume: activeVolume, path: currentPath, recursive: 'true' });
+      const listResponse = await fetch(`/api/s3-storage/files?${listParams.toString()}`);
+      const listData = await listResponse.json().catch(() => ({}));
+
+      if (!listResponse.ok) {
+        throw new Error(listData.error || 'Failed to list folder contents for deletion.');
+      }
+
+      const keysToDelete: string[] = Array.isArray(listData.keys) ? listData.keys : [];
+      setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const })));
+      setDeleteProgress({
+        total: keysToDelete.length,
+        completed: 0,
+        currentKey: keysToDelete[0] || currentPath,
+        cancelled: false,
       });
 
-      if (!response.ok) {
+      const batchSize = 100;
+      let completed = 0;
+
+      for (let index = 0; index < keysToDelete.length; index += batchSize) {
+        const batch = keysToDelete.slice(index, index + batchSize);
+        let cancelled = false;
+
+        setDeleteProgress((previous) => {
+          cancelled = previous.cancelled;
+          return {
+            ...previous,
+            currentKey: batch[0] || previous.currentKey,
+          };
+        });
+
+        if (cancelled) {
+          break;
+        }
+
+        setDeleteLogs((previous) => previous.map((entry) => batch.includes(entry.key) ? { ...entry, status: 'deleting' } : entry));
+
+        const response = await fetch('/api/s3-storage/delete', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ volume: activeVolume, keys: batch }),
+        });
+
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to delete folder.');
+
+        if (!response.ok) {
+          setDeleteLogs((previous) => previous.map((entry) => batch.includes(entry.key) ? { ...entry, status: 'failed', message: data.error || 'Delete failed' } : entry));
+          throw new Error(data.error || 'Failed to delete folder batch.');
+        }
+
+        const deletedKeys: string[] = Array.isArray(data.deletedKeys) ? data.deletedKeys : batch;
+        completed += deletedKeys.length;
+        setDeleteLogs((previous) => previous.map((entry) => deletedKeys.includes(entry.key) ? { ...entry, status: 'deleted' } : entry));
+        setDeleteProgress((previous) => ({
+          ...previous,
+          completed,
+          currentKey: batch[batch.length - 1] || previous.currentKey,
+        }));
       }
 
       const parts = currentPath.split('/').filter(Boolean);
@@ -266,7 +318,6 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       setCurrentPath(parentPath);
       setSelectedKeys([]);
       setPreviewKey('');
-      setDeleteProgress((previous) => ({ ...previous, completed: 1 }));
       await loadItems(activeVolume, parentPath);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Folder delete failed.');
@@ -288,6 +339,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     const keysToDelete = [...selectedKeys];
     setIsDeleting(true);
     setError('');
+    setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const })));
     setDeleteProgress({
       total: keysToDelete.length,
       completed: 0,
@@ -315,6 +367,8 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
           break;
         }
 
+        setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'deleting' } : entry));
+
         const response = await fetch('/api/s3-storage/delete', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
@@ -324,8 +378,10 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
           failures.push(data.error || key);
+          setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'failed', message: data.error || 'Delete failed' } : entry));
         } else {
           completed += 1;
+          setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'deleted' } : entry));
           setDeleteProgress((previous) => ({
             ...previous,
             completed,
@@ -403,13 +459,28 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
           </div>
           <DialogDescription className="flex flex-col gap-2 text-xs">
             {isDeleting && (
-              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <span>
                     Deleting {deleteProgress.completed}/{deleteProgress.total}
-                    {deleteProgress.currentKey ? `, current: ${getFileName(deleteProgress.currentKey)}` : ''}
+                    {deleteProgress.currentKey ? `, current: ${deleteProgress.currentKey}` : ''}
                   </span>
                   <span>{deleteProgress.cancelled ? 'Stopping after current item...' : 'In progress'}</span>
+                </div>
+                <div className="max-h-40 overflow-auto rounded border border-border/60 bg-background/60 p-2 font-mono text-[10px] space-y-1">
+                  {deleteLogs.length === 0 ? (
+                    <div className="text-muted-foreground">Preparing delete plan...</div>
+                  ) : (
+                    deleteLogs.map((entry) => (
+                      <div key={entry.key} className="break-all">
+                        <span className={entry.status === 'deleted' ? 'text-green-500' : entry.status === 'failed' ? 'text-red-500' : entry.status === 'deleting' ? 'text-amber-500' : 'text-muted-foreground'}>
+                          [{entry.status}]
+                        </span>{' '}
+                        {entry.key}
+                        {entry.message ? ` - ${entry.message}` : ''}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

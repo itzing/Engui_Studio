@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const volume = searchParams.get('volume');
     const path = searchParams.get('path') || '';
+    const recursive = searchParams.get('recursive') === 'true';
 
     if (!volume) {
       return NextResponse.json(
@@ -47,6 +48,11 @@ export async function GET(request: NextRequest) {
       region: settings.s3.region || 'us-east-1',
       useGlobalNetworking: settings.s3.useGlobalNetworking ?? false,
     });
+
+    if (recursive) {
+      const keys = await s3Service.listAllObjectKeys(path);
+      return NextResponse.json({ keys });
+    }
 
     const files = await s3Service.listFiles(path);
 

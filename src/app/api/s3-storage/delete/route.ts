@@ -4,9 +4,9 @@ import SettingsService from '@/lib/settingsService';
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { volume, key } = await request.json();
+    const { volume, key, keys } = await request.json();
 
-    if (!volume || !key) {
+    if (!volume || (!key && !Array.isArray(keys))) {
       return NextResponse.json(
         { error: '볼륨과 파일 키가 필요합니다.' },
         { status: 400 }
@@ -32,22 +32,34 @@ export async function DELETE(request: NextRequest) {
       useGlobalNetworking: settings.s3.useGlobalNetworking ?? false,
     });
 
-    const normalizedKey = key.replace(/^\/+/, '');
-    const looksLikeDirectory = normalizedKey.endsWith('/');
-
     let deleted = 0;
+    let deletedKeys: string[] = [];
 
-    if (looksLikeDirectory) {
-      const result = await s3Service.deletePrefix(normalizedKey);
+    if (Array.isArray(keys)) {
+      const normalizedKeys = keys.map((entry) => String(entry).replace(/^\/+/, '')).filter(Boolean);
+      const result = await s3Service.deleteFiles(normalizedKeys);
       deleted = result.deleted;
+      deletedKeys = normalizedKeys;
     } else {
-      await s3Service.deleteFile(normalizedKey);
-      deleted = 1;
+      const normalizedKey = key.replace(/^\/+/, '');
+      const looksLikeDirectory = normalizedKey.endsWith('/');
+
+      if (looksLikeDirectory) {
+        const allKeys = await s3Service.listAllObjectKeys(normalizedKey);
+        const result = await s3Service.deleteFiles(allKeys);
+        deleted = result.deleted;
+        deletedKeys = allKeys;
+      } else {
+        await s3Service.deleteFile(normalizedKey);
+        deleted = 1;
+        deletedKeys = [normalizedKey];
+      }
     }
 
     return NextResponse.json({ 
       success: true, 
       deleted,
+      deletedKeys,
       message: '파일이 성공적으로 삭제되었습니다.' 
     });
   } catch (error) {
