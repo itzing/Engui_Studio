@@ -93,10 +93,27 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     cancelled: false,
   });
   const [deleteLogs, setDeleteLogs] = useState<DeleteLogEntry[]>([]);
+  const [copiedDeleteLog, setCopiedDeleteLog] = useState(false);
   const [error, setError] = useState<string>('');
 
   function appendDeleteLog(entry: Omit<DeleteLogEntry, 'timestamp'>) {
     setDeleteLogs((previous) => [...previous, { ...entry, timestamp: makeTimestamp() }]);
+  }
+
+  async function handleCopyDeleteLog() {
+    if (deleteLogs.length === 0) return;
+
+    const text = deleteLogs
+      .map((entry) => `${entry.timestamp} [${entry.status}] ${entry.key}${entry.message ? ` - ${entry.message}` : ''}`)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDeleteLog(true);
+      window.setTimeout(() => setCopiedDeleteLog(false), 2000);
+    } catch {
+      setError('Failed to copy delete log.');
+    }
   }
 
   const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
@@ -491,6 +508,16 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   </span>
                   <div className="flex items-center gap-2">
                     <span>{isDeleting ? (deleteProgress.cancelled ? 'Stopping after current item...' : 'In progress') : 'Finished'}</span>
+                    {deleteLogs.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => void handleCopyDeleteLog()}
+                      >
+                        {copiedDeleteLog ? 'Copied' : 'Copy log'}
+                      </Button>
+                    )}
                     {!isDeleting && deleteLogs.length > 0 && (
                       <Button
                         variant="ghost"
