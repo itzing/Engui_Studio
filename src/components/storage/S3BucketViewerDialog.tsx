@@ -382,9 +382,17 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
           throw new Error(data.error || 'Failed to delete batch.');
         }
 
-        const deletedKeys: string[] = Array.isArray(data.deletedKeys) ? data.deletedKeys : batch;
+        const deletedKeys: string[] = Array.isArray(data.deletedKeys) ? data.deletedKeys : [];
+        const failedKeys: string[] = Array.isArray(data.failedKeys) ? data.failedKeys : [];
+
         completed += deletedKeys.length;
-        setDeleteLogStatus(deletedKeys, 'deleted');
+        if (deletedKeys.length > 0) {
+          setDeleteLogStatus(deletedKeys, 'deleted');
+        }
+        if (failedKeys.length > 0) {
+          setDeleteLogStatus(failedKeys, 'failed', 'Delete failed');
+          appendDeleteLog({ key: contextKey, status: 'info', message: `batch ${batchNumber} partial failure (${failedKeys.length} keys)` });
+        }
         appendDeleteLog({ key: contextKey, status: 'info', message: `batch ${batchNumber} finished (${deletedKeys.length} keys)` });
         setDeleteProgress((previous) => ({
           ...previous,

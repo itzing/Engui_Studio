@@ -514,14 +514,16 @@ class S3Service {
     });
   }
 
-  async deleteFiles(keys: string[]): Promise<{ deleted: number }> {
+  async deleteFiles(keys: string[]): Promise<{ deleted: number; deletedKeys: string[]; failedKeys: string[] }> {
     const normalizedKeys = Array.from(new Set(keys.map(key => key.replace(/^\/+/, '')).filter(Boolean)));
     if (normalizedKeys.length === 0) {
-      return { deleted: 0 };
+      return { deleted: 0, deletedKeys: [], failedKeys: [] };
     }
 
     const chunkSize = 1000;
     let deleted = 0;
+    const deletedKeys: string[] = [];
+    const failedKeys: string[] = [];
 
     for (let index = 0; index < normalizedKeys.length; index += chunkSize) {
       const chunk = normalizedKeys.slice(index, index + chunkSize);
@@ -578,19 +580,26 @@ class S3Service {
         );
 
         deleted += chunk.length;
+        deletedKeys.push(...chunk);
       } catch (batchError) {
         logger.warn('Batch delete failed, falling back to per-file delete:', batchError);
         for (const key of chunk) {
-          await this.deleteFile(key);
-          deleted += 1;
+          try {
+            await this.deleteFile(key);
+            deleted += 1;
+            deletedKeys.push(key);
+          } catch (fileError) {
+            logger.warn(`Per-file delete failed for key ${key}:`, fileError);
+            failedKeys.push(key);
+          }
         }
       }
     }
 
-    return { deleted };
+    return { deleted, deletedKeys, failedKeys };
   }
 
-  async deletePrefix(prefix: string): Promise<{ deleted: number }> {
+  async deletePrefix(prefix: string): Promise<{ deleted: number; deletedKeys: string[]; failedKeys: string[] }> {
     const normalizedPrefix = prefix.replace(/^\/+/, '');
     const keys = await this.listAllObjectKeys(normalizedPrefix);
     return this.deleteFiles(keys);

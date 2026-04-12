@@ -34,12 +34,14 @@ export async function DELETE(request: NextRequest) {
 
     let deleted = 0;
     let deletedKeys: string[] = [];
+    let failedKeys: string[] = [];
 
     if (Array.isArray(keys)) {
       const normalizedKeys = keys.map((entry) => String(entry).replace(/^\/+/, '')).filter(Boolean);
       const result = await s3Service.deleteFiles(normalizedKeys);
       deleted = result.deleted;
-      deletedKeys = normalizedKeys;
+      deletedKeys = result.deletedKeys;
+      failedKeys = result.failedKeys;
     } else {
       const normalizedKey = key.replace(/^\/+/, '');
       const looksLikeDirectory = normalizedKey.endsWith('/');
@@ -48,7 +50,8 @@ export async function DELETE(request: NextRequest) {
         const allKeys = await s3Service.listAllObjectKeys(normalizedKey);
         const result = await s3Service.deleteFiles(allKeys);
         deleted = result.deleted;
-        deletedKeys = allKeys;
+        deletedKeys = result.deletedKeys;
+        failedKeys = result.failedKeys;
       } else {
         await s3Service.deleteFile(normalizedKey);
         deleted = 1;
@@ -57,15 +60,17 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ 
-      success: true, 
+      success: failedKeys.length === 0,
       deleted,
       deletedKeys,
-      message: '파일이 성공적으로 삭제되었습니다.' 
+      failedKeys,
+      message: failedKeys.length > 0 ? '일부 파일 삭제에 실패했습니다.' : '파일이 성공적으로 삭제되었습니다.' 
     });
   } catch (error) {
     console.error('Failed to delete file:', error);
+    const message = error instanceof Error ? error.message : '파일 삭제에 실패했습니다.';
     return NextResponse.json(
-      { error: '파일 삭제에 실패했습니다.' },
+      { error: message },
       { status: 500 }
     );
   }
