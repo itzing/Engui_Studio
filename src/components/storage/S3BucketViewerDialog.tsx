@@ -290,10 +290,12 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         appendDeleteLog({ key, status: 'info', message: `listed ${nestedKeys.length} keys` });
 
         if (nestedKeys.length === 0) {
-          plan.push(`${normalizePrefix(key)}folder-marker.txt`);
-          appendDeleteLog({ key, status: 'info', message: 'empty folder, adding folder marker to delete plan' });
+          const normalizedFolderKey = normalizePrefix(key);
+          plan.push(normalizedFolderKey, `${normalizedFolderKey}folder-marker.txt`);
+          appendDeleteLog({ key, status: 'info', message: 'empty folder, adding folder placeholder and marker to delete plan' });
         } else {
-          plan.push(...nestedKeys);
+          plan.push(...nestedKeys, normalizePrefix(key));
+          appendDeleteLog({ key, status: 'info', message: 'adding folder placeholder to delete plan' });
         }
       } else {
         plan.push(key);

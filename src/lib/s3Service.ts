@@ -499,8 +499,15 @@ class S3Service {
     ).catch(async error => {
       logger.error('Failed to delete file after retries:', error);
 
-      if (error instanceof Error && error.message.includes('502')) {
-        throw new Error(`RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)`);
+      if (error instanceof Error) {
+        if (error.message.includes('NoSuchKey') || error.message.includes('404') || error.message.includes('Not Found')) {
+          logger.warn(`Delete treated missing key as already removed: ${normalizedKey}`);
+          return;
+        }
+
+        if (error.message.includes('502')) {
+          throw new Error(`RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)`);
+        }
       }
 
       throw new Error(`파일 삭제에 실패했습니다: ${error}`);
