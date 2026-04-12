@@ -4,6 +4,7 @@ interface OpenAIChatResponse {
   choices?: Array<{
     message?: {
       content?: string | Array<{ type?: string; text?: string }>;
+      reasoning_content?: string | Array<{ type?: string; text?: string }>;
     };
   }>;
   error?: {
@@ -151,7 +152,8 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       throw new Error(data?.error?.message || `Prompt Helper provider request failed with status ${response.status}`);
     }
 
-    const rawText = extractTextContent(data?.choices?.[0]?.message?.content);
+    const message = data?.choices?.[0]?.message;
+    const rawText = extractTextContent(message?.content) || extractTextContent(message?.reasoning_content);
     const normalizedText = normalizeModelText(rawText);
 
     if (!normalizedText) {
