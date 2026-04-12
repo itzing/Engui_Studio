@@ -519,57 +519,65 @@ class S3Service {
     for (let index = 0; index < normalizedKeys.length; index += chunkSize) {
       const chunk = normalizedKeys.slice(index, index + chunkSize);
 
-      await executeWithRetry(
-        async () => {
-          const payload = {
-            Objects: chunk.map(key => ({ Key: key })),
-            Quiet: true,
-          };
+      try {
+        await executeWithRetry(
+          async () => {
+            const payload = {
+              Objects: chunk.map(key => ({ Key: key })),
+              Quiet: true,
+            };
 
-          const tempFile = path.join(os.tmpdir(), `s3-delete-batch-${Date.now()}-${index}.json`);
-          fs.writeFileSync(tempFile, JSON.stringify(payload), 'utf8');
+            const tempFile = path.join(os.tmpdir(), `s3-delete-batch-${Date.now()}-${index}.json`);
+            fs.writeFileSync(tempFile, JSON.stringify(payload), 'utf8');
 
-          try {
-            const args = [
-              's3api',
-              'delete-objects',
-              '--bucket',
-              this.config.bucketName,
-              '--delete',
-              `file://${tempFile}`,
-              '--region',
-              this.config.region,
-              '--endpoint-url',
-              this.config.endpointUrl,
-              '--output',
-              'json',
-            ];
+            try {
+              const args = [
+                's3api',
+                'delete-objects',
+                '--bucket',
+                this.config.bucketName,
+                '--delete',
+                `file://${tempFile}`,
+                '--region',
+                this.config.region,
+                '--endpoint-url',
+                this.config.endpointUrl,
+                '--output',
+                'json',
+              ];
 
-            logger.emoji.search(`Deleting ${chunk.length} files in batch...`);
-            const { stdout, stderr } = await this.runAwsCommand(args, { silent: true });
+              logger.emoji.search(`Deleting ${chunk.length} files in batch...`);
+              const { stdout, stderr } = await this.runAwsCommand(args, { silent: true });
 
-            if (stderr && stderr.length > 0) {
-              logger.emoji.search('AWS CLI stderr:', stderr);
-            }
+              if (stderr && stderr.length > 0) {
+                logger.emoji.search('AWS CLI stderr:', stderr);
+              }
 
-            if (stdout && stdout.trim().length > 0) {
-              const result = JSON.parse(stdout);
-              if (Array.isArray(result.Errors) && result.Errors.length > 0) {
-                throw new Error(`Batch delete returned ${result.Errors.length} error(s)`);
+              if (stdout && stdout.trim().length > 0) {
+                const result = JSON.parse(stdout);
+                if (Array.isArray(result.Errors) && result.Errors.length > 0) {
+                  throw new Error(`Batch delete returned ${result.Errors.length} error(s)`);
+                }
+              }
+            } finally {
+              if (fs.existsSync(tempFile)) {
+                fs.unlinkSync(tempFile);
               }
             }
-          } finally {
-            if (fs.existsSync(tempFile)) {
-              fs.unlinkSync(tempFile);
-            }
-          }
-        },
-        this.config.maxRetries || 3,
-        this.config.retryDelay || 1000,
-        '파일 일괄 삭제'
-      );
+          },
+          this.config.maxRetries || 3,
+          this.config.retryDelay || 1000,
+          '파일 일괄 삭제'
+        );
 
-      deleted += chunk.length;
+        deleted += chunk.length;
+      } catch (batchError) {
+        logger.warn('Batch delete failed, falling back to per-file delete:', batchError);
+        for (const key of chunk) {
+          await this.deleteFile(key);
+          deleted += 1;
+        }
+      }
     }
 
     return { deleted };
