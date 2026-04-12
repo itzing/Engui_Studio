@@ -90,6 +90,8 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   }, [items]);
 
   const previewItem = useMemo(() => sortedItems.find((item) => item.key === previewKey), [sortedItems, previewKey]);
+  const visibleKeys = useMemo(() => sortedItems.map((item) => item.key), [sortedItems]);
+  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedSet.has(key));
 
   const previewType = useMemo(() => {
     if (!previewItem || previewItem.type !== 'file') return 'none';
@@ -214,6 +216,67 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       }
       return previous.filter((itemKey) => itemKey !== key);
     });
+  }
+
+  function handleToggleSelectAllVisible() {
+    setSelectedKeys((previous) => {
+      if (allVisibleSelected) {
+        return previous.filter((key) => !visibleKeys.includes(key));
+      }
+
+      const next = new Set(previous);
+      for (const key of visibleKeys) {
+        next.add(key);
+      }
+      return Array.from(next);
+    });
+  }
+
+  async function handleDeleteCurrentFolder() {
+    if (!activeVolume || !currentPath) return;
+
+    const folderName = getFileName(currentPath);
+    const confirmed = confirm(`Delete folder "${folderName}" with all nested contents?`);
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setError('');
+    setDeleteProgress({
+      total: 1,
+      completed: 0,
+      currentKey: currentPath,
+      cancelled: false,
+    });
+
+    try {
+      const response = await fetch('/api/s3-storage/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ volume: activeVolume, key: currentPath }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete folder.');
+      }
+
+      const parts = currentPath.split('/').filter(Boolean);
+      const parentParts = parts.slice(0, -1);
+      const parentPath = parentParts.length > 0 ? `${parentParts.join('/')}/` : '';
+      setCurrentPath(parentPath);
+      setSelectedKeys([]);
+      setPreviewKey('');
+      setDeleteProgress((previous) => ({ ...previous, completed: 1 }));
+      await loadItems(activeVolume, parentPath);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Folder delete failed.');
+    } finally {
+      setDeleteProgress((previous) => ({
+        ...previous,
+        currentKey: null,
+      }));
+      setIsDeleting(false);
+    }
   }
 
   async function handleDeleteSelected() {
@@ -403,18 +466,39 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
 
         <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2">
           <div className="border-r border-border min-h-0 flex flex-col">
-            <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+            <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">Contents</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={handleGoUp}
-                disabled={!currentPath || isDeleting}
-              >
-                <ArrowUp className="w-3 h-3 mr-1" />
-                Up
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={handleToggleSelectAllVisible}
+                  disabled={visibleKeys.length === 0 || isDeleting}
+                >
+                  {allVisibleSelected ? 'Clear visible' : 'Select visible'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                  onClick={handleDeleteCurrentFolder}
+                  disabled={!currentPath || isDeleting}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Delete folder
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={handleGoUp}
+                  disabled={!currentPath || isDeleting}
+                >
+                  <ArrowUp className="w-3 h-3 mr-1" />
+                  Up
+                </Button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
