@@ -61,6 +61,23 @@ export interface SecureTransportResult {
 const WRAPPED_KEY_PREFIX = 'v1:';
 const SECURE_NAMESPACE_ROOT = '/runpod-volume/secure-jobs';
 
+function buildAttemptPrefix(jobId: string, attemptId: string): string {
+  return `${jobId}__${attemptId}`;
+}
+
+function splitStoragePathForUpload(storagePath: string): { uploadPath: string; fileName: string } {
+  const key = storagePathToS3Key(storagePath);
+  const lastSlash = key.lastIndexOf('/');
+  if (lastSlash === -1) {
+    return { uploadPath: '', fileName: key };
+  }
+
+  return {
+    uploadPath: key.slice(0, lastSlash),
+    fileName: key.slice(lastSlash + 1),
+  };
+}
+
 export class SecureTransportError extends Error {
   code: string;
 
@@ -151,20 +168,22 @@ function unwrapDek(masterKey: Buffer, wrappedKey: string): Buffer {
 }
 
 export function buildAttemptPaths(jobId: string, attemptId: string) {
-  const baseDir = `${SECURE_NAMESPACE_ROOT}/${jobId}/${attemptId}`;
+  const prefix = buildAttemptPrefix(jobId, attemptId);
   return {
-    baseDir,
-    inputsDir: `${baseDir}/inputs`,
-    outputsDir: `${baseDir}/outputs`,
+    baseDir: SECURE_NAMESPACE_ROOT,
+    inputsDir: SECURE_NAMESPACE_ROOT,
+    outputsDir: SECURE_NAMESPACE_ROOT,
+    inputPrefix: `${SECURE_NAMESPACE_ROOT}/${prefix}__input__`,
+    outputPrefix: `${SECURE_NAMESPACE_ROOT}/${prefix}__output__`,
   };
 }
 
 export function buildInputStoragePath(jobId: string, attemptId: string, fileName: string): string {
-  return `${buildAttemptPaths(jobId, attemptId).inputsDir}/${fileName}`;
+  return `${buildAttemptPaths(jobId, attemptId).inputPrefix}${fileName}`;
 }
 
 export function buildOutputStoragePath(jobId: string, attemptId: string, fileName: string): string {
-  return `${buildAttemptPaths(jobId, attemptId).outputsDir}/${fileName}`;
+  return `${buildAttemptPaths(jobId, attemptId).outputPrefix}${fileName}`;
 }
 
 export function storagePathToS3Key(storagePath: string): string {
@@ -279,7 +298,8 @@ export async function uploadEncryptedMediaInput(params: {
   };
 
   const { envelope, ciphertext } = createMediaEnvelope(params.masterKey, binding, params.plaintext);
-  await params.s3.uploadFile(ciphertext, params.fileName, 'application/octet-stream', storagePathToS3Key(buildAttemptPaths(params.jobId, params.attemptId).inputsDir));
+  const uploadTarget = splitStoragePathForUpload(storagePath);
+  await params.s3.uploadFile(ciphertext, uploadTarget.fileName, 'application/octet-stream', uploadTarget.uploadPath);
 
   return {
     role: params.role,
