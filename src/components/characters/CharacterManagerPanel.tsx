@@ -141,6 +141,13 @@ function titleCaseName(value: string) {
     .join(' ');
 }
 
+function cleanFreeTextPhrase(value: string) {
+  return normalizeImportValue(value)
+    .replace(/^(?:and|with|having|featuring)\s+/i, '')
+    .replace(/\s+alignment$/i, '')
+    .trim();
+}
+
 function parseStructuredImportText(input: string): ImportPreview {
   const lines = input
     .split(/\r?\n/)
@@ -190,7 +197,7 @@ function parseFreeTextImportText(input: string): ImportPreview {
   if (!normalizedInput) return parsed;
 
   const assignTrait = (key: string, value: string | null | undefined) => {
-    const normalized = normalizeImportValue(value || '');
+    const normalized = cleanFreeTextPhrase(value || '');
     if (!normalized || parsed.traits[key]) return;
     parsed.traits[key] = normalized;
   };
@@ -205,7 +212,7 @@ function parseFreeTextImportText(input: string): ImportPreview {
 
   const segments = normalizedInput
     .split(/[\n,;]+/)
-    .map((segment) => normalizeImportValue(segment.replace(/^and\s+/i, '').replace(/^having\s+/i, '')))
+    .map((segment) => cleanFreeTextPhrase(segment))
     .filter(Boolean);
 
   for (const segment of segments) {
@@ -276,8 +283,16 @@ function parseFreeTextImportText(input: string): ImportPreview {
     }
     if ((match = segment.match(/^(.+?)\s+lips(?:\s+(.+))?$/i))) {
       assignTrait('lip_color_natural', match[1]);
-      assignTrait('lip_shape', match[2]);
-      assignTrait('lip_fullness', match[2]);
+
+      const lipDescriptor = cleanFreeTextPhrase(match[2] || '');
+      if (lipDescriptor) {
+        if (/upper lip|lower lip/i.test(lipDescriptor)) {
+          assignTrait('lip_fullness', lipDescriptor);
+        } else {
+          assignTrait('lip_shape', lipDescriptor);
+          assignTrait('lip_fullness', lipDescriptor);
+        }
+      }
       continue;
     }
     if ((match = segment.match(/^(.+?)\s+build$/i))) {
