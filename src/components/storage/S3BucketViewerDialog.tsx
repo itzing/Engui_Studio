@@ -282,7 +282,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         appendDeleteLog({ key, status: 'info', message: 'expanding folder' });
         const nestedKeys = await fetchRecursiveKeys(key);
         appendDeleteLog({ key, status: 'info', message: `listed ${nestedKeys.length} keys` });
-        plan.push(...nestedKeys);
+        plan.push(key, ...nestedKeys);
       } else {
         plan.push(key);
       }
