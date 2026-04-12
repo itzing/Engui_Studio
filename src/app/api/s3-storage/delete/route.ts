@@ -2,29 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
 
-async function deleteS3KeyRecursive(s3Service: S3Service, key: string) {
-  const normalizedKey = key.replace(/^\/+/, '');
-  const prefix = normalizedKey.endsWith('/') ? normalizedKey : `${normalizedKey}/`;
-
-  const items = await s3Service.listFiles(prefix);
-  for (const item of items) {
-    if (item.type === 'directory') {
-      await deleteS3KeyRecursive(s3Service, item.key);
-    } else {
-      await s3Service.deleteFile(item.key.replace(/^\/+/, ''));
-    }
-  }
-
-  const markerCandidates = [normalizedKey, prefix, `${prefix}folder-marker.txt`];
-  for (const markerKey of markerCandidates) {
-    try {
-      await s3Service.deleteFile(markerKey.replace(/^\/+/, ''));
-    } catch {
-      // Ignore missing marker-like objects.
-    }
-  }
-}
-
 export async function DELETE(request: NextRequest) {
   try {
     const { volume, key } = await request.json();
@@ -58,14 +35,19 @@ export async function DELETE(request: NextRequest) {
     const normalizedKey = key.replace(/^\/+/, '');
     const looksLikeDirectory = normalizedKey.endsWith('/');
 
+    let deleted = 0;
+
     if (looksLikeDirectory) {
-      await deleteS3KeyRecursive(s3Service, normalizedKey);
+      const result = await s3Service.deletePrefix(normalizedKey);
+      deleted = result.deleted;
     } else {
       await s3Service.deleteFile(normalizedKey);
+      deleted = 1;
     }
 
     return NextResponse.json({ 
       success: true, 
+      deleted,
       message: '파일이 성공적으로 삭제되었습니다.' 
     });
   } catch (error) {

@@ -439,29 +439,80 @@ class S3Service {
     });
   }
 
-  // 파일 삭제
+  private async listAllObjectKeys(prefix: string = ''): Promise<string[]> {
+    const normalizedPrefix = prefix.replace(/^\/+/, '');
+    const keys: string[] = [];
+    let continuationToken: string | null = null;
+
+    while (true) {
+      const args = [
+        's3api',
+        'list-objects-v2',
+        '--bucket',
+        this.config.bucketName,
+        '--region',
+        this.config.region,
+        '--endpoint-url',
+        this.config.endpointUrl,
+        '--output',
+        'json',
+      ];
+
+      if (normalizedPrefix) {
+        args.push('--prefix', normalizedPrefix);
+      }
+
+      if (continuationToken) {
+        args.push('--continuation-token', continuationToken);
+      }
+
+      const { stdout } = await this.runAwsCommand(args, { silent: true });
+      const result = stdout && stdout.trim().length > 0 ? JSON.parse(stdout) : {};
+      const contents = Array.isArray(result.Contents) ? result.Contents : [];
+
+      for (const item of contents) {
+        if (item?.Key) {
+          keys.push(item.Key);
+        }
+      }
+
+      if (!result.IsTruncated || !result.NextContinuationToken) {
+        break;
+      }
+
+      continuationToken = result.NextContinuationToken;
+    }
+
+    return keys;
+  }
+
   async deleteFile(key: string): Promise<void> {
+    const normalizedKey = key.replace(/^\/+/, '');
+
     return executeWithRetry(
       async () => {
         const args = [
-          's3',
-          'rm',
-          `s3://${this.config.bucketName}/${key}`,
+          's3api',
+          'delete-object',
+          '--bucket',
+          this.config.bucketName,
+          '--key',
+          normalizedKey,
           '--region',
           this.config.region,
           '--endpoint-url',
           this.config.endpointUrl,
         ];
 
-        logger.emoji.search(`Deleting file: ${key}`);
+        logger.emoji.search(`Deleting file: ${normalizedKey}`);
 
-        const { stdout, stderr } = await this.runAwsCommand(args);
+        const { stderr } = await this.runAwsCommand(args, { silent: true });
 
         if (stderr && stderr.length > 0) {
           logger.emoji.search('AWS CLI stderr:', stderr);
         }
 
-        logger.info(`✅ File deleted successfully: ${key}`);
+        logger.info(`✅ File deleted successfully: ${normalizedKey}`);
       },
       this.config.maxRetries || 3,
       this.config.retryDelay || 1000,
@@ -475,6 +526,80 @@ class S3Service {
 
       throw new Error(`파일 삭제에 실패했습니다: ${error}`);
     });
+  }
+
+  async deleteFiles(keys: string[]): Promise<{ deleted: number }> {
+    const normalizedKeys = Array.from(new Set(keys.map(key => key.replace(/^\/+/, '')).filter(Boolean)));
+    if (normalizedKeys.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const chunkSize = 1000;
+    let deleted = 0;
+
+    for (let index = 0; index < normalizedKeys.length; index += chunkSize) {
+      const chunk = normalizedKeys.slice(index, index + chunkSize);
+
+      await executeWithRetry(
+        async () => {
+          const payload = {
+            Objects: chunk.map(key => ({ Key: key })),
+            Quiet: true,
+          };
+
+          const tempFile = path.join(os.tmpdir(), `s3-delete-batch-${Date.now()}-${index}.json`);
+          fs.writeFileSync(tempFile, JSON.stringify(payload), 'utf8');
+
+          try {
+            const args = [
+              's3api',
+              'delete-objects',
+              '--bucket',
+              this.config.bucketName,
+              '--delete',
+              `file://${tempFile}`,
+              '--region',
+              this.config.region,
+              '--endpoint-url',
+              this.config.endpointUrl,
+              '--output',
+              'json',
+            ];
+
+            logger.emoji.search(`Deleting ${chunk.length} files in batch...`);
+            const { stdout, stderr } = await this.runAwsCommand(args, { silent: true });
+
+            if (stderr && stderr.length > 0) {
+              logger.emoji.search('AWS CLI stderr:', stderr);
+            }
+
+            if (stdout && stdout.trim().length > 0) {
+              const result = JSON.parse(stdout);
+              if (Array.isArray(result.Errors) && result.Errors.length > 0) {
+                throw new Error(`Batch delete returned ${result.Errors.length} error(s)`);
+              }
+            }
+          } finally {
+            if (fs.existsSync(tempFile)) {
+              fs.unlinkSync(tempFile);
+            }
+          }
+        },
+        this.config.maxRetries || 3,
+        this.config.retryDelay || 1000,
+        '파일 일괄 삭제'
+      );
+
+      deleted += chunk.length;
+    }
+
+    return { deleted };
+  }
+
+  async deletePrefix(prefix: string): Promise<{ deleted: number }> {
+    const normalizedPrefix = prefix.replace(/^\/+/, '');
+    const keys = await this.listAllObjectKeys(normalizedPrefix);
+    return this.deleteFiles(keys);
   }
 
   // 폴더 생성
