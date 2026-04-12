@@ -148,6 +148,11 @@ function cleanFreeTextPhrase(value: string) {
     .trim();
 }
 
+function isLikelyNaturalLipColor(value: string) {
+  const normalized = value.toLowerCase();
+  return !/(deep red|bright red|red|crimson|scarlet|ruby|burgundy|wine|plum|fuchsia|magenta|violet|purple|orange|coral|lipstick|gloss|matte)/i.test(normalized);
+}
+
 function parseStructuredImportText(input: string): ImportPreview {
   const lines = input
     .split(/\r?\n/)
@@ -251,8 +256,8 @@ function parseFreeTextImportText(input: string): ImportPreview {
       assignTrait('hair_color', match[1]);
       continue;
     }
-    if ((match = segment.match(/^(.+?)\s+(ponytail|braid|bun|bob|pixie cut|waves|curls|curly hair|straight hair)$/i))) {
-      assignTrait('hair_texture', `${match[1]} ${match[2]}`);
+    if ((match = segment.match(/^(.+?)\s+(straight|wavy|curly|coily|silky|sleek|textured)\s+hair$/i))) {
+      assignTrait('hair_texture', `${match[1]} ${match[2]} hair`);
       continue;
     }
     if ((match = segment.match(/^(.+?)\s+eyes$/i))) {
@@ -282,7 +287,10 @@ function parseFreeTextImportText(input: string): ImportPreview {
       continue;
     }
     if ((match = segment.match(/^(.+?)\s+lips(?:\s+(.+))?$/i))) {
-      assignTrait('lip_color_natural', match[1]);
+      const lipColorCandidate = cleanFreeTextPhrase(match[1]);
+      if (isLikelyNaturalLipColor(lipColorCandidate)) {
+        assignTrait('lip_color_natural', lipColorCandidate);
+      }
 
       const lipDescriptor = cleanFreeTextPhrase(match[2] || '');
       if (lipDescriptor) {
