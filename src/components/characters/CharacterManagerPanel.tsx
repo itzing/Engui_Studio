@@ -1454,23 +1454,13 @@ export default function CharacterManagerPanel() {
           <div key={card.title} className="flex min-h-[0] flex-1 flex-col rounded-lg border border-border bg-muted/20 p-3">
             <div className="text-xs font-medium">{card.title}</div>
             <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
-            <div className="mt-3 flex min-h-[140px] flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/40 px-4 text-center">
+            <div className="mt-3 flex min-h-[180px] flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/40 px-4 text-center">
               <div>
-                <div className="text-sm font-medium">{card.traitCount > 0 ? card.summary : 'Empty preview state'}</div>
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'}` : 'Add more traits to make this preview card informative.'}
+                <div className="text-sm font-medium">{card.traitCount > 0 ? 'Preview scaffold ready' : 'Empty preview state'}</div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
                 </div>
               </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {card.chips.map((chip) => (
-                <span key={chip} className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
-                  {chip}
-                </span>
-              ))}
-              {card.chips.length === 0 && (
-                <span className="text-[11px] text-muted-foreground">No traits mapped into this preview yet.</span>
-              )}
             </div>
           </div>
         ))}
