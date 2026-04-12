@@ -363,12 +363,6 @@ export default function CenterPanel() {
   const handleUpscale = async () => {
     if (!previewJob || isUpscaling) return;
 
-    const upscaleSourceJobId = isGalleryPreview ? previewJob.sourceJobId : previewJob.id;
-    if (!upscaleSourceJobId) {
-      showToast('This gallery image has no source job for upscale yet', 'error');
-      return;
-    }
-
     setIsUpscaling(true);
     showToast(`Starting upscale for ${previewJob.type}...`, 'info');
 
@@ -376,8 +370,11 @@ export default function CenterPanel() {
       const response = await fetch('/api/upscale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId: upscaleSourceJobId,
+        body: JSON.stringify(isGalleryPreview ? {
+          galleryAssetId: previewJob.id,
+          type: previewJob.type,
+        } : {
+          jobId: previewJob.id,
           type: previewJob.type,
         }),
       });
@@ -477,7 +474,7 @@ export default function CenterPanel() {
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
                 </Button>
               )}
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || (isGalleryPreview ? !previewJob?.sourceJobId : isSavingToGallery)}>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || isSavingToGallery}>
                 {isUpscaling ? 'Upscaling...' : 'Upscale'}
               </Button>
               <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
