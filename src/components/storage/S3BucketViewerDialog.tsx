@@ -21,8 +21,9 @@ type S3Item = {
 
 type DeleteLogEntry = {
   key: string;
-  status: 'queued' | 'deleting' | 'deleted' | 'failed';
+  status: 'queued' | 'deleting' | 'deleted' | 'failed' | 'info';
   message?: string;
+  timestamp: string;
 };
 
 interface S3BucketViewerDialogProps {
@@ -67,6 +68,11 @@ function normalizePrefix(prefix: string): string {
   return prefix.endsWith('/') ? prefix : `${prefix}/`;
 }
 
+function makeTimestamp(): string {
+  const now = new Date();
+  return `${now.toLocaleTimeString('en-GB', { hour12: false })}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+}
+
 export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialogProps) {
   const [volumes, setVolumes] = useState<VolumeInfo[]>([]);
   const [activeVolume, setActiveVolume] = useState<string>('');
@@ -84,6 +90,10 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   });
   const [deleteLogs, setDeleteLogs] = useState<DeleteLogEntry[]>([]);
   const [error, setError] = useState<string>('');
+
+  function appendDeleteLog(entry: Omit<DeleteLogEntry, 'timestamp'>) {
+    setDeleteLogs((previous) => [...previous, { ...entry, timestamp: makeTimestamp() }]);
+  }
 
   const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
 
@@ -249,6 +259,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     setIsDeleting(true);
     setError('');
     setDeleteLogs([]);
+    appendDeleteLog({ key: currentPath, status: 'info', message: 'delete requested' });
 
     try {
       const listParams = new URLSearchParams({ volume: activeVolume, path: currentPath, recursive: 'true' });
@@ -260,7 +271,11 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       }
 
       const keysToDelete: string[] = Array.isArray(listData.keys) ? listData.keys : [];
-      setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const })));
+      appendDeleteLog({ key: currentPath, status: 'info', message: `listed ${keysToDelete.length} keys` });
+      setDeleteLogs((previous) => [
+        ...previous,
+        ...keysToDelete.map((key) => ({ key, status: 'queued' as const, timestamp: makeTimestamp() })),
+      ]);
       setDeleteProgress({
         total: keysToDelete.length,
         completed: 0,
@@ -274,6 +289,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       for (let index = 0; index < keysToDelete.length; index += batchSize) {
         const batch = keysToDelete.slice(index, index + batchSize);
         let cancelled = false;
+        appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} started (${batch.length} keys)` });
 
         setDeleteProgress((previous) => {
           cancelled = previous.cancelled;
@@ -284,6 +300,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         });
 
         if (cancelled) {
+          appendDeleteLog({ key: currentPath, status: 'info', message: 'cancellation requested' });
           break;
         }
 
@@ -299,12 +316,14 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
 
         if (!response.ok) {
           setDeleteLogs((previous) => previous.map((entry) => batch.includes(entry.key) ? { ...entry, status: 'failed', message: data.error || 'Delete failed' } : entry));
+          appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} failed` });
           throw new Error(data.error || 'Failed to delete folder batch.');
         }
 
         const deletedKeys: string[] = Array.isArray(data.deletedKeys) ? data.deletedKeys : batch;
         completed += deletedKeys.length;
         setDeleteLogs((previous) => previous.map((entry) => deletedKeys.includes(entry.key) ? { ...entry, status: 'deleted' } : entry));
+        appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} finished (${deletedKeys.length} keys)` });
         setDeleteProgress((previous) => ({
           ...previous,
           completed,
@@ -339,7 +358,8 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     const keysToDelete = [...selectedKeys];
     setIsDeleting(true);
     setError('');
-    setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const })));
+    setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const, timestamp: makeTimestamp() })));
+    appendDeleteLog({ key: currentPath || activeVolume, status: 'info', message: `deleting ${keysToDelete.length} selected items` });
     setDeleteProgress({
       total: keysToDelete.length,
       completed: 0,
@@ -472,8 +492,9 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                     <div className="text-muted-foreground">Preparing delete plan...</div>
                   ) : (
                     deleteLogs.map((entry) => (
-                      <div key={entry.key} className="break-all">
-                        <span className={entry.status === 'deleted' ? 'text-green-500' : entry.status === 'failed' ? 'text-red-500' : entry.status === 'deleting' ? 'text-amber-500' : 'text-muted-foreground'}>
+                      <div key={`${entry.timestamp}-${entry.key}-${entry.status}-${entry.message || ''}`} className="break-all">
+                        <span className="text-muted-foreground">{entry.timestamp}</span>{' '}
+                        <span className={entry.status === 'deleted' ? 'text-green-500' : entry.status === 'failed' ? 'text-red-500' : entry.status === 'deleting' ? 'text-amber-500' : entry.status === 'info' ? 'text-sky-400' : 'text-muted-foreground'}>
                           [{entry.status}]
                         </span>{' '}
                         {entry.key}
