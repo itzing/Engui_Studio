@@ -73,6 +73,10 @@ function makeTimestamp(): string {
   return `${now.toLocaleTimeString('en-GB', { hour12: false })}.${String(now.getMilliseconds()).padStart(3, '0')}`;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialogProps) {
   const [volumes, setVolumes] = useState<VolumeInfo[]>([]);
   const [activeVolume, setActiveVolume] = useState<string>('');
@@ -175,7 +179,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     }
   }
 
-  async function loadItems(volume: string, path: string) {
+  async function loadItems(volume: string, path: string): Promise<S3Item[]> {
     setIsLoading(true);
     setError('');
     try {
@@ -192,11 +196,13 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
 
       setSelectedKeys((previous) => previous.filter((key) => nextItems.some((item) => item.key === key)));
       setPreviewKey((previous) => (nextItems.some((item) => item.key === previous) ? previous : ''));
+      return nextItems;
     } catch (loadError) {
       setItems([]);
       setSelectedKeys([]);
       setPreviewKey('');
       setError(loadError instanceof Error ? loadError.message : 'Failed to load files.');
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -297,7 +303,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     return Array.from(new Set(plan));
   }
 
-  async function executeDeletePlan(inputKeys: string[], contextKey: string, successPathAfterDelete: string) {
+  async function executeDeletePlan(inputKeys: string[], contextKey: string, successPathAfterDelete: string): Promise<boolean> {
     setIsDeleting(true);
     setError('');
     setDeleteLogs([]);
@@ -373,9 +379,27 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         setPreviewKey('');
       }
 
-      await loadItems(activeVolume, successPathAfterDelete);
+      let refreshedItems = await loadItems(activeVolume, successPathAfterDelete);
+      let remainingTargets = inputKeys.filter((key) => refreshedItems.some((item) => item.key === key));
+
+      if (remainingTargets.length > 0) {
+        appendDeleteLog({ key: contextKey, status: 'info', message: `verification retry for ${remainingTargets.length} remaining target(s)` });
+        await sleep(800);
+        refreshedItems = await loadItems(activeVolume, successPathAfterDelete);
+        remainingTargets = inputKeys.filter((key) => refreshedItems.some((item) => item.key === key));
+      }
+
+      if (remainingTargets.length > 0) {
+        appendDeleteLog({ key: contextKey, status: 'failed', message: `verification failed, still visible: ${remainingTargets.join(', ')}` });
+        setError(`Delete reported success, but ${remainingTargets.length} target(s) are still visible.`);
+        return false;
+      }
+
+      appendDeleteLog({ key: contextKey, status: 'info', message: 'verification passed' });
+      return true;
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Delete failed.');
+      return false;
     } finally {
       setDeleteProgress((previous) => ({
         ...previous,
@@ -395,8 +419,10 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     const parts = currentPath.split('/').filter(Boolean);
     const parentParts = parts.slice(0, -1);
     const parentPath = parentParts.length > 0 ? `${parentParts.join('/')}/` : '';
-    await executeDeletePlan([currentPath], currentPath, parentPath);
-    setCurrentPath(parentPath);
+    const deleted = await executeDeletePlan([currentPath], currentPath, parentPath);
+    if (deleted) {
+      setCurrentPath(parentPath);
+    }
   }
 
   async function handleDeleteSelected() {
@@ -454,14 +480,26 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
             </div>
           </div>
           <DialogDescription className="flex flex-col gap-2 text-xs">
-            {isDeleting && (
+            {(isDeleting || deleteLogs.length > 0) && (
               <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <span>
-                    Deleting {deleteProgress.completed}/{deleteProgress.total}
+                    {isDeleting ? 'Deleting' : 'Last delete'} {deleteProgress.completed}/{deleteProgress.total}
                     {deleteProgress.currentKey ? `, current: ${deleteProgress.currentKey}` : ''}
                   </span>
-                  <span>{deleteProgress.cancelled ? 'Stopping after current item...' : 'In progress'}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{isDeleting ? (deleteProgress.cancelled ? 'Stopping after current item...' : 'In progress') : 'Finished'}</span>
+                    {!isDeleting && deleteLogs.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setDeleteLogs([])}
+                      >
+                        Clear log
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="max-h-40 overflow-auto rounded border border-border/60 bg-background/60 p-2 font-mono text-[10px] space-y-1">
                   {deleteLogs.length === 0 ? (
