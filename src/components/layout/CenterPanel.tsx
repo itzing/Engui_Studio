@@ -15,6 +15,7 @@ type GalleryItem = {
   prompt?: string;
   modelId?: string;
   workspaceId?: string;
+  sourceJobId?: string | null;
   createdAt?: number;
 };
 
@@ -25,6 +26,7 @@ type HoverPreview = {
   prompt?: string;
   modelId?: string;
   workspaceId?: string;
+  sourceJobId?: string | null;
   status?: string;
   createdAt?: number;
 } | null;
@@ -107,6 +109,7 @@ export default function CenterPanel() {
           prompt: item.prompt,
           modelId: item.modelId,
           workspaceId: item.workspaceId,
+          sourceJobId: item.sourceJobId,
           createdAt: item.createdAt,
         } as GalleryItem));
       setGalleryItems(nextItems);
@@ -236,6 +239,7 @@ export default function CenterPanel() {
         prompt: selectedGalleryItem.prompt,
         modelId: selectedGalleryItem.modelId,
         workspaceId: selectedGalleryItem.workspaceId,
+        sourceJobId: selectedGalleryItem.sourceJobId,
         status: 'completed',
         createdAt: selectedGalleryItem.createdAt,
       };
@@ -357,7 +361,13 @@ export default function CenterPanel() {
   };
 
   const handleUpscale = async () => {
-    if (!previewJob || isGalleryPreview || isUpscaling) return;
+    if (!previewJob || isUpscaling) return;
+
+    const upscaleSourceJobId = isGalleryPreview ? previewJob.sourceJobId : previewJob.id;
+    if (!upscaleSourceJobId) {
+      showToast('This gallery image has no source job for upscale yet', 'error');
+      return;
+    }
 
     setIsUpscaling(true);
     showToast(`Starting upscale for ${previewJob.type}...`, 'info');
@@ -367,7 +377,7 @@ export default function CenterPanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          jobId: previewJob.id,
+          jobId: upscaleSourceJobId,
           type: previewJob.type,
         }),
       });
@@ -467,11 +477,9 @@ export default function CenterPanel() {
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
                 </Button>
               )}
-              {!isGalleryPreview && (
-                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
-                  {isUpscaling ? 'Upscaling...' : 'Upscale'}
-                </Button>
-              )}
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || (isGalleryPreview ? !previewJob?.sourceJobId : isSavingToGallery)}>
+                {isUpscaling ? 'Upscaling...' : 'Upscale'}
+              </Button>
               <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img'}
               </Button>

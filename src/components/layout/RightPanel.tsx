@@ -321,6 +321,7 @@ export default function RightPanel() {
                 prompt: (asset.userTags || asset.autoTags || []).join(', '),
                 modelId: 'gallery',
                 workspaceId: asset.workspaceId,
+                sourceJobId: asset.sourceJobId,
                 status: 'completed',
                 createdAt: new Date(asset.addedToGalleryAt).getTime(),
             } : null
@@ -411,6 +412,7 @@ export default function RightPanel() {
                 prompt: (asset.userTags || asset.autoTags || []).join(', '),
                 modelId: 'gallery',
                 workspaceId: asset.workspaceId,
+                sourceJobId: asset.sourceJobId,
                 status: 'completed',
                 createdAt: new Date(asset.addedToGalleryAt).getTime(),
             })),
