@@ -249,47 +249,78 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     });
   }
 
-  async function handleDeleteCurrentFolder() {
-    if (!activeVolume || !currentPath) return;
+  function setDeleteLogStatus(keys: string[], status: DeleteLogEntry['status'], message?: string) {
+    const keySet = new Set(keys);
+    setDeleteLogs((previous) => previous.map((entry) => {
+      if (!keySet.has(entry.key)) return entry;
+      return {
+        ...entry,
+        status,
+        message: message ?? entry.message,
+        timestamp: makeTimestamp(),
+      };
+    }));
+  }
 
-    const folderName = getFileName(currentPath);
-    const confirmed = confirm(`Delete folder "${folderName}" with all nested contents?`);
-    if (!confirmed) return;
+  async function fetchRecursiveKeys(folderKey: string): Promise<string[]> {
+    const params = new URLSearchParams({ volume: activeVolume, path: folderKey, recursive: 'true' });
+    const response = await fetch(`/api/s3-storage/files?${params.toString()}`);
+    const data = await response.json().catch(() => ({}));
 
+    if (!response.ok) {
+      throw new Error(data.error || `Failed to list folder contents for ${folderKey}`);
+    }
+
+    return Array.isArray(data.keys) ? data.keys : [];
+  }
+
+  async function buildDeletePlan(inputKeys: string[]): Promise<string[]> {
+    const plan: string[] = [];
+
+    for (const key of inputKeys) {
+      if (key.endsWith('/')) {
+        appendDeleteLog({ key, status: 'info', message: 'expanding folder' });
+        const nestedKeys = await fetchRecursiveKeys(key);
+        appendDeleteLog({ key, status: 'info', message: `listed ${nestedKeys.length} keys` });
+        plan.push(...nestedKeys);
+      } else {
+        plan.push(key);
+      }
+    }
+
+    return Array.from(new Set(plan));
+  }
+
+  async function executeDeletePlan(inputKeys: string[], contextKey: string, successPathAfterDelete: string) {
     setIsDeleting(true);
     setError('');
     setDeleteLogs([]);
-    appendDeleteLog({ key: currentPath, status: 'info', message: 'delete requested' });
+    appendDeleteLog({ key: contextKey, status: 'info', message: 'delete requested' });
 
     try {
-      const listParams = new URLSearchParams({ volume: activeVolume, path: currentPath, recursive: 'true' });
-      const listResponse = await fetch(`/api/s3-storage/files?${listParams.toString()}`);
-      const listData = await listResponse.json().catch(() => ({}));
-
-      if (!listResponse.ok) {
-        throw new Error(listData.error || 'Failed to list folder contents for deletion.');
-      }
-
-      const keysToDelete: string[] = Array.isArray(listData.keys) ? listData.keys : [];
-      appendDeleteLog({ key: currentPath, status: 'info', message: `listed ${keysToDelete.length} keys` });
+      const planKeys = await buildDeletePlan(inputKeys);
       setDeleteLogs((previous) => [
         ...previous,
-        ...keysToDelete.map((key) => ({ key, status: 'queued' as const, timestamp: makeTimestamp() })),
+        ...planKeys.map((key) => ({ key, status: 'queued' as const, timestamp: makeTimestamp() })),
       ]);
+      appendDeleteLog({ key: contextKey, status: 'info', message: `delete plan has ${planKeys.length} object keys` });
+
       setDeleteProgress({
-        total: keysToDelete.length,
+        total: planKeys.length,
         completed: 0,
-        currentKey: keysToDelete[0] || currentPath,
+        currentKey: planKeys[0] || contextKey,
         cancelled: false,
       });
 
       const batchSize = 100;
       let completed = 0;
 
-      for (let index = 0; index < keysToDelete.length; index += batchSize) {
-        const batch = keysToDelete.slice(index, index + batchSize);
+      for (let index = 0; index < planKeys.length; index += batchSize) {
+        const batch = planKeys.slice(index, index + batchSize);
+        const batchNumber = Math.floor(index / batchSize) + 1;
         let cancelled = false;
-        appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} started (${batch.length} keys)` });
+
+        appendDeleteLog({ key: contextKey, status: 'info', message: `batch ${batchNumber} started (${batch.length} keys)` });
 
         setDeleteProgress((previous) => {
           cancelled = previous.cancelled;
@@ -300,11 +331,11 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         });
 
         if (cancelled) {
-          appendDeleteLog({ key: currentPath, status: 'info', message: 'cancellation requested' });
+          appendDeleteLog({ key: contextKey, status: 'info', message: 'cancellation requested' });
           break;
         }
 
-        setDeleteLogs((previous) => previous.map((entry) => batch.includes(entry.key) ? { ...entry, status: 'deleting' } : entry));
+        setDeleteLogStatus(batch, 'deleting');
 
         const response = await fetch('/api/s3-storage/delete', {
           method: 'DELETE',
@@ -315,15 +346,15 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          setDeleteLogs((previous) => previous.map((entry) => batch.includes(entry.key) ? { ...entry, status: 'failed', message: data.error || 'Delete failed' } : entry));
-          appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} failed` });
-          throw new Error(data.error || 'Failed to delete folder batch.');
+          setDeleteLogStatus(batch, 'failed', data.error || 'Delete failed');
+          appendDeleteLog({ key: contextKey, status: 'info', message: `batch ${batchNumber} failed` });
+          throw new Error(data.error || 'Failed to delete batch.');
         }
 
         const deletedKeys: string[] = Array.isArray(data.deletedKeys) ? data.deletedKeys : batch;
         completed += deletedKeys.length;
-        setDeleteLogs((previous) => previous.map((entry) => deletedKeys.includes(entry.key) ? { ...entry, status: 'deleted' } : entry));
-        appendDeleteLog({ key: currentPath, status: 'info', message: `batch ${Math.floor(index / batchSize) + 1} finished (${deletedKeys.length} keys)` });
+        setDeleteLogStatus(deletedKeys, 'deleted');
+        appendDeleteLog({ key: contextKey, status: 'info', message: `batch ${batchNumber} finished (${deletedKeys.length} keys)` });
         setDeleteProgress((previous) => ({
           ...previous,
           completed,
@@ -331,97 +362,12 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         }));
       }
 
-      const parts = currentPath.split('/').filter(Boolean);
-      const parentParts = parts.slice(0, -1);
-      const parentPath = parentParts.length > 0 ? `${parentParts.join('/')}/` : '';
-      setCurrentPath(parentPath);
       setSelectedKeys([]);
-      setPreviewKey('');
-      await loadItems(activeVolume, parentPath);
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Folder delete failed.');
-    } finally {
-      setDeleteProgress((previous) => ({
-        ...previous,
-        currentKey: null,
-      }));
-      setIsDeleting(false);
-    }
-  }
-
-  async function handleDeleteSelected() {
-    if (!activeVolume || selectedKeys.length === 0) return;
-
-    const confirmed = confirm(`Delete ${selectedKeys.length} selected item(s)?`);
-    if (!confirmed) return;
-
-    const keysToDelete = [...selectedKeys];
-    setIsDeleting(true);
-    setError('');
-    setDeleteLogs(keysToDelete.map((key) => ({ key, status: 'queued' as const, timestamp: makeTimestamp() })));
-    appendDeleteLog({ key: currentPath || activeVolume, status: 'info', message: `deleting ${keysToDelete.length} selected items` });
-    setDeleteProgress({
-      total: keysToDelete.length,
-      completed: 0,
-      currentKey: null,
-      cancelled: false,
-    });
-
-    try {
-      const failures: string[] = [];
-      let completed = 0;
-      let cancelled = false;
-
-      for (const key of keysToDelete) {
-        setDeleteProgress((previous) => {
-          if (previous.cancelled) {
-            cancelled = true;
-          }
-          return {
-            ...previous,
-            currentKey: key,
-          };
-        });
-
-        if (cancelled) {
-          break;
-        }
-
-        setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'deleting' } : entry));
-
-        const response = await fetch('/api/s3-storage/delete', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ volume: activeVolume, key }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          failures.push(data.error || key);
-          setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'failed', message: data.error || 'Delete failed' } : entry));
-        } else {
-          completed += 1;
-          setDeleteLogs((previous) => previous.map((entry) => entry.key === key ? { ...entry, status: 'deleted' } : entry));
-          setDeleteProgress((previous) => ({
-            ...previous,
-            completed,
-          }));
-        }
-      }
-
-      const remainingKeys = keysToDelete.slice(completed + failures.length);
-      setSelectedKeys(cancelled ? remainingKeys : []);
-      if (previewKey && keysToDelete.includes(previewKey)) {
+      if (previewKey && inputKeys.includes(previewKey)) {
         setPreviewKey('');
       }
 
-      await loadItems(activeVolume, currentPath);
-
-      if (cancelled) {
-        setError(`Deletion cancelled. Removed ${completed} of ${keysToDelete.length} item(s).`);
-      } else if (failures.length > 0) {
-        throw new Error(`Failed to delete ${failures.length} item(s).`);
-      }
+      await loadItems(activeVolume, successPathAfterDelete);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Delete failed.');
     } finally {
@@ -431,6 +377,30 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       }));
       setIsDeleting(false);
     }
+  }
+
+  async function handleDeleteCurrentFolder() {
+    if (!activeVolume || !currentPath) return;
+
+    const folderName = getFileName(currentPath);
+    const confirmed = confirm(`Delete folder "${folderName}" with all nested contents?`);
+    if (!confirmed) return;
+
+    const parts = currentPath.split('/').filter(Boolean);
+    const parentParts = parts.slice(0, -1);
+    const parentPath = parentParts.length > 0 ? `${parentParts.join('/')}/` : '';
+    await executeDeletePlan([currentPath], currentPath, parentPath);
+    setCurrentPath(parentPath);
+  }
+
+  async function handleDeleteSelected() {
+    if (!activeVolume || selectedKeys.length === 0) return;
+
+    const confirmed = confirm(`Delete ${selectedKeys.length} selected item(s)?`);
+    if (!confirmed) return;
+
+    const targets = [...selectedKeys];
+    await executeDeletePlan(targets, currentPath || activeVolume, currentPath);
   }
 
   function handleCancelDelete() {
