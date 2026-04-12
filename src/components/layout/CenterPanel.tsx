@@ -34,7 +34,7 @@ type RightPanelMode = 'jobs' | 'gallery';
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 
 export default function CenterPanel() {
-  const { activeArtifactId, activeTool, jobs, activeWorkspaceId } = useStudio();
+  const { activeArtifactId, activeTool, jobs, activeWorkspaceId, addJob } = useStudio();
   const { showToast } = useToast();
   const [mode, setMode] = useState<CenterMode>('image');
   const [hoverPreview, setHoverPreview] = useState<HoverPreview>(null);
@@ -45,6 +45,7 @@ export default function CenterPanel() {
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [isPreviewAlreadyInGallery, setIsPreviewAlreadyInGallery] = useState(false);
   const [isSavingToGallery, setIsSavingToGallery] = useState(false);
+  const [isUpscaling, setIsUpscaling] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
 
   useEffect(() => {
@@ -355,6 +356,37 @@ export default function CenterPanel() {
     }
   };
 
+  const handleUpscale = async () => {
+    if (!previewJob || isGalleryPreview || isUpscaling) return;
+
+    setIsUpscaling(true);
+    showToast(`Starting upscale for ${previewJob.type}...`, 'info');
+
+    try {
+      const response = await fetch('/api/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: previewJob.id,
+          type: previewJob.type,
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success && data.job) {
+        addJob(data.job);
+        showToast('Upscale job created and processing', 'success');
+      } else {
+        showToast(data.error || 'Failed to create upscale job', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to create center panel upscale job:', error);
+      showToast('Failed to create upscale job', 'error');
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
   if (mode === 'video') {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -431,17 +463,22 @@ export default function CenterPanel() {
             </div>
             <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
               {shouldShowAddToGallery && (
-                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || !!reuseAction}>
+                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
                 </Button>
               )}
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || !!reuseAction}>
+              {!isGalleryPreview && (
+                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+                  {isUpscaling ? 'Upscaling...' : 'Upscale'}
+                </Button>
+              )}
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || !!reuseAction}>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'img2img' ? 'Opening...' : 'To img2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || !!reuseAction}>
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'img2vid' ? 'Opening...' : 'To img2vid'}
               </Button>
             </div>
