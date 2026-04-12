@@ -336,16 +336,29 @@ class S3Service {
         });
 
         // 폴더들 처리 (CommonPrefixes)
-        const folders = (result.CommonPrefixes || []).map((p: any) => {
-          const key = p.Prefix!;
-          return {
-            key,
-            size: 0,
-            lastModified: new Date(),
-            type: 'directory' as const,
-            extension: undefined,
-          };
-        });
+        const rawFolders = (result.CommonPrefixes || []).map((p: any) => ({
+          key: p.Prefix!,
+          size: 0,
+          lastModified: new Date(),
+          type: 'directory' as const,
+          extension: undefined,
+        }));
+
+        const verifiedFolders = await Promise.all(rawFolders.map(async (folder) => {
+          try {
+            const nestedKeys = await this.listAllObjectKeys(folder.key);
+            if (nestedKeys.length === 0) {
+              logger.emoji.search('🚫 Hiding phantom empty prefix:', folder.key);
+              return null;
+            }
+            return folder;
+          } catch (verificationError) {
+            logger.warn(`Failed to verify folder prefix ${folder.key}, keeping it visible:`, verificationError);
+            return folder;
+          }
+        }));
+
+        const folders = verifiedFolders.filter((folder): folder is NonNullable<typeof folder> => Boolean(folder));
 
         // 파일과 폴더 합치기
         const allItems = [...files, ...folders];
