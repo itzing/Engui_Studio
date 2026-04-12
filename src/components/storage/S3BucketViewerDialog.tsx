@@ -282,7 +282,13 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         appendDeleteLog({ key, status: 'info', message: 'expanding folder' });
         const nestedKeys = await fetchRecursiveKeys(key);
         appendDeleteLog({ key, status: 'info', message: `listed ${nestedKeys.length} keys` });
-        plan.push(key, ...nestedKeys);
+
+        if (nestedKeys.length === 0) {
+          plan.push(`${normalizePrefix(key)}folder-marker.txt`);
+          appendDeleteLog({ key, status: 'info', message: 'empty folder, adding folder marker to delete plan' });
+        } else {
+          plan.push(...nestedKeys);
+        }
       } else {
         plan.push(key);
       }
