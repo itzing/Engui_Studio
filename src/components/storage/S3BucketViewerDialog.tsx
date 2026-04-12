@@ -529,7 +529,10 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2">
           <div className="border-r border-border min-h-0 flex flex-col">
             <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Contents</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Contents</span>
+                <span className="text-xs text-muted-foreground">{sortedItems.length} object{sortedItems.length === 1 ? '' : 's'}</span>
+              </div>
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
