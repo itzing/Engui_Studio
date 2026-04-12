@@ -723,6 +723,42 @@ export default function CharacterManagerPanel() {
     ? versions.find((version) => version.id === selectedCharacter.currentVersionId) || null
     : versions[0] || null;
 
+  const previewCards = useMemo(() => {
+    const buildCard = (title: string, subtitle: string, groupIds: string[]) => {
+      if (!draft) {
+        return {
+          title,
+          subtitle,
+          traitCount: 0,
+          chips: [] as string[],
+          summary: 'Select a character to preview this region.',
+        };
+      }
+
+      const chips = characterTraitDefinitionsByGroup
+        .filter(({ group }) => groupIds.includes(group.id))
+        .flatMap(({ traits }) => traits)
+        .filter((trait) => draft.traits[trait.key])
+        .map((trait) => `${trait.label}: ${draft.traits[trait.key]}`);
+
+      return {
+        title,
+        subtitle,
+        traitCount: chips.length,
+        chips: chips.slice(0, 6),
+        summary: chips.length > 0
+          ? chips.slice(0, 2).join(' • ')
+          : 'No preview-driving traits captured yet.',
+      };
+    };
+
+    return [
+      buildCard('Portrait preview', 'Identity, face, and hair', ['identity', 'face', 'hair']),
+      buildCard('Upper-body preview', 'Hair, body, and posture', ['hair', 'body', 'posture']),
+      buildCard('Full-body preview', 'Body, lower body, and posture', ['body', 'lower-body', 'posture']),
+    ];
+  }, [draft]);
+
   const moveCharacterToTrash = async () => {
     if (!selectedCharacter || selectedCharacter.deletedAt) return;
     if (!confirm(`Move ${selectedCharacter.name} to trash?`)) return;
@@ -778,83 +814,66 @@ export default function CharacterManagerPanel() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">Characters</div>
-          <div className="text-xs text-muted-foreground">
-            V1 foundation, create/edit/save, import, and clone flows.
+    <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]"> 
+      <aside className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
+        <div className="border-b border-border px-4 py-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Characters</div>
+              <div className="text-xs text-muted-foreground">Search, switch, and pick a draft target.</div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => void fetchCharacters()} title="Refresh characters">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openImportDialog}>
-            <Download className="w-3.5 h-3.5 mr-1" />
-            Import
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={startNewCharacter}>
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            New
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void fetchCharacters()} title="Refresh characters">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search characters by name..."
-          className="h-9 text-xs"
-        />
-        <select
-          value={sortMode}
-          onChange={(event) => setSortMode(event.target.value as CharacterSortMode)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Sort characters"
-        >
-          <option value="updated_desc">Recently updated</option>
-          <option value="name_asc">Name A-Z</option>
-          <option value="name_desc">Name Z-A</option>
-        </select>
-      </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openImportDialog}>
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Import
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={startNewCharacter}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              New
+            </Button>
+          </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Active</div>
-          <div className="mt-1 text-lg font-semibold">{activeCharacters.length}</div>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Trash</div>
-          <div className="mt-1 text-lg font-semibold">{trashedCharacters.length}</div>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Dirty traits</div>
-          <div className="mt-1 text-lg font-semibold">{dirtyTraitCount}</div>
-        </div>
-      </div>
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search characters by name..."
+            className="h-9 text-xs"
+          />
 
-      <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
-        <div className="border-b border-border px-3 py-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as CharacterSortMode)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Sort characters"
+          >
+            <option value="updated_desc">Recently updated</option>
+            <option value="name_asc">Name A-Z</option>
+            <option value="name_desc">Name Z-A</option>
+          </select>
+
+          <div className="flex items-center gap-1 rounded-md bg-muted/30 p-1">
             {(['active', 'trash'] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setListMode(mode)}
-                className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${listMode === mode
-                  ? 'bg-background shadow-sm text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                className={`flex-1 rounded-sm px-2 py-1 text-[11px] font-medium capitalize transition-all ${listMode === mode
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                   }`}
               >
                 {mode}
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-muted-foreground">{filteredCharacters.length} shown • {sortMode === 'updated_desc' ? 'Recently updated' : sortMode === 'name_asc' ? 'Name A-Z' : 'Name Z-A'}</div>
         </div>
-        <div className="max-h-48 overflow-y-auto divide-y divide-border/70">
+
+        <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border/70">
           {isLoading ? (
             <div className="px-4 py-6 text-xs text-muted-foreground">Loading characters...</div>
           ) : error ? (
@@ -868,6 +887,7 @@ export default function CharacterManagerPanel() {
           ) : (
             filteredCharacters.map((character) => {
               const isSelected = selectedCharacterId === character.id;
+              const isDirty = draft?.id === character.id && dirtyTraitCount > 0;
 
               return (
                 <button
@@ -893,18 +913,27 @@ export default function CharacterManagerPanel() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
-                        {isSelected && (
-                          <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-200">
-                            Selected
-                          </span>
-                        )}
-                      </div>
+                      <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
                       <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
                         {character.gender || 'Unspecified gender'} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
-                        {character.deletedAt ? ` • trashed ${formatDateTime(character.deletedAt)}` : ''}
                       </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {isSelected && (
+                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-200">
+                          Selected
+                        </span>
+                      )}
+                      {character.deletedAt && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                          Trash
+                        </span>
+                      )}
+                      {isDirty && !character.deletedAt && (
+                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-200">
+                          Dirty
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -912,268 +941,317 @@ export default function CharacterManagerPanel() {
             })
           )}
         </div>
-      </div>
 
-      <div className="rounded-xl border border-border bg-card/60 overflow-hidden">
-        <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-sm font-semibold">{draft?.name || 'Unsaved character draft'}</div>
-              {selectedCharacter?.deletedAt && (
-                <span className="rounded-full px-2 py-0.5 text-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-200">
-                  In trash
+        <div className="border-t border-border bg-muted/10 px-4 py-3 text-[11px] text-muted-foreground">
+          {activeCharacters.length} active • {trashedCharacters.length} in trash
+        </div>
+      </aside>
+
+      <main className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-base font-semibold">{draft?.name || 'Unsaved character draft'}</div>
+                {selectedCharacter?.deletedAt && (
+                  <span className="rounded-full px-2 py-0.5 text-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-200">
+                    In trash
+                  </span>
+                )}
+                <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
+                  ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                  : 'border-border bg-background/70 text-muted-foreground'
+                  }`}>
+                  {dirtyTraitCount > 0 ? `${dirtyTraitCount} unsaved change${dirtyTraitCount === 1 ? '' : 's'}` : 'No unsaved changes'}
                 </span>
-              )}
-              <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
-                ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
-                : 'border-border bg-background/70 text-muted-foreground'
-                }`}>
-                {dirtyTraitCount > 0 ? `${dirtyTraitCount} unsaved change${dirtyTraitCount === 1 ? '' : 's'}` : 'No unsaved trait changes'}
-              </span>
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {draft?.id ? 'Editing current saved character' : 'Nothing is persisted until Save'}
+                {draft ? ` • ${draftTraitCount} total traits in draft` : ''}
+              </div>
             </div>
-            <div className="text-[11px] text-muted-foreground">
-              {draft?.id ? 'Editing current saved character' : 'Nothing is persisted until Save'}
-              {draft ? ` • ${draftTraitCount} saved-or-draft trait${draftTraitCount === 1 ? '' : 's'}` : ''}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/20 p-1">
+
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               {selectedCharacter?.deletedAt ? (
-                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
                   <Undo2 className="w-3.5 h-3.5 mr-1" />
                   {isTrashMutating ? 'Restoring...' : 'Restore'}
                 </Button>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
                     <CopyPlus className="w-3.5 h-3.5 mr-1" />
                     Clone
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs text-red-300 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
+                  <Button variant="outline" size="sm" className="h-8 text-xs text-red-300 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
                     <Trash2 className="w-3.5 h-3.5 mr-1" />
                     {isTrashMutating ? 'Deleting...' : 'Delete'}
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
                 <Undo2 className="w-3.5 h-3.5 mr-1" />
                 Cancel
               </Button>
+              <Button size="sm" className="h-8 min-w-[88px] text-xs" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
+                <Save className="w-3.5 h-3.5 mr-1" />
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
             </div>
-            <Button size="sm" className="h-8 text-xs min-w-[88px]" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
-              <Save className="w-3.5 h-3.5 mr-1" />
-              {isSaving ? 'Saving...' : 'Save'}
-            </Button>
           </div>
         </div>
 
         {!draft ? (
           <div className="px-4 py-8 text-xs text-muted-foreground">Select a character or create a new one.</div>
         ) : (
-          <div className="space-y-3 p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-xs font-medium">Basics</div>
-                  <div className="text-[11px] text-muted-foreground">Top-level fields stay outside traits for display and indexing.</div>
+                  <div className="text-[11px] text-muted-foreground">Top-level fields stay compact and always visible.</div>
                 </div>
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={openBasicsModal}>
                   <Pencil className="w-3.5 h-3.5 mr-1" />
                   Edit
                 </Button>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-background/70 px-2 py-2">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Name</div>
-                  <div className="mt-1 font-medium break-words">{draft.name || 'Required before first save'}</div>
+                  <div className="mt-1 text-xs font-medium break-words">{draft.name || 'Required before first save'}</div>
                 </div>
-                <div className="rounded-md bg-background/70 px-2 py-2">
+                <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Gender</div>
-                  <div className="mt-1 font-medium break-words">{draft.gender || 'Optional'}</div>
+                  <div className="mt-1 text-xs font-medium break-words">{draft.gender || 'Optional'}</div>
+                </div>
+                <div className="rounded-md bg-background/70 px-3 py-2">
+                  <div className="text-[10px] text-muted-foreground">Draft status</div>
+                  <div className="mt-1 text-xs font-medium break-words">{dirtyTraitCount > 0 ? `${dirtyTraitCount} pending trait edits` : 'Clean draft'}</div>
                 </div>
               </div>
             </div>
 
-            {characterTraitDefinitionsByGroup.map(({ group, traits }) => {
-              const filledTraits = traits.filter((trait) => draft.traits[trait.key]);
-              const filledCount = filledTraits.length;
-              const groupChanged = traits.some((trait) => changedTraitKeys.has(trait.key));
-              const groupLocked = !!groupLocks[group.id];
-              const groupEditableCount = traits.filter((trait) => draft.traits[trait.key] && !traitLocks[trait.key]).length;
+            <div className="grid gap-3 2xl:grid-cols-2">
+              {characterTraitDefinitionsByGroup.map(({ group, traits }) => {
+                const filledTraits = traits.filter((trait) => draft.traits[trait.key]);
+                const filledCount = filledTraits.length;
+                const groupChanged = traits.some((trait) => changedTraitKeys.has(trait.key));
+                const groupLocked = !!groupLocks[group.id];
+                const groupEditableCount = traits.filter((trait) => draft.traits[trait.key] && !traitLocks[trait.key]).length;
+                const visibleTraits = filledTraits.slice(0, 4);
+                const hiddenTraitCount = Math.max(0, filledTraits.length - visibleTraits.length);
 
-              return (
-                <div key={group.id} className={`rounded-lg border p-3 ${groupChanged ? 'border-blue-500/40 bg-blue-500/5' : 'border-border bg-muted/20'} ${groupLocked ? 'opacity-80' : ''}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-xs font-medium">{group.label}</div>
-                        <button
-                          type="button"
-                          onClick={() => toggleGroupLock(group.id)}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${groupLocked
-                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                            }`}
-                          title={groupLocked ? 'Unlock group for assistant editing' : 'Lock group from assistant editing'}
-                        >
-                          {groupLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
-                          {groupLocked ? 'Group locked' : 'Group editable'}
-                        </button>
+                return (
+                  <div key={group.id} className={`rounded-lg border p-3 ${groupChanged ? 'border-blue-500/40 bg-blue-500/5' : 'border-border bg-muted/20'} ${groupLocked ? 'opacity-85' : ''}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="text-xs font-medium">{group.label}</div>
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupLock(group.id)}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${groupLocked
+                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              }`}
+                            title={groupLocked ? 'Unlock group for assistant editing' : 'Lock group from assistant editing'}
+                          >
+                            {groupLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                            {groupLocked ? 'Locked' : 'Editable'}
+                          </button>
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">{filledCount}/{traits.length} filled • {groupEditableCount} assistant-editable</div>
                       </div>
-                      <div className="text-[11px] text-muted-foreground">{filledCount}/{traits.length} traits filled • {groupEditableCount} assistant-editable</div>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openGroupModal(group.id)}>
+                        <Pencil className="w-3.5 h-3.5 mr-1" />
+                        Edit
+                      </Button>
                     </div>
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openGroupModal(group.id)}>
-                      <Pencil className="w-3.5 h-3.5 mr-1" />
-                      Edit
-                    </Button>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {filledTraits.map((trait) => {
-                      const traitLocked = !!traitLocks[trait.key];
-                      const traitBlockedByGroup = groupLocked;
-                      const traitEditable = !traitLocked && !traitBlockedByGroup;
 
-                      return (
-                        <span
-                          key={trait.key}
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${traitEditable
-                            ? changedTraitKeys.has(trait.key)
-                              ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
-                              : 'border-border bg-background/70 text-muted-foreground'
-                            : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                            }`}
-                        >
-                          {trait.label}: {draft.traits[trait.key]}
-                          {!traitEditable ? ' 🔒' : ''}
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {visibleTraits.map((trait) => {
+                        const traitLocked = !!traitLocks[trait.key];
+                        const traitEditable = !traitLocked && !groupLocked;
+
+                        return (
+                          <span
+                            key={trait.key}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${traitEditable
+                              ? changedTraitKeys.has(trait.key)
+                                ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                                : 'border-border bg-background/70 text-muted-foreground'
+                              : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                              }`}
+                          >
+                            {trait.label}: {draft.traits[trait.key]}
+                            {!traitEditable ? ' 🔒' : ''}
+                          </span>
+                        );
+                      })}
+
+                      {hiddenTraitCount > 0 && (
+                        <span className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+                          +{hiddenTraitCount} more
                         </span>
-                      );
-                    })}
-                    {filledCount === 0 && (
-                      <span className="text-[11px] text-muted-foreground">No saved values in this group yet.</span>
+                      )}
+
+                      {filledCount === 0 && (
+                        <span className="text-[11px] text-muted-foreground">No saved values in this group yet.</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <details className="rounded-lg border border-border bg-muted/20 p-3">
+              <summary className="cursor-pointer list-none text-xs font-medium">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Assistant draft edit</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">Secondary section</span>
+                </div>
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[11px] text-muted-foreground">Uses only the editable trait subset and auto-applies to the transient draft.</div>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applyAssistantPatch} disabled={isAssistantLoading || !assistantInstruction.trim()}>
+                    <Sparkles className="w-3.5 h-3.5 mr-1" />
+                    {isAssistantLoading ? 'Applying...' : 'Apply patch'}
+                  </Button>
+                </div>
+                <textarea
+                  value={assistantInstruction}
+                  onChange={(event) => setAssistantInstruction(event.target.value)}
+                  placeholder="Describe what should change in the editable character traits..."
+                  className="min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(editableTraits).map(([key, value]) => (
+                    <span key={key} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                      {traitLabel(key)}: {value}
+                    </span>
+                  ))}
+                  {Object.keys(editableTraits).length === 0 && (
+                    <span className="text-[11px] text-muted-foreground">No editable traits available. Locks or empty draft may be excluding everything.</span>
+                  )}
+                </div>
+                {assistantError && <div className="text-[11px] text-red-400">{assistantError}</div>}
+                {assistantNote && !assistantError && <div className="text-[11px] text-blue-300">{assistantNote}</div>}
+              </div>
+            </details>
+
+            {selectedCharacter && (
+              <details className="rounded-lg border border-border bg-muted/20 p-3">
+                <summary className="cursor-pointer list-none text-xs font-medium">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Version history</span>
+                    <span className="text-[11px] font-normal text-muted-foreground">{isLoadingVersions ? 'Loading...' : `${versions.length} version${versions.length === 1 ? '' : 's'}`}</span>
+                  </div>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {currentVersion && (
+                    <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[11px] text-blue-200">
+                      Current saved version: v{currentVersion.versionNumber} • {formatDateTime(currentVersion.createdAt)}
+                      <div className="mt-1 text-blue-100/90">{currentVersion.changeSummary}</div>
+                    </div>
+                  )}
+
+                  {selectedHistoryVersion && (
+                    <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+                      Selected history snapshot: v{selectedHistoryVersion.versionNumber} • {formatDateTime(selectedHistoryVersion.createdAt)}
+                      <div className="mt-1 text-emerald-100/90">{selectedHistoryVersion.changeSummary}</div>
+                    </div>
+                  )}
+
+                  <div className="max-h-56 overflow-y-auto space-y-2">
+                    {versions.map((version) => (
+                      <div key={version.id} className={`rounded-md border px-3 py-2 ${selectedCharacter.currentVersionId === version.id
+                        ? 'border-blue-500/30 bg-blue-500/5'
+                        : selectedHistoryVersionId === version.id
+                          ? 'border-emerald-500/30 bg-emerald-500/5'
+                          : 'border-border bg-background/60'
+                        }`}>
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium">Version {version.versionNumber}</span>
+                          <span className="text-muted-foreground">{formatDateTime(version.createdAt)}</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">{version.changeSummary}</div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[11px]"
+                            onClick={() => {
+                              setSelectedHistoryVersionId(version.id);
+                              applyHistoryVersionToDraft(version);
+                            }}
+                          >
+                            Apply to draft
+                          </Button>
+                          {selectedCharacter.currentVersionId === version.id && (
+                            <span className="text-[10px] text-blue-300">Current saved</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {!isLoadingVersions && versions.length === 0 && (
+                      <div className="text-[11px] text-muted-foreground">No saved versions yet.</div>
                     )}
                   </div>
                 </div>
-              );
-            })}
-
-            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-medium">Assistant draft edit</div>
-                  <div className="text-[11px] text-muted-foreground">Uses only the editable trait subset and auto-applies to the transient draft.</div>
-                </div>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applyAssistantPatch} disabled={isAssistantLoading || !assistantInstruction.trim()}>
-                  <Sparkles className="w-3.5 h-3.5 mr-1" />
-                  {isAssistantLoading ? 'Applying...' : 'Apply patch'}
-                </Button>
-              </div>
-              <textarea
-                value={assistantInstruction}
-                onChange={(event) => setAssistantInstruction(event.target.value)}
-                placeholder="Describe what should change in the editable character traits..."
-                className="min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(editableTraits).map(([key, value]) => (
-                  <span key={key} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
-                    {traitLabel(key)}: {value}
-                  </span>
-                ))}
-                {Object.keys(editableTraits).length === 0 && (
-                  <span className="text-[11px] text-muted-foreground">No editable traits available. Locks or empty draft may be excluding everything.</span>
-                )}
-              </div>
-              {assistantError && (
-                <div className="text-[11px] text-red-400">{assistantError}</div>
-              )}
-              {assistantNote && !assistantError && (
-                <div className="text-[11px] text-blue-300">{assistantNote}</div>
-              )}
-            </div>
-
-            {selectedCharacter && (
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-medium">Version history</div>
-                    <div className="text-[11px] text-muted-foreground">Current version is visible here, clone still uses explicit dialog flow.</div>
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {isLoadingVersions ? 'Loading...' : `${versions.length} version${versions.length === 1 ? '' : 's'}`}
-                  </div>
-                </div>
-
-                {currentVersion && (
-                  <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[11px] text-blue-200">
-                    Current saved version: v{currentVersion.versionNumber} • {formatDateTime(currentVersion.createdAt)}
-                    <div className="mt-1 text-blue-100/90">{currentVersion.changeSummary}</div>
-                  </div>
-                )}
-
-                {selectedHistoryVersion && (
-                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
-                    Selected history snapshot: v{selectedHistoryVersion.versionNumber} • {formatDateTime(selectedHistoryVersion.createdAt)}
-                    <div className="mt-1 text-emerald-100/90">{selectedHistoryVersion.changeSummary}</div>
-                  </div>
-                )}
-
-                <div className="max-h-56 overflow-y-auto space-y-2">
-                  {versions.map((version) => (
-                    <div key={version.id} className={`rounded-md border px-3 py-2 ${selectedCharacter.currentVersionId === version.id
-                      ? 'border-blue-500/30 bg-blue-500/5'
-                      : selectedHistoryVersionId === version.id
-                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : 'border-border bg-background/60'
-                      }`}>
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="font-medium">Version {version.versionNumber}</span>
-                        <span className="text-muted-foreground">{formatDateTime(version.createdAt)}</span>
-                      </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">{version.changeSummary}</div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          onClick={() => {
-                            setSelectedHistoryVersionId(version.id);
-                            applyHistoryVersionToDraft(version);
-                          }}
-                        >
-                          Apply to draft
-                        </Button>
-                        {selectedCharacter.currentVersionId === version.id && (
-                          <span className="text-[10px] text-blue-300">Current saved</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {!isLoadingVersions && versions.length === 0 && (
-                    <div className="text-[11px] text-muted-foreground">No saved versions yet.</div>
-                  )}
-                </div>
-              </div>
+              </details>
             )}
 
             {legacyTraits.length > 0 && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                <div className="text-xs font-medium text-amber-200">Legacy or unsupported traits</div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+              <details className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <summary className="cursor-pointer list-none text-xs font-medium text-amber-200">Legacy or unsupported traits</summary>
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {legacyTraits.map(([key, value]) => (
                     <span key={key} className="rounded-full border border-amber-500/30 bg-background/70 px-2 py-0.5 text-[10px] text-amber-100">
                       {traitLabel(key)}: {value}
                     </span>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
-
-            <div className="rounded-lg border border-border bg-muted/10 p-3 text-[11px] text-muted-foreground">
-              Save creates a new immutable version only when traits changed. Import confirmation creates a new character immediately. Clone creates a new character from the selected saved version snapshot. Applying a history snapshot only updates the transient draft until you save. Delete moves a character to Trash via soft delete, and Trash only supports restore in this v1 flow. This UI only manages group locks and trait locks for assistant editability, not volatility locks.
-            </div>
           </div>
         )}
-      </div>
+      </main>
+
+      <aside className="flex min-h-0 flex-col gap-3 rounded-xl border border-border bg-card/60 p-3">
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="text-xs font-medium">Preview rail</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {draft?.previewStatusSummary || 'Stable placeholders until real rendered character previews are wired in.'}
+          </div>
+        </div>
+
+        {previewCards.map((card) => (
+          <div key={card.title} className="flex min-h-[0] flex-1 flex-col rounded-lg border border-border bg-muted/20 p-3">
+            <div className="text-xs font-medium">{card.title}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
+            <div className="mt-3 flex min-h-[140px] flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/40 px-4 text-center">
+              <div>
+                <div className="text-sm font-medium">{card.traitCount > 0 ? card.summary : 'Empty preview state'}</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'}` : 'Add more traits to make this preview card informative.'}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {card.chips.map((chip) => (
+                <span key={chip} className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {chip}
+                </span>
+              ))}
+              {card.chips.length === 0 && (
+                <span className="text-[11px] text-muted-foreground">No traits mapped into this preview yet.</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </aside>
 
       <Dialog open={modalState.kind !== 'closed'} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent>
