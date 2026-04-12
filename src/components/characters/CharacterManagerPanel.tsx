@@ -1442,7 +1442,7 @@ export default function CharacterManagerPanel() {
         )}
       </main>
 
-      <aside className="flex min-h-0 flex-col gap-3 rounded-xl border border-border bg-card/60 p-3">
+      <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-xl border border-border bg-card/60 p-3">
         <div className="rounded-lg border border-border bg-muted/20 p-3">
           <div className="text-xs font-medium">Preview rail</div>
           <div className="mt-1 text-[11px] text-muted-foreground">
@@ -1451,10 +1451,10 @@ export default function CharacterManagerPanel() {
         </div>
 
         {previewCards.map((card) => (
-          <div key={card.title} className="flex min-h-[0] flex-1 flex-col rounded-lg border border-border bg-muted/20 p-3">
+          <div key={card.title} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-3">
             <div className="text-xs font-medium">{card.title}</div>
             <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
-            <div className="mt-3 flex min-h-[180px] flex-1 items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/40 px-4 text-center">
+            <div className="mt-3 flex h-[180px] items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/80 bg-background/40 px-4 text-center">
               <div>
                 <div className="text-sm font-medium">{card.traitCount > 0 ? 'Preview scaffold ready' : 'Empty preview state'}</div>
                 <div className="mt-2 text-xs text-muted-foreground">
