@@ -124,29 +124,12 @@ model Workspace {
 
   // 관계 설정
   jobs        Job[]     @relation("WorkspaceJobs")
-  media       WorkspaceMedia[] @relation("WorkspaceMedia")
   galleryAssets GalleryAsset[]
   loras       LoRA[]
   
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
   @@map("workspaces")
-}
-
-model WorkspaceMedia {
-  id          String    @id @default(uuid())
-  workspaceId String
-  type        String    // 'image' | 'video' | 'audio'
-  url         String
-  prompt      String?
-  modelId     String?
-  createdAt   DateTime  @default(now())
-
-  // 관계 설정
-  workspace   Workspace @relation("WorkspaceMedia", fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@index([workspaceId, createdAt(sort: Desc)])
-  @@map("workspace_media")
 }
 
 model GalleryAsset {
