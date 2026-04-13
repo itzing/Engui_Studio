@@ -470,31 +470,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         // Optimistic update
         setJobs(prev => [jobWithWorkspace, ...prev]);
 
-        // If job is already completed (e.g. from ElevenLabs), add it to media immediately
-        if (job.status === 'completed' && job.resultUrl && activeWorkspaceId) {
-            console.log(`✅ Job ${job.id} added as completed, processing media...`);
-            const newMedia: WorkspaceMedia = {
-                id: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                workspaceId: activeWorkspaceId,
-                type: job.type as 'image' | 'video' | 'audio',
-                url: job.resultUrl,
-                prompt: job.prompt,
-                modelId: job.modelId,
-                createdAt: Date.now(),
-            };
-            setWorkspaceMedia(prev => [...prev, newMedia]);
-
-            // Save media to database
-            try {
-                await fetch('/api/workspace-media', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newMedia)
-                });
-            } catch (err) {
-                console.error('Failed to save media:', err);
-            }
-        }
+        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
 
         try {
             const response = await fetch('/api/jobs', {
@@ -530,26 +506,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         // Update jobs list
         setJobs(prev => [jobWithWorkspace, ...prev]);
 
-        // Add to workspace media
-        if (job.resultUrl && activeWorkspaceId) {
-            const newMedia: WorkspaceMedia = {
-                id: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                workspaceId: activeWorkspaceId,
-                type: job.type as 'image' | 'video' | 'audio',
-                url: job.resultUrl,
-                prompt: job.prompt,
-                modelId: job.modelId,
-                createdAt: Date.now(),
-            };
-            setWorkspaceMedia(prev => [...prev, newMedia]);
-
-            // Allow background sync of media
-            fetch('/api/workspace-media', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newMedia)
-            }).catch(err => console.error('Failed to sync media:', err));
-        }
+        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
     };
 
     const updateJobStatus = async (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number) => {
@@ -561,34 +518,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             job.id === id ? { ...job, status, resultUrl, error, cost } : job
         ));
 
-        // If job completed successfully with a result, add to workspace media
-        if (status === 'completed' && resultUrl && job && activeWorkspaceId) {
-            console.log(`✅ Job ${id} completed, adding to workspace media:`, resultUrl);
-
-            const newMedia: WorkspaceMedia = {
-                id: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                workspaceId: activeWorkspaceId,
-                type: job.type,
-                url: resultUrl,
-                prompt: job.prompt,
-                modelId: job.modelId,
-                createdAt: Date.now(),
-            };
-
-            setWorkspaceMedia(prev => [...prev, newMedia]);
-
-            // Save to database
-            try {
-                await fetch('/api/workspace-media', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newMedia)
-                });
-                console.log(`💾 Media saved to workspace: ${newMedia.id}`);
-            } catch (err) {
-                console.error('Failed to save media to workspace:', err);
-            }
-        }
+        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
 
         try {
             await fetch(`/api/jobs/${id}`, {
