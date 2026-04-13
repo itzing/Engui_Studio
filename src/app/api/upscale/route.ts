@@ -21,6 +21,7 @@ type SourceContext = {
     sourceKind: 'job' | 'gallery_asset';
     sourceJobId: string | null;
     galleryAssetId: string | null;
+    inferredType: 'image' | 'video';
 };
 
 function createS3Service(settings: any) {
@@ -140,7 +141,19 @@ function buildOptions(params: {
     };
 }
 
-async function resolveSourceContext(body: { jobId?: string; galleryAssetId?: string; type: UpscaleRequestType }): Promise<SourceContext> {
+function inferUpscaleTypeFromUrl(url: string): 'image' | 'video' {
+    const normalized = url.toLowerCase();
+    if (normalized.endsWith('.mp4') || normalized.includes('/video/') || normalized.includes('/videos/')) {
+        return 'video';
+    }
+    return 'image';
+}
+
+function normalizeRequestedUpscaleType(type: unknown): UpscaleRequestType | null {
+    return type === 'image' || type === 'video' || type === 'video-interpolation' ? type : null;
+}
+
+async function resolveSourceContext(body: { jobId?: string; galleryAssetId?: string; type?: UpscaleRequestType | null }): Promise<SourceContext> {
     if (body.galleryAssetId) {
         const galleryAsset = await prisma.galleryAsset.findUnique({
             where: { id: body.galleryAssetId },
@@ -163,6 +176,7 @@ async function resolveSourceContext(body: { jobId?: string; galleryAssetId?: str
             sourceKind: 'gallery_asset',
             sourceJobId: null,
             galleryAssetId: galleryAsset.id,
+            inferredType: inferUpscaleTypeFromUrl(galleryAsset.originalUrl),
         };
     }
 
@@ -190,22 +204,18 @@ async function resolveSourceContext(body: { jobId?: string; galleryAssetId?: str
         sourceKind: 'job',
         sourceJobId: originalJob.id,
         galleryAssetId: null,
+        inferredType: originalJob.type === 'video' ? 'video' : 'image',
     };
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json() as { jobId?: string; galleryAssetId?: string; type?: UpscaleRequestType };
-        const type = body.type;
-
-        if (type !== 'image' && type !== 'video' && type !== 'video-interpolation') {
-            return NextResponse.json({
-                success: false,
-                error: 'Invalid upscale type'
-            }, { status: 400 });
-        }
-
-        const source = await resolveSourceContext({ ...body, type });
+        const requestedType = normalizeRequestedUpscaleType(body.type);
+        const source = await resolveSourceContext({ ...body, type: requestedType });
+        const type: UpscaleRequestType = requestedType === 'video-interpolation'
+            ? 'video-interpolation'
+            : source.inferredType;
         const { settings } = await settingsService.getSettings(source.userId);
 
         if (!settings?.runpod?.apiKey) {

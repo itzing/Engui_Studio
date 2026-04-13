@@ -362,6 +362,10 @@ export default function CenterPanel() {
 
   const handleUpscale = async () => {
     if (!previewJob || isUpscaling) return;
+    if (previewJob.type !== 'image' && previewJob.type !== 'video') {
+      showToast('Upscale is only available for image and video results', 'error');
+      return;
+    }
 
     setIsUpscaling(true);
     showToast(`Starting upscale for ${previewJob.type}...`, 'info');
