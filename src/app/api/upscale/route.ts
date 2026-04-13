@@ -276,6 +276,7 @@ export async function POST(request: NextRequest) {
         const s3 = createS3Service(settings);
         const plaintext = await loadSourcePlaintext(source.resultUrl, mediaType, s3);
         const mime = inferMimeFromSource(source.resultUrl, mediaType);
+        const inputFileName = `${newJob.id}__${attemptId}__${inferFileName(source.resultUrl, mediaType)}`;
         const inputDescriptor = await uploadEncryptedMediaInput({
             s3,
             masterKey,
@@ -286,7 +287,8 @@ export async function POST(request: NextRequest) {
             kind: mediaType,
             mime,
             plaintext,
-            fileName: inferFileName(source.resultUrl, mediaType),
+            fileName: inputFileName,
+            storagePath: `/runpod-volume/upscale-inputs/${inputFileName}`,
         });
 
         const runpodInput: Record<string, any> = {

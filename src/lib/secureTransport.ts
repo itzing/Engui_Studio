@@ -280,8 +280,9 @@ export async function uploadEncryptedMediaInput(params: {
   mime: string;
   plaintext: Buffer;
   fileName: string;
+  storagePath?: string;
 }): Promise<MediaInputDescriptor> {
-  const storagePath = buildInputStoragePath(params.jobId, params.attemptId, params.fileName);
+  const storagePath = params.storagePath || buildInputStoragePath(params.jobId, params.attemptId, params.fileName);
   const binding: MediaBinding = {
     job_id: params.jobId,
     model_id: params.modelId,
