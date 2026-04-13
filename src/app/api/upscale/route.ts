@@ -293,7 +293,14 @@ export async function POST(request: NextRequest) {
             __encryptSensitiveUpscale: true,
             media_inputs: [inputDescriptor],
             transport_request: {
-                output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`
+                output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`,
+                s3: {
+                    endpoint_url: settings.s3.endpointUrl,
+                    access_key_id: settings.s3.accessKeyId,
+                    secret_access_key: settings.s3.secretAccessKey,
+                    bucket_name: settings.s3.bucketName,
+                    region: settings.s3.region,
+                }
             },
             task_type: taskType,
             media_type: mediaType,

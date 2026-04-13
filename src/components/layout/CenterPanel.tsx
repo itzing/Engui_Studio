@@ -137,6 +137,7 @@ export default function CenterPanel() {
       .filter((job: Job) => job.status === 'completed' && !!job.resultUrl && job.type === 'image')
       .map(job => ({
         id: job.id,
+        type: 'image',
         url: job.resultUrl as string,
         prompt: job.prompt,
         modelId: job.modelId,
