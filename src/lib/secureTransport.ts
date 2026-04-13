@@ -61,10 +61,6 @@ export interface SecureTransportResult {
 const WRAPPED_KEY_PREFIX = 'v1:';
 const SECURE_NAMESPACE_ROOT = '/runpod-volume/secure-jobs';
 
-function buildAttemptPrefix(jobId: string, attemptId: string): string {
-  return `${jobId}__${attemptId}`;
-}
-
 function splitStoragePathForUpload(storagePath: string): { uploadPath: string; fileName: string } {
   const key = storagePathToS3Key(storagePath);
   const lastSlash = key.lastIndexOf('/');
@@ -168,22 +164,20 @@ function unwrapDek(masterKey: Buffer, wrappedKey: string): Buffer {
 }
 
 export function buildAttemptPaths(jobId: string, attemptId: string) {
-  const prefix = buildAttemptPrefix(jobId, attemptId);
+  const baseDir = `${SECURE_NAMESPACE_ROOT}/${jobId}/${attemptId}`;
   return {
-    baseDir: SECURE_NAMESPACE_ROOT,
-    inputsDir: SECURE_NAMESPACE_ROOT,
-    outputsDir: SECURE_NAMESPACE_ROOT,
-    inputPrefix: `${SECURE_NAMESPACE_ROOT}/${prefix}__input__`,
-    outputPrefix: `${SECURE_NAMESPACE_ROOT}/${prefix}__output__`,
+    baseDir,
+    inputsDir: `${baseDir}/inputs`,
+    outputsDir: `${baseDir}/outputs`,
   };
 }
 
 export function buildInputStoragePath(jobId: string, attemptId: string, fileName: string): string {
-  return `${buildAttemptPaths(jobId, attemptId).inputPrefix}${fileName}`;
+  return `${buildAttemptPaths(jobId, attemptId).inputsDir}/${fileName}`;
 }
 
 export function buildOutputStoragePath(jobId: string, attemptId: string, fileName: string): string {
-  return `${buildAttemptPaths(jobId, attemptId).outputPrefix}${fileName}`;
+  return `${buildAttemptPaths(jobId, attemptId).outputsDir}/${fileName}`;
 }
 
 export function storagePathToS3Key(storagePath: string): string {
