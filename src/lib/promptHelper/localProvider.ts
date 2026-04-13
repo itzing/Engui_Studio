@@ -60,30 +60,6 @@ function extractJsonObject(value: string): string {
   return trimmed.slice(firstBrace, lastBrace + 1);
 }
 
-function extractFallbackPromptPair(value: string): { prompt: string; negativePrompt: string } | null {
-  const normalized = value.replace(/\r/g, '');
-  const positivePatterns = [
-    /Drafting Positive Prompt:\*\s*(.+?)(?:\n\n|\n\d+\.|$)/is,
-    /Positive Prompt:\s*(.+?)(?:\n\n|\nNegative Prompt:|$)/is,
-  ];
-  const negativePatterns = [
-    /Drafting Negative Prompt:\*\s*(.+?)(?:\n\n|\n\d+\.|$)/is,
-    /Negative Prompt:\s*(.+?)(?:\n\n|$)/is,
-  ];
-
-  const positiveMatch = positivePatterns.map((pattern) => normalized.match(pattern)).find(Boolean);
-  const negativeMatch = negativePatterns.map((pattern) => normalized.match(pattern)).find(Boolean);
-
-  const prompt = positiveMatch?.[1] ? normalizeModelText(positiveMatch[1]) : '';
-  const negativePrompt = negativeMatch?.[1] ? normalizeModelText(negativeMatch[1]) : '';
-
-  if (!prompt) {
-    return null;
-  }
-
-  return { prompt, negativePrompt };
-}
-
 function buildUserMessage(request: PromptHelperRequest): string {
   const instruction = request.instruction.trim();
   const currentPrompt = request.prompt.trim();
@@ -154,12 +130,9 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        temperature: 0.2,
+        temperature: 0.4,
         max_tokens: 400,
         stream: false,
-        response_format: {
-          type: 'json_object'
-        },
         messages: [
           {
             role: 'system',
@@ -191,11 +164,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     try {
       parsed = JSON.parse(extractJsonObject(normalizedText));
     } catch {
-      const fallback = extractFallbackPromptPair(normalizedText);
-      if (!fallback) {
-        throw new Error('Prompt Helper provider returned invalid JSON');
-      }
-      parsed = fallback;
+      throw new Error('Prompt Helper provider returned invalid JSON');
     }
 
     const improvedPrompt = typeof parsed.prompt === 'string' ? normalizeModelText(parsed.prompt) : '';
