@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
         const s3 = createS3Service(settings);
         const plaintext = await loadSourcePlaintext(source.resultUrl, mediaType, s3);
         const mime = inferMimeFromSource(source.resultUrl, mediaType);
-        const inputFileName = `${newJob.id}__${attemptId}__${inferFileName(source.resultUrl, mediaType)}`;
+        const inputFileName = `${newJob.id}__${attemptId}__input.bin`;
         const inputDescriptor = await uploadEncryptedMediaInput({
             s3,
             masterKey,
