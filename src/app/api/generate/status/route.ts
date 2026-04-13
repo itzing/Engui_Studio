@@ -4,7 +4,7 @@ import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
 import S3Service from '@/lib/s3Service';
 import { getModelById } from '@/lib/models/modelConfig';
-import { decodeMasterKey, downloadAndDecryptResultMedia } from '@/lib/secureTransport';
+import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -30,8 +30,12 @@ function detectResultExtension(mime?: string | null, kind?: string | null): stri
     return '.png';
 }
 
+function normalizeS3KeyOrPrefix(value: string): string {
+    return storagePathToS3Key(value).replace(/\/+$/, '');
+}
+
 async function deleteS3PrefixRecursive(s3: S3Service, prefix: string, warnings: string[]) {
-    const normalizedPrefix = prefix.replace(/^\/+/, '').replace(/\/+$/, '');
+    const normalizedPrefix = normalizeS3KeyOrPrefix(prefix);
     if (!normalizedPrefix) return;
 
     try {
@@ -77,7 +81,7 @@ async function cleanupSecureTransportArtifacts(params: {
         const storagePath = media?.storagePath;
         if (!storagePath) continue;
         try {
-            await params.s3.deleteFile(storagePath.replace(/^\/+/, ''));
+            await params.s3.deleteFile(normalizeS3KeyOrPrefix(storagePath));
         } catch (error: any) {
             cleanupWarnings.push(`input:${storagePath}:${error.message}`);
         }
@@ -85,7 +89,7 @@ async function cleanupSecureTransportArtifacts(params: {
 
     if (params.resultStoragePath) {
         try {
-            await params.s3.deleteFile(params.resultStoragePath.replace(/^\/+/, ''));
+            await params.s3.deleteFile(normalizeS3KeyOrPrefix(params.resultStoragePath));
         } catch (error: any) {
             cleanupWarnings.push(`result:${params.resultStoragePath}:${error.message}`);
         }
