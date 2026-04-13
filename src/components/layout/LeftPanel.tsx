@@ -210,8 +210,17 @@ export default function LeftPanel() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isVibeManagerOpen} onOpenChange={setIsVibeManagerOpen}>
-                <DialogContent className="w-[96vw] max-w-[1600px] h-[94vh] p-0 gap-0 overflow-hidden flex flex-col">
+            <Dialog open={isVibeManagerOpen} onOpenChange={(open) => {
+                if (open) {
+                    setIsVibeManagerOpen(true);
+                }
+            }}>
+                <DialogContent
+                    className="w-[96vw] max-w-[1600px] h-[94vh] p-0 gap-0 overflow-hidden flex flex-col [&>button]:hidden"
+                    onEscapeKeyDown={(event) => event.preventDefault()}
+                    onPointerDownOutside={(event) => event.preventDefault()}
+                    onInteractOutside={(event) => event.preventDefault()}
+                >
                     <DialogHeader className="border-b border-border px-5 py-4 pr-14 space-y-1 text-left">
                         <div className="flex items-start justify-between gap-4">
                             <div>
