@@ -231,7 +231,7 @@ export default function LeftPanel() {
                         </div>
                     </DialogHeader>
                     <div className="flex-1 overflow-y-auto p-5">
-                        <VibeManagerPanel />
+                        <VibeManagerPanel onRequestClose={() => setIsVibeManagerOpen(false)} />
                     </div>
                 </DialogContent>
             </Dialog>

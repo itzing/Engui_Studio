@@ -19,6 +19,13 @@ type DraftVibe = {
   baseline: string;
 };
 
+type PendingNavigation =
+  | { kind: 'select'; vibe: VibePresetSummary }
+  | { kind: 'new' }
+  | { kind: 'clone' }
+  | { kind: 'switch_mode'; mode: VibeListMode }
+  | { kind: 'close_manager' };
+
 function emptyDraft(): DraftVibe {
   return {
     id: null,
@@ -85,7 +92,7 @@ function matchesSearch(vibe: VibePresetSummary, query: string): boolean {
   return haystack.includes(query);
 }
 
-export default function VibeManagerPanel() {
+export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: () => void }) {
   const { showToast } = useToast();
   const [vibes, setVibes] = useState<VibePresetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,7 +108,69 @@ export default function VibeManagerPanel() {
   const [extractPrompt, setExtractPrompt] = useState('');
   const [extractError, setExtractError] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation | null>(null);
+  const [isDirtyGuardOpen, setIsDirtyGuardOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredVibes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = vibes.filter((vibe) => matchesSearch(vibe, query));
+    return [...filtered].sort((left, right) => {
+      if (sortMode === 'name_asc') return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+      if (sortMode === 'name_desc') return right.name.localeCompare(left.name, undefined, { sensitivity: 'base' });
+      if (sortMode === 'created_desc') return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+  }, [vibes, search, sortMode]);
+
+  const selectedVibe = useMemo(() => vibes.find((item) => item.id === selectedId) || null, [vibes, selectedId]);
+  const isDirty = useMemo(() => draftFingerprint(draft) !== draft.baseline, [draft]);
+  const isValid = !!draft.name.trim() && !!draft.baseDescription.trim();
+  const canSave = isDirty && isValid && listMode === 'active';
+
+  const focusNameSoon = () => {
+    window.requestAnimationFrame(() => nameInputRef.current?.focus());
+  };
+
+  const applyNavigation = (nav: PendingNavigation) => {
+    if (nav.kind === 'select') {
+      setSelectedId(nav.vibe.id);
+      setDraft(buildDraft(nav.vibe));
+      return;
+    }
+
+    if (nav.kind === 'new') {
+      setSelectedId(null);
+      setDraft(emptyDraft());
+      focusNameSoon();
+      return;
+    }
+
+    if (nav.kind === 'clone') {
+      setSelectedId(null);
+      setDraft(cloneDraft(draft));
+      return;
+    }
+
+    if (nav.kind === 'switch_mode') {
+      setListMode(nav.mode);
+      return;
+    }
+
+    if (nav.kind === 'close_manager') {
+      onRequestClose?.();
+    }
+  };
+
+  const requestNavigation = (nav: PendingNavigation) => {
+    if (!isDirty) {
+      applyNavigation(nav);
+      return;
+    }
+
+    setPendingNavigation(nav);
+    setIsDirtyGuardOpen(true);
+  };
 
   const loadVibes = async (mode: VibeListMode, preferredId?: string | null) => {
     setIsLoading(true);
@@ -131,51 +200,22 @@ export default function VibeManagerPanel() {
 
   useEffect(() => {
     void loadVibes(listMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listMode]);
 
-  const filteredVibes = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const filtered = vibes.filter((vibe) => matchesSearch(vibe, query));
-    return [...filtered].sort((left, right) => {
-      if (sortMode === 'name_asc') return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-      if (sortMode === 'name_desc') return right.name.localeCompare(left.name, undefined, { sensitivity: 'base' });
-      if (sortMode === 'created_desc') return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-    });
-  }, [vibes, search, sortMode]);
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
 
-  const selectedVibe = useMemo(() => vibes.find((item) => item.id === selectedId) || null, [vibes, selectedId]);
-  const isDirty = useMemo(() => draftFingerprint(draft) !== draft.baseline, [draft]);
-  const isValid = !!draft.name.trim() && !!draft.baseDescription.trim();
-  const canSave = isDirty && isValid && listMode === 'active';
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
-  const confirmDiscardIfDirty = () => {
-    if (!isDirty) return true;
-    return window.confirm('You have unsaved changes. Press OK to discard them, or Cancel to stay here.');
-  };
-
-  const selectVibe = (vibe: VibePresetSummary) => {
-    if (!confirmDiscardIfDirty()) return;
-    setSelectedId(vibe.id);
-    setDraft(buildDraft(vibe));
-  };
-
-  const handleNew = () => {
-    if (!confirmDiscardIfDirty()) return;
-    setSelectedId(null);
-    setDraft(emptyDraft());
-    window.requestAnimationFrame(() => nameInputRef.current?.focus());
-  };
-
-  const handleClone = () => {
-    if (listMode === 'trash') return;
-    if (!confirmDiscardIfDirty()) return;
-    setSelectedId(null);
-    setDraft(cloneDraft(draft));
-  };
-
-  const handleSave = async () => {
-    if (!canSave) return;
+  const handleSave = async (afterSave?: () => void) => {
+    if (!canSave) return false;
     setIsSaving(true);
     try {
       const payload = {
@@ -193,9 +233,12 @@ export default function VibeManagerPanel() {
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to save vibe');
       showToast(draft.id ? 'Vibe saved' : 'Vibe created', 'success');
       await loadVibes(listMode, data.vibe.id);
+      afterSave?.();
+      return true;
     } catch (error: any) {
       console.error('Failed to save vibe:', error);
       showToast(error?.message || 'Failed to save vibe', 'error');
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -242,6 +285,7 @@ export default function VibeManagerPanel() {
         baseline: JSON.stringify({ name: '', baseDescription: '', tags: [], compatibleSceneTypes: [] }),
       });
       setIsExtractOpen(false);
+      setExtractError(null);
     } catch (error: any) {
       console.error('Failed to extract vibe:', error);
       setExtractError(error?.message || 'Failed to extract vibe');
@@ -311,90 +355,93 @@ export default function VibeManagerPanel() {
   );
 
   return (
-    <div className="flex h-full gap-5">
-      <div className="flex w-[320px] flex-shrink-0 flex-col rounded-xl border border-border bg-card">
-        <div className="border-b border-border p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search vibes" className="h-9" />
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as VibeSortMode)} className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-              <option value="updated_desc">Updated</option>
-              <option value="created_desc">Created</option>
-              <option value="name_asc">Name A-Z</option>
-              <option value="name_desc">Name Z-A</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant={listMode === 'active' ? 'secondary' : 'outline'} size="sm" onClick={() => setListMode('active')}>Active</Button>
-            <Button variant={listMode === 'trash' ? 'secondary' : 'outline'} size="sm" onClick={() => setListMode('trash')}>Trash</Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2">
-          {isLoading ? (
-            <div className="p-3 text-sm text-muted-foreground">Loading vibes...</div>
-          ) : filteredVibes.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-              <div className="text-sm text-muted-foreground">No vibes yet</div>
-              {listMode === 'active' && <Button size="sm" onClick={handleNew}><PlusIcon className="mr-2 h-4 w-4" />New</Button>}
+    <>
+      <div className="flex h-full gap-5">
+        <div className="flex w-[320px] flex-shrink-0 flex-col rounded-xl border border-border bg-card">
+          <div className="border-b border-border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search vibes" className="h-9" />
+              <select value={sortMode} onChange={(event) => setSortMode(event.target.value as VibeSortMode)} className="h-9 rounded-md border border-border bg-background px-2 text-sm">
+                <option value="updated_desc">Updated</option>
+                <option value="created_desc">Created</option>
+                <option value="name_asc">Name A-Z</option>
+                <option value="name_desc">Name Z-A</option>
+              </select>
             </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredVibes.map((vibe) => (
-                <button
-                  key={vibe.id}
-                  type="button"
-                  onClick={() => selectVibe(vibe)}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${selectedId === vibe.id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
-                >
-                  {vibe.name}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <Button variant={listMode === 'active' ? 'secondary' : 'outline'} size="sm" onClick={() => requestNavigation({ kind: 'switch_mode', mode: 'active' })}>Active</Button>
+              <Button variant={listMode === 'trash' ? 'secondary' : 'outline'} size="sm" onClick={() => requestNavigation({ kind: 'switch_mode', mode: 'trash' })}>Trash</Button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-card">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
-          <Button size="sm" onClick={handleNew}><PlusIcon className="mr-2 h-4 w-4" />New</Button>
-          <Button size="sm" variant="outline" onClick={handleClone} disabled={listMode === 'trash'}><DocumentDuplicateIcon className="mr-2 h-4 w-4" />Clone</Button>
-          {listMode === 'trash' ? (
-            <Button size="sm" variant="outline" onClick={() => void handleTrashAction('restore')} disabled={!selectedVibe}><ArrowUturnLeftIcon className="mr-2 h-4 w-4" />Restore</Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => void handleTrashAction('soft_delete')} disabled={!selectedVibe || !draft.id}><TrashIcon className="mr-2 h-4 w-4" />Delete</Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => setIsExtractOpen(true)}><SparklesIcon className="mr-2 h-4 w-4" />Extract</Button>
-          <div className="ml-auto">
-            <Button size="sm" onClick={() => void handleSave()} disabled={!canSave || isSaving}>{isSaving ? 'Saving...' : 'Save'}</Button>
+          <div className="flex-1 overflow-y-auto p-2">
+            {isLoading ? (
+              <div className="p-3 text-sm text-muted-foreground">Loading vibes...</div>
+            ) : filteredVibes.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <div className="text-sm text-muted-foreground">No vibes yet</div>
+                {listMode === 'active' && <Button size="sm" onClick={() => requestNavigation({ kind: 'new' })}><PlusIcon className="mr-2 h-4 w-4" />New</Button>}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredVibes.map((vibe) => (
+                  <button
+                    key={vibe.id}
+                    type="button"
+                    onClick={() => requestNavigation({ kind: 'select', vibe })}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${selectedId === vibe.id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+                  >
+                    {vibe.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <div className="mx-auto max-w-4xl space-y-5">
-            <div className="space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</div>
-              <Input
-                ref={nameInputRef}
-                value={draft.name}
-                disabled={listMode === 'trash'}
-                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Vibe name"
-              />
+        <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
+            <Button size="sm" onClick={() => requestNavigation({ kind: 'new' })}><PlusIcon className="mr-2 h-4 w-4" />New</Button>
+            <Button size="sm" variant="outline" onClick={() => requestNavigation({ kind: 'clone' })} disabled={listMode === 'trash'}><DocumentDuplicateIcon className="mr-2 h-4 w-4" />Clone</Button>
+            {listMode === 'trash' ? (
+              <Button size="sm" variant="outline" onClick={() => void handleTrashAction('restore')} disabled={!selectedVibe}><ArrowUturnLeftIcon className="mr-2 h-4 w-4" />Restore</Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => void handleTrashAction('soft_delete')} disabled={!selectedVibe || !draft.id}><TrashIcon className="mr-2 h-4 w-4" />Delete</Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setIsExtractOpen(true)}><SparklesIcon className="mr-2 h-4 w-4" />Extract</Button>
+            <div className="ml-auto flex items-center gap-3">
+              <div className="text-xs text-muted-foreground">{isDirty ? 'Unsaved changes' : 'Saved'}</div>
+              <Button size="sm" onClick={() => void handleSave()} disabled={!canSave || isSaving}>{isSaving ? 'Saving...' : 'Save'}</Button>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Base Description</div>
-              <textarea
-                value={draft.baseDescription}
-                disabled={listMode === 'trash'}
-                onChange={(event) => setDraft((current) => ({ ...current, baseDescription: event.target.value }))}
-                placeholder="Describe the reusable vibe core"
-                className="min-h-[220px] w-full rounded-lg border border-border bg-background px-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-              />
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="mx-auto max-w-4xl space-y-5">
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</div>
+                <Input
+                  ref={nameInputRef}
+                  value={draft.name}
+                  disabled={listMode === 'trash'}
+                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Vibe name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Base Description</div>
+                <textarea
+                  value={draft.baseDescription}
+                  disabled={listMode === 'trash'}
+                  onChange={(event) => setDraft((current) => ({ ...current, baseDescription: event.target.value }))}
+                  placeholder="Describe the reusable vibe core"
+                  className="min-h-[220px] w-full rounded-lg border border-border bg-background px-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+
+              {renderChipField('Tags', draft.tags, (next) => setDraft((current) => ({ ...current, tags: next })), tagInput, setTagInput, listMode === 'trash')}
+              {renderChipField('Compatible Scene Types', draft.compatibleSceneTypes, (next) => setDraft((current) => ({ ...current, compatibleSceneTypes: next })), sceneTypeInput, setSceneTypeInput, listMode === 'trash')}
             </div>
-
-            {renderChipField('Tags', draft.tags, (next) => setDraft((current) => ({ ...current, tags: next })), tagInput, setTagInput, listMode === 'trash')}
-            {renderChipField('Compatible Scene Types', draft.compatibleSceneTypes, (next) => setDraft((current) => ({ ...current, compatibleSceneTypes: next })), sceneTypeInput, setSceneTypeInput, listMode === 'trash')}
           </div>
         </div>
       </div>
@@ -445,6 +492,47 @@ export default function VibeManagerPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      <Dialog open={isDirtyGuardOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsDirtyGuardOpen(false);
+          setPendingNavigation(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Unsaved changes</DialogTitle>
+            <DialogDescription>
+              Save this draft before leaving it, discard changes, or cancel.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsDirtyGuardOpen(false);
+              setPendingNavigation(null);
+            }}>Cancel</Button>
+            <Button variant="outline" onClick={() => {
+              const next = pendingNavigation;
+              setIsDirtyGuardOpen(false);
+              setPendingNavigation(null);
+              if (next) applyNavigation(next);
+            }}>Discard</Button>
+            <Button onClick={async () => {
+              if (!canSave) {
+                showToast('Name and Base Description are required before saving', 'error');
+                return;
+              }
+              const next = pendingNavigation;
+              const saved = await handleSave(() => {
+                setIsDirtyGuardOpen(false);
+                setPendingNavigation(null);
+                if (next) applyNavigation(next);
+              });
+              if (!saved) return;
+            }} disabled={isSaving}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
