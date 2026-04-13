@@ -68,27 +68,51 @@ export function heuristicExtractVibe(prompt: string): VibeExtractResult {
   const trimmed = prompt.trim();
   const normalized = trimmed.replace(/\s+/g, ' ');
   const lower = normalized.toLowerCase();
-  const tokens = lower.split(/[^a-z0-9]+/i).filter((token) => token.length >= 4);
-  const stop = new Set(['with', 'that', 'this', 'from', 'into', 'about', 'there', 'their', 'scene', 'style', 'mood', 'light', 'lighting', 'camera', 'focus', 'vibe', 'prompt']);
-  const tags = pickTopUnique(tokens.filter((token) => !stop.has(token)), 6);
+  const tokens = lower.split(/[^a-z0-9-]+/i).filter((token) => token.length >= 4);
+  const stop = new Set(['with', 'that', 'this', 'from', 'into', 'about', 'there', 'their', 'scene', 'style', 'camera', 'focus', 'vibe', 'prompt', 'woman', 'young', 'man', 'person', 'girl', 'boy', 'sitting', 'standing', 'holding', 'wearing', 'train', 'station', 'bench', 'bag', 'tracks', 'locomotive']);
+  const moodPriority = ['nostalgic', 'warm', 'wistful', 'dreamy', 'romantic', 'soft', 'gentle', 'misty', 'moody', 'elegant', 'cinematic', 'serene', 'melancholic', 'ethereal', 'pastel', 'vintage', 'victorian'];
+  const detectedMoodTags = moodPriority.filter((tag) => lower.includes(tag));
+  const tags = pickTopUnique([...detectedMoodTags, ...tokens.filter((token) => !stop.has(token))], 6);
 
   const sceneTypes: string[] = [];
-  if (/portrait|close[- ]?up|headshot|character/i.test(normalized)) sceneTypes.push('portrait');
+  if (/portrait|close[- ]?up|headshot|character|woman|man|girl|boy/i.test(normalized)) sceneTypes.push('portrait');
   if (/landscape|environment|wide shot|panorama/i.test(normalized)) sceneTypes.push('landscape');
   if (/interior|room|inside/i.test(normalized)) sceneTypes.push('interior');
-  if (/exterior|outside|street|outdoor/i.test(normalized)) sceneTypes.push('exterior');
+  if (/exterior|outside|street|outdoor|station|garden/i.test(normalized)) sceneTypes.push('exterior');
   if (/cinematic|film|movie/i.test(normalized)) sceneTypes.push('cinematic');
 
-  const firstSentence = normalized.split(/[.!?\n]/).map((part) => part.trim()).find(Boolean) || normalized;
-  const rawName = firstSentence.split(/,| with | featuring /i)[0].trim();
-  const safeName = rawName.slice(0, 60).replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, '');
-  const name = safeName ? safeName.replace(/\b\w/g, (char) => char.toUpperCase()) : 'Extracted Vibe';
+  const baseParts = [
+    lower.includes('warm') ? 'warm' : '',
+    lower.includes('nostalgic') ? 'nostalgic' : '',
+    lower.includes('soft') || lower.includes('mist') ? 'soft misty atmosphere' : '',
+    lower.includes('morning') ? 'morning light' : '',
+    lower.includes('romantic') ? 'romantic tone' : '',
+    lower.includes('wistful') ? 'quiet wistfulness' : '',
+    lower.includes('victorian') || lower.includes('vintage') ? 'period elegance' : '',
+    lower.includes('pastel') ? 'pastel delicacy' : '',
+    lower.includes('cinematic') ? 'cinematic softness' : '',
+  ].filter(Boolean);
+
+  const baseDescription = baseParts.length > 0
+    ? pickTopUnique(baseParts, 6).join(', ')
+    : 'atmospheric visual mood, cinematic light, and reusable aesthetic tone';
+
+  const nameParts = [
+    lower.includes('nostalgic') ? 'Nostalgic' : '',
+    lower.includes('warm') ? 'Warm' : '',
+    lower.includes('morning') ? 'Morning' : '',
+    lower.includes('mist') ? 'Mist' : '',
+    lower.includes('victorian') ? 'Victorian' : '',
+    lower.includes('romantic') ? 'Romantic' : '',
+    'Vibe'
+  ].filter(Boolean);
+  const name = pickTopUnique(nameParts, 3).join(' ');
 
   return {
-    name,
-    baseDescription: normalized,
+    name: name || 'Extracted Vibe',
+    baseDescription,
     tags,
     compatibleSceneTypes: pickTopUnique(sceneTypes, 4),
-    confidence: normalized.length > 80 ? 'medium' : 'low',
+    confidence: detectedMoodTags.length >= 2 ? 'medium' : 'low',
   };
 }

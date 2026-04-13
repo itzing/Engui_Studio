@@ -80,7 +80,7 @@ async function extractWithPromptHelper(prompt: string) {
       messages: [
         {
           role: 'system',
-          content: 'You extract reusable vibe presets from creative prompts. A vibe preset is a compact reusable atmosphere definition, not a full production prompt. Return only valid JSON with exactly these keys: {"name":"string","baseDescription":"string","tags":["string"],"compatibleSceneTypes":["string"],"confidence":"low|medium|high"}. Use concise English. Keep tags lowercase. Keep compatibleSceneTypes short, lowercase, and advisory only. Do not return markdown or explanations.'
+          content: 'You extract reusable vibe presets from creative prompts. A vibe preset is a compact reusable atmosphere definition, not a caption, not a scene summary, and not a character description. Prioritize mood, emotional tone, lighting, color atmosphere, texture, era feeling, softness/harshness, romanticism, tension, calmness, nostalgia, dreaminess, environmental feel, and cinematic energy. Avoid anchoring on specific people, clothing, props, exact locations, or one-off narrative actions unless they are essential to the vibe itself. Return only valid JSON with exactly these keys: {"name":"string","baseDescription":"string","tags":["string"],"compatibleSceneTypes":["string"],"confidence":"low|medium|high"}. Use concise English. Keep tags lowercase. Keep compatibleSceneTypes short, lowercase, and advisory only. Do not return markdown or explanations.'
         },
         {
           role: 'user',
@@ -90,12 +90,24 @@ async function extractWithPromptHelper(prompt: string) {
             'Prompt:',
             prompt,
             '',
-            'Requirements:',
-            '- name should be short and human-readable',
-            '- baseDescription should capture the reusable semantic vibe core',
-            '- tags should be concise lowercase chips',
+            'Rules:',
+            '- Think: what reusable atmosphere should survive if the subject, place, and props are changed?',
+            '- baseDescription must describe the vibe core, not retell the literal scene',
+            '- baseDescription should usually focus on mood, light, air, emotional tone, texture, palette, elegance, nostalgia, softness, drama, serenity, etc.',
+            '- Avoid wording like "woman at a train station", "person sitting", "holding a bag", "standing in a room" unless truly essential to the vibe',
+            '- Prefer scene-agnostic wording when possible',
+            '- name should be short and human-readable, and should describe the vibe rather than the scene',
+            '- tags should be concise lowercase chips, mostly mood/aesthetic descriptors, not literal object inventory',
             '- compatibleSceneTypes should be a small advisory list like portrait, landscape, interior, exterior, cinematic',
-            '- if uncertain, still return best-effort JSON'
+            '- if uncertain, still return best-effort JSON',
+            '',
+            'Bad extraction example:',
+            '- prompt: "A woman in a rainy neon alley... moody blue-magenta cyberpunk atmosphere"',
+            '- bad baseDescription: "woman in a neon alley at night"',
+            '- why bad: too literal and scene-specific',
+            '',
+            'Good extraction example:',
+            '- good baseDescription: "moody cyberpunk night atmosphere, neon reflections, wet surfaces, blue-magenta glow, noir tension"'
           ].join('\n')
         }
       ]
