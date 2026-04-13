@@ -142,6 +142,8 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
     if (nav.kind === 'new') {
       setSelectedId(null);
       setDraft(emptyDraft());
+      setTagInput('');
+      setSceneTypeInput('');
       focusNameSoon();
       return;
     }
@@ -149,6 +151,8 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
     if (nav.kind === 'clone') {
       setSelectedId(null);
       setDraft(cloneDraft(draft));
+      setTagInput('');
+      setSceneTypeInput('');
       return;
     }
 
@@ -187,12 +191,16 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
         : preferredId;
       setSelectedId(nextSelectedId || null);
       setDraft(nextSelectedId ? buildDraft(nextVibes.find((item) => item.id === nextSelectedId) || nextVibes[0]) : emptyDraft());
+      setTagInput('');
+      setSceneTypeInput('');
     } catch (error: any) {
       console.error('Failed to load vibes:', error);
       showToast(error?.message || 'Failed to load vibes', 'error');
       setVibes([]);
       setSelectedId(null);
       setDraft(emptyDraft());
+      setTagInput('');
+      setSceneTypeInput('');
     } finally {
       setIsLoading(false);
     }
@@ -210,8 +218,16 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
       event.returnValue = '';
     };
 
+    const handleRequestClose = () => {
+      requestNavigation({ kind: 'close_manager' });
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('vibe-manager-request-close', handleRequestClose);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('vibe-manager-request-close', handleRequestClose);
+    };
   }, [isDirty]);
 
   const handleSave = async (afterSave?: () => void) => {
@@ -246,6 +262,11 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
 
   const handleTrashAction = async (action: 'soft_delete' | 'restore') => {
     if (!draft.id) return;
+
+    const currentId = draft.id;
+    const currentIndex = vibes.findIndex((item) => item.id === currentId);
+    const fallbackSelection = vibes[currentIndex + 1]?.id || vibes[currentIndex - 1]?.id || null;
+
     try {
       const response = await fetch(`/api/vibes/${draft.id}`, {
         method: 'PATCH',
@@ -255,7 +276,7 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to update vibe');
       showToast(action === 'restore' ? 'Vibe restored' : 'Vibe moved to trash', 'success');
-      await loadVibes(listMode, null);
+      await loadVibes(listMode, fallbackSelection);
     } catch (error: any) {
       console.error('Failed to update vibe:', error);
       showToast(error?.message || 'Failed to update vibe', 'error');
@@ -284,6 +305,8 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
         compatibleSceneTypes: Array.isArray(extracted.compatibleSceneTypes) ? extracted.compatibleSceneTypes : [],
         baseline: JSON.stringify({ name: '', baseDescription: '', tags: [], compatibleSceneTypes: [] }),
       });
+      setTagInput('');
+      setSceneTypeInput('');
       setIsExtractOpen(false);
       setExtractError(null);
     } catch (error: any) {
@@ -379,7 +402,7 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
               <div className="p-3 text-sm text-muted-foreground">Loading vibes...</div>
             ) : filteredVibes.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-                <div className="text-sm text-muted-foreground">No vibes yet</div>
+                <div className="text-sm text-muted-foreground">{listMode === 'trash' ? 'Trash is empty' : 'No vibes yet'}</div>
                 {listMode === 'active' && <Button size="sm" onClick={() => requestNavigation({ kind: 'new' })}><PlusIcon className="mr-2 h-4 w-4" />New</Button>}
               </div>
             ) : (
@@ -401,22 +424,28 @@ export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: 
 
         <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
-            <Button size="sm" onClick={() => requestNavigation({ kind: 'new' })}><PlusIcon className="mr-2 h-4 w-4" />New</Button>
-            <Button size="sm" variant="outline" onClick={() => requestNavigation({ kind: 'clone' })} disabled={listMode === 'trash'}><DocumentDuplicateIcon className="mr-2 h-4 w-4" />Clone</Button>
+            <Button size="sm" onClick={() => requestNavigation({ kind: 'new' })} disabled={listMode === 'trash'}><PlusIcon className="mr-2 h-4 w-4" />New</Button>
+            <Button size="sm" variant="outline" onClick={() => requestNavigation({ kind: 'clone' })} disabled={listMode === 'trash' || (!selectedVibe && !draft.name && !draft.baseDescription && draft.tags.length === 0 && draft.compatibleSceneTypes.length === 0)}><DocumentDuplicateIcon className="mr-2 h-4 w-4" />Clone</Button>
             {listMode === 'trash' ? (
               <Button size="sm" variant="outline" onClick={() => void handleTrashAction('restore')} disabled={!selectedVibe}><ArrowUturnLeftIcon className="mr-2 h-4 w-4" />Restore</Button>
             ) : (
               <Button size="sm" variant="outline" onClick={() => void handleTrashAction('soft_delete')} disabled={!selectedVibe || !draft.id}><TrashIcon className="mr-2 h-4 w-4" />Delete</Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => setIsExtractOpen(true)}><SparklesIcon className="mr-2 h-4 w-4" />Extract</Button>
+            <Button size="sm" variant="outline" onClick={() => setIsExtractOpen(true)} disabled={listMode === 'trash'}><SparklesIcon className="mr-2 h-4 w-4" />Extract</Button>
             <div className="ml-auto flex items-center gap-3">
-              <div className="text-xs text-muted-foreground">{isDirty ? 'Unsaved changes' : 'Saved'}</div>
+              <div className="text-xs text-muted-foreground">{listMode === 'trash' ? 'Read-only trash view' : (isDirty ? 'Unsaved changes' : 'Saved')}</div>
               <Button size="sm" onClick={() => void handleSave()} disabled={!canSave || isSaving}>{isSaving ? 'Saving...' : 'Save'}</Button>
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5">
             <div className="mx-auto max-w-4xl space-y-5">
+              {listMode === 'trash' && (
+                <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Trash mode is read-only. You can review presets here and restore them, but you cannot edit, clone, extract, or save.
+                </div>
+              )}
+
               <div className="space-y-2">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</div>
                 <Input

@@ -231,7 +231,7 @@ export default function LeftPanel() {
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setIsVibeManagerOpen(false)}
+                                onClick={() => window.dispatchEvent(new CustomEvent('vibe-manager-request-close'))}
                                 className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                             >
                                 <XMarkIcon className="h-4 w-4" />
