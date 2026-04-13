@@ -785,23 +785,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         fetchProjects();
     }, []);
 
-    // Fetch workspace media
-    const fetchWorkspaceMedia = async () => {
-        if (!activeWorkspaceId) return;
-
-        try {
-            const response = await fetch(`/api/workspace-media?workspaceId=${activeWorkspaceId}`);
-            const data = await response.json();
-            if (data.success) {
-                console.log(`📚 Loaded ${data.media.length} media items for workspace ${activeWorkspaceId}`);
-                setWorkspaceMedia(data.media);
-            }
-        } catch (error) {
-            console.error('Failed to fetch workspace media:', error);
-        }
-    };
-
-    // Fetch jobs and media when workspace changes
+    // Fetch jobs when workspace changes
     useEffect(() => {
         console.log('🔄 Workspace changed:', activeWorkspaceId);
         if (activeWorkspaceId) {
@@ -810,7 +794,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem('activeWorkspaceId', activeWorkspaceId);
             }
             fetchJobs();
-            fetchWorkspaceMedia();
         } else {
             console.warn('⚠️ No active workspace ID set');
         }
