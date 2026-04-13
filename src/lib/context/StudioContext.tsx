@@ -77,16 +77,6 @@ export interface Job {
     workspaceId?: string;
 }
 
-export interface WorkspaceMedia {
-    id: string;
-    workspaceId: string;
-    type: 'image' | 'video' | 'audio' | 'tts' | 'music';
-    url: string;
-    prompt?: string;
-    modelId?: string;
-    createdAt: number;
-}
-
 // Video Editor Types
 export interface VideoProject {
     id: string;
@@ -172,7 +162,6 @@ interface StudioContextType {
     // Workspaces
     workspaces: Workspace[];
     activeWorkspaceId: string | null;
-    workspaceMedia: WorkspaceMedia[];
     createWorkspace: (name: string) => Promise<void>;
     selectWorkspace: (id: string) => void;
     deleteWorkspace: (id: string) => Promise<void>;
@@ -220,7 +209,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     // Workspace State
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-    const [workspaceMedia, setWorkspaceMedia] = useState<WorkspaceMedia[]>([]);
 
     // Video Editor State
     const [currentProject, setCurrentProject] = useState<VideoProject | null>(null);
@@ -470,8 +458,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         // Optimistic update
         setJobs(prev => [jobWithWorkspace, ...prev]);
 
-        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
-
         try {
             const response = await fetch('/api/jobs', {
                 method: 'POST',
@@ -505,8 +491,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
         // Update jobs list
         setJobs(prev => [jobWithWorkspace, ...prev]);
-
-        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
     };
 
     const updateJobStatus = async (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number) => {
@@ -517,8 +501,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setJobs(prev => prev.map(job =>
             job.id === id ? { ...job, status, resultUrl, error, cost } : job
         ));
-
-        // Legacy workspaceMedia sync disabled. Gallery and jobs are the active sources of truth.
 
         try {
             await fetch(`/api/jobs/${id}`, {
@@ -1517,7 +1499,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // Workspaces
             workspaces,
             activeWorkspaceId,
-            workspaceMedia,
             createWorkspace,
             selectWorkspace,
             deleteWorkspace,
