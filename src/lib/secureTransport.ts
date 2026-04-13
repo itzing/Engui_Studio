@@ -42,6 +42,7 @@ export interface MediaInputDescriptor {
 
 export interface TransportRequest {
   output_dir: string;
+  output_file_name?: string;
 }
 
 export interface SecureTransportResult {
@@ -182,8 +183,12 @@ export function buildInputStoragePath(jobId: string, attemptId: string, fileName
   return `${buildAttemptPaths(jobId, attemptId).inputPrefix}${fileName}`;
 }
 
+export function buildOutputFileName(jobId: string, attemptId: string, fileName: string): string {
+  return `${buildAttemptPrefix(jobId, attemptId)}__output__${fileName}`;
+}
+
 export function buildOutputStoragePath(jobId: string, attemptId: string, fileName: string): string {
-  return `${buildAttemptPaths(jobId, attemptId).outputPrefix}${fileName}`;
+  return `${buildAttemptPaths(jobId, attemptId).outputsDir}/${buildOutputFileName(jobId, attemptId, fileName)}`;
 }
 
 export function storagePathToS3Key(storagePath: string): string {

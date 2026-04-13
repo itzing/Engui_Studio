@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import SettingsService from '@/lib/settingsService';
 import RunPodService from '@/lib/runpodService';
 import S3Service from '@/lib/s3Service';
-import { buildAttemptPaths, createSecureStateSkeleton, decodeMasterKey, storagePathToS3Key, uploadEncryptedMediaInput } from '@/lib/secureTransport';
+import { buildAttemptPaths, buildOutputFileName, createSecureStateSkeleton, decodeMasterKey, storagePathToS3Key, uploadEncryptedMediaInput } from '@/lib/secureTransport';
 import { getModelById } from '@/lib/models/modelConfig';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -295,7 +295,8 @@ export async function POST(request: NextRequest) {
             __encryptSensitiveUpscale: true,
             media_inputs: [inputDescriptor],
             transport_request: {
-                output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`
+                output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`,
+                output_file_name: buildOutputFileName(newJob.id, attemptId, 'result.bin')
             },
             job_id: newJob.id,
             attempt_id: attemptId,

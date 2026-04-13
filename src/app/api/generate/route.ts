@@ -5,7 +5,7 @@ import SettingsService from '@/lib/settingsService';
 import ElevenLabsService from '@/lib/elevenlabsService';
 import S3Service from '@/lib/s3Service';
 import { processFileUpload } from '@/lib/serverFileUtils';
-import { createSecureStateSkeleton, createStructuredEnvelope, decodeMasterKey, uploadEncryptedMediaInput, buildAttemptPaths } from '@/lib/secureTransport';
+import { createSecureStateSkeleton, createStructuredEnvelope, decodeMasterKey, uploadEncryptedMediaInput, buildAttemptPaths, buildOutputFileName } from '@/lib/secureTransport';
 import { mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -503,7 +503,8 @@ export async function POST(request: NextRequest) {
 
                 runpodInput.media_inputs = mediaInputs;
                 runpodInput.transport_request = {
-                    output_dir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`
+                    output_dir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`,
+                    output_file_name: buildOutputFileName(job.id, attemptId, 'result.bin')
                 };
 
                 delete runpodInput.image_path;
