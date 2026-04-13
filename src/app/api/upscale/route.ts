@@ -297,6 +297,9 @@ export async function POST(request: NextRequest) {
             transport_request: {
                 output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`
             },
+            job_id: newJob.id,
+            attempt_id: attemptId,
+            model_id: modelId,
             task_type: taskType,
             media_type: mediaType,
             frame_interpolation: type === 'video-interpolation',
