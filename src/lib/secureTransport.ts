@@ -299,13 +299,13 @@ export async function uploadEncryptedMediaInput(params: {
 
   const { envelope, ciphertext } = createMediaEnvelope(params.masterKey, binding, params.plaintext);
   const uploadTarget = splitStoragePathForUpload(storagePath);
-  await params.s3.uploadFile(ciphertext, uploadTarget.fileName, 'application/octet-stream', uploadTarget.uploadPath);
+  const uploadResult = await params.s3.uploadFile(ciphertext, uploadTarget.fileName, 'application/octet-stream', uploadTarget.uploadPath);
 
   return {
     role: params.role,
     kind: params.kind,
     mime: params.mime,
-    storage_path: storagePath,
+    storage_path: uploadResult.filePath || storagePath,
     envelope,
   };
 }
