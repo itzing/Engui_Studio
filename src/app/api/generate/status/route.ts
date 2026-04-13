@@ -34,41 +34,6 @@ function normalizeS3KeyOrPrefix(value: string): string {
     return storagePathToS3Key(value).replace(/\/+$/, '');
 }
 
-async function deleteS3PrefixRecursive(s3: S3Service, prefix: string, warnings: string[]) {
-    const normalizedPrefix = normalizeS3KeyOrPrefix(prefix);
-    if (!normalizedPrefix) return;
-
-    try {
-        const items = await s3.listFiles(`${normalizedPrefix}/`);
-        for (const item of items) {
-            if (item.type === 'directory') {
-                await deleteS3PrefixRecursive(s3, item.key, warnings);
-            } else {
-                try {
-                    await s3.deleteFile(item.key.replace(/^\/+/, ''));
-                } catch (error: any) {
-                    warnings.push(`prefix-file:${item.key}:${error.message}`);
-                }
-            }
-        }
-    } catch (error: any) {
-        warnings.push(`prefix-list:${normalizedPrefix}:${error.message}`);
-    }
-
-    const markerCandidates = [
-        `${normalizedPrefix}/`,
-        `${normalizedPrefix}/folder-marker.txt`,
-    ];
-
-    for (const markerKey of markerCandidates) {
-        try {
-            await s3.deleteFile(markerKey.replace(/^\/+/, ''));
-        } catch {
-            // Ignore missing marker objects.
-        }
-    }
-}
-
 async function cleanupSecureTransportArtifacts(params: {
     s3: S3Service;
     secureState: any;
@@ -95,14 +60,9 @@ async function cleanupSecureTransportArtifacts(params: {
         }
     }
 
-    const outputDir = params.secureState?.activeAttempt?.outputDir;
-    const attemptPrefix = typeof outputDir === 'string'
-        ? outputDir.replace(/\/+$/, '').replace(/\/outputs$/, '')
-        : null;
-
-    if (attemptPrefix) {
-        await deleteS3PrefixRecursive(params.s3, attemptPrefix, cleanupWarnings);
-    }
+    // Do not clean prefixes recursively.
+    // Secure transport no longer relies on per-job folder structures,
+    // and recursive prefix deletion can accidentally remove artifacts from other jobs.
 
     return {
         transportStatus: cleanupWarnings.length === 0 ? 'completed' : 'warning',
