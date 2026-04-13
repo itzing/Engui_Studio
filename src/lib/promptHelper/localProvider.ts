@@ -60,6 +60,27 @@ function extractJsonObject(value: string): string {
   return trimmed.slice(firstBrace, lastBrace + 1);
 }
 
+function buildFramingHint(width: number | null, height: number | null): string | null {
+  if (!width || !height) {
+    return null;
+  }
+
+  const ratio = width / height;
+  if (ratio >= 1.7) {
+    return 'This is a wide frame. Prefer horizontal composition, stronger environmental context, lateral subject placement, and scene structure that uses left-to-right space well.';
+  }
+
+  if (ratio <= 0.8) {
+    return 'This is a tall frame. Prefer vertical composition, clearer head-to-toe or upper-body framing, stronger top-to-bottom subject flow, and avoid overly wide scene blocking.';
+  }
+
+  if (ratio >= 0.9 && ratio <= 1.1) {
+    return 'This is a near-square frame. Prefer centered or balanced composition, clean subject grouping, and avoid composition cues that rely on very wide cinematic spread.';
+  }
+
+  return 'Use composition cues that fit a moderately rectangular frame, balancing subject emphasis with enough surrounding context.';
+}
+
 function buildUserMessage(request: PromptHelperRequest): string {
   const instruction = request.instruction.trim();
   const currentPrompt = request.prompt.trim();
@@ -67,6 +88,7 @@ function buildUserMessage(request: PromptHelperRequest): string {
   const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
   const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
   const aspectRatio = width && height ? `${width}:${height}` : null;
+  const framingHint = buildFramingHint(width, height);
 
   return [
     currentPrompt
@@ -86,6 +108,8 @@ function buildUserMessage(request: PromptHelperRequest): string {
     instruction,
     '',
     'When improving the positive prompt, consider the target dimensions and aspect ratio for composition, framing, subject placement, camera distance, and scene structure.',
+    framingHint,
+    'Do not overstate framing cues when they are not necessary. Keep the prompt natural and only add composition guidance that genuinely helps the requested format.',
     '',
     'Return JSON with exactly these keys:',
     '{"prompt":"...","negativePrompt":"..."}'
