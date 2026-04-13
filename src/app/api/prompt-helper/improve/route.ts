@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
-import { getPromptHelperProvider } from '@/lib/promptHelper';
+import { getPromptHelperProvider, PromptHelperProviderError } from '@/lib/promptHelper';
 
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
@@ -29,11 +29,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Prompt Helper request failed';
     const status = /disabled|required/i.test(message) ? 400 : 500;
+    const debug = error instanceof PromptHelperProviderError ? error.debug : undefined;
 
     return NextResponse.json(
       {
         success: false,
         error: message,
+        debug,
       },
       { status }
     );

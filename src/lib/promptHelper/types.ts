@@ -16,9 +16,24 @@ export interface PromptHelperRequest {
   modelId?: string;
 }
 
+export interface PromptHelperDebugInfo {
+  content?: string;
+  reasoningContent?: string;
+}
+
 export interface PromptHelperResult {
   improvedPrompt: string;
   improvedNegativePrompt: string;
+}
+
+export class PromptHelperProviderError extends Error {
+  debug?: PromptHelperDebugInfo;
+
+  constructor(message: string, debug?: PromptHelperDebugInfo) {
+    super(message);
+    this.name = 'PromptHelperProviderError';
+    this.debug = debug;
+  }
 }
 
 export interface PromptHelperProvider {

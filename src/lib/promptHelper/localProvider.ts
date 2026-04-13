@@ -1,4 +1,4 @@
-import { PromptHelperProvider, PromptHelperRequest, PromptHelperResult, PromptHelperSettings } from './types';
+import { PromptHelperProvider, PromptHelperProviderError, PromptHelperRequest, PromptHelperResult, PromptHelperSettings } from './types';
 
 interface OpenAIChatResponse {
   choices?: Array<{
@@ -147,31 +147,36 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     });
 
     const data = await response.json() as OpenAIChatResponse;
+    const message = data?.choices?.[0]?.message;
+    const contentText = extractTextContent(message?.content);
+    const reasoningText = extractTextContent(message?.reasoning_content);
+    const rawText = contentText || reasoningText;
+    const normalizedText = normalizeModelText(rawText);
+    const debug = {
+      content: contentText || undefined,
+      reasoningContent: reasoningText || undefined,
+    };
 
     if (!response.ok) {
-      throw new Error(data?.error?.message || `Prompt Helper provider request failed with status ${response.status}`);
+      throw new PromptHelperProviderError(data?.error?.message || `Prompt Helper provider request failed with status ${response.status}`, debug);
     }
 
-    const message = data?.choices?.[0]?.message;
-    const rawText = extractTextContent(message?.content) || extractTextContent(message?.reasoning_content);
-    const normalizedText = normalizeModelText(rawText);
-
     if (!normalizedText) {
-      throw new Error('Prompt Helper provider returned empty text');
+      throw new PromptHelperProviderError('Prompt Helper provider returned empty text', debug);
     }
 
     let parsed: { prompt?: unknown; negativePrompt?: unknown };
     try {
       parsed = JSON.parse(extractJsonObject(normalizedText));
     } catch {
-      throw new Error('Prompt Helper provider returned invalid JSON');
+      throw new PromptHelperProviderError('Prompt Helper provider returned invalid JSON', debug);
     }
 
     const improvedPrompt = typeof parsed.prompt === 'string' ? normalizeModelText(parsed.prompt) : '';
     const improvedNegativePrompt = typeof parsed.negativePrompt === 'string' ? normalizeModelText(parsed.negativePrompt) : '';
 
     if (!improvedPrompt) {
-      throw new Error('Prompt Helper provider returned empty prompt text');
+      throw new PromptHelperProviderError('Prompt Helper provider returned empty prompt text', debug);
     }
 
     return {

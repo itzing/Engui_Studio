@@ -94,6 +94,7 @@ export default function ImageGenerationForm() {
         }
 
         setPromptHelperError(null);
+        setPromptHelperDebug(null);
         setIsPromptHelperLoading(true);
 
         try {
@@ -111,7 +112,11 @@ export default function ImageGenerationForm() {
             const data = await response.json();
 
             if (!response.ok || !data.success || !data.improvedPrompt) {
-                throw new Error(data.error || 'Prompt Helper request failed');
+                const error = new Error(data.error || 'Prompt Helper request failed') as Error & {
+                    debug?: { content?: string; reasoningContent?: string };
+                };
+                error.debug = data.debug;
+                throw error;
             }
 
             setPrompt(data.improvedPrompt);
@@ -124,9 +129,12 @@ export default function ImageGenerationForm() {
             }
 
             setPromptHelperError(null);
+            setPromptHelperDebug(null);
             setIsPromptHelperOpen(false);
         } catch (error) {
             setPromptHelperError(error instanceof Error ? error.message : 'Prompt Helper request failed');
+            const debug = (error as Error & { debug?: { content?: string; reasoningContent?: string } }).debug;
+            setPromptHelperDebug(debug || null);
         } finally {
             setIsPromptHelperLoading(false);
         }
@@ -418,6 +426,7 @@ export default function ImageGenerationForm() {
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
+    const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -1202,14 +1211,15 @@ export default function ImageGenerationForm() {
                     setIsPromptHelperOpen(open);
                     if (!open) {
                         setPromptHelperError(null);
+                        setPromptHelperDebug(null);
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Prompt Helper</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-3">
+                    <div className="space-y-3 overflow-y-auto pr-1">
                         <Label htmlFor="prompt-helper-instruction">Instruction</Label>
                         <textarea
                             id="prompt-helper-instruction"
@@ -1219,8 +1229,20 @@ export default function ImageGenerationForm() {
                             onChange={(e) => setPromptHelperInstruction(e.target.value)}
                         />
                         {promptHelperError && (
-                            <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">
-                                {promptHelperError}
+                            <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400 space-y-3">
+                                <div>{promptHelperError}</div>
+                                {promptHelperDebug && (
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                        <div className="rounded-md border border-border bg-background/60 p-3">
+                                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">content</div>
+                                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-foreground">{promptHelperDebug.content || '(empty)'}</pre>
+                                        </div>
+                                        <div className="rounded-md border border-border bg-background/60 p-3">
+                                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">reasoning_content</div>
+                                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-foreground">{promptHelperDebug.reasoningContent || '(empty)'}</pre>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
