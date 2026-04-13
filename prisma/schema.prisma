@@ -279,3 +279,18 @@ model CharacterVersion {
   @@index([characterId, createdAt(sort: Desc)])
   @@map("character_versions")
 }
+
+model VibePreset {
+  id                   String   @id @default(uuid())
+  name                 String
+  baseDescription      String
+  tags                 String   @default("[]")
+  compatibleSceneTypes String   @default("[]")
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([updatedAt(sort: Desc)])
+  @@map("vibe_presets")
+}
