@@ -14,6 +14,8 @@ export interface PromptHelperRequest {
   negativePrompt?: string;
   instruction: string;
   modelId?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface PromptHelperDebugInfo {

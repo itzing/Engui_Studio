@@ -85,6 +85,10 @@ export default function ImageGenerationForm() {
     const currentNegativePrompt = negativePromptParameterName
         ? String(parameterValues[negativePromptParameterName] ?? currentModel?.parameters.find((param) => param.name === negativePromptParameterName)?.default ?? '')
         : '';
+    const widthParameter = currentModel?.parameters.find((param) => param.name === 'width');
+    const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
+    const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
+    const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
 
     const submitPromptHelper = async () => {
         const instruction = promptHelperInstruction.trim();
@@ -106,6 +110,8 @@ export default function ImageGenerationForm() {
                     negativePrompt: currentNegativePrompt,
                     instruction,
                     modelId: currentModel.id,
+                    width: Number.isFinite(currentWidth) ? currentWidth : undefined,
+                    height: Number.isFinite(currentHeight) ? currentHeight : undefined,
                 }),
             });
 
@@ -121,7 +127,7 @@ export default function ImageGenerationForm() {
 
             setPrompt(data.improvedPrompt);
 
-            if (negativePromptParameterName && typeof data.improvedNegativePrompt === 'string') {
+            if (promptHelperChangeNegative && negativePromptParameterName && typeof data.improvedNegativePrompt === 'string') {
                 setParameterValues((prev) => ({
                     ...prev,
                     [negativePromptParameterName]: data.improvedNegativePrompt,
@@ -425,6 +431,7 @@ export default function ImageGenerationForm() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+    const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
@@ -1228,6 +1235,23 @@ export default function ImageGenerationForm() {
                             value={promptHelperInstruction}
                             onChange={(e) => setPromptHelperInstruction(e.target.value)}
                         />
+                        <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                            <div>
+                                <div className="text-sm font-medium">Change negative</div>
+                                <div className="text-xs text-muted-foreground">If enabled, apply the negative prompt returned by the model.</div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={promptHelperChangeNegative}
+                                onClick={() => setPromptHelperChangeNegative((prev) => !prev)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${promptHelperChangeNegative ? 'bg-primary' : 'bg-muted'}`}
+                            >
+                                <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${promptHelperChangeNegative ? 'translate-x-5' : 'translate-x-0'}`}
+                                />
+                            </button>
+                        </div>
                         {promptHelperError && (
                             <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400 space-y-3">
                                 <div>{promptHelperError}</div>

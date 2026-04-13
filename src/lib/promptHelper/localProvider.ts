@@ -64,12 +64,17 @@ function buildUserMessage(request: PromptHelperRequest): string {
   const instruction = request.instruction.trim();
   const currentPrompt = request.prompt.trim();
   const currentNegativePrompt = request.negativePrompt?.trim() || '';
+  const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
+  const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
+  const aspectRatio = width && height ? `${width}:${height}` : null;
 
   return [
     currentPrompt
       ? 'Rewrite the current image prompts according to the instruction.'
       : 'Create new image prompts from the instruction below.',
     request.modelId ? `Target model: ${request.modelId}` : null,
+    width && height ? `Target dimensions: ${width}x${height}` : null,
+    aspectRatio ? `Target aspect ratio: ${aspectRatio}` : null,
     '',
     'Current positive prompt:',
     currentPrompt || '(empty)',
@@ -79,6 +84,8 @@ function buildUserMessage(request: PromptHelperRequest): string {
     '',
     'Instruction:',
     instruction,
+    '',
+    'When improving the positive prompt, consider the target dimensions and aspect ratio for composition, framing, subject placement, camera distance, and scene structure.',
     '',
     'Return JSON with exactly these keys:',
     '{"prompt":"...","negativePrompt":"..."}'
