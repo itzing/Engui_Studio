@@ -148,15 +148,7 @@ export async function cancelJobExecution(job: any) {
     throw new Error('Only active jobs can be cancelled');
   }
 
-  const { runpodApiKey, endpointId, runpodJobId } = await resolveRunPodDeletionContext(job);
-  if (!runpodApiKey || !endpointId || !runpodJobId) {
-    throw new Error('Missing RunPod cancellation metadata');
-  }
-
-  const runpodService = new RunPodService(runpodApiKey, endpointId);
-  await runpodService.cancelJob(runpodJobId);
-
-  const cancelledJob = await prisma.job.update({
+  const markCancelledLocally = async () => prisma.job.update({
     where: { id: job.id },
     data: {
       status: 'failed',
@@ -165,7 +157,37 @@ export async function cancelJobExecution(job: any) {
     },
   });
 
-  return cancelledJob;
+  const { runpodApiKey, endpointId, runpodJobId } = await resolveRunPodDeletionContext(job);
+  if (!runpodApiKey || !endpointId || !runpodJobId) {
+    console.warn('Cancel fallback: missing RunPod cancellation metadata, marking job cancelled locally', {
+      jobId: job.id,
+      endpointId,
+      hasRunpodApiKey: !!runpodApiKey,
+      hasRunpodJobId: !!runpodJobId,
+    });
+    return markCancelledLocally();
+  }
+
+  const runpodService = new RunPodService(runpodApiKey, endpointId);
+
+  try {
+    await runpodService.cancelJob(runpodJobId);
+  } catch (error: any) {
+    const message = String(error?.message || '');
+    const isRecoverableMissingUpstream = /404|not found|job not found|unknown job|does not exist/i.test(message);
+
+    if (!isRecoverableMissingUpstream) {
+      throw error;
+    }
+
+    console.warn('Cancel fallback: RunPod job already missing upstream, marking job cancelled locally', {
+      jobId: job.id,
+      runpodJobId,
+      message,
+    });
+  }
+
+  return markCancelledLocally();
 }
 
 export async function deleteFinishedJob(job: any) {
