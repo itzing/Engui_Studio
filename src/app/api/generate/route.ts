@@ -444,6 +444,9 @@ export async function POST(request: NextRequest) {
                         mime: primaryImageFile.type || 'image/png',
                         plaintext: Buffer.from(await primaryImageFile.arrayBuffer()),
                         fileName: `${imageRole}.bin`,
+                        storagePath: modelId === 'wan22'
+                            ? `/runpod-volume/wan22-inputs/${job.id}__${attemptId}__input.bin`
+                            : undefined,
                     }));
                 }
                 if (secondaryImageFile) {

@@ -214,8 +214,6 @@ class RunPodService {
 
       case 'wan22':
         const wan22Input: Record<string, any> = {
-          ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
-          ...(!input.media_inputs && input.image_path ? { image_path: input.image_path } : {}),
           ...(input._secure && { _secure: input._secure }),
           ...(input.media_inputs && { media_inputs: input.media_inputs }),
           ...(input.transport_request && { transport_request: input.transport_request }),
@@ -226,7 +224,6 @@ class RunPodService {
           length: input.length,
           steps: input.steps,
           context_overlap: input.context_overlap,
-          ...(!input.media_inputs && input.end_image_path ? { end_image_path: input.end_image_path } : {})
         };
 
         // Build lora_pairs array from individual LoRA parameters
