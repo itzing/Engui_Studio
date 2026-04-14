@@ -20,6 +20,7 @@ interface ServiceConfig {
   elevenlabs: ElevenLabsConfig;
   s3: S3Config;
   promptHelper?: PromptHelperConfig;
+  visionPromptHelper?: PromptHelperConfig;
   workspace?: WorkspaceConfig;
   ui?: UIConfig;
   qwenImageEditHandler?: QwenImageEditHandlerConfig;
@@ -198,6 +199,14 @@ class SettingsService {
             apiKey: ''
           }
         },
+        visionPromptHelper: {
+          provider: 'disabled',
+          local: {
+            baseUrl: '',
+            model: '',
+            apiKey: ''
+          }
+        },
         workspace: {
           currentWorkspaceId: '',
           defaultWorkspaceId: ''
@@ -284,6 +293,16 @@ class SettingsService {
               settings.promptHelper.local.model = value;
             } else if (setting.configKey === 'local.apiKey') {
               settings.promptHelper.local.apiKey = value;
+            }
+          } else if (setting.serviceName === 'visionPromptHelper') {
+            if (setting.configKey === 'provider') {
+              settings.visionPromptHelper.provider = value === 'local' ? 'local' : 'disabled';
+            } else if (setting.configKey === 'local.baseUrl') {
+              settings.visionPromptHelper.local.baseUrl = value;
+            } else if (setting.configKey === 'local.model') {
+              settings.visionPromptHelper.local.model = value;
+            } else if (setting.configKey === 'local.apiKey') {
+              settings.visionPromptHelper.local.apiKey = value;
             }
           } else if (setting.serviceName === 'workspace') {
             if (setting.configKey === 'currentWorkspaceId') {
@@ -533,6 +552,45 @@ class SettingsService {
             serviceName: 'promptHelper',
             configKey: 'local.apiKey',
             configValue: settings.promptHelper.local.apiKey,
+            isEncrypted: false
+          });
+        }
+      }
+
+      // Process Vision Prompt Helper settings
+      if (settings.visionPromptHelper) {
+        if (settings.visionPromptHelper.provider) {
+          flatSettings.push({
+            serviceName: 'visionPromptHelper',
+            configKey: 'provider',
+            configValue: settings.visionPromptHelper.provider,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.visionPromptHelper.local?.baseUrl !== undefined) {
+          flatSettings.push({
+            serviceName: 'visionPromptHelper',
+            configKey: 'local.baseUrl',
+            configValue: settings.visionPromptHelper.local.baseUrl,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.visionPromptHelper.local?.model !== undefined) {
+          flatSettings.push({
+            serviceName: 'visionPromptHelper',
+            configKey: 'local.model',
+            configValue: settings.visionPromptHelper.local.model,
+            isEncrypted: false
+          });
+        }
+
+        if (settings.visionPromptHelper.local?.apiKey !== undefined) {
+          flatSettings.push({
+            serviceName: 'visionPromptHelper',
+            configKey: 'local.apiKey',
+            configValue: settings.visionPromptHelper.local.apiKey,
             isEncrypted: false
           });
         }
