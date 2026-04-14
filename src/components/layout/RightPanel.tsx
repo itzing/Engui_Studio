@@ -465,6 +465,7 @@ export default function RightPanel() {
     const selectedJobPosition = selectedJobIndex >= 0 ? selectedJobIndex + 1 : 0;
 
     const getExecutionMs = (job: Job): number | null => {
+        if (typeof job.executionMs === 'number' && Number.isFinite(job.executionMs)) return job.executionMs;
         try {
             const rawOptions = (job as any).options;
             const opts = typeof rawOptions === 'string' ? JSON.parse(rawOptions) : (rawOptions || {});
@@ -479,8 +480,7 @@ export default function RightPanel() {
 
     const formatExecution = (ms: number | null) => {
         if (ms === null) return null;
-        if (ms < 1000) return `${ms}ms`;
-        return `${(ms / 1000).toFixed(1)}s`;
+        return `${(ms / 1000).toFixed(2)}s`;
     };
 
     // Helper to format time ago
@@ -1127,7 +1127,7 @@ export default function RightPanel() {
                                             {job.status === 'failed' && (
                                                 <span className="text-[9px] text-red-500 font-medium">{job.error === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
                                             )}
-                                            {job.status === 'completed' && executionLabel && (
+                                            {executionLabel && (
                                                 <span className="text-[9px] text-emerald-500 font-medium">⏱ {executionLabel}</span>
                                             )}
                                         </div>

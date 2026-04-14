@@ -155,7 +155,7 @@ interface StudioContextType {
     jobs: Job[];
     addJob: (job: Job) => void;
     addCompletedJob: (job: Job) => void;
-    updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number) => void;
+    updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => void;
     deleteJob: (id: string) => Promise<boolean>;
     cancelJob: (id: string) => Promise<boolean>;
     clearFinishedJobs: (workspaceId: string | null) => Promise<{ success: boolean; deleted?: number; deletedFiles?: number; error?: string }>;
@@ -495,20 +495,20 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setJobs(prev => [jobWithWorkspace, ...prev]);
     };
 
-    const updateJobStatus = async (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number) => {
+    const updateJobStatus = async (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => {
         // Find the job to get its details
         const job = jobs.find(j => j.id === id);
 
         // Optimistic update
         setJobs(prev => prev.map(job =>
-            job.id === id ? { ...job, status, resultUrl, error, cost } : job
+            job.id === id ? { ...job, status, resultUrl, error, cost, ...(executionMs !== undefined ? { executionMs } : {}) } : job
         ));
 
         try {
             await fetch(`/api/jobs/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status, resultUrl, error, cost })
+                body: JSON.stringify({ status, resultUrl, error, cost, ...(executionMs !== undefined ? { executionMs } : {}) })
             });
         } catch (error) {
             console.error('Failed to update job:', error);
@@ -885,7 +885,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                                 setJobs(prev => prev.map(j => j.id === job.id ? { ...j, executionMs } : j));
                             }
 
-                            updateJobStatus(job.id, 'completed', resultUrl);
+                            updateJobStatus(job.id, 'completed', resultUrl, undefined, undefined, executionMs);
                         } else if (data.status === 'FAILED') {
                             updateJobStatus(job.id, 'failed', undefined, data.error || 'RunPod job failed');
                         }
