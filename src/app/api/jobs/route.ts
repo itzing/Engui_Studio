@@ -168,6 +168,8 @@ export async function GET(request: NextRequest) {
         prompt: job.prompt || '',
         createdAt: job.createdAt.getTime(),
         executionMs: (job as any).executionMs ?? undefined,
+        options: job.options,
+        secureState: (job as any).secureState ?? null,
         resultUrl: job.resultUrl,
         error: job.error,
         endpointId: job.endpointId,

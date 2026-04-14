@@ -215,9 +215,9 @@ export async function GET(request: Request) {
 
         const endpoints = settings.runpod.endpoints as Record<string, string> | undefined;
         
-        // Get endpoint ID from settings using the model's endpoint key
+        // Use the immutable endpoint stored on the job first. Current settings are only a fallback.
         const endpointKey = model.api.endpoint;
-        const endpointId = endpoints?.[endpointKey] || endpoints?.[model.id];
+        const endpointId = (job as any).endpointId || endpoints?.[endpointKey] || endpoints?.[model.id];
         
         if (!endpointId) {
             return NextResponse.json({ success: false, error: `Endpoint '${endpointKey}' not configured` }, { status: 400 });
@@ -226,11 +226,43 @@ export async function GET(request: Request) {
         // Create RunPod service and check status
         const runpodService = new RunPodService(settings.runpod.apiKey, endpointId);
         
-        // Extract runpod job ID from job options
+        // Extract runpod job ID from persisted job metadata.
         const options = typeof job.options === 'string' ? JSON.parse(job.options) : job.options;
-        const runpodJobId = options.runpodJobId || jobId;
+        const runpodJobId = (job as any).runpodJobId
+            || options?.runpodJobId
+            || existingSecureState?.activeAttempt?.runpodJobId
+            || jobId;
 
         const status = await runpodService.getJobStatus(runpodJobId);
+
+        const jobAgeMs = Date.now() - new Date(job.createdAt).getTime();
+        const staleNotFoundThresholdMs = 5 * 60 * 1000;
+        if (status.upstreamNotFound && jobAgeMs > staleNotFoundThresholdMs) {
+            const missingMessage = 'RunPod job not found on the original endpoint';
+            await prisma.job.update({
+                where: { id: jobId },
+                data: {
+                    status: 'failed',
+                    completedAt: new Date(),
+                    error: missingMessage,
+                    options: JSON.stringify({
+                        ...options,
+                        error: missingMessage,
+                        upstreamNotFound: true,
+                    }),
+                },
+            });
+
+            return NextResponse.json({
+                success: true,
+                status: 'FAILED',
+                error: missingMessage,
+                meta: {
+                    upstreamNotFound: true,
+                    endpointId,
+                },
+            });
+        }
 
         let normalizedOutput: any = status.output;
         const executionMs = parseRunPodExecutionMs(status);

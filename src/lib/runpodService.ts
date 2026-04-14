@@ -7,6 +7,7 @@ interface RunPodJobResponse {
   status: 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
   output?: any;
   error?: string;
+  upstreamNotFound?: boolean;
 }
 
 // Generic input type - model-specific payload creation is handled by createPayload
@@ -546,7 +547,8 @@ class RunPodService {
         return {
           id: jobId,
           status: 'IN_QUEUE',
-          error: undefined
+          error: 'upstream_not_found',
+          upstreamNotFound: true
         };
       }
       

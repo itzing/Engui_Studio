@@ -71,6 +71,7 @@ export interface Job {
     prompt: string;
     createdAt: number;
     executionMs?: number;
+    options?: any;
     resultUrl?: string;
     error?: string;
     endpointId?: string;

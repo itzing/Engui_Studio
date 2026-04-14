@@ -569,8 +569,11 @@ export async function POST(request: NextRequest) {
                 await prisma.job.update({
                     where: { id: job.id },
                     data: {
+                        runpodJobId,
+                        endpointId,
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                             runpodJobId,
+                            endpointId,
                             attemptId: requiresSecureKey ? attemptId : undefined,
                             secureMode: requiresSecureKey || undefined,
                         })),
