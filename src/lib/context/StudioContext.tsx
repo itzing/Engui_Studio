@@ -31,6 +31,14 @@ export interface StudioSettings {
             apiKey?: string;
         };
     };
+    visionPromptHelper?: {
+        provider?: 'disabled' | 'local';
+        local?: {
+            baseUrl?: string;
+            model?: string;
+            apiKey?: string;
+        };
+    };
     runpod: {
         endpoints: Record<string, string>; // modelId -> endpointId
         fieldEncKeyB64?: string;

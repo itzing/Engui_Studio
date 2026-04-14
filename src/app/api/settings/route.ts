@@ -208,6 +208,25 @@ function validateSettings(settings: any): string | null {
       }
     }
   }
+
+  if ((settings as any).visionPromptHelper) {
+    const visionPromptHelper = (settings as any).visionPromptHelper;
+    if (visionPromptHelper.provider !== undefined && !['disabled', 'local'].includes(visionPromptHelper.provider)) {
+      return 'Vision Prompt Helper provider must be disabled or local';
+    }
+
+    if (visionPromptHelper.local) {
+      if (visionPromptHelper.local.baseUrl !== undefined && typeof visionPromptHelper.local.baseUrl !== 'string') {
+        return 'Vision Prompt Helper local baseUrl must be a string';
+      }
+      if (visionPromptHelper.local.model !== undefined && typeof visionPromptHelper.local.model !== 'string') {
+        return 'Vision Prompt Helper local model must be a string';
+      }
+      if (visionPromptHelper.local.apiKey !== undefined && typeof visionPromptHelper.local.apiKey !== 'string') {
+        return 'Vision Prompt Helper local apiKey must be a string';
+      }
+    }
+  }
   
   return null;
 }
