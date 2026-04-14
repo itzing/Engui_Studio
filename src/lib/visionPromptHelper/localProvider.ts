@@ -107,7 +107,7 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
 
   async testConnection(): Promise<void> {
     await this.extractPrompt({
-      imageDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAuMBg6X8Zs8AAAAASUVORK5CYII=',
+      imageDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mP8z8Dwn4GBgYGJAQoAHxcCAr7cGDwAAAAASUVORK5CYII=',
       instruction: 'Describe this as a prompt for image generation.'
     });
   }
