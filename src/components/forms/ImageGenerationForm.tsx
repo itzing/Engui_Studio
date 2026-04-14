@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, ImagePlus, Loader2, Sparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
@@ -78,6 +78,10 @@ export default function ImageGenerationForm() {
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
         && !!settings.promptHelper?.local?.model?.trim();
+    const visionPromptHelperProvider = settings.visionPromptHelper?.provider || 'disabled';
+    const isVisionPromptHelperConfigured = visionPromptHelperProvider === 'local'
+        && !!settings.visionPromptHelper?.local?.baseUrl?.trim()
+        && !!settings.visionPromptHelper?.local?.model?.trim();
 
     const negativePromptParameterName = currentModel?.parameters.find(
         (param) => param.name === 'negativePrompt' || param.name === 'negative_prompt'
@@ -143,6 +147,51 @@ export default function ImageGenerationForm() {
             setPromptHelperDebug(debug || null);
         } finally {
             setIsPromptHelperLoading(false);
+        }
+    };
+
+    const extractPromptFromImage = async () => {
+        if (!imageFile || isVisionPromptLoading) {
+            return;
+        }
+
+        setMessage(null);
+        setIsVisionPromptLoading(true);
+
+        try {
+            const imageDataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    if (typeof reader.result === 'string') {
+                        resolve(reader.result);
+                    } else {
+                        reject(new Error('Failed to read image as data URL'));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read image file'));
+                reader.readAsDataURL(imageFile);
+            });
+
+            const response = await fetch('/api/vision-prompt-helper/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageDataUrl,
+                    modelId: currentModel.id,
+                    instruction: 'Convert this image into a reusable image-generation prompt in English.',
+                }),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.prompt) {
+                throw new Error(data.error || 'Image to prompt extraction failed');
+            }
+
+            setPrompt(data.prompt);
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Image to prompt extraction failed' });
+        } finally {
+            setIsVisionPromptLoading(false);
         }
     };
 
@@ -435,6 +484,7 @@ export default function ImageGenerationForm() {
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
+    const [isVisionPromptLoading, setIsVisionPromptLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // Handler for parameter changes
@@ -978,28 +1028,50 @@ export default function ImageGenerationForm() {
                                 onChange={(e) => setPrompt(e.target.value)}
                             />
                         </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                                setPromptHelperError(null);
-                                setIsPromptHelperOpen(true);
-                            }}
-                            disabled={!isPromptHelperConfigured || isPromptHelperLoading}
-                            className="w-full justify-center gap-2"
-                        >
-                            {isPromptHelperLoading ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Prompt Helper is working...
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles className="h-4 w-4" />
-                                    Prompt Helper
-                                </>
-                            )}
-                        </Button>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setPromptHelperError(null);
+                                    setIsPromptHelperOpen(true);
+                                }}
+                                disabled={!isPromptHelperConfigured || isPromptHelperLoading || isVisionPromptLoading}
+                                className="w-full justify-center gap-2"
+                            >
+                                {isPromptHelperLoading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Prompt Helper is working...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="h-4 w-4" />
+                                        Prompt Helper
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => void extractPromptFromImage()}
+                                disabled={!isVisionPromptHelperConfigured || !imageFile || isVisionPromptLoading || isPromptHelperLoading}
+                                className="w-full justify-center gap-2"
+                                title={!imageFile ? 'Upload an image first' : undefined}
+                            >
+                                {isVisionPromptLoading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Reading image...
+                                    </>
+                                ) : (
+                                    <>
+                                        <ImagePlus className="h-4 w-4" />
+                                        Image → Prompt
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 )}
 
