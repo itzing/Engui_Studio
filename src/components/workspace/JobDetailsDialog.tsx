@@ -231,17 +231,17 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
     const getExecutionLabel = () => {
         if (!job) return null;
+        const raw = job.executionMs;
+        if (typeof raw === 'number' && Number.isFinite(raw)) {
+            return `${(raw / 1000).toFixed(2)}s`;
+        }
         try {
             const opts = typeof (job as any).options === 'string' ? JSON.parse((job as any).options) : ((job as any).options || {});
-            const raw = opts?.executionMs;
-            let ms: number | null = null;
-            if (typeof raw === 'number' && Number.isFinite(raw)) ms = raw;
-            else if (typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))) ms = Number(raw);
-            if (ms === null) return null;
-            return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-        } catch {
-            return null;
-        }
+            const fallback = opts?.executionMs;
+            if (typeof fallback === 'number' && Number.isFinite(fallback)) return `${(fallback / 1000).toFixed(2)}s`;
+            if (typeof fallback === 'string' && fallback.trim() !== '' && !Number.isNaN(Number(fallback))) return `${(Number(fallback) / 1000).toFixed(2)}s`;
+        } catch {}
+        return null;
     };
 
     const handleDialogKeyDownCapture = (event: React.KeyboardEvent) => {

@@ -142,7 +142,8 @@ export async function GET(
                 videoInputPath: (job as any).videoInputPath,
                 audioInputPath: (job as any).audioInputPath,
                 createdAt: job.createdAt,
-                completedAt: (job as any).completedAt
+                completedAt: (job as any).completedAt,
+                executionMs: (job as any).executionMs ?? null
             }
         });
     } catch (error: any) {

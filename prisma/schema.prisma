@@ -29,6 +29,7 @@ model Job {
   error         String?   // 에러 메시지 추가
   cost          Float?    // 비용 추가
   completedAt   DateTime?
+  executionMs   Int?
   
   // Media input paths for job input reuse
   imageInputPath String?  // Path to input image file

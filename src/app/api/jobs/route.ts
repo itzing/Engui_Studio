@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
       endpointId,
       error,
       cost,
-      createdAt
+      createdAt,
+      executionMs
     } = body;
 
     // 필수 필드 검증
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest) {
         thumbnailUrl: thumbnailUrl || null,
         error,
         cost,
-        completedAt: status === 'completed' ? new Date() : null
+        completedAt: status === 'completed' ? new Date() : null,
+        executionMs: typeof executionMs === 'number' ? executionMs : null
       },
       create: {
         id: id || undefined, // Use provided ID if available
@@ -59,7 +61,8 @@ export async function POST(request: NextRequest) {
         error,
         cost,
         createdAt: createdAt ? new Date(createdAt) : new Date(),
-        completedAt: status === 'completed' ? new Date() : null
+        completedAt: status === 'completed' ? new Date() : null,
+        executionMs: typeof executionMs === 'number' ? executionMs : null
       }
     });
 
@@ -164,6 +167,7 @@ export async function GET(request: NextRequest) {
         status: job.status,
         prompt: job.prompt || '',
         createdAt: job.createdAt.getTime(),
+        executionMs: (job as any).executionMs ?? undefined,
         resultUrl: job.resultUrl,
         error: job.error,
         endpointId: job.endpointId,

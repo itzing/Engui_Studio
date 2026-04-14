@@ -135,6 +135,17 @@ function normalizeSecureFailure(source: string, error: any, fallbackCode: string
     };
 }
 
+function parseRunPodExecutionMs(status: any): number | null {
+    const raw = status?.executionTime ?? status?.execution_time ?? status?.metrics?.executionTime;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+        return Math.max(0, Math.round(raw));
+    }
+    if (typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))) {
+        return Math.max(0, Math.round(Number(raw)));
+    }
+    return null;
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -222,6 +233,7 @@ export async function GET(request: Request) {
         const status = await runpodService.getJobStatus(runpodJobId);
 
         let normalizedOutput: any = status.output;
+        const executionMs = parseRunPodExecutionMs(status);
         let secureState = existingSecureState;
 
         if (normalizedOutput && typeof normalizedOutput === 'object' && normalizedOutput.transport_result && secureState?.activeAttempt?.attemptId) {
@@ -297,6 +309,8 @@ export async function GET(request: Request) {
                             status: 'completed',
                             resultUrl: relativePath,
                             secureState: JSON.stringify(secureState),
+                            completedAt: new Date(),
+                            executionMs: executionMs ?? undefined,
                             options: JSON.stringify({
                                 ...options,
                                 transportResultStatus: transportResult.status,
@@ -348,6 +362,8 @@ export async function GET(request: Request) {
                         data: {
                             status: 'failed',
                             secureState: JSON.stringify(secureState),
+                            completedAt: new Date(),
+                            executionMs: executionMs ?? undefined,
                             options: JSON.stringify({
                                 ...options,
                                 transportResultStatus: transportResult.status,
@@ -379,6 +395,8 @@ export async function GET(request: Request) {
                     where: { id: jobId },
                     data: {
                         status: 'failed',
+                        completedAt: new Date(),
+                        executionMs: executionMs ?? undefined,
                         secureState: JSON.stringify({
                             ...secureState,
                             failure,
@@ -494,6 +512,8 @@ export async function GET(request: Request) {
                     where: { id: jobId },
                     data: {
                         status: 'failed',
+                        completedAt: new Date(),
+                        executionMs: executionMs ?? undefined,
                         options: JSON.stringify({
                             ...options,
                             error: status.error || 'Job failed or was cancelled'
@@ -506,6 +526,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             success: true,
             status: status.status,
+            executionTime: executionMs ?? undefined,
             output: normalizedOutput,
             error: status.error
         });
