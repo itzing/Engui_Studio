@@ -41,6 +41,7 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
     const [formData, setFormData] = useState<StudioSettings>(settings);
     const [isSaving, setIsSaving] = useState(false);
     const [isTestingPromptHelper, setIsTestingPromptHelper] = useState(false);
+    const [isTestingVisionPromptHelper, setIsTestingVisionPromptHelper] = useState(false);
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     
     // Video project settings state
@@ -293,6 +294,61 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
             showToast(error instanceof Error ? error.message : 'Prompt Helper connection failed', 'error');
         } finally {
             setIsTestingPromptHelper(false);
+        }
+    };
+
+    const updateVisionPromptHelperProvider = (value: 'disabled' | 'local') => {
+        setFormData(prev => ({
+            ...prev,
+            visionPromptHelper: {
+                provider: value,
+                local: {
+                    baseUrl: prev.visionPromptHelper?.local?.baseUrl || '',
+                    model: prev.visionPromptHelper?.local?.model || '',
+                    apiKey: prev.visionPromptHelper?.local?.apiKey || '',
+                }
+            }
+        }));
+    };
+
+    const updateVisionPromptHelperLocal = (key: 'baseUrl' | 'model' | 'apiKey', value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            visionPromptHelper: {
+                provider: prev.visionPromptHelper?.provider || 'disabled',
+                local: {
+                    baseUrl: prev.visionPromptHelper?.local?.baseUrl || '',
+                    model: prev.visionPromptHelper?.local?.model || '',
+                    apiKey: prev.visionPromptHelper?.local?.apiKey || '',
+                    [key]: value,
+                }
+            }
+        }));
+    };
+
+    const handleTestVisionPromptHelper = async () => {
+        setIsTestingVisionPromptHelper(true);
+        try {
+            const response = await fetch('/api/vision-prompt-helper/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: formData.visionPromptHelper?.provider,
+                    local: formData.visionPromptHelper?.local,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast(data.message || 'Vision Prompt Helper connection successful', 'success');
+            } else {
+                showToast(data.error || data.message || 'Vision Prompt Helper connection failed', 'error');
+            }
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Vision Prompt Helper connection failed', 'error');
+        } finally {
+            setIsTestingVisionPromptHelper(false);
         }
     };
 
@@ -666,6 +722,71 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                                         type="password"
                                                         value={formData.promptHelper?.local?.apiKey || ''}
                                                         onChange={(e) => updatePromptHelperLocal('apiKey', e.target.value)}
+                                                        placeholder="Optional"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+
+                                    <div className="pt-4 space-y-4 border-t border-border">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <h4 className="text-sm font-medium">Vision Prompt Helper</h4>
+                                                <p className="text-xs text-muted-foreground">Separate local multimodal model settings for image to prompt extraction.</p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleTestVisionPromptHelper}
+                                                disabled={isTestingVisionPromptHelper || formData.visionPromptHelper?.provider !== 'local'}
+                                            >
+                                                {isTestingVisionPromptHelper ? (
+                                                    <span className="inline-flex items-center gap-2">
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                        Testing...
+                                                    </span>
+                                                ) : 'Test'}
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Provider</Label>
+                                            <select
+                                                value={formData.visionPromptHelper?.provider || 'disabled'}
+                                                onChange={(e) => updateVisionPromptHelperProvider(e.target.value as 'disabled' | 'local')}
+                                                className="w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                                            >
+                                                <option value="disabled">Disabled</option>
+                                                <option value="local">Local</option>
+                                            </select>
+                                        </div>
+
+                                        {formData.visionPromptHelper?.provider === 'local' && (
+                                            <div className="grid grid-cols-1 gap-4 rounded-md border border-border/60 bg-muted/20 p-3">
+                                                <div className="space-y-2">
+                                                    <Label>Base URL</Label>
+                                                    <Input
+                                                        value={formData.visionPromptHelper?.local?.baseUrl || ''}
+                                                        onChange={(e) => updateVisionPromptHelperLocal('baseUrl', e.target.value)}
+                                                        placeholder="http://127.0.0.1:8081"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Model</Label>
+                                                    <Input
+                                                        value={formData.visionPromptHelper?.local?.model || ''}
+                                                        onChange={(e) => updateVisionPromptHelperLocal('model', e.target.value)}
+                                                        placeholder="Qwen2.5-VL-3B-Instruct-GGUF"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>API Key (optional)</Label>
+                                                    <Input
+                                                        type="password"
+                                                        value={formData.visionPromptHelper?.local?.apiKey || ''}
+                                                        onChange={(e) => updateVisionPromptHelperLocal('apiKey', e.target.value)}
                                                         placeholder="Optional"
                                                     />
                                                 </div>
