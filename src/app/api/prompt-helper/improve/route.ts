@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getPromptHelperProvider, PromptHelperProviderError } from '@/lib/promptHelper';
+import { ensureHelperMode } from '@/lib/helperMode';
 
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const settingsResult = await settingsService.getSettings(userId);
+    await ensureHelperMode('text');
     const provider = getPromptHelperProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
     const result = await provider.improve({ prompt, negativePrompt, instruction, modelId });
 

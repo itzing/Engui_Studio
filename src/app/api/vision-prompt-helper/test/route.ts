@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getVisionPromptHelperProvider, VisionPromptHelperSettings } from '@/lib/visionPromptHelper';
+import { ensureHelperMode } from '@/lib/helperMode';
 
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
+    await ensureHelperMode('vision');
     const provider = getVisionPromptHelperProvider(effectiveSettings);
     await provider.testConnection();
 

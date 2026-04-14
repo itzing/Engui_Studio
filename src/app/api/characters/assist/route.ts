@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getCharacterAssistantProvider } from '@/lib/characterAssistant';
+import { ensureHelperMode } from '@/lib/helperMode';
 
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const settingsResult = await settingsService.getSettings(userId);
+    await ensureHelperMode('text');
     const provider = getCharacterAssistantProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
     const result = await provider.apply({ instruction, editableTraits });
 

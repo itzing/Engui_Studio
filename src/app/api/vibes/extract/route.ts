@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { heuristicExtractVibe, normalizeChipArray } from '@/lib/vibes/utils';
+import { ensureHelperMode } from '@/lib/helperMode';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -65,6 +66,8 @@ async function extractWithPromptHelper(prompt: string) {
   if (provider !== 'local' || !local?.baseUrl || !local?.model) {
     throw new Error('Prompt Helper provider is not configured for Vibe extraction');
   }
+
+  await ensureHelperMode('text');
 
   const response = await fetch(`${local.baseUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
     method: 'POST',
