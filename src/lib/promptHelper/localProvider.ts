@@ -91,8 +91,8 @@ function buildUserMessage(request: PromptHelperRequest): string {
   const framingHint = buildFramingHint(width, height);
 
   return [
-    currentPrompt
-      ? 'Rewrite the current image prompts according to the instruction.'
+    currentPrompt || currentNegativePrompt
+      ? 'Apply the instruction to the current image prompts.'
       : 'Create new image prompts from the instruction below.',
     request.modelId ? `Target model: ${request.modelId}` : null,
     width && height ? `Target dimensions: ${width}x${height}` : null,
@@ -107,9 +107,12 @@ function buildUserMessage(request: PromptHelperRequest): string {
     'Instruction:',
     instruction,
     '',
-    'When improving the positive prompt, consider the target dimensions and aspect ratio for composition, framing, subject placement, camera distance, and scene structure.',
+    'Primary rule: follow the user instruction exactly.',
+    'If the instruction is a narrow edit or formatting change, preserve all existing content and change only what the instruction requires.',
+    'Do not add creative improvements, style embellishments, extra details, or extra cleanup unless the instruction explicitly asks for them.',
+    'Only use target dimensions, aspect ratio, and framing guidance when the instruction explicitly asks for prompt improvement, reframing, recomposition, or new prompt creation.',
     framingHint,
-    'Do not overstate framing cues when they are not necessary. Keep the prompt natural and only add composition guidance that genuinely helps the requested format.',
+    'If the instruction asks to improve, expand, rewrite, or generate prompts, then you may make broader prompt-engineering improvements.',
     '',
     'Return JSON with exactly these keys:',
     '{"prompt":"...","negativePrompt":"..."}'
@@ -167,7 +170,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
         messages: [
           {
             role: 'system',
-            content: 'You are an expert prompt engineer for image generation. Improve both the positive prompt and the negative prompt while preserving the user\'s core intent. Make the positive prompt clearer, more vivid, better structured, and more useful for image models. Improve composition, subject clarity, style, lighting, camera, materials, color, environment, mood, and quality cues only when they help. Make the negative prompt concise and focused on unwanted artifacts, defects, low-quality traits, and content the user wants avoided. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.'
+            content: 'You are an instruction-following prompt editor for image generation. Your first priority is to apply the user instruction exactly. Preserve the existing positive and negative prompts unless the instruction explicitly asks you to change, improve, expand, shorten, or rewrite them. If the user asks for a narrow edit, formatting change, or substitution, make only that change and keep everything else intact. Only perform broader prompt-engineering improvements when the instruction explicitly requests improvement, rewriting, generation, or optimization. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.'
           },
           {
             role: 'user',

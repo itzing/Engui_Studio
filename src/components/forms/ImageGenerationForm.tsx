@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight, ImagePlus, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Sparkles, Upload, WandSparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
@@ -41,6 +41,7 @@ export default function ImageGenerationForm() {
     const imageModels = getModelsByType('image');
 
     const RANDOMIZE_SEED_STORAGE_KEY = 'engui:image:randomize-seed';
+    const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
     const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
@@ -62,6 +63,29 @@ export default function ImageGenerationForm() {
             console.warn('Failed to persist randomize seed preference', error);
         }
     }, [randomizeSeed]);
+
+    useEffect(() => {
+        try {
+            const storedInstruction = localStorage.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            if (storedInstruction !== null) {
+                setPromptHelperInstruction(storedInstruction);
+            }
+        } catch (error) {
+            console.warn('Failed to restore prompt helper instruction', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            if (promptHelperInstruction.trim()) {
+                localStorage.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
+            } else {
+                localStorage.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            }
+        } catch (error) {
+            console.warn('Failed to persist prompt helper instruction', error);
+        }
+    }, [promptHelperInstruction]);
 
     // Initialize selected model if not set or if it's not an image model
     useEffect(() => {
@@ -94,8 +118,18 @@ export default function ImageGenerationForm() {
     const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
     const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
 
-    const submitPromptHelper = async () => {
-        const instruction = promptHelperInstruction.trim();
+    const submitPromptHelper = async ({
+        instructionOverride,
+        openOnError = false,
+        closeOnSuccess = true,
+        animatePromptOnSuccess = false,
+    }: {
+        instructionOverride?: string;
+        openOnError?: boolean;
+        closeOnSuccess?: boolean;
+        animatePromptOnSuccess?: boolean;
+    } = {}) => {
+        const instruction = (instructionOverride ?? promptHelperInstruction).trim();
 
         if (!instruction || isPromptHelperLoading) {
             return;
@@ -138,39 +172,79 @@ export default function ImageGenerationForm() {
                 }));
             }
 
+            if (animatePromptOnSuccess) {
+                setIsPromptHelperQuickAnimating(true);
+                window.setTimeout(() => setIsPromptHelperQuickAnimating(false), 1200);
+            }
+
             setPromptHelperError(null);
             setPromptHelperDebug(null);
-            setIsPromptHelperOpen(false);
+            if (closeOnSuccess) {
+                setIsPromptHelperOpen(false);
+            }
         } catch (error) {
             setPromptHelperError(error instanceof Error ? error.message : 'Prompt Helper request failed');
             const debug = (error as Error & { debug?: { content?: string; reasoningContent?: string } }).debug;
             setPromptHelperDebug(debug || null);
+            if (openOnError) {
+                setIsPromptHelperOpen(true);
+            }
         } finally {
             setIsPromptHelperLoading(false);
         }
     };
 
-    const extractPromptFromImage = async () => {
-        if (!imageFile || isVisionPromptLoading) {
+    const runSavedPromptHelperInstruction = async () => {
+        if (!promptHelperInstruction.trim() || isPromptHelperLoading || isVisionPromptLoading) {
             return;
         }
 
-        setMessage(null);
+        await submitPromptHelper({
+            instructionOverride: promptHelperInstruction,
+            openOnError: true,
+            closeOnSuccess: false,
+            animatePromptOnSuccess: true,
+        });
+    };
+
+    const readFileAsDataUrl = async (file: File) => {
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    resolve(reader.result);
+                } else {
+                    reject(new Error('Failed to read image as data URL'));
+                }
+            };
+            reader.onerror = () => reject(new Error('Failed to read image file'));
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const replaceImagePromptFile = (file: File) => {
+        setImagePromptFile(file);
+        setImagePromptPreviewUrl((prev) => {
+            if (prev) {
+                URL.revokeObjectURL(prev);
+            }
+            return URL.createObjectURL(file);
+        });
+        setImagePromptResult('');
+        setHasCopiedImagePromptResult(false);
+    };
+
+    const extractPromptFromImage = async () => {
+        if (!imagePromptFile || isVisionPromptLoading) {
+            return;
+        }
+
+        setImagePromptResult('');
+        setHasCopiedImagePromptResult(false);
         setIsVisionPromptLoading(true);
 
         try {
-            const imageDataUrl = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    if (typeof reader.result === 'string') {
-                        resolve(reader.result);
-                    } else {
-                        reject(new Error('Failed to read image as data URL'));
-                    }
-                };
-                reader.onerror = () => reject(new Error('Failed to read image file'));
-                reader.readAsDataURL(imageFile);
-            });
+            const imageDataUrl = await readFileAsDataUrl(imagePromptFile);
 
             const response = await fetch('/api/vision-prompt-helper/extract', {
                 method: 'POST',
@@ -178,7 +252,7 @@ export default function ImageGenerationForm() {
                 body: JSON.stringify({
                     imageDataUrl,
                     modelId: currentModel.id,
-                    instruction: 'Convert this image into a reusable image-generation prompt in English.',
+                    instruction: 'Return one concise reusable image-generation prompt in English. Preserve fine visible details like hair, face, clothing construction, accessories, pose, body orientation, framing, camera angle, and photographic style cues. Do not guess hidden details.',
                 }),
             });
 
@@ -187,12 +261,66 @@ export default function ImageGenerationForm() {
                 throw new Error(data.error || 'Image to prompt extraction failed');
             }
 
-            setPrompt(data.prompt);
+            setImagePromptResult(data.prompt);
         } catch (error) {
-            setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Image to prompt extraction failed' });
+            setImagePromptResult(error instanceof Error ? error.message : 'Image to prompt extraction failed');
         } finally {
             setIsVisionPromptLoading(false);
         }
+    };
+
+    const handleImagePromptFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            replaceImagePromptFile(file);
+        }
+        event.target.value = '';
+    };
+
+    const handleImagePromptPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+        if (isVisionPromptLoading) {
+            event.preventDefault();
+            return;
+        }
+
+        const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'));
+        if (!imageItem) {
+            return;
+        }
+
+        const file = imageItem.getAsFile();
+        if (!file) {
+            return;
+        }
+
+        event.preventDefault();
+        replaceImagePromptFile(file);
+    };
+
+    const closeImagePromptDialog = () => {
+        if (isVisionPromptLoading) {
+            return;
+        }
+
+        if (imagePromptPreviewUrl) {
+            URL.revokeObjectURL(imagePromptPreviewUrl);
+        }
+
+        setImagePromptFile(null);
+        setImagePromptPreviewUrl('');
+        setImagePromptResult('');
+        setHasCopiedImagePromptResult(false);
+        setIsImagePromptOpen(false);
+    };
+
+    const copyImagePromptResult = async () => {
+        if (!imagePromptResult.trim() || isVisionPromptLoading) {
+            return;
+        }
+
+        await navigator.clipboard.writeText(imagePromptResult);
+        setHasCopiedImagePromptResult(true);
+        closeImagePromptDialog();
     };
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
@@ -484,8 +612,15 @@ export default function ImageGenerationForm() {
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
+    const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
+    const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
+    const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
+    const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
+    const [imagePromptResult, setImagePromptResult] = useState('');
+    const [hasCopiedImagePromptResult, setHasCopiedImagePromptResult] = useState(false);
     const [isVisionPromptLoading, setIsVisionPromptLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
 
     // Handler for parameter changes
     const handleParameterChange = (paramName: string, value: any) => {
@@ -1022,13 +1157,14 @@ export default function ImageGenerationForm() {
                     <div className="space-y-2">
                         <div className="relative">
                             <textarea
-                                className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
+                                disabled={isPromptHelperLoading}
                             />
                         </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1054,22 +1190,27 @@ export default function ImageGenerationForm() {
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => void extractPromptFromImage()}
-                                disabled={!isVisionPromptHelperConfigured || !imageFile || isVisionPromptLoading || isPromptHelperLoading}
-                                className="w-full justify-center gap-2"
-                                title={!imageFile ? 'Upload an image first' : undefined}
+                                size="icon"
+                                onClick={() => void runSavedPromptHelperInstruction()}
+                                disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isVisionPromptLoading}
+                                className="h-10 w-10 shrink-0"
+                                title={promptHelperInstruction.trim() ? 'Apply saved Prompt Helper instruction' : 'Save a Prompt Helper instruction first'}
                             >
-                                {isVisionPromptLoading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Reading image...
-                                    </>
-                                ) : (
-                                    <>
-                                        <ImagePlus className="h-4 w-4" />
-                                        Image → Prompt
-                                    </>
-                                )}
+                                {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setIsImagePromptOpen(true);
+                                    setImagePromptResult('');
+                                    setHasCopiedImagePromptResult(false);
+                                }}
+                                disabled={!isVisionPromptHelperConfigured || isVisionPromptLoading || isPromptHelperLoading}
+                                className="w-full justify-center gap-2"
+                            >
+                                <ImagePlus className="h-4 w-4" />
+                                Image → Prompt
                             </Button>
                         </div>
                     </div>
@@ -1354,6 +1495,108 @@ export default function ImageGenerationForm() {
                         >
                             {isPromptHelperLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                             {isPromptHelperLoading ? 'Applying...' : 'Apply'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isImagePromptOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        closeImagePromptDialog();
+                        return;
+                    }
+                    setIsImagePromptOpen(true);
+                }}
+            >
+                <DialogContent
+                    className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col"
+                    onEscapeKeyDown={(event) => {
+                        if (isVisionPromptLoading) {
+                            event.preventDefault();
+                        }
+                    }}
+                    onPointerDownOutside={(event) => {
+                        if (isVisionPromptLoading) {
+                            event.preventDefault();
+                        }
+                    }}
+                    onInteractOutside={(event) => {
+                        if (isVisionPromptLoading) {
+                            event.preventDefault();
+                        }
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Image → Prompt</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 overflow-y-auto pr-1 md:grid-cols-[1fr_1.2fr]" onPaste={handleImagePromptPaste}>
+                        <div className="space-y-3">
+                            <input
+                                ref={imagePromptFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleImagePromptFileChange}
+                                disabled={isVisionPromptLoading}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => imagePromptFileInputRef.current?.click()}
+                                disabled={isVisionPromptLoading}
+                                className="flex min-h-[280px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/20 p-4 text-center transition hover:bg-secondary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {imagePromptPreviewUrl ? (
+                                    <img src={imagePromptPreviewUrl} alt="Selected image" className="max-h-[260px] w-full rounded-lg object-contain" />
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-secondary/60">
+                                            <Upload className="h-5 w-5 text-muted-foreground" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-sm font-medium">Click to choose an image</div>
+                                            <div className="text-xs text-muted-foreground">or press Ctrl+V to paste one from the clipboard</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </button>
+                            <Button
+                                type="button"
+                                onClick={() => void extractPromptFromImage()}
+                                disabled={!imagePromptFile || isVisionPromptLoading}
+                                className="w-full gap-2"
+                            >
+                                {isVisionPromptLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {isVisionPromptLoading ? 'Extracting...' : 'Extract'}
+                            </Button>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label>Result</Label>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => void copyImagePromptResult()}
+                                    disabled={!imagePromptResult.trim() || isVisionPromptLoading}
+                                    title="Copy result and close"
+                                >
+                                    {hasCopiedImagePromptResult ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                            <textarea
+                                className="min-h-[340px] w-full rounded-lg border border-border bg-secondary/30 p-3 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-80"
+                                placeholder="The extracted prompt will appear here"
+                                value={imagePromptResult}
+                                readOnly
+                                disabled={isVisionPromptLoading}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={closeImagePromptDialog} disabled={isVisionPromptLoading}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

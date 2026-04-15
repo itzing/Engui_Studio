@@ -33,15 +33,46 @@ function normalizePrompt(value: string): string {
   return stripCodeFences(value).trim().replace(/^['"]|['"]$/g, '').trim();
 }
 
-function buildInstruction(request: VisionPromptHelperRequest): string {
+function buildStructuredInventoryInstruction(request: VisionPromptHelperRequest): string {
   return [
-    'Analyze the image and write a strong image-generation prompt in English.',
-    request.modelId ? `Target image model: ${request.modelId}` : null,
-    request.instruction?.trim() ? `Extra instruction: ${request.instruction?.trim()}` : null,
+    'Extract a structured visual inventory from this image in English.',
+    request.modelId ? `Target model: ${request.modelId}` : null,
+    request.instruction?.trim() ? request.instruction.trim() : null,
+    'Describe only what is visible or strongly implied by the image.',
+    'Do not guess hidden limbs, exact unseen hand or foot positions, unreadable text, or body parts outside the frame.',
+    'If a detail is cropped, occluded, or unclear, say unclear instead of inventing specifics.',
+    'Pay special attention to body orientation, which side faces the camera, whether the view is front, side, back, or three-quarter, torso angle, hip angle, back arch, stance width, and whether one or both hands hold an object.',
+    'Explicitly determine camera height and viewpoint: low-angle, eye-level, or high-angle; side-view, rear-side view, front-side view, or frontal view; close-up, medium, medium full-body, or full-body.',
+    'Also note if clothing is lifted, displaced, bunched, tied, exposing another garment layer, or emphasizing specific body regions.',
+    'State which body regions are visually dominant or emphasized by the composition if that is clearly visible.',
+    'Preserve fine visible attributes whenever present: hair color and hairstyle, eye color, makeup, lips, jewelry, exact garment type, straps, ties, pendants, textures, and materials.',
+    'Return plain text only using exactly these labeled lines:',
+    'subject:',
+    'hair_face:',
+    'clothing_accessories:',
+    'body_orientation:',
+    'pose_limb_placement:',
+    'hands_object_interaction:',
+    'legs_stance:',
+    'camera_framing:',
+    'emphasized_regions_or_clothing_displacement:',
+    'background_environment:',
+    'lighting_style:'
+  ].filter(Boolean).join('\n');
+}
+
+function buildRewriteInstruction(request: VisionPromptHelperRequest, inventory: string): string {
+  return [
+    'Rewrite the structured visual inventory below into one reusable image-generation prompt in English.',
+    request.modelId ? `Target model: ${request.modelId}` : null,
+    'Keep as many concrete visible details as possible.',
+    'Preserve concrete pose, body orientation, hand placement, stance, camera angle, emphasized regions, clothing displacement, accessories, and photographic style cues.',
+    'Do not add facts that are not present in the inventory.',
+    'Do not remove small visible details for brevity.',
+    'Return one concise but detail-rich paragraph of plain text only.',
     '',
-    'Focus on prompt-relevant details only: subject, pose, framing, composition, camera angle, lens feel, lighting, style, materials, environment, mood, color, and notable scene details.',
-    'Do not mention safety policy, uncertainty, or that you are describing an image.',
-    'Return plain text only. No JSON, no markdown, no bullets.'
+    'Structured visual inventory:',
+    inventory,
   ].filter(Boolean).join('\n');
 }
 
@@ -58,15 +89,7 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
     this.apiKey = settings.apiKey?.trim() || undefined;
   }
 
-  async extractPrompt(request: VisionPromptHelperRequest): Promise<VisionPromptHelperResult> {
-    const imageUrl = typeof request.imageUrl === 'string' && request.imageUrl.trim() !== '' ? request.imageUrl.trim() : undefined;
-    const imageDataUrl = typeof request.imageDataUrl === 'string' && request.imageDataUrl.trim() !== '' ? request.imageDataUrl.trim() : undefined;
-
-    if (!imageUrl && !imageDataUrl) {
-      throw new Error('Vision Prompt Helper requires imageUrl or imageDataUrl');
-    }
-
-    const imagePayload = imageDataUrl || imageUrl;
+  private async chat(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: any }>, maxTokens: number): Promise<string> {
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -76,21 +99,9 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
       body: JSON.stringify({
         model: this.model,
         temperature: 0.2,
-        max_tokens: 300,
+        max_tokens: maxTokens,
         stream: false,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert visual prompt extractor for image generation. Convert a single image into one concise, vivid, reusable image-generation prompt in English. Focus on visual facts and stylistic cues. Return plain text only.'
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: buildInstruction(request) },
-              { type: 'image_url', image_url: { url: imagePayload } }
-            ]
-          }
-        ]
+        messages,
       })
     });
 
@@ -102,7 +113,44 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
     if (!text) {
       throw new VisionPromptHelperProviderError('Vision Prompt Helper returned empty prompt text');
     }
-    return { prompt: text };
+    return text;
+  }
+
+  async extractPrompt(request: VisionPromptHelperRequest): Promise<VisionPromptHelperResult> {
+    const imageUrl = typeof request.imageUrl === 'string' && request.imageUrl.trim() !== '' ? request.imageUrl.trim() : undefined;
+    const imageDataUrl = typeof request.imageDataUrl === 'string' && request.imageDataUrl.trim() !== '' ? request.imageDataUrl.trim() : undefined;
+
+    if (!imageUrl && !imageDataUrl) {
+      throw new Error('Vision Prompt Helper requires imageUrl or imageDataUrl');
+    }
+
+    const imagePayload = imageDataUrl || imageUrl;
+    const inventory = await this.chat([
+      {
+        role: 'system',
+        content: 'Extract a structured visual inventory from the image. Preserve fine visible details, body orientation, pose, limb placement, hand-object interaction, stance, framing, camera angle, camera height, viewpoint, crop size, clothing construction, clothing displacement, emphasized body regions, accessories, and photographic style cues. Do not guess hidden details. Use the requested labeled-line format exactly. Plain text only.'
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildStructuredInventoryInstruction(request) },
+          { type: 'image_url', image_url: { url: imagePayload } }
+        ]
+      }
+    ], 700);
+
+    const prompt = await this.chat([
+      {
+        role: 'system',
+        content: 'Rewrite structured visual inventories into concise, detail-rich image-generation prompts in English. Preserve concrete details and do not invent new facts. Be especially faithful to body orientation, hand placement, stance, camera viewpoint, camera height, crop size, emphasized regions, and clothing displacement. Plain text only.'
+      },
+      {
+        role: 'user',
+        content: buildRewriteInstruction(request, inventory)
+      }
+    ], 460);
+
+    return { prompt };
   }
 
   async testConnection(): Promise<void> {
