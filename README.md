@@ -139,6 +139,12 @@ Navigate to `/settings` in your browser
 - Test connections using the test buttons
 - Verify all services are working correctly
 
+## Local helper runtime notes
+
+For the canonical local llama.cpp helper model layout, active service paths, and rollback notes, see:
+
+- `docs/local-helper-model-layout.md`
+
 ## 🔒 Security Notes
 
 - Enter API keys and secrets only through web interface and store safely

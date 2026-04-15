@@ -1,7 +1,7 @@
 ---
 id: ENGUI-77
 title: Move active Engui local model assets to system-managed locations
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-15 13:38'
 labels:
@@ -19,8 +19,8 @@ Move the currently used Engui local model assets and launch scripts from ad hoc 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Document the target system-managed model layout for active Engui local models.
-- [ ] #2 Move or re-point active Engui model assets and launch scripts to the new managed locations without breaking current services.
-- [ ] #3 Update service references and docs/notes so the new locations are the canonical source of truth.
-- [ ] #4 Preserve a clear rollback path.
+- [x] #1 Document the target system-managed model layout for active Engui local models.
+- [x] #2 Move or re-point active Engui model assets and launch scripts to the new managed locations without breaking current services.
+- [x] #3 Update service references and docs/notes so the new locations are the canonical source of truth.
+- [x] #4 Preserve a clear rollback path.
 <!-- AC:END -->
