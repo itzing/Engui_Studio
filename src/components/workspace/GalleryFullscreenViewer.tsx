@@ -21,6 +21,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
+  const previousOpenRef = useRef(false);
   const [showCloseButton, setShowCloseButton] = useState(true);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
@@ -60,17 +61,23 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   }, [goNext, goPrevious]);
 
   useEffect(() => {
-    if (!open || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-    setShowCloseButton(true);
-    containerRef.current?.focus();
+    if (open && !previousOpenRef.current) {
+      setShowCloseButton(true);
+      containerRef.current?.focus();
+    }
 
-    [previousItem?.url, nextItem?.url]
-      .filter((url): url is string => typeof url === 'string' && url.length > 0)
-      .forEach((url) => {
-        const image = new window.Image();
-        image.src = url;
-      });
+    if (open) {
+      [previousItem?.url, nextItem?.url]
+        .filter((url): url is string => typeof url === 'string' && url.length > 0)
+        .forEach((url) => {
+          const image = new window.Image();
+          image.src = url;
+        });
+    }
+
+    previousOpenRef.current = open;
   }, [nextItem?.url, open, previousItem?.url]);
 
   const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
