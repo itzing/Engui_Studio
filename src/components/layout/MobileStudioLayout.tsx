@@ -49,9 +49,15 @@ export default function MobileStudioLayout() {
   return (
     <div className="flex h-screen min-h-[100dvh] w-full flex-col overflow-hidden bg-background text-foreground">
       <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
-        {activeTab === 'create' && <LeftPanel mobile />}
-        {activeTab === 'preview' && <CenterPanel mobile />}
-        {activeTab === 'library' && <RightPanel mobile />}
+        <div className={activeTab === 'create' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
+          <LeftPanel mobile />
+        </div>
+        <div className={activeTab === 'preview' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
+          <CenterPanel mobile />
+        </div>
+        <div className={activeTab === 'library' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
+          <RightPanel mobile />
+        </div>
       </div>
 
       <nav className="border-t border-border bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85">
