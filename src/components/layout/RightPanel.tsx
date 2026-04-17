@@ -450,29 +450,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }));
     };
 
-    const emitGalleryHoverPreview = (asset: GalleryAsset | null) => {
-        if (typeof window === 'undefined') return;
-        const detail = asset ? {
-            id: asset.id,
-            type: asset.type,
-            url: asset.originalUrl,
-            prompt: (asset.userTags || asset.autoTags || []).join(', '),
-            modelId: 'gallery',
-            workspaceId: asset.workspaceId,
-            sourceJobId: asset.sourceJobId,
-            status: 'completed',
-            createdAt: new Date(asset.addedToGalleryAt).getTime(),
-        } : null;
-
-        if (mobile && detail) {
-            window.localStorage.setItem('engui.mobile.pending-preview', JSON.stringify(detail));
-        }
-
-        window.dispatchEvent(new CustomEvent('jobHoverPreview', {
-            detail,
-        }));
-    };
-
     const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation();
         if (!confirm('Delete this finished job and clean up its local outputs when safe?')) return;
@@ -1236,8 +1213,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                     key={asset.id}
                                     type="button"
                                     onClick={() => handleGalleryAssetClick(asset)}
-                                    onMouseEnter={() => { if (!mobile) emitGalleryHoverPreview(asset); }}
-                                    onMouseLeave={() => { if (!mobile) emitGalleryHoverPreview(null); }}
                                     className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">

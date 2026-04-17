@@ -66,12 +66,16 @@ export default function MobileStudioLayout() {
         <div className={activeTab === 'preview' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
           <CenterPanel mobile />
         </div>
-        <div className={activeTab === 'jobs' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
-          <RightPanel mobile mobileMode="jobs" />
-        </div>
-        <div className={activeTab === 'gallery' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
-          <RightPanel mobile mobileMode="gallery" />
-        </div>
+        {activeTab === 'jobs' && (
+          <div className="flex h-full min-h-0">
+            <RightPanel mobile mobileMode="jobs" />
+          </div>
+        )}
+        {activeTab === 'gallery' && (
+          <div className="flex h-full min-h-0">
+            <RightPanel mobile mobileMode="gallery" />
+          </div>
+        )}
       </div>
 
       <nav className="border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
