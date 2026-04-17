@@ -83,6 +83,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const [newWorkspaceName, setNewWorkspaceName] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const restoredMobileViewerRef = useRef(false);
+    const mobileViewerPersistenceReadyRef = useRef(false);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
@@ -304,6 +305,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setGalleryViewerHasNextPage(false);
             setGalleryViewerOpen(false);
             restoredMobileViewerRef.current = false;
+            mobileViewerPersistenceReadyRef.current = false;
             return;
         }
         void fetchJobsPage(1, false);
@@ -545,6 +547,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         const raw = window.localStorage.getItem('engui.mobile.library.viewer');
         if (!raw) {
             restoredMobileViewerRef.current = true;
+            mobileViewerPersistenceReadyRef.current = true;
             return;
         }
 
@@ -552,6 +555,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             const saved = JSON.parse(raw) as { open?: boolean; assetId?: string | null };
             if (!saved?.open || !saved.assetId) {
                 restoredMobileViewerRef.current = true;
+                mobileViewerPersistenceReadyRef.current = true;
                 return;
             }
 
@@ -567,13 +571,15 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
             setGalleryViewerOpen(true);
             restoredMobileViewerRef.current = true;
+            mobileViewerPersistenceReadyRef.current = true;
         } catch {
             restoredMobileViewerRef.current = true;
+            mobileViewerPersistenceReadyRef.current = true;
         }
     }, [filteredGalleryAssets, galleryAssets, galleryHasNextPage, galleryPage, mobile, panelMode]);
 
     useEffect(() => {
-        if (!mobile || typeof window === 'undefined') return;
+        if (!mobile || typeof window === 'undefined' || !mobileViewerPersistenceReadyRef.current) return;
         window.localStorage.setItem('engui.mobile.library.viewer', JSON.stringify({
             open: galleryViewerOpen,
             assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || selectedGalleryAsset?.id || null) : null,
