@@ -462,6 +462,18 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
     reader.readAsDataURL(file);
   };
 
+  const handleExtractPaste = (event: React.ClipboardEvent) => {
+    const items = Array.from(event.clipboardData?.items || []);
+    const imageItem = items.find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    event.preventDefault();
+    void onSelectExtractFile(file);
+  };
+
   const renderChipField = () => (
     <div className="space-y-2">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tags</div>
@@ -692,7 +704,7 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
               This replaces the current editor draft with a new extracted draft.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3" onPaste={handleExtractPaste}>
             <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               Extract builds a review draft only. Nothing is saved to the pose library until you press Save in the editor.
             </div>
@@ -705,7 +717,7 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
             {extractImageDataUrl && <img src={extractImageDataUrl} alt="Extract preview" className="max-h-64 rounded-lg border border-border object-contain" />}
             {!extractImageDataUrl && !extractImageUrl.trim() && (
               <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                Paste an image URL or upload a reference image to extract a pose draft.
+                Paste an image URL, upload a reference image, or press Ctrl+V to paste one from the clipboard.
               </div>
             )}
             {extractError && (
