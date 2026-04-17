@@ -241,6 +241,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             page: String(page),
             limit: String(pageSize),
             includeTrashed: showTrashed ? 'true' : 'false',
+            onlyTrashed: showTrashed ? 'true' : 'false',
             type: filter,
             favoritesOnly: favoritesOnly ? 'true' : 'false',
             q: debouncedGallerySearchQuery,

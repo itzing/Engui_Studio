@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
     const includeTrashed = searchParams.get('includeTrashed') === 'true';
+    const onlyTrashed = searchParams.get('onlyTrashed') === 'true';
     const type = searchParams.get('type');
     const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
     const q = (searchParams.get('q') || '').trim().toLowerCase();
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const where = {
       workspaceId,
-      ...(includeTrashed ? {} : { trashed: false }),
+      ...(onlyTrashed ? { trashed: true } : includeTrashed ? {} : { trashed: false }),
       ...(type && type !== 'all' ? { type } : {}),
       ...(favoritesOnly ? { favorited: true } : {}),
     };
