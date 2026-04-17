@@ -416,34 +416,46 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
     const emitHoverPreview = (job: Job | null) => {
         if (typeof window === 'undefined') return;
+        const detail = job ? {
+            id: job.id,
+            type: job.type,
+            url: job.resultUrl,
+            prompt: job.prompt,
+            modelId: job.modelId,
+            workspaceId: job.workspaceId,
+            status: job.status,
+            createdAt: job.createdAt,
+        } : null;
+
+        if (mobile && detail) {
+            window.localStorage.setItem('engui.mobile.pending-preview', JSON.stringify(detail));
+        }
+
         window.dispatchEvent(new CustomEvent('jobHoverPreview', {
-            detail: job ? {
-                id: job.id,
-                type: job.type,
-                url: job.resultUrl,
-                prompt: job.prompt,
-                modelId: job.modelId,
-                workspaceId: job.workspaceId,
-                status: job.status,
-                createdAt: job.createdAt,
-            } : null
+            detail,
         }));
     };
 
     const emitGalleryHoverPreview = (asset: GalleryAsset | null) => {
         if (typeof window === 'undefined') return;
+        const detail = asset ? {
+            id: asset.id,
+            type: asset.type,
+            url: asset.originalUrl,
+            prompt: (asset.userTags || asset.autoTags || []).join(', '),
+            modelId: 'gallery',
+            workspaceId: asset.workspaceId,
+            sourceJobId: asset.sourceJobId,
+            status: 'completed',
+            createdAt: new Date(asset.addedToGalleryAt).getTime(),
+        } : null;
+
+        if (mobile && detail) {
+            window.localStorage.setItem('engui.mobile.pending-preview', JSON.stringify(detail));
+        }
+
         window.dispatchEvent(new CustomEvent('jobHoverPreview', {
-            detail: asset ? {
-                id: asset.id,
-                type: asset.type,
-                url: asset.originalUrl,
-                prompt: (asset.userTags || asset.autoTags || []).join(', '),
-                modelId: 'gallery',
-                workspaceId: asset.workspaceId,
-                sourceJobId: asset.sourceJobId,
-                status: 'completed',
-                createdAt: new Date(asset.addedToGalleryAt).getTime(),
-            } : null
+            detail,
         }));
     };
 

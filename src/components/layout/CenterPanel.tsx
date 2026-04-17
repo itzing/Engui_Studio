@@ -77,9 +77,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   }, [mode]);
 
   useEffect(() => {
-    const handler = (event: Event) => {
-      const custom = event as CustomEvent;
-      const detail = (custom.detail ?? null) as HoverPreview;
+    const applyPreviewDetail = (detail: HoverPreview) => {
       setHoverPreview(detail);
 
       if (detail && detail.type === 'image' && detail.status === 'completed' && detail.url) {
@@ -89,6 +87,12 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
           setSelectedImageJobId(detail.id);
         }
       }
+    };
+
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent;
+      const detail = (custom.detail ?? null) as HoverPreview;
+      applyPreviewDetail(detail);
     };
 
     const panelModeHandler = (event: Event) => {
@@ -124,9 +128,20 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     };
 
     if (typeof window !== 'undefined') {
-      const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
+      const savedPanelMode = window.localStorage.getItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode');
       if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
         setRightPanelMode(savedPanelMode);
+      }
+
+      if (mobile) {
+        const pendingPreview = window.localStorage.getItem('engui.mobile.pending-preview');
+        if (pendingPreview) {
+          try {
+            applyPreviewDetail(JSON.parse(pendingPreview) as HoverPreview);
+          } catch {
+            // ignore invalid stored preview payload
+          }
+        }
       }
     }
 
@@ -140,7 +155,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       window.removeEventListener('rightPanelGalleryItemsChanged', galleryItemsHandler as EventListener);
       window.removeEventListener('rightPanelGallerySelect', gallerySelectionHandler as EventListener);
     };
-  }, []);
+  }, [mobile]);
 
   const completedImageJobs = useMemo(() => {
     return [...jobs]
