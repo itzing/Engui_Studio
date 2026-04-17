@@ -783,7 +783,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             }
             const allSelected = prev.length === TYPE_FILTERS.length;
             if (allSelected) {
-                return TYPE_FILTERS.filter(entry => entry !== target);
+                return [target];
             }
             const hasTarget = prev.includes(target);
             const next = hasTarget ? prev.filter(entry => entry !== target) : [...prev, target];
