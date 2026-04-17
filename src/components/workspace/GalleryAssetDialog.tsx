@@ -117,7 +117,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   return (
     <Dialog open={safeOpen} onOpenChange={onOpenChange}>
       {asset && (
-        <DialogContent className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
+        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
           <div className="flex-1 bg-black/90 flex items-center justify-center relative min-h-[300px] md:h-full overflow-hidden p-4">
             {asset.type === 'video' ? (
               <video src={asset.previewUrl || asset.originalUrl} controls className="max-w-full max-h-full object-contain" />

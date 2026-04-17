@@ -264,7 +264,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     return (
         <Dialog open={safeOpen} onOpenChange={onOpenChange}>
             {job && (
-                <DialogContent onKeyDownCapture={handleDialogKeyDownCapture} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
+                <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} onKeyDownCapture={handleDialogKeyDownCapture} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
                     {/* Media Preview - Left/Top Side */}
                     <div className="flex-1 bg-black/90 flex items-center justify-center relative min-h-[300px] md:h-full overflow-hidden p-4">
                         {job.status === 'completed' && selectedOutput?.url ? (

@@ -181,7 +181,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[100] bg-black touch-manipulation"
+      className="fixed inset-0 z-40 bg-black touch-manipulation"
       role="dialog"
       aria-modal="true"
       aria-label="Fullscreen gallery viewer"
