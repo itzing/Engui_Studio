@@ -49,6 +49,10 @@ export default function RightPanel() {
     const [galleryDetailsOpen, setGalleryDetailsOpen] = useState(false);
     const [galleryViewerOpen, setGalleryViewerOpen] = useState(false);
     const [galleryViewerIndex, setGalleryViewerIndex] = useState(0);
+    const [galleryViewerItems, setGalleryViewerItems] = useState<GalleryAsset[]>([]);
+    const [galleryViewerPage, setGalleryViewerPage] = useState(1);
+    const [galleryViewerHasNextPage, setGalleryViewerHasNextPage] = useState(false);
+    const [isLoadingMoreViewerItems, setIsLoadingMoreViewerItems] = useState(false);
     const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
@@ -201,6 +205,34 @@ export default function RightPanel() {
         }
     }, [activeWorkspaceId, filter, mergeUniqueJobs]);
 
+    const fetchGalleryAssetsPage = useCallback(async (page: number) => {
+        if (!activeWorkspaceId) return null;
+
+        const params = new URLSearchParams({
+            workspaceId: activeWorkspaceId,
+            page: String(page),
+            limit: String(pageSize),
+            includeTrashed: showTrashed ? 'true' : 'false',
+            type: filter,
+            favoritesOnly: favoritesOnly ? 'true' : 'false',
+            q: debouncedGallerySearchQuery,
+            sort: gallerySort,
+        });
+
+        const response = await fetch(`/api/gallery/assets?${params.toString()}`, {
+            cache: 'no-store',
+        });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to fetch gallery assets');
+        }
+
+        return {
+            assets: (data.assets || []) as GalleryAsset[],
+            hasNextPage: !!data.pagination?.hasNextPage,
+        };
+    }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, filter, gallerySort, showTrashed]);
+
     const fetchGalleryAssets = useCallback(async (page: number, append = false) => {
         if (!activeWorkspaceId) return;
 
@@ -211,29 +243,12 @@ export default function RightPanel() {
         }
 
         try {
-            const params = new URLSearchParams({
-                workspaceId: activeWorkspaceId,
-                page: String(page),
-                limit: String(pageSize),
-                includeTrashed: showTrashed ? 'true' : 'false',
-                type: filter,
-                favoritesOnly: favoritesOnly ? 'true' : 'false',
-                q: debouncedGallerySearchQuery,
-                sort: gallerySort,
-            });
-
-            const response = await fetch(`/api/gallery/assets?${params.toString()}`, {
-                cache: 'no-store',
-            });
-            const data = await response.json();
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to fetch gallery assets');
-            }
-
-            const nextAssets = data.assets || [];
+            const result = await fetchGalleryAssetsPage(page);
+            if (!result) return;
+            const nextAssets = result.assets;
             setGalleryAssets(prev => append ? [...prev, ...nextAssets] : nextAssets);
             setGalleryPage(page);
-            setGalleryHasNextPage(!!data.pagination?.hasNextPage);
+            setGalleryHasNextPage(result.hasNextPage);
         } catch (error) {
             console.error('Failed to fetch gallery assets:', error);
             if (!append) {
@@ -243,7 +258,7 @@ export default function RightPanel() {
             setIsLoadingGallery(false);
             setIsLoadingMoreGallery(false);
         }
-    }, [activeWorkspaceId, showTrashed, filter, favoritesOnly, debouncedGallerySearchQuery, gallerySort]);
+    }, [activeWorkspaceId, fetchGalleryAssetsPage]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -257,6 +272,10 @@ export default function RightPanel() {
             setHasNextPage(false);
             setGalleryPage(1);
             setGalleryHasNextPage(false);
+            setGalleryViewerItems([]);
+            setGalleryViewerPage(1);
+            setGalleryViewerHasNextPage(false);
+            setGalleryViewerOpen(false);
             return;
         }
         void fetchJobsPage(1, false);
@@ -329,6 +348,9 @@ export default function RightPanel() {
         setSelectedGalleryAsset(asset);
         emitGallerySelection(asset);
         setGalleryDetailsOpen(false);
+        setGalleryViewerItems(filteredGalleryAssets);
+        setGalleryViewerPage(galleryPage);
+        setGalleryViewerHasNextPage(galleryHasNextPage);
         setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
         setGalleryViewerOpen(true);
     };
@@ -441,23 +463,64 @@ export default function RightPanel() {
     const filteredGalleryAssets = galleryAssets;
 
     const handleGalleryViewerIndexChange = useCallback((index: number) => {
-        const asset = filteredGalleryAssets[index];
+        const asset = galleryViewerItems[index];
         if (!asset) return;
         setGalleryViewerIndex(index);
         setSelectedGalleryAsset(asset);
         emitGallerySelection(asset);
-    }, [emitGallerySelection, filteredGalleryAssets]);
+    }, [emitGallerySelection, galleryViewerItems]);
 
     useEffect(() => {
         if (!galleryViewerOpen) return;
-        if (filteredGalleryAssets.length === 0) {
+        if (galleryViewerItems.length === 0) {
             setGalleryViewerOpen(false);
             return;
         }
-        if (galleryViewerIndex >= filteredGalleryAssets.length) {
-            setGalleryViewerIndex(filteredGalleryAssets.length - 1);
+        if (galleryViewerIndex >= galleryViewerItems.length) {
+            setGalleryViewerIndex(galleryViewerItems.length - 1);
         }
-    }, [filteredGalleryAssets, galleryViewerIndex, galleryViewerOpen]);
+    }, [galleryViewerItems, galleryViewerIndex, galleryViewerOpen]);
+
+    useEffect(() => {
+        if (!galleryViewerOpen || isLoadingMoreViewerItems || !galleryViewerHasNextPage) return;
+        if (galleryViewerItems.length - galleryViewerIndex > 5) return;
+
+        const loadMoreViewerItems = async () => {
+            setIsLoadingMoreViewerItems(true);
+            try {
+                const nextPage = galleryViewerPage + 1;
+                const result = await fetchGalleryAssetsPage(nextPage);
+                if (!result) return;
+                setGalleryViewerItems(prev => {
+                    const seen = new Set(prev.map(item => item.id));
+                    const merged = [...prev];
+                    for (const item of result.assets) {
+                        if (!seen.has(item.id)) {
+                            merged.push(item);
+                            seen.add(item.id);
+                        }
+                    }
+                    return merged;
+                });
+                setGalleryViewerPage(nextPage);
+                setGalleryViewerHasNextPage(result.hasNextPage);
+            } catch (error) {
+                console.error('Failed to load more gallery viewer items:', error);
+            } finally {
+                setIsLoadingMoreViewerItems(false);
+            }
+        };
+
+        void loadMoreViewerItems();
+    }, [fetchGalleryAssetsPage, galleryViewerHasNextPage, galleryViewerIndex, galleryViewerItems.length, galleryViewerOpen, galleryViewerPage, isLoadingMoreViewerItems]);
+
+    useEffect(() => {
+        if (!galleryViewerOpen) return;
+        setGalleryViewerItems(prev => prev.map(item => {
+            const updated = filteredGalleryAssets.find(entry => entry.id === item.id);
+            return updated || item;
+        }));
+    }, [filteredGalleryAssets, galleryViewerOpen]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -554,6 +617,7 @@ export default function RightPanel() {
     const updateGalleryFavorite = useCallback(async (asset: GalleryAsset) => {
         const nextFavorited = !asset.favorited;
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
+        setGalleryViewerItems(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: nextFavorited } : prev);
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/favorite`, {
@@ -570,6 +634,7 @@ export default function RightPanel() {
         } catch (error) {
             console.error('Failed to update favorite:', error);
             setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
+            setGalleryViewerItems(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: asset.favorited } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to update favorite', 'error');
             return asset.favorited;
@@ -1383,7 +1448,7 @@ export default function RightPanel() {
 
             <GalleryFullscreenViewer
                 open={galleryViewerOpen}
-                items={filteredGalleryAssets.map(asset => ({
+                items={galleryViewerItems.map(asset => ({
                     id: asset.id,
                     url: asset.originalUrl,
                     favorited: asset.favorited,
@@ -1392,7 +1457,7 @@ export default function RightPanel() {
                 onIndexChange={handleGalleryViewerIndexChange}
                 onClose={() => setGalleryViewerOpen(false)}
                 onToggleFavorite={async (itemId) => {
-                    const asset = filteredGalleryAssets.find((entry) => entry.id === itemId);
+                    const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId);
                     if (!asset) return false;
                     return await updateGalleryFavorite(asset);
                 }}
