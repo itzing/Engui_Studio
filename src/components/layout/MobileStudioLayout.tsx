@@ -44,7 +44,6 @@ export default function MobileStudioLayout() {
     window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
     window.addEventListener('mobileOpenJobsTab', openJobs as EventListener);
     window.addEventListener('mobileOpenGalleryTab', openGallery as EventListener);
-    window.addEventListener('galleryAssetChanged', openGallery as EventListener);
 
     return () => {
       window.removeEventListener('mobileOpenCreateTab', openCreate as EventListener);
@@ -53,7 +52,6 @@ export default function MobileStudioLayout() {
       window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
       window.removeEventListener('mobileOpenJobsTab', openJobs as EventListener);
       window.removeEventListener('mobileOpenGalleryTab', openGallery as EventListener);
-      window.removeEventListener('galleryAssetChanged', openGallery as EventListener);
     };
   }, []);
 
