@@ -284,12 +284,23 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     return galleryItems.find(item => item.id === selectedGalleryItemId) || null;
   }, [selectedGalleryItemId, galleryItems]);
 
+  const selectedGallerySourceJob = useMemo(() => {
+    if (!selectedGalleryItem?.sourceJobId) return null;
+    return completedImageJobs.find(job => job.id === selectedGalleryItem.sourceJobId) || null;
+  }, [completedImageJobs, selectedGalleryItem]);
+
   const previewJob = useMemo(() => {
     if (hoverPreview && hoverPreview.status === 'completed' && hoverPreview.url && hoverPreview.type === 'image') {
+      if (mobile && hoverPreview.modelId === 'gallery') {
+        const sourceJob = hoverPreview.sourceJobId
+          ? completedImageJobs.find(job => job.id === hoverPreview.sourceJobId) || null
+          : null;
+        return sourceJob || selectedImageJob;
+      }
       return hoverPreview;
     }
 
-    if (rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
+    if (!mobile && rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
       return {
         id: selectedGalleryItem.id,
         type: 'image',
@@ -303,10 +314,14 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       };
     }
 
-    return selectedImageJob;
-  }, [hoverPreview, rightPanelMode, selectedGalleryItem, selectedImageJob]);
+    if (mobile && rightPanelMode === 'gallery') {
+      return selectedGallerySourceJob || selectedImageJob;
+    }
 
-  const isGalleryPreview = previewJob?.modelId === 'gallery';
+    return selectedImageJob;
+  }, [completedImageJobs, hoverPreview, mobile, rightPanelMode, selectedGalleryItem, selectedGallerySourceJob, selectedImageJob]);
+
+  const isGalleryPreview = !mobile && previewJob?.modelId === 'gallery';
   const shouldShowAddToGallery = !!previewJob && !isGalleryPreview && !isPreviewAlreadyInGallery;
 
   useEffect(() => {
@@ -424,7 +439,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     window.dispatchEvent(new CustomEvent('openPreviewInfo', {
       detail: {
         id: previewJob.id,
-        kind: previewJob.modelId === 'gallery' ? 'gallery' : 'job',
+        kind: isGalleryPreview ? 'gallery' : 'job',
       },
     }));
   };
