@@ -43,6 +43,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const [hoverPreview, setHoverPreview] = useState<HoverPreview>(null);
   const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('fit');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
   const [selectedGalleryItemId, setSelectedGalleryItemId] = useState<string | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('jobs');
@@ -245,17 +246,28 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     const onTouchStart = (event: TouchEvent) => {
       if (!mobile || mode !== 'image') return;
       setTouchStartX(event.touches[0]?.clientX ?? null);
+      setTouchStartY(event.touches[0]?.clientY ?? null);
     };
 
     const onTouchEnd = (event: TouchEvent) => {
-      if (!mobile || mode !== 'image' || touchStartX === null) return;
+      if (!mobile || mode !== 'image' || touchStartX === null || touchStartY === null) return;
       const endX = event.changedTouches[0]?.clientX;
-      if (typeof endX !== 'number') {
+      const endY = event.changedTouches[0]?.clientY;
+      if (typeof endX !== 'number' || typeof endY !== 'number') {
         setTouchStartX(null);
+        setTouchStartY(null);
         return;
       }
       const deltaX = endX - touchStartX;
+      const deltaY = endY - touchStartY;
       setTouchStartX(null);
+      setTouchStartY(null);
+
+      if (Math.abs(deltaY) >= 60 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        window.dispatchEvent(new CustomEvent('mobileClosePreviewTab'));
+        return;
+      }
+
       if (Math.abs(deltaX) < 40) return;
       navigatePreview(deltaX < 0 ? 'next' : 'previous');
     };
@@ -268,7 +280,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [mode, hoverPreview, rightPanelMode, selectedImageJobId, selectedGalleryItemId, completedImageJobs, galleryItems, mobile, touchStartX]);
+  }, [mode, hoverPreview, rightPanelMode, selectedImageJobId, selectedGalleryItemId, completedImageJobs, galleryItems, mobile, touchStartX, touchStartY]);
 
   const selectedImageJob = useMemo(() => {
     if (!selectedImageJobId) return latestSuccessfulJob;
