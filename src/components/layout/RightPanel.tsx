@@ -328,6 +328,7 @@ export default function RightPanel() {
         const itemIndex = filteredGalleryAssets.findIndex(item => item.id === asset.id);
         setSelectedGalleryAsset(asset);
         emitGallerySelection(asset);
+        setGalleryDetailsOpen(false);
         setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
         setGalleryViewerOpen(true);
     };
