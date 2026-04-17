@@ -35,6 +35,8 @@ export default function ImageGenerationForm() {
     const formRef = useRef<HTMLDivElement>(null);
     const formElementRef = useRef<HTMLFormElement>(null);
     const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
+    const hasRestoredDraftRef = useRef(false);
+    const isApplyingDraftModelRef = useRef(false);
 
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -103,9 +105,15 @@ export default function ImageGenerationForm() {
         const restoreDraft = async () => {
             try {
                 const raw = window.localStorage.getItem(STORAGE_KEY);
-                if (!raw) return;
+                if (!raw) {
+                    hasRestoredDraftRef.current = true;
+                    return;
+                }
                 const draft = JSON.parse(raw);
-                if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
+                if (typeof draft.selectedModel === 'string') {
+                    isApplyingDraftModelRef.current = true;
+                    setSelectedModel(draft.selectedModel);
+                }
                 if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
                 if (typeof draft.showAdvanced === 'boolean') setShowAdvanced(draft.showAdvanced);
                 if (draft.parameterValues && typeof draft.parameterValues === 'object') setParameterValues(draft.parameterValues);
@@ -123,6 +131,8 @@ export default function ImageGenerationForm() {
                 }
             } catch (error) {
                 console.warn('Failed to restore image draft', error);
+            } finally {
+                hasRestoredDraftRef.current = true;
             }
         };
         void restoreDraft();
@@ -177,6 +187,7 @@ export default function ImageGenerationForm() {
 
     // Initialize selected model if not set or if it's not an image model
     useEffect(() => {
+        if (!hasRestoredDraftRef.current) return;
         const isImageModel = imageModels.some(m => m.id === selectedModel);
         if (!selectedModel || !isImageModel) {
             if (imageModels.length > 0) {
@@ -499,19 +510,27 @@ export default function ImageGenerationForm() {
 
     // Initialize parameter values with defaults when model changes
     useEffect(() => {
-        if (currentModel) {
-            const initialValues: Record<string, any> = {};
-            currentModel.parameters.forEach(param => {
-                if (param.default !== undefined) {
-                    initialValues[param.name] = param.default;
-                }
-            });
-            setParameterValues(initialValues);
-        }
+        if (!currentModel) return;
+        const initialValues: Record<string, any> = {};
+        currentModel.parameters.forEach(param => {
+            if (param.default !== undefined) {
+                initialValues[param.name] = param.default;
+            }
+        });
+        setParameterValues(prev => {
+            if (isApplyingDraftModelRef.current) {
+                isApplyingDraftModelRef.current = false;
+                return { ...initialValues, ...prev };
+            }
+            return initialValues;
+        });
     }, [selectedModel]);
 
     // 모델이 변경될 때 이미지 파일 초기화
     useEffect(() => {
+        if (isApplyingDraftModelRef.current) {
+            return;
+        }
         setImageFile(null);
         setPreviewUrl('');
         setImageFile2(null);
