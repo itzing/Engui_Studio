@@ -1054,7 +1054,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                             </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-2 p-2">
+                        <div className={`${mobile ? 'grid grid-cols-3 gap-2 p-2' : 'grid grid-cols-2 gap-2 p-2'}`}>
                             {filteredGalleryAssets.map(asset => (
                                 <button
                                     key={asset.id}
@@ -1095,7 +1095,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                             <Trash2 className="w-3 h-3" />
                                         </button>
                                     </div>
-                                    <div className="p-2 space-y-1">
+                                    <div className={`${mobile ? 'p-1.5 space-y-1' : 'p-2 space-y-1'}`}>
                                         <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
                                             <span>{asset.type}</span>
                                             {asset.favorited && <span className="text-pink-400">♥</span>}
@@ -1109,8 +1109,8 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                                 <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
                                             )}
                                         </div>
-                                        <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>
-                                        {!!(asset.userTags?.length || asset.autoTags?.length) && (
+                                        {!mobile && <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>}
+                                        {!mobile && !!(asset.userTags?.length || asset.autoTags?.length) && (
                                             <div className="flex flex-wrap gap-1 pt-1">
                                                 {(asset.userTags || []).slice(0, 2).map(tag => (
                                                     <button
@@ -1162,7 +1162,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 onClick={() => handleJobClick(job)}
                                 onMouseEnter={() => emitHoverPreview(job)}
                                 onMouseLeave={() => emitHoverPreview(null)}
-                                className="group flex gap-3 p-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative"
+                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'}`}
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
                                     if (job.status === 'completed' && job.resultUrl) {
@@ -1179,7 +1179,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 }}
                             >
                                 {/* Thumbnail */}
-                                <div className="w-14 h-14 bg-black/20 rounded-md overflow-hidden flex-shrink-0 relative shadow-sm group-hover:shadow-md transition-shadow">
+                                <div className={`${mobile ? 'w-12 h-12' : 'w-14 h-14'} bg-black/20 rounded-md overflow-hidden flex-shrink-0 relative shadow-sm group-hover:shadow-md transition-shadow`}>
                                     {job.status === 'completed' && job.resultUrl ? (
                                         job.type === 'video' ? (
                                             <video src={job.resultUrl} className="w-full h-full object-cover" muted />
@@ -1226,14 +1226,14 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                                     <div className="space-y-0.5">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-foreground truncate pr-2">
+                                            <span className={`${mobile ? 'text-[11px]' : 'text-xs'} font-medium text-foreground truncate pr-2`}>
                                                 {model?.name || job.modelId}
                                             </span>
                                             <span className="text-[9px] text-muted-foreground/50 whitespace-nowrap bg-muted/10 px-1 py-0.5 rounded-[2px] border border-white/5">
                                                 {model?.provider}
                                             </span>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground line-clamp-1 leading-tight opacity-80">
+                                        <p className={`${mobile ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground line-clamp-1 leading-tight opacity-80`}>
                                             {job.prompt || 'No prompt'}
                                         </p>
                                     </div>

@@ -699,6 +699,32 @@ export default function ImageGenerationForm() {
         window.setTimeout(() => setIsDimensionSwapHighlightActive(false), 650);
     };
 
+    const applyAspectPreset = (widthParam: any, heightParam: any, ratioWidth: number, ratioHeight: number) => {
+        const currentWidth = Number(parameterValues[widthParam.name] ?? widthParam.default);
+        const currentHeight = Number(parameterValues[heightParam.name] ?? heightParam.default);
+        const baseEdge = Math.max(64, Math.round(Math.max(currentWidth || 0, currentHeight || 0, 1024)));
+
+        let nextWidth = baseEdge;
+        let nextHeight = baseEdge;
+
+        if (ratioWidth >= ratioHeight) {
+            nextHeight = Math.round((baseEdge * ratioHeight) / ratioWidth);
+        } else {
+            nextWidth = Math.round((baseEdge * ratioWidth) / ratioHeight);
+        }
+
+        const clampToStep = (value: number, step?: number) => {
+            const safeStep = Number(step || 64);
+            return Math.max(safeStep, Math.round(value / safeStep) * safeStep);
+        };
+
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParam.name]: clampToStep(nextWidth, widthParam.step),
+            [heightParam.name]: clampToStep(nextHeight, heightParam.step),
+        }));
+    };
+
     const renderDimensionPair = (params: any[]) => {
         const widthParam = params.find(param => param.name === 'width');
         const heightParam = params.find(param => param.name === 'height');
@@ -709,6 +735,26 @@ export default function ImageGenerationForm() {
 
         return (
             <div className="space-y-2">
+                {isPhoneLayout && (
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            ['1:1', 1, 1],
+                            ['3:4', 3, 4],
+                            ['4:3', 4, 3],
+                            ['9:16', 9, 16],
+                            ['16:9', 16, 9],
+                        ].map(([label, rw, rh]) => (
+                            <button
+                                key={label}
+                                type="button"
+                                onClick={() => applyAspectPreset(widthParam, heightParam, Number(rw), Number(rh))}
+                                className="rounded-md border border-border bg-muted/20 px-3 py-1.5 text-xs text-foreground hover:bg-muted/40"
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <div className="flex items-center justify-between gap-2">
                     <Label className="text-xs">Width × Height</Label>
                     <Button
