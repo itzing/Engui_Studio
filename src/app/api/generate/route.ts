@@ -576,6 +576,7 @@ export async function POST(request: NextRequest) {
                         runpodJobId,
                         endpointId,
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            randomizeSeed,
                             runpodJobId,
                             endpointId,
                             attemptId: requiresSecureKey ? attemptId : undefined,
@@ -607,6 +608,7 @@ export async function POST(request: NextRequest) {
                     data: {
                         status: 'failed',
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            randomizeSeed,
                             error: error.message,
                             secureMode: requiresSecureKey || undefined,
                         }))
@@ -693,11 +695,10 @@ export async function POST(request: NextRequest) {
                         data: {
                             status: 'completed',
                             resultUrl: resultUrl,
-                            options: JSON.stringify({
-                                ...parameters,
-                                ...inputData,
+                            options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                                randomizeSeed,
                                 duration: audioBlob.size, // Approximate
-                            })
+                            }))
                         }
                     });
 
@@ -718,11 +719,10 @@ export async function POST(request: NextRequest) {
                         where: { id: job.id },
                         data: {
                             status: 'failed',
-                            options: JSON.stringify({
-                                ...parameters,
-                                ...inputData,
+                            options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                                randomizeSeed,
                                 error: error instanceof Error ? error.message : 'Unknown error'
-                            })
+                            }))
                         },
                     });
 

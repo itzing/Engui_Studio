@@ -88,6 +88,7 @@ export default function ImageGenerationForm() {
     const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
     const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
+    const normalizeRandomizeSeed = (value: unknown) => value === true || value === 'true' || value === 1 || value === '1';
 
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
@@ -119,7 +120,7 @@ export default function ImageGenerationForm() {
     const applySnapshot = async (modelId: string, snapshot?: {
         prompt?: string;
         showAdvanced?: boolean;
-        randomizeSeed?: boolean;
+        randomizeSeed?: boolean | string | number;
         parameterValues?: Record<string, any>;
         previewUrl?: string;
         previewUrl2?: string;
@@ -135,7 +136,7 @@ export default function ImageGenerationForm() {
 
             setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
             setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
-            setRandomizeSeed(typeof snapshot?.randomizeSeed === 'boolean' ? snapshot.randomizeSeed : false);
+            setRandomizeSeed(normalizeRandomizeSeed(snapshot?.randomizeSeed));
             setParameterValues(mergedParameterValues);
 
             const nextPreviewUrl = typeof snapshot?.previewUrl === 'string' ? snapshot.previewUrl : '';
@@ -173,7 +174,7 @@ export default function ImageGenerationForm() {
                 const draft = getWorkflowDraft<{
                     prompt?: string;
                     showAdvanced?: boolean;
-                    randomizeSeed?: boolean;
+                    randomizeSeed?: boolean | string | number;
                     parameterValues?: Record<string, any>;
                     previewUrl?: string;
                     previewUrl2?: string;
@@ -711,7 +712,7 @@ export default function ImageGenerationForm() {
                 const snapshot = {
                     prompt: jobPrompt || '',
                     showAdvanced: true,
-                    randomizeSeed: typeof parsedOptions.randomizeSeed === 'boolean' ? parsedOptions.randomizeSeed : false,
+                    randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
                     parameterValues: allParamValues,
                     previewUrl: shouldReusePrimaryImage && imagePath ? imagePath : '',
                     previewUrl2: shouldReuseSecondaryImage && imagePath2 ? imagePath2 : '',
@@ -1120,7 +1121,11 @@ export default function ImageGenerationForm() {
                     status: 'queued',
                     prompt: prompt,
                     createdAt: Date.now(),
-                    endpointId: headers['X-RunPod-Endpoint-Id']
+                    endpointId: headers['X-RunPod-Endpoint-Id'],
+                    options: {
+                        ...parameterValues,
+                        randomizeSeed,
+                    }
                 });
             } else {
                 console.error('Generation failed', data);

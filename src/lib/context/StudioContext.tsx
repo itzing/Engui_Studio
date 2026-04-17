@@ -757,14 +757,29 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             const parsedOptions = typeof rawOptions === 'string'
                                 ? (() => { try { return JSON.parse(rawOptions); } catch { return {}; } })()
                                 : (rawOptions || {});
+                            const hasPersistedOptions = typeof rawOptions === 'string'
+                                ? rawOptions.trim().length > 0
+                                : !!(rawOptions && typeof rawOptions === 'object' && Object.keys(rawOptions).length > 0);
 
                             if (!parsedOptions.runStartedAt) {
-                                parsedOptions.runStartedAt = Date.now();
-                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing', options: parsedOptions } : j));
+                                const nextOptions = {
+                                    ...parsedOptions,
+                                    runStartedAt: Date.now(),
+                                };
+
+                                setJobs(prev => prev.map(j => {
+                                    if (j.id !== job.id) return j;
+                                    return hasPersistedOptions
+                                        ? { ...j, status: 'processing', options: nextOptions }
+                                        : { ...j, status: 'processing' };
+                                }));
+
                                 await fetch(`/api/jobs/${job.id}`, {
                                     method: 'PATCH',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ status: 'processing', options: JSON.stringify(parsedOptions) })
+                                    body: JSON.stringify(hasPersistedOptions
+                                        ? { status: 'processing', options: JSON.stringify(nextOptions) }
+                                        : { status: 'processing' })
                                 });
                             } else if (job.status !== 'processing') {
                                 setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing' } : j));
