@@ -93,6 +93,9 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     const handler = (event: Event) => {
       const custom = event as CustomEvent;
       const detail = (custom.detail ?? null) as HoverPreview;
+      if (mobile && detail?.modelId === 'gallery') {
+        setRightPanelMode('jobs');
+      }
       applyPreviewDetail(detail);
     };
 
@@ -138,7 +141,11 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         const pendingPreview = window.localStorage.getItem('engui.mobile.pending-preview');
         if (pendingPreview) {
           try {
-            applyPreviewDetail(JSON.parse(pendingPreview) as HoverPreview);
+            const parsedPreview = JSON.parse(pendingPreview) as HoverPreview;
+            if (parsedPreview?.modelId === 'gallery') {
+              setRightPanelMode('jobs');
+            }
+            applyPreviewDetail(parsedPreview);
           } catch {
             // ignore invalid stored preview payload
           }
