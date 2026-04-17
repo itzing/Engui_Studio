@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -18,7 +18,11 @@ interface GalleryFullscreenViewerProps {
 }
 
 export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose }: GalleryFullscreenViewerProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
+  const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
+  const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
 
   const goPrevious = useCallback(() => {
     if (currentIndex <= 0) return;
@@ -43,6 +47,47 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     if (ratio >= 0.6) {
       goNext();
     }
+  }, [goNext, goPrevious]);
+
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return;
+
+    containerRef.current?.focus();
+
+    [previousItem?.url, nextItem?.url]
+      .filter((url): url is string => typeof url === 'string' && url.length > 0)
+      .forEach((url) => {
+        const image = new window.Image();
+        image.src = url;
+      });
+  }, [nextItem?.url, open, previousItem?.url]);
+
+  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    const touch = event.changedTouches[0];
+    touchStartRef.current = null;
+
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX > 0) {
+      goPrevious();
+      return;
+    }
+
+    goNext();
   }, [goNext, goPrevious]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -70,6 +115,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-[100] bg-black touch-manipulation"
       role="dialog"
       aria-modal="true"
@@ -89,7 +135,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
         </Button>
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4" onClick={handleViewerClick}>
+      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4" onClick={handleViewerClick} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <img
           src={currentItem.url}
           alt="Gallery fullscreen preview"
