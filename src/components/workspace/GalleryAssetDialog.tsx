@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, X } from 'lucide-react';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 import { useToast } from '@/components/ui/toast';
@@ -33,10 +33,11 @@ interface GalleryAssetDialogProps {
   onTrash: () => void;
   onPermanentDelete: () => void;
   onSaveTags: (tags: string[]) => Promise<void> | void;
+  onRemoveAutoTag: (tag: string) => Promise<void> | void;
   onTagClick: (tag: string) => void;
 }
 
-export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onTagClick }: GalleryAssetDialogProps) {
+export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onRemoveAutoTag, onTagClick }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
@@ -193,14 +194,27 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                       <div className="text-[11px] text-muted-foreground">Auto tags</div>
                       <div className="flex flex-wrap gap-1">
                         {(asset.autoTags || []).map(tag => (
-                          <button
+                          <div
                             key={tag}
-                            type="button"
-                            onClick={() => onTagClick(tag)}
-                            className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                            className="inline-flex items-center gap-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                           >
-                            {tag}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => onTagClick(tag)}
+                              className="text-[11px] px-2 py-0.5 hover:bg-emerald-500/20 rounded-l"
+                            >
+                              {tag}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void onRemoveAutoTag(tag)}
+                              className="px-1.5 py-0.5 text-emerald-300 hover:text-white hover:bg-emerald-500/20 rounded-r"
+                              aria-label={`Remove auto tag ${tag}`}
+                              title="Remove auto tag"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </div>

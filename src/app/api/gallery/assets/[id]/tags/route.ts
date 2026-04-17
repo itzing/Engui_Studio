@@ -8,20 +8,29 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const tags = body.tags;
+    const userTags = body.tags ?? body.userTags;
+    const autoTags = body.autoTags;
 
-    if (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string')) {
-      return NextResponse.json({ success: false, error: 'tags must be an array of strings' }, { status: 400 });
+    if (!Array.isArray(userTags) || !userTags.every(tag => typeof tag === 'string')) {
+      return NextResponse.json({ success: false, error: 'userTags must be an array of strings' }, { status: 400 });
     }
 
-    const normalizedTags = Array.from(new Set(tags.map(tag => tag.trim()).filter(Boolean)));
+    if (autoTags !== undefined && (!Array.isArray(autoTags) || !autoTags.every(tag => typeof tag === 'string'))) {
+      return NextResponse.json({ success: false, error: 'autoTags must be an array of strings' }, { status: 400 });
+    }
+
+    const normalizedUserTags = Array.from(new Set(userTags.map(tag => tag.trim()).filter(Boolean)));
+    const normalizedAutoTags = Array.from(new Set((autoTags ?? []).map(tag => tag.trim()).filter(Boolean)));
 
     const asset = await prisma.galleryAsset.update({
       where: { id },
-      data: { userTags: JSON.stringify(normalizedTags) },
+      data: {
+        userTags: JSON.stringify(normalizedUserTags),
+        ...(autoTags !== undefined ? { autoTags: JSON.stringify(normalizedAutoTags) } : {}),
+      },
     });
 
-    return NextResponse.json({ success: true, asset, tags: normalizedTags });
+    return NextResponse.json({ success: true, asset, userTags: normalizedUserTags, autoTags: autoTags !== undefined ? normalizedAutoTags : undefined });
   } catch (error: any) {
     console.error('Failed to update gallery tags:', error);
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });

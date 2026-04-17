@@ -783,7 +783,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             const response = await fetch(`/api/gallery/assets/${asset.id}/tags`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags }),
+                body: JSON.stringify({ userTags: tags, autoTags: asset.autoTags || [] }),
             });
             const data = await response.json();
             if (!response.ok || !data.success) {
@@ -795,6 +795,29 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: asset.userTags || [] } : item));
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: asset.userTags || [] } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to save tags', 'error');
+        }
+    };
+
+    const handleGalleryRemoveAutoTag = async (asset: GalleryAsset, tagToRemove: string) => {
+        const nextAutoTags = (asset.autoTags || []).filter(tag => tag !== tagToRemove);
+        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, autoTags: nextAutoTags } : item));
+        setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, autoTags: nextAutoTags } : prev);
+        try {
+            const response = await fetch(`/api/gallery/assets/${asset.id}/tags`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userTags: asset.userTags || [], autoTags: nextAutoTags }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to remove auto tag');
+            }
+            showToast('Auto tag removed', 'success');
+        } catch (error) {
+            console.error('Failed to remove auto tag:', error);
+            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, autoTags: asset.autoTags || [] } : item));
+            setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, autoTags: asset.autoTags || [] } : prev);
+            showToast(error instanceof Error ? error.message : 'Failed to remove auto tag', 'error');
         }
     };
 
@@ -1548,6 +1571,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 onTrash={() => selectedGalleryAsset && void handleGalleryTrash({ stopPropagation() {} } as React.MouseEvent, selectedGalleryAsset, !selectedGalleryAsset.trashed)}
                 onPermanentDelete={() => selectedGalleryAsset && void handleGalleryPermanentDelete(selectedGalleryAsset)}
                 onSaveTags={(tags) => selectedGalleryAsset ? handleGallerySaveTags(selectedGalleryAsset, tags) : undefined}
+                onRemoveAutoTag={(tag) => selectedGalleryAsset ? handleGalleryRemoveAutoTag(selectedGalleryAsset, tag) : undefined}
                 onTagClick={(tag) => handleGalleryTagClick(tag)}
             />
 
