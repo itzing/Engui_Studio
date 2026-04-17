@@ -537,6 +537,13 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
                       <Badge variant="outline" className="shrink-0">{pose.characterCount === 1 ? 'single' : pose.characterCount === 2 ? 'duo' : 'trio'}</Badge>
                     </div>
                     <div className="mt-1 truncate text-xs opacity-80">{pose.summary}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px]">{pose.source}</Badge>
+                      {pose.tags.slice(0, 3).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-[10px]">{tag}</Badge>
+                      ))}
+                      {pose.tags.length > 3 && <span className="text-[10px] opacity-70">+{pose.tags.length - 3}</span>}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -572,6 +579,13 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
                   <Badge variant="outline">{selectedPose.characterCount === 1 ? 'single' : selectedPose.characterCount === 2 ? 'duo' : 'trio'}</Badge>
                   {selectedPose.modelHint && <Badge variant="outline">{selectedPose.modelHint}</Badge>}
                   <span>Updated {formatRelativeDate(selectedPose.updatedAt)}</span>
+                  {selectedPose.sourceImageUrl && <span className="truncate">Has source image</span>}
+                </div>
+              )}
+
+              {!selectedPose && !draft.name && listMode === 'active' && (
+                <div className="rounded-xl border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                  Start with <span className="font-medium text-foreground">New</span> for manual authoring or <span className="font-medium text-foreground">Extract</span> to review a pose from an image before saving it.
                 </div>
               )}
 
@@ -679,6 +693,9 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Extract builds a review draft only. Nothing is saved to the pose library until you press Save in the editor.
+            </div>
             <div className="flex items-center gap-2">
               <Input value={extractImageUrl} onChange={(event) => { setExtractImageUrl(event.target.value); if (event.target.value) { setExtractImageDataUrl(''); setExtractFileName(''); } }} disabled={isExtracting} placeholder="Paste image URL" className="h-9" />
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isExtracting}>Upload</Button>
@@ -686,6 +703,11 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
             </div>
             {extractFileName && <div className="text-xs text-muted-foreground">Selected file: {extractFileName}</div>}
             {extractImageDataUrl && <img src={extractImageDataUrl} alt="Extract preview" className="max-h-64 rounded-lg border border-border object-contain" />}
+            {!extractImageDataUrl && !extractImageUrl.trim() && (
+              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                Paste an image URL or upload a reference image to extract a pose draft.
+              </div>
+            )}
             {extractError && (
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
                 <div className="flex items-start gap-3">
