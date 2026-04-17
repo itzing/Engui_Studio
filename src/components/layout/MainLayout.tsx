@@ -17,8 +17,13 @@ export default function MainLayout() {
         const updateLayout = () => setIsPhoneLayout(mediaQuery.matches);
 
         updateLayout();
-        mediaQuery.addEventListener('change', updateLayout);
-        return () => mediaQuery.removeEventListener('change', updateLayout);
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', updateLayout);
+            return () => mediaQuery.removeEventListener('change', updateLayout);
+        }
+
+        mediaQuery.addListener(updateLayout);
+        return () => mediaQuery.removeListener(updateLayout);
     }, []);
 
     return (

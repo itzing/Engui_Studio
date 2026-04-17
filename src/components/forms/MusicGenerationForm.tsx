@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n/context';
@@ -9,6 +9,7 @@ import { useStudio } from '@/lib/context/StudioContext';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 
 export default function MusicGenerationForm() {
+    const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
@@ -17,6 +18,20 @@ export default function MusicGenerationForm() {
     const [isGenerating, setIsGenerating] = useState(false);
 
     const musicModels = getModelsByType('music');
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia('(max-width: 767px)');
+        const updateLayout = () => setIsPhoneLayout(mediaQuery.matches);
+        updateLayout();
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', updateLayout);
+            return () => mediaQuery.removeEventListener('change', updateLayout);
+        }
+
+        mediaQuery.addListener(updateLayout);
+        return () => mediaQuery.removeListener(updateLayout);
+    }, []);
 
     // Listen for reuseJobInput event
     React.useEffect(() => {
@@ -212,7 +227,7 @@ export default function MusicGenerationForm() {
     };
 
     return (
-        <div className="space-y-4">
+        <div className={`space-y-4 ${isPhoneLayout ? 'pb-20' : ''}`}>
             <div className="space-y-2">
                 <label className="text-sm font-medium">{t('musicGeneration.musicModel')}</label>
                 <select

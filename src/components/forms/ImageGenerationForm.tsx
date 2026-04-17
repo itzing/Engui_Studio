@@ -42,8 +42,13 @@ export default function ImageGenerationForm() {
         const mediaQuery = window.matchMedia('(max-width: 767px)');
         const updateLayout = () => setIsPhoneLayout(mediaQuery.matches);
         updateLayout();
-        mediaQuery.addEventListener('change', updateLayout);
-        return () => mediaQuery.removeEventListener('change', updateLayout);
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', updateLayout);
+            return () => mediaQuery.removeEventListener('change', updateLayout);
+        }
+
+        mediaQuery.addListener(updateLayout);
+        return () => mediaQuery.removeListener(updateLayout);
     }, []);
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');

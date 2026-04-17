@@ -60,8 +60,13 @@ export default function VideoGenerationForm() {
             }
         };
         updateLayout();
-        mediaQuery.addEventListener('change', updateLayout);
-        return () => mediaQuery.removeEventListener('change', updateLayout);
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', updateLayout);
+            return () => mediaQuery.removeEventListener('change', updateLayout);
+        }
+
+        mediaQuery.addListener(updateLayout);
+        return () => mediaQuery.removeListener(updateLayout);
     }, []);
 
     const videoModels = getModelsByType('video');

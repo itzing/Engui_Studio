@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n/context';
@@ -11,6 +11,7 @@ import { PlayIcon, SpeakerWaveIcon, TrashIcon as TrashIcon2 } from '@heroicons/r
 import VoiceDialog from '@/components/voice/VoiceDialog';
 
 export default function AudioGenerationForm() {
+    const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId, updateSettings } = useStudio();
     const [prompt, setPrompt] = useState('');
@@ -22,6 +23,20 @@ export default function AudioGenerationForm() {
     // Initialize with saved voice ID from settings
     const [selectedVoice, setSelectedVoice] = useState(settings.elevenlabs?.voiceId || '');
     const { voices, isLoading, fetchVoiceSamples, playSample } = useElevenLabsVoices();
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia('(max-width: 767px)');
+        const updateLayout = () => setIsPhoneLayout(mediaQuery.matches);
+        updateLayout();
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', updateLayout);
+            return () => mediaQuery.removeEventListener('change', updateLayout);
+        }
+
+        mediaQuery.addListener(updateLayout);
+        return () => mediaQuery.removeListener(updateLayout);
+    }, []);
 
     // Update local state if settings change externally (e.g. initial load)
     React.useEffect(() => {
@@ -195,7 +210,7 @@ export default function AudioGenerationForm() {
     };
 
     return (
-        <div className="space-y-4">
+        <div className={`space-y-4 ${isPhoneLayout ? 'pb-20' : ''}`}>
             <div className="space-y-2">
                 <label className="text-sm font-medium">{t('audioGeneration.voiceModel')}</label>
                 <select
@@ -217,8 +232,8 @@ export default function AudioGenerationForm() {
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder={t('audioGeneration.textPlaceholder')}
-                    rows={4}
-                    className="w-full p-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    rows={isPhoneLayout ? 5 : 4}
+                    className={`w-full p-3 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${isPhoneLayout ? 'text-base min-h-[140px]' : ''}`}
                 />
             </div>
 
@@ -229,7 +244,7 @@ export default function AudioGenerationForm() {
                         <Button
                             variant="outline"
                             onClick={() => setIsVoiceDialogOpen(true)}
-                            className="w-full justify-start text-left font-normal"
+                            className={`w-full justify-start text-left font-normal ${isPhoneLayout ? 'h-11 text-sm' : ''}`}
                         >
                             <SpeakerWaveIcon className="w-4 h-4 mr-2" />
                             {selectedVoice
@@ -243,7 +258,7 @@ export default function AudioGenerationForm() {
             <Button
                 onClick={handleGenerate}
                 disabled={isGenerating || !prompt.trim() || (selectedModel === 'elevenlabs-tts' && (!settings.apiKeys?.elevenlabs || !selectedVoice))}
-                className="w-full"
+                className={`w-full ${isPhoneLayout ? 'h-12 text-sm' : ''}`}
             >
                 <PlayIcon className="w-4 h-4 mr-2" />
                 {isGenerating ? t('audioGeneration.generating') : t('audioGeneration.generateBtn')}
