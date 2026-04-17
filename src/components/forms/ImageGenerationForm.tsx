@@ -19,6 +19,7 @@ export default function ImageGenerationForm() {
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string>('');
     const [imageFile2, setImageFile2] = useState<File | null>(null);
@@ -32,6 +33,35 @@ export default function ImageGenerationForm() {
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const formRef = useRef<HTMLDivElement>(null);
     const formElementRef = useRef<HTMLFormElement>(null);
+    const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
+
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia('(max-width: 767px)');
+        const updateLayout = () => setIsPhoneLayout(mediaQuery.matches);
+        updateLayout();
+        mediaQuery.addEventListener('change', updateLayout);
+        return () => mediaQuery.removeEventListener('change', updateLayout);
+    }, []);
+    const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
+    const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+    const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
+    const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
+    const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
+    const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
+    const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
+    const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
+    const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
+    const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
+    const [imagePromptResult, setImagePromptResult] = useState('');
+    const [hasCopiedImagePromptResult, setHasCopiedImagePromptResult] = useState(false);
+    const [isVisionPromptLoading, setIsVisionPromptLoading] = useState(false);
+    const [imagePromptElapsedMs, setImagePromptElapsedMs] = useState(0);
+    const [imagePromptStartedAt, setImagePromptStartedAt] = useState<number | null>(null);
+    const [isDimensionSwapHighlightActive, setIsDimensionSwapHighlightActive] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -239,8 +269,11 @@ export default function ImageGenerationForm() {
             return;
         }
 
+        const startedAt = Date.now();
         setImagePromptResult('');
         setHasCopiedImagePromptResult(false);
+        setImagePromptElapsedMs(0);
+        setImagePromptStartedAt(startedAt);
         setIsVisionPromptLoading(true);
 
         try {
@@ -265,6 +298,8 @@ export default function ImageGenerationForm() {
         } catch (error) {
             setImagePromptResult(error instanceof Error ? error.message : 'Image to prompt extraction failed');
         } finally {
+            setImagePromptElapsedMs(Date.now() - startedAt);
+            setImagePromptStartedAt(null);
             setIsVisionPromptLoading(false);
         }
     };
@@ -310,7 +345,33 @@ export default function ImageGenerationForm() {
         setImagePromptPreviewUrl('');
         setImagePromptResult('');
         setHasCopiedImagePromptResult(false);
+        setImagePromptElapsedMs(0);
+        setImagePromptStartedAt(null);
         setIsImagePromptOpen(false);
+    };
+
+    useEffect(() => {
+        if (!isVisionPromptLoading || imagePromptStartedAt === null) {
+            return;
+        }
+
+        setImagePromptElapsedMs(Date.now() - imagePromptStartedAt);
+        const intervalId = window.setInterval(() => {
+            setImagePromptElapsedMs(Date.now() - imagePromptStartedAt);
+        }, 100);
+
+        return () => window.clearInterval(intervalId);
+    }, [isVisionPromptLoading, imagePromptStartedAt]);
+
+    const formatElapsedMs = (elapsedMs: number) => {
+        const totalSeconds = elapsedMs / 1000;
+        if (totalSeconds < 60) {
+            return `${totalSeconds.toFixed(1)}s`;
+        }
+
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`;
     };
 
     const copyImagePromptResult = async () => {
@@ -605,23 +666,6 @@ export default function ImageGenerationForm() {
         return () => window.removeEventListener('reuseJobInput', handleReuseInput as any);
     }, [setSelectedModel, selectedModel]);
 
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
-    const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
-    const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
-    const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
-    const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
-    const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
-    const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
-    const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
-    const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
-    const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
-    const [imagePromptResult, setImagePromptResult] = useState('');
-    const [hasCopiedImagePromptResult, setHasCopiedImagePromptResult] = useState(false);
-    const [isVisionPromptLoading, setIsVisionPromptLoading] = useState(false);
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-    const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
-
     // Handler for parameter changes
     const handleParameterChange = (paramName: string, value: any) => {
         setParameterValues(prev => ({
@@ -650,6 +694,9 @@ export default function ImageGenerationForm() {
             [widthParam.name]: currentHeight,
             [heightParam.name]: currentWidth,
         }));
+
+        setIsDimensionSwapHighlightActive(true);
+        window.setTimeout(() => setIsDimensionSwapHighlightActive(false), 650);
     };
 
     const renderDimensionPair = (params: any[]) => {
@@ -687,7 +734,7 @@ export default function ImageGenerationForm() {
                             min={widthParam.min}
                             max={widthParam.max}
                             step={widthParam.step}
-                            className="h-8 text-sm"
+                            className={`h-8 text-sm transition-all duration-500 ${isDimensionSwapHighlightActive ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : ''}`}
                         />
                     </div>
                     <div className="pb-2 text-xs text-muted-foreground">×</div>
@@ -701,7 +748,7 @@ export default function ImageGenerationForm() {
                             min={heightParam.min}
                             max={heightParam.max}
                             step={heightParam.step}
-                            className="h-8 text-sm"
+                            className={`h-8 text-sm transition-all duration-500 ${isDimensionSwapHighlightActive ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : ''}`}
                         />
                     </div>
                 </div>
@@ -1164,7 +1211,7 @@ export default function ImageGenerationForm() {
                                 disabled={isPromptHelperLoading}
                             />
                         </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                        <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'}`}>
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1193,7 +1240,7 @@ export default function ImageGenerationForm() {
                                 size="icon"
                                 onClick={() => void runSavedPromptHelperInstruction()}
                                 disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isVisionPromptLoading}
-                                className="h-10 w-10 shrink-0"
+                                className={isPhoneLayout ? 'h-11 w-full shrink-0' : 'h-10 w-10 shrink-0'}
                                 title={promptHelperInstruction.trim() ? 'Apply saved Prompt Helper instruction' : 'Save a Prompt Helper instruction first'}
                             >
                                 {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
@@ -1572,8 +1619,15 @@ export default function ImageGenerationForm() {
                             </Button>
                         </div>
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <Label>Result</Label>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <Label>Result</Label>
+                                    {(isVisionPromptLoading || imagePromptElapsedMs > 0) && (
+                                        <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                                            {formatElapsedMs(imagePromptElapsedMs)}
+                                        </span>
+                                    )}
+                                </div>
                                 <Button
                                     type="button"
                                     variant="outline"

@@ -100,8 +100,8 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
             {/* Form Area */}
             <div className={mobile ? 'w-full flex flex-col overflow-hidden' : 'w-[340px] flex flex-col overflow-hidden flex-shrink-0'}>
                 {/* Header with Logo, Socials, and Settings */}
-                <div className="p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10">
-                    <div className="flex items-center gap-2">
+                <div className={mobile ? 'p-3 border-b border-border flex items-center justify-between gap-3 bg-muted/10' : 'p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10'}>
+                    <div className="flex items-center gap-2 min-w-0">
                         <div className="w-8 h-8 relative">
                             <Image
                                 src="/logo.png"
@@ -110,20 +110,24 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                                 className="object-contain"
                             />
                         </div>
-                        <span className="font-bold text-lg tracking-tight">EnguiStudio</span>
+                        <span className={`${mobile ? 'font-bold text-base tracking-tight truncate' : 'font-bold text-lg tracking-tight'}`}>EnguiStudio</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <a href="https://discord.gg/8Xhq9f77fK" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="Discord">
-                            <DiscordIcon className="w-5 h-5" />
-                        </a>
-                        <a href="https://github.com/wlsdml1114/Engui_Studio" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="GitHub">
-                            <GithubIcon className="w-5 h-5" />
-                        </a>
-                        <a href="https://www.youtube.com/@enguistudio" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="YouTube">
-                            <YoutubeIcon className="w-5 h-5" />
-                        </a>
-                        <div className="w-px h-4 bg-border mx-1"></div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {!mobile && (
+                            <>
+                                <a href="https://discord.gg/8Xhq9f77fK" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="Discord">
+                                    <DiscordIcon className="w-5 h-5" />
+                                </a>
+                                <a href="https://github.com/wlsdml1114/Engui_Studio" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="GitHub">
+                                    <GithubIcon className="w-5 h-5" />
+                                </a>
+                                <a href="https://www.youtube.com/@enguistudio" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" title="YouTube">
+                                    <YoutubeIcon className="w-5 h-5" />
+                                </a>
+                                <div className="w-px h-4 bg-border mx-1"></div>
+                            </>
+                        )}
                         <button
                             onClick={() => setIsStorageOpen(true)}
                             className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
@@ -141,8 +145,8 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                     </div>
                 </div>
 
-                <div className={mobile ? 'flex-1 overflow-y-auto p-4 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
-                    <div className="grid grid-cols-3 gap-1 p-1 bg-muted/20 rounded-lg mb-4">
+                <div className={mobile ? 'flex-1 overflow-y-auto p-3 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
+                    <div className={`grid grid-cols-3 gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
                         <button
                             type="button"
                             className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 bg-muted text-foreground shadow-sm"
@@ -175,7 +179,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                     </div>
 
                     <>
-                        <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} />
+                        <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} mobile={mobile} />
                         {generationMode === 'image' && <ImageGenerationForm />}
                         {generationMode === 'video' && <VideoGenerationForm />}
                         {generationMode === 'tts' && <AudioGenerationForm />}

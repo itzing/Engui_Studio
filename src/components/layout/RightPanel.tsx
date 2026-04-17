@@ -818,7 +818,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     return (
         <div className={mobile ? 'flex h-full w-full flex-col bg-card' : 'flex h-full flex-col bg-card border-l border-border w-[320px]'}>
             {/* Header */}
-            <div className="p-3 border-b border-border flex flex-col gap-3 bg-muted/5">
+            <div className={`${mobile ? 'p-3 pb-2 border-b border-border flex flex-col gap-3 bg-muted/5' : 'p-3 border-b border-border flex flex-col gap-3 bg-muted/5'}`}>
                 {/* Workspace Selector */}
                 <div className="flex items-center justify-between">
                     {isCreatingWorkspace ? (
@@ -880,8 +880,8 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                             </button>
                         ))}
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5">
+                    <div className={mobile ? 'flex flex-col items-stretch gap-2' : 'flex items-center justify-between gap-2'}>
+                        <div className={`${mobile ? 'grid grid-cols-4 gap-1 bg-muted/30 rounded-md p-0.5 w-full' : 'flex items-center gap-1 bg-muted/30 rounded-md p-0.5'}`}>
                             {(['all', 'image', 'video', 'audio'] as const).map((t) => (
                                 <button
                                     key={t}
@@ -895,7 +895,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 </button>
                             ))}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className={`${mobile ? 'flex flex-wrap items-center gap-1 justify-between' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (
                                 <>
                                     <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${favoritesOnly ? 'text-pink-400' : 'text-muted-foreground'}`} onClick={() => setFavoritesOnly(prev => !prev)}>
@@ -993,17 +993,17 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex gap-2">
+                            <div className={`${mobile ? 'grid grid-cols-1 gap-2' : 'flex gap-2'}`}>
                                 <Input
                                     value={gallerySearchQuery}
                                     onChange={(e) => setGallerySearchQuery(e.target.value)}
                                     placeholder="Search by tags, asset id, source job..."
-                                    className="h-8 text-xs"
+                                    className="h-9 text-xs"
                                 />
                                 <select
                                     value={gallerySort}
                                     onChange={(e) => setGallerySort(e.target.value as 'newest' | 'oldest' | 'favorites')}
-                                    className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                                    className="h-9 rounded-md border border-border bg-background px-2 text-xs"
                                 >
                                     <option value="newest">Newest</option>
                                     <option value="oldest">Oldest</option>
