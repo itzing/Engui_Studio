@@ -160,7 +160,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                 </div>
 
                 <div className={mobile ? 'flex-1 overflow-y-auto p-3 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
-                    <div className={`grid grid-cols-4 gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
+                    <div className={`grid ${mobile ? 'grid-cols-3' : 'grid-cols-4'} gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
                         <button
                             type="button"
                             className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 bg-muted text-foreground shadow-sm"
@@ -190,17 +190,19 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                             <SwatchIcon className="w-4 h-4" />
                             Vibes
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsPoseManagerOpen(true)}
-                            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${isPoseManagerOpen
-                                ? 'bg-muted text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                }`}
-                        >
-                            <HandRaisedIcon className="w-4 h-4" />
-                            Poses
-                        </button>
+                        {!mobile && (
+                            <button
+                                type="button"
+                                onClick={() => setIsPoseManagerOpen(true)}
+                                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${isPoseManagerOpen
+                                    ? 'bg-muted text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                    }`}
+                            >
+                                <HandRaisedIcon className="w-4 h-4" />
+                                Poses
+                            </button>
+                        )}
                     </div>
 
                     <>

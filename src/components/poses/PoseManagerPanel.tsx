@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PlusIcon, SparklesIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PlusIcon, SparklesIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -124,6 +124,19 @@ function applyChipInput(current: string[], rawValue: string): { values: string[]
   return { values: [...current, normalized], reset: true };
 }
 
+function formatRelativeDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 function draftFingerprint(draft: DraftPose | null): string {
   if (!draft) return '';
   return JSON.stringify({
@@ -205,8 +218,9 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
       const nextSelectedId = preferredId === undefined
         ? (selectedId && nextPoses.some((item) => item.id === selectedId) ? selectedId : nextPoses[0]?.id || null)
         : preferredId;
-      setSelectedId(nextSelectedId || null);
-      setDraft(nextSelectedId ? buildDraft(nextPoses.find((item) => item.id === nextSelectedId) || nextPoses[0]) : emptyDraft(activeWorkspaceId));
+      const nextSelectedPose = nextSelectedId ? nextPoses.find((item) => item.id === nextSelectedId) || null : null;
+      setSelectedId(nextSelectedPose?.id || null);
+      setDraft(nextSelectedPose ? buildDraft(nextSelectedPose) : emptyDraft(activeWorkspaceId));
       setTagInput('');
     } catch (error: any) {
       console.error('Failed to load poses:', error);
@@ -240,13 +254,24 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
       setIsDirtyGuardOpen(true);
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isSaveKey = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
+      if (!isSaveKey) return;
+      event.preventDefault();
+      if (canSave && !isSaving) {
+        void handleSave();
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pose-manager-request-close', handleRequestClose);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pose-manager-request-close', handleRequestClose);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDirty, onRequestClose]);
+  }, [canSave, isDirty, isSaving, onRequestClose]);
 
   const applyNavigation = (nav: PendingNavigation) => {
     if (nav.kind === 'select') {
@@ -401,6 +426,29 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
     }
   };
 
+  const rebuildPromptFromFields = () => {
+    const characterParts = draft.characters.map((character, index) => {
+      const prefix = draft.characterCount === 1 ? 'one character' : `character ${index + 1}`;
+      return [
+        prefix,
+        character.orientation,
+        character.head,
+        character.gaze,
+        character.torso,
+        character.armsHands,
+        character.legsStance,
+        character.expression,
+      ].filter(Boolean).join(', ');
+    });
+
+    const relationshipPart = draft.relationship
+      ? [draft.relationship.spatialLayout, draft.relationship.interaction, draft.relationship.contact, draft.relationship.symmetry].filter(Boolean).join(', ')
+      : '';
+
+    const nextPrompt = [...characterParts, relationshipPart].filter(Boolean).join(', ').trim();
+    setDraft((current) => ({ ...current, posePrompt: nextPrompt }));
+  };
+
   const onSelectExtractFile = async (file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
@@ -507,7 +555,7 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
             )}
             <Button size="sm" variant="outline" onClick={() => setIsExtractOpen(true)} disabled={listMode === 'trash' || !activeWorkspaceId}><SparklesIcon className="mr-2 h-4 w-4" />Extract</Button>
             <div className="ml-auto flex items-center gap-3">
-              <div className="text-xs text-muted-foreground">{listMode === 'trash' ? 'Read-only trash view' : (isDirty ? 'Unsaved changes' : 'Saved')}</div>
+              <div className="text-xs text-muted-foreground">{listMode === 'trash' ? 'Read-only trash view' : (isDirty ? 'Unsaved changes' : 'Saved')}{listMode !== 'trash' ? ' • Ctrl/Cmd+S' : ''}</div>
               <Button size="sm" onClick={() => void handleSave()} disabled={!canSave || isSaving}>{isSaving ? 'Saving...' : 'Save'}</Button>
             </div>
           </div>
@@ -516,6 +564,15 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
             <div className="mx-auto max-w-5xl space-y-5">
               {!activeWorkspaceId && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Select or create a workspace before using Pose Manager.</div>
+              )}
+
+              {selectedPose && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
+                  <Badge variant="outline">{selectedPose.source === 'extracted' ? 'extracted' : 'manual'}</Badge>
+                  <Badge variant="outline">{selectedPose.characterCount === 1 ? 'single' : selectedPose.characterCount === 2 ? 'duo' : 'trio'}</Badge>
+                  {selectedPose.modelHint && <Badge variant="outline">{selectedPose.modelHint}</Badge>}
+                  <span>Updated {formatRelativeDate(selectedPose.updatedAt)}</span>
+                </div>
               )}
 
               <div className="grid gap-5 lg:grid-cols-2">
@@ -542,7 +599,13 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
                   {renderChipField()}
 
                   <div className="space-y-2">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Generated Pose Prompt</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Generated Pose Prompt</div>
+                      <Button type="button" size="sm" variant="outline" disabled={listMode === 'trash'} onClick={rebuildPromptFromFields}>
+                        <ArrowPathIcon className="mr-2 h-4 w-4" />
+                        Rebuild from fields
+                      </Button>
+                    </div>
                     <textarea value={draft.posePrompt} disabled={listMode === 'trash'} onChange={(event) => setDraft((current) => ({ ...current, posePrompt: event.target.value }))} placeholder="Detailed generated pose prompt" className="min-h-[220px] w-full rounded-lg border border-border bg-background px-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60" />
                   </div>
                 </div>
