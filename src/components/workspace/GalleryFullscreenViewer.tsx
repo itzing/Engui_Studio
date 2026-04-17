@@ -43,19 +43,9 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     onIndexChange(currentIndex + 1);
   }, [currentIndex, items.length, onIndexChange]);
 
-  const runSingleTapAction = useCallback((ratio: number) => {
-    if (ratio <= 0.3) {
-      goPrevious();
-      return;
-    }
-
-    if (ratio >= 0.7) {
-      goNext();
-      return;
-    }
-
+  const runSingleTapAction = useCallback(() => {
     setShowCloseButton((value) => !value);
-  }, [goNext, goPrevious]);
+  }, []);
 
   const triggerFavoriteOverlay = useCallback((mode: 'added' | 'removed') => {
     if (overlayTimeoutRef.current) {
@@ -82,9 +72,6 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       return;
     }
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const ratio = rect.width > 0 ? x / rect.width : 0.5;
     const now = Date.now();
     const isDoubleTap = currentItem?.id && lastTapRef.current.itemId === currentItem.id && (now - lastTapRef.current.time) < 280;
 
@@ -100,7 +87,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
     lastTapRef.current = { time: now, itemId: currentItem?.id || null };
     singleTapTimeoutRef.current = window.setTimeout(() => {
-      runSingleTapAction(ratio);
+      runSingleTapAction();
       singleTapTimeoutRef.current = null;
     }, 280);
   }, [currentItem?.id, handleFavoriteToggle, runSingleTapAction]);
@@ -217,15 +204,50 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4" onClick={handleViewerClick} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {favoriteOverlay && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="flex items-center justify-center animate-in zoom-in-50 fade-in duration-200">
+            <div className="gallery-favorite-pulse absolute rounded-full bg-white/10" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} />
+            <div className={`flex items-center justify-center ${favoriteOverlay === 'added' ? 'gallery-heart-pop-added' : 'gallery-heart-pop-removed'}`}>
               {favoriteOverlay === 'added' ? (
-                <Heart className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.6)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} fill="currentColor" strokeWidth={1.5} />
+                <Heart className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.75)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} fill="currentColor" strokeWidth={1.5} />
               ) : (
-                <HeartOff className="text-white drop-shadow-[0_0_24px_rgba(255,255,255,0.35)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} strokeWidth={1.75} />
+                <HeartOff className="text-white drop-shadow-[0_0_24px_rgba(255,255,255,0.45)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} strokeWidth={1.75} />
               )}
             </div>
           </div>
         )}
+        <style jsx>{`
+          .gallery-heart-pop-added {
+            animation: gallery-heart-pop-added 560ms cubic-bezier(0.22, 1.3, 0.36, 1) forwards;
+          }
+
+          .gallery-heart-pop-removed {
+            animation: gallery-heart-pop-removed 560ms cubic-bezier(0.22, 1.15, 0.36, 1) forwards;
+          }
+
+          .gallery-favorite-pulse {
+            animation: gallery-favorite-pulse 420ms ease-out forwards;
+          }
+
+          @keyframes gallery-heart-pop-added {
+            0% { transform: scale(0.45); opacity: 0; }
+            35% { transform: scale(1.18); opacity: 1; }
+            55% { transform: scale(0.92); opacity: 1; }
+            75% { transform: scale(1.03); opacity: 0.95; }
+            100% { transform: scale(1); opacity: 0; }
+          }
+
+          @keyframes gallery-heart-pop-removed {
+            0% { transform: scale(0.55); opacity: 0; }
+            35% { transform: scale(1.1); opacity: 1; }
+            60% { transform: scale(0.96); opacity: 0.95; }
+            100% { transform: scale(0.9); opacity: 0; }
+          }
+
+          @keyframes gallery-favorite-pulse {
+            0% { transform: scale(0.45); opacity: 0; }
+            35% { transform: scale(1); opacity: 0.22; }
+            100% { transform: scale(1.28); opacity: 0; }
+          }
+        `}</style>
         <img
           src={currentItem.url}
           alt="Gallery fullscreen preview"
