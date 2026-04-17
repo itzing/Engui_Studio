@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Heart, HeartOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type GalleryFullscreenViewerItem = {
   id: string;
   url: string;
+  favorited?: boolean;
 };
 
 interface GalleryFullscreenViewerProps {
@@ -15,14 +16,19 @@ interface GalleryFullscreenViewerProps {
   currentIndex: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
+  onToggleFavorite?: (itemId: string) => Promise<boolean | void>;
 }
 
-export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose }: GalleryFullscreenViewerProps) {
+export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onToggleFavorite }: GalleryFullscreenViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
   const previousOpenRef = useRef(false);
+  const singleTapTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const lastTapRef = useRef<{ time: number; itemId: string | null }>({ time: 0, itemId: null });
+  const overlayTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [showCloseButton, setShowCloseButton] = useState(true);
+  const [favoriteOverlay, setFavoriteOverlay] = useState<'added' | 'removed' | null>(null);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
   const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
@@ -37,16 +43,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     onIndexChange(currentIndex + 1);
   }, [currentIndex, items.length, onIndexChange]);
 
-  const handleViewerClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
-      return;
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const ratio = rect.width > 0 ? x / rect.width : 0.5;
-
+  const runSingleTapAction = useCallback((ratio: number) => {
     if (ratio <= 0.3) {
       goPrevious();
       return;
@@ -59,6 +56,54 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
     setShowCloseButton((value) => !value);
   }, [goNext, goPrevious]);
+
+  const triggerFavoriteOverlay = useCallback((mode: 'added' | 'removed') => {
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+    }
+    setFavoriteOverlay(mode);
+    overlayTimeoutRef.current = window.setTimeout(() => {
+      setFavoriteOverlay(null);
+      overlayTimeoutRef.current = null;
+    }, 650);
+  }, []);
+
+  const handleFavoriteToggle = useCallback(async () => {
+    if (!currentItem?.id || !onToggleFavorite) return;
+    const wasFavorited = !!currentItem.favorited;
+    const result = await onToggleFavorite(currentItem.id);
+    const nextFavorited = typeof result === 'boolean' ? result : !wasFavorited;
+    triggerFavoriteOverlay(nextFavorited ? 'added' : 'removed');
+  }, [currentItem?.favorited, currentItem?.id, onToggleFavorite, triggerFavoriteOverlay]);
+
+  const handleViewerClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const ratio = rect.width > 0 ? x / rect.width : 0.5;
+    const now = Date.now();
+    const isDoubleTap = currentItem?.id && lastTapRef.current.itemId === currentItem.id && (now - lastTapRef.current.time) < 280;
+
+    if (isDoubleTap) {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
+      lastTapRef.current = { time: 0, itemId: null };
+      void handleFavoriteToggle();
+      return;
+    }
+
+    lastTapRef.current = { time: now, itemId: currentItem?.id || null };
+    singleTapTimeoutRef.current = window.setTimeout(() => {
+      runSingleTapAction(ratio);
+      singleTapTimeoutRef.current = null;
+    }, 280);
+  }, [currentItem?.id, handleFavoriteToggle, runSingleTapAction]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -79,6 +124,17 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
     previousOpenRef.current = open;
   }, [nextItem?.url, open, previousItem?.url]);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+      }
+      if (overlayTimeoutRef.current) {
+        clearTimeout(overlayTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
@@ -159,6 +215,17 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       )}
 
       <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4" onClick={handleViewerClick} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {favoriteOverlay && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center justify-center animate-in zoom-in-50 fade-in duration-200">
+              {favoriteOverlay === 'added' ? (
+                <Heart className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.6)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} fill="currentColor" strokeWidth={1.5} />
+              ) : (
+                <HeartOff className="text-white drop-shadow-[0_0_24px_rgba(255,255,255,0.35)]" style={{ width: '33vw', height: '33vw', maxWidth: 220, maxHeight: 220 }} strokeWidth={1.75} />
+              )}
+            </div>
+          </div>
+        )}
         <img
           src={currentItem.url}
           alt="Gallery fullscreen preview"

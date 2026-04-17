@@ -551,8 +551,7 @@ export default function RightPanel() {
         return `${Math.floor(hours / 24)}d ago`;
     };
 
-    const handleGalleryFavorite = async (e: React.MouseEvent, asset: GalleryAsset) => {
-        e.stopPropagation();
+    const updateGalleryFavorite = useCallback(async (asset: GalleryAsset) => {
         const nextFavorited = !asset.favorited;
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: nextFavorited } : prev);
@@ -567,12 +566,19 @@ export default function RightPanel() {
                 throw new Error(data.error || 'Failed to update favorite');
             }
             showToast(nextFavorited ? 'Added to favorites' : 'Removed from favorites', 'success');
+            return nextFavorited;
         } catch (error) {
             console.error('Failed to update favorite:', error);
             setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: asset.favorited } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to update favorite', 'error');
+            return asset.favorited;
         }
+    }, [showToast]);
+
+    const handleGalleryFavorite = async (e: React.MouseEvent, asset: GalleryAsset) => {
+        e.stopPropagation();
+        await updateGalleryFavorite(asset);
     };
 
     const handleGalleryTagClick = (tag: string) => {
@@ -1380,10 +1386,16 @@ export default function RightPanel() {
                 items={filteredGalleryAssets.map(asset => ({
                     id: asset.id,
                     url: asset.originalUrl,
+                    favorited: asset.favorited,
                 }))}
                 currentIndex={galleryViewerIndex}
                 onIndexChange={handleGalleryViewerIndexChange}
                 onClose={() => setGalleryViewerOpen(false)}
+                onToggleFavorite={async (itemId) => {
+                    const asset = filteredGalleryAssets.find((entry) => entry.id === itemId);
+                    if (!asset) return false;
+                    return await updateGalleryFavorite(asset);
+                }}
             />
         </div>
     );
