@@ -60,7 +60,7 @@ export default function MobileStudioLayout() {
         </div>
       </div>
 
-      <nav className="border-t border-border bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <nav className="border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="grid grid-cols-3 gap-2">
           {tabs.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
