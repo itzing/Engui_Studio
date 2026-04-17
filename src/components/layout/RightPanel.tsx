@@ -439,7 +439,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setGalleryViewerOpen(true);
     };
 
-    const handleMobileGalleryTouchEnd = (asset: GalleryAsset) => {
+    const handleMobileGalleryTouchEnd = (event: React.TouchEvent, asset: GalleryAsset) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('[data-gallery-overlay-action="true"]')) {
+            return;
+        }
+
         mobileTouchHandledRef.current = { kind: 'gallery', id: asset.id };
         handleGalleryAssetClick(asset);
         window.setTimeout(() => {
@@ -1240,9 +1245,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         }
                                         handleGalleryAssetClick(asset);
                                     }}
-                                    onTouchEnd={() => {
+                                    onTouchEnd={(event) => {
                                         if (mobile) {
-                                            handleMobileGalleryTouchEnd(asset);
+                                            handleMobileGalleryTouchEnd(event, asset);
                                         }
                                     }}
                                     className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
@@ -1263,6 +1268,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                     <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                         <button
                                             type="button"
+                                            data-gallery-overlay-action="true"
+                                            onTouchEnd={(e) => e.stopPropagation()}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedGalleryAsset(asset);
@@ -1275,6 +1282,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         </button>
                                         <button
                                             type="button"
+                                            data-gallery-overlay-action="true"
+                                            onTouchEnd={(e) => e.stopPropagation()}
                                             onClick={(e) => void handleGalleryFavorite(e, asset)}
                                             className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
                                             title={asset.favorited ? 'Unfavorite' : 'Favorite'}
@@ -1283,6 +1292,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         </button>
                                         <button
                                             type="button"
+                                            data-gallery-overlay-action="true"
+                                            onTouchEnd={(e) => e.stopPropagation()}
                                             onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
                                             className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
                                             title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
