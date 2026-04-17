@@ -789,6 +789,26 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         }
     };
 
+    const toggleGalleryFavorites = () => {
+        setFavoritesOnly(prev => {
+            const next = !prev;
+            if (next) {
+                setShowTrashed(false);
+            }
+            return next;
+        });
+    };
+
+    const toggleGalleryTrash = () => {
+        setShowTrashed(prev => {
+            const next = !prev;
+            if (next) {
+                setFavoritesOnly(false);
+            }
+            return next;
+        });
+    };
+
     const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
         setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: tags } : item));
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: tags } : prev);
@@ -1039,10 +1059,10 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                         <div className={`${mobile ? 'flex flex-wrap items-center gap-1 justify-between' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (
                                 <>
-                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${favoritesOnly ? 'text-pink-400' : 'text-muted-foreground'}`} onClick={() => setFavoritesOnly(prev => !prev)}>
+                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${favoritesOnly ? 'text-pink-400' : 'text-muted-foreground'}`} onClick={toggleGalleryFavorites}>
                                         ♥
                                     </Button>
-                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={() => setShowTrashed(prev => !prev)}>
+                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={toggleGalleryTrash}>
                                         {showTrashed ? 'Trash' : 'Active'}
                                     </Button>
                                 </>
