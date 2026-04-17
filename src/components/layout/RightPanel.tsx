@@ -341,6 +341,9 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
             if (isSameJob) {
                 emitHoverPreview(job);
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('mobileOpenPreviewTab'));
+                }
             }
             return;
         }
@@ -1088,8 +1091,8 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                     key={asset.id}
                                     type="button"
                                     onClick={() => handleGalleryAssetClick(asset)}
-                                    onMouseEnter={() => emitGalleryHoverPreview(asset)}
-                                    onMouseLeave={() => emitGalleryHoverPreview(null)}
+                                    onMouseEnter={() => { if (!mobile) emitGalleryHoverPreview(asset); }}
+                                    onMouseLeave={() => { if (!mobile) emitGalleryHoverPreview(null); }}
                                     className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
@@ -1188,8 +1191,8 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                             <div
                                 key={job.id}
                                 onClick={() => handleJobClick(job)}
-                                onMouseEnter={() => emitHoverPreview(job)}
-                                onMouseLeave={() => emitHoverPreview(null)}
+                                onMouseEnter={() => { if (!mobile) emitHoverPreview(job); }}
+                                onMouseLeave={() => { if (!mobile) emitHoverPreview(null); }}
                                 className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${mobile && mobileSelectedJobId === job.id ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
