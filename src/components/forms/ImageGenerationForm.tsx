@@ -586,6 +586,7 @@ export default function ImageGenerationForm() {
     }, [activeWorkspaceId]);
 
     const selectedScene = availableScenes.find((scene) => scene.id === selectedSceneId) || null;
+    const promptMatchesSelectedScene = !!selectedScene && prompt.trim() === (selectedScene.generatedScenePrompt || '').trim();
 
     const applySelectedSceneToPrompt = () => {
         if (!selectedScene) return;
@@ -604,6 +605,10 @@ export default function ImageGenerationForm() {
         } finally {
             setIsLoadingMedia(false);
         }
+    };
+
+    const openSceneManager = () => {
+        window.dispatchEvent(new CustomEvent('openSceneManager'));
     };
 
     // Handle reuse job input event
@@ -1336,7 +1341,15 @@ export default function ImageGenerationForm() {
                         <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-3">
                             <div className="flex items-center justify-between gap-3">
                                 <Label className="text-xs">Scene preset</Label>
-                                {isLoadingScenes && <span className="text-xs text-muted-foreground">Loading scenes...</span>}
+                                <div className="flex items-center gap-2">
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => void fetchAvailableScenes()} disabled={!activeWorkspaceId || isLoadingScenes} className="h-7 px-2 text-xs">
+                                        Refresh
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" onClick={openSceneManager} className="h-7 px-2 text-xs">
+                                        Open Scene Manager
+                                    </Button>
+                                    {isLoadingScenes && <span className="text-xs text-muted-foreground">Loading scenes...</span>}
+                                </div>
                             </div>
                             <select
                                 className="w-full p-2 rounded-md border border-border bg-background text-sm"
@@ -1353,7 +1366,14 @@ export default function ImageGenerationForm() {
                             </select>
                             {selectedScene && (
                                 <div className="space-y-2 rounded-md border border-border bg-background/70 p-3">
-                                    <div className="text-sm font-medium text-foreground">{selectedScene.name}</div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="text-sm font-medium text-foreground">{selectedScene.name}</div>
+                                        {promptMatchesSelectedScene && (
+                                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+                                                Prompt synced
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="text-xs text-muted-foreground">{selectedScene.summary}</div>
                                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         <span>{selectedScene.characterCount === 1 ? 'single' : selectedScene.characterCount === 2 ? 'duo' : 'trio'}</span>
@@ -1362,7 +1382,7 @@ export default function ImageGenerationForm() {
                                     </div>
                                     <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-2'}`}>
                                         <Button type="button" variant="outline" onClick={applySelectedSceneToPrompt} className="w-full">
-                                            Apply scene prompt
+                                            {promptMatchesSelectedScene ? 'Re-apply scene prompt' : 'Apply scene prompt'}
                                         </Button>
                                         <Button type="button" variant="outline" onClick={() => void applySelectedScenePreviewImage()} disabled={!selectedScene.latestPreviewImageUrl || isLoadingMedia} className="w-full">
                                             Use latest preview
@@ -1371,9 +1391,14 @@ export default function ImageGenerationForm() {
                                 </div>
                             )}
                         </div>
+                        {!selectedSceneId && (
+                            <div className="rounded-md border border-dashed border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+                                Pick a saved scene to reuse its assembled prompt and latest prototype preview in Create.
+                            </div>
+                        )}
                         <div className="relative">
                             <textarea
-                                className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : promptMatchesSelectedScene ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}

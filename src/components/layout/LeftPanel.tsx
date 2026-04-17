@@ -111,6 +111,16 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
         return () => window.removeEventListener('reuseJobInput', handleReuseInput as any);
     }, []);
 
+    React.useEffect(() => {
+        const handleOpenSceneManager = () => {
+            setGenerationMode('image');
+            setIsSceneManagerOpen(true);
+        };
+
+        window.addEventListener('openSceneManager', handleOpenSceneManager as EventListener);
+        return () => window.removeEventListener('openSceneManager', handleOpenSceneManager as EventListener);
+    }, []);
+
     return (
         <div className={mobile ? 'flex h-full bg-card' : 'flex h-full border-r border-border bg-card'}>
             {/* Form Area */}
