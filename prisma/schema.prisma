@@ -127,6 +127,7 @@ model Workspace {
   jobs        Job[]     @relation("WorkspaceJobs")
   galleryAssets GalleryAsset[]
   posePresets PosePreset[]
+  scenePresets ScenePreset[]
   loras       LoRA[]
   
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
@@ -257,8 +258,9 @@ model Character {
   updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
 
-  versions             CharacterVersion[] @relation("CharacterVersions")
-  currentVersion       CharacterVersion?  @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  versions             CharacterVersion[]    @relation("CharacterVersions")
+  currentVersion       CharacterVersion?     @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  sceneBindings        SceneCharacterBinding[]
 
   @@index([updatedAt(sort: Desc)])
   @@index([deletedAt, updatedAt(sort: Desc)])
@@ -283,14 +285,15 @@ model CharacterVersion {
 }
 
 model VibePreset {
-  id                   String   @id @default(uuid())
+  id                   String        @id @default(uuid())
   name                 String
   baseDescription      String
-  tags                 String   @default("[]")
-  compatibleSceneTypes String   @default("[]")
-  status               String   @default("active")
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  tags                 String        @default("[]")
+  compatibleSceneTypes String        @default("[]")
+  status               String        @default("active")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  scenePresets         ScenePreset[]
 
   @@index([status, updatedAt(sort: Desc)])
   @@index([updatedAt(sort: Desc)])
@@ -298,26 +301,77 @@ model VibePreset {
 }
 
 model PosePreset {
-  id               String    @id @default(uuid())
+  id               String        @id @default(uuid())
   workspaceId      String
   name             String
   characterCount   Int
   summary          String
   posePrompt       String
-  tags             String    @default("[]")
-  source           String    @default("manual")
+  tags             String        @default("[]")
+  source           String        @default("manual")
   sourceImageUrl   String?
   modelHint        String?
   charactersJson   String
   relationshipJson String?
-  status           String    @default("active")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  status           String        @default("active")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scenePresets     ScenePreset[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, characterCount, status, updatedAt(sort: Desc)])
   @@index([updatedAt(sort: Desc)])
   @@map("pose_presets")
+}
+
+model ScenePreset {
+  id                    String                  @id @default(uuid())
+  workspaceId           String
+  name                  String
+  summary               String
+  characterCount        Int
+  tags                  String                  @default("[]")
+  posePresetId          String?
+  vibePresetId          String?
+  sceneInstructions     String                  @default("")
+  assemblyMode          String                  @default("template")
+  generatedScenePrompt  String
+  latestPreviewImageUrl String?
+  latestPreviewJobId    String?
+  status                String                  @default("active")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posePreset            PosePreset?             @relation(fields: [posePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vibePreset            VibePreset?             @relation(fields: [vibePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  characterBindings     SceneCharacterBinding[]
+
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@index([workspaceId, characterCount, status, updatedAt(sort: Desc)])
+  @@index([posePresetId])
+  @@index([vibePresetId])
+  @@index([updatedAt(sort: Desc)])
+  @@map("scene_presets")
+}
+
+model SceneCharacterBinding {
+  id                   String      @id @default(uuid())
+  scenePresetId        String
+  slot                 Int
+  roleLabel            String?
+  characterPresetId    String?
+  overrideInstructions String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  scenePreset          ScenePreset @relation(fields: [scenePresetId], references: [id], onDelete: Cascade)
+  characterPreset      Character?  @relation(fields: [characterPresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([scenePresetId, slot])
+  @@index([scenePresetId, slot])
+  @@index([characterPresetId])
+  @@map("scene_character_bindings")
 }
