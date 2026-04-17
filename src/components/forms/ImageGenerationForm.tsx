@@ -91,12 +91,65 @@ export default function ImageGenerationForm() {
         return new File([blob], filename, { type: blob.type || fallbackType });
     };
 
-    useEffect(() => {
-        const draft = getWorkflowDraft<{ randomizeSeed?: boolean }>('image', getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL);
-        if (typeof draft?.randomizeSeed === 'boolean') {
-            setRandomizeSeed(draft.randomizeSeed);
+    const buildDefaultParameterValues = (modelId: string) => {
+        const model = getModelById(modelId);
+        const initialValues: Record<string, any> = {};
+        model?.parameters.forEach(param => {
+            if (param.default !== undefined) {
+                initialValues[param.name] = param.default;
+            }
+        });
+        return initialValues;
+    };
+
+    const buildCurrentSnapshot = () => ({
+        prompt,
+        showAdvanced,
+        randomizeSeed,
+        parameterValues,
+        previewUrl,
+        previewUrl2,
+    });
+
+    const applySnapshot = async (modelId: string, snapshot?: {
+        prompt?: string;
+        showAdvanced?: boolean;
+        randomizeSeed?: boolean;
+        parameterValues?: Record<string, any>;
+        previewUrl?: string;
+        previewUrl2?: string;
+    } | null) => {
+        isHydratingDraftRef.current = true;
+        try {
+            const defaults = buildDefaultParameterValues(modelId);
+            const mergedParameterValues = {
+                ...defaults,
+                ...((snapshot?.parameterValues && typeof snapshot.parameterValues === 'object') ? snapshot.parameterValues : {}),
+            };
+
+            setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
+            setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
+            setRandomizeSeed(typeof snapshot?.randomizeSeed === 'boolean' ? snapshot.randomizeSeed : false);
+            setParameterValues(mergedParameterValues);
+
+            const nextPreviewUrl = typeof snapshot?.previewUrl === 'string' ? snapshot.previewUrl : '';
+            const nextPreviewUrl2 = typeof snapshot?.previewUrl2 === 'string' ? snapshot.previewUrl2 : '';
+
+            setPreviewUrl(nextPreviewUrl);
+            setPreviewUrl2(nextPreviewUrl2);
+            setImageFile(null);
+            setImageFile2(null);
+
+            if (nextPreviewUrl.startsWith('data:')) {
+                setImageFile(await dataUrlToFile(nextPreviewUrl, 'image-input'));
+            }
+            if (nextPreviewUrl2.startsWith('data:')) {
+                setImageFile2(await dataUrlToFile(nextPreviewUrl2, 'image-input-2'));
+            }
+        } finally {
+            isHydratingDraftRef.current = false;
         }
-    }, [DEFAULT_IMAGE_MODEL]);
+    };
 
     useEffect(() => {
         const modelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
@@ -110,7 +163,6 @@ export default function ImageGenerationForm() {
             if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
             hydratedModelRef.current = selectedModel;
             try {
-                isHydratingDraftRef.current = true;
                 const draft = getWorkflowDraft<{
                     prompt?: string;
                     showAdvanced?: boolean;
@@ -119,24 +171,9 @@ export default function ImageGenerationForm() {
                     previewUrl?: string;
                     previewUrl2?: string;
                 }>('image', selectedModel);
-                setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
-                setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
-                setRandomizeSeed(typeof draft?.randomizeSeed === 'boolean' ? draft.randomizeSeed : false);
-                setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
-                setPreviewUrl(typeof draft?.previewUrl === 'string' ? draft.previewUrl : '');
-                setPreviewUrl2(typeof draft?.previewUrl2 === 'string' ? draft.previewUrl2 : '');
-                setImageFile(null);
-                setImageFile2(null);
-                if (typeof draft?.previewUrl === 'string' && draft.previewUrl.startsWith('data:')) {
-                    setImageFile(await dataUrlToFile(draft.previewUrl, 'image-input'));
-                }
-                if (typeof draft?.previewUrl2 === 'string' && draft.previewUrl2.startsWith('data:')) {
-                    setImageFile2(await dataUrlToFile(draft.previewUrl2, 'image-input-2'));
-                }
+                await applySnapshot(selectedModel, draft);
             } catch (error) {
                 console.warn('Failed to restore image draft', error);
-            } finally {
-                isHydratingDraftRef.current = false;
             }
         };
         void restoreDraft();
@@ -144,15 +181,9 @@ export default function ImageGenerationForm() {
 
     useEffect(() => {
         if (!hasRestoredDraftRef.current || isHydratingDraftRef.current) return;
-        setWorkflowActiveModel('image', selectedModel || DEFAULT_IMAGE_MODEL);
-        saveWorkflowDraft('image', selectedModel || DEFAULT_IMAGE_MODEL, {
-            prompt,
-            showAdvanced,
-            randomizeSeed,
-            parameterValues,
-            previewUrl,
-            previewUrl2,
-        });
+        const modelId = selectedModel || DEFAULT_IMAGE_MODEL;
+        setWorkflowActiveModel('image', modelId);
+        saveWorkflowDraft('image', modelId, buildCurrentSnapshot());
     }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedModel, showAdvanced]);
 
     useEffect(() => {
@@ -501,33 +532,15 @@ export default function ImageGenerationForm() {
         return [];
     };
 
-    // Initialize parameter values with defaults when model changes
+    // Model changes are hydrated via applySnapshot so defaults and restore follow one path.
     useEffect(() => {
-        if (!currentModel) return;
-        const initialValues: Record<string, any> = {};
-        currentModel.parameters.forEach(param => {
-            if (param.default !== undefined) {
-                initialValues[param.name] = param.default;
-            }
-        });
-        setParameterValues(prev => {
-            if (isApplyingDraftModelRef.current) {
-                isApplyingDraftModelRef.current = false;
-                return { ...initialValues, ...prev };
-            }
-            return initialValues;
-        });
-    }, [selectedModel]);
-
-    // 모델이 변경될 때 이미지 파일 초기화
-    useEffect(() => {
-        if (isApplyingDraftModelRef.current) {
+        if (!selectedModel || isApplyingDraftModelRef.current) {
+            isApplyingDraftModelRef.current = false;
             return;
         }
-        setImageFile(null);
-        setPreviewUrl('');
-        setImageFile2(null);
-        setPreviewUrl2('');
+
+        hydratedModelRef.current = selectedModel;
+        void applySnapshot(selectedModel, null);
     }, [selectedModel]);
 
     // Fetch LoRAs when model changes or dialog closes
@@ -611,122 +624,57 @@ export default function ImageGenerationForm() {
                     }
                 }
 
-                const model = getModelById(modelId);
-                const shouldReusePrimaryImage = !!(model && isInputVisible(model, 'image', parsedOptions));
-                const shouldReuseSecondaryImage = !!(model && isInputVisible(model, 'image2', parsedOptions));
+                const nextModelId = modelId || selectedModel || DEFAULT_IMAGE_MODEL;
+                const model = getModelById(nextModelId);
 
-                // Load image file from path only when the model currently expects it
-                const imagePath = imageInputPath || parsedOptions.image_path;
-                if (shouldReusePrimaryImage && imagePath) {
-                    console.log('📥 Loading image from path:', imagePath);
-                    const file = await loadFileFromPath(imagePath);
-                    if (file) {
-                        setImageFile(file);
-                        setPreviewUrl(imagePath);
-                        console.log('✅ Image file loaded successfully');
-                    } else {
-                        console.warn('⚠️ Failed to load image file');
-                        setImageFile(null);
-                        setPreviewUrl('');
-                    }
-                } else {
-                    setImageFile(null);
-                    setPreviewUrl('');
-                }
-
-                // Load second image file only when the model currently expects it
-                const imagePath2 = parsedOptions.image_path_2;
-                if (shouldReuseSecondaryImage && imagePath2) {
-                    console.log('📥 Loading second image from path:', imagePath2);
-                    const file2 = await loadFileFromPath(imagePath2);
-                    if (file2) {
-                        setImageFile2(file2);
-                        setPreviewUrl2(imagePath2);
-                        console.log('✅ Second image file loaded successfully');
-                    } else {
-                        console.warn('⚠️ Failed to load second image file');
-                        setImageFile2(null);
-                        setPreviewUrl2('');
-                    }
-                } else {
-                    setImageFile2(null);
-                    setPreviewUrl2('');
-                }
-
-                if (typeof parsedOptions.randomizeSeed === 'boolean') {
-                    setRandomizeSeed(parsedOptions.randomizeSeed);
-                }
-
-                // Apply parameter values in parent-first order
-                // First, collect all parameter values from options
                 const allParamValues: Record<string, any> = {};
                 Object.keys(parsedOptions).forEach(key => {
-                    // Skip internal fields and file paths
                     if (!key.includes('_path') && key !== 'runpodJobId' && key !== 'error') {
                         allParamValues[key] = parsedOptions[key];
                     }
                 });
 
-                // Get model configuration to identify dependencies
-                if (model) {
-                    // Separate parameters into parent and dependent
-                    const parentParams: string[] = [];
-                    const dependentParams: Array<{ name: string; dependsOn: string }> = [];
+                const shouldReusePrimaryImage = !!(model && isInputVisible(model, 'image', allParamValues));
+                const shouldReuseSecondaryImage = !!(model && isInputVisible(model, 'image2', allParamValues));
+                const imagePath = imageInputPath || parsedOptions.image_path;
+                const imagePath2 = parsedOptions.image_path_2;
 
-                    model.parameters.forEach(param => {
-                        if (param.dependsOn) {
-                            dependentParams.push({
-                                name: param.name,
-                                dependsOn: param.dependsOn.parameter
-                            });
-                        } else if (allParamValues[param.name] !== undefined) {
-                            parentParams.push(param.name);
-                        }
-                    });
-
-                    // Apply parent parameters first
-                    const parentValues: Record<string, any> = {};
-                    parentParams.forEach(paramName => {
-                        parentValues[paramName] = allParamValues[paramName];
-                    });
-                    setParameterValues(prev => ({ ...prev, ...parentValues }));
-
-                    // Wait for parent parameters to be applied (next render cycle)
-                    await new Promise(resolve => setTimeout(resolve, 0));
-
-                    // Then apply dependent parameters (only if their conditions are met)
-                    const dependentValues: Record<string, any> = {};
-                    dependentParams.forEach(({ name, dependsOn }) => {
-                        if (allParamValues[name] !== undefined) {
-                            // Find the parameter configuration
-                            const paramConfig = model.parameters.find(p => p.name === name);
-                            if (paramConfig && paramConfig.dependsOn) {
-                                // Check if the dependency condition is met
-                                const parentValue = parentValues[dependsOn] ?? allParamValues[dependsOn];
-                                if (parentValue === paramConfig.dependsOn.value) {
-                                    // Condition met, populate the value
-                                    dependentValues[name] = allParamValues[name];
-                                }
-                                // If condition not met, skip this parameter (Requirement 5.5)
-                            }
-                        }
-                    });
-                    setParameterValues(prev => ({ ...prev, ...dependentValues }));
-                } else {
-                    // Fallback: apply all at once if model not found
-                    setParameterValues(prev => ({ ...prev, ...allParamValues }));
-                }
-
-                saveWorkflowDraft('image', modelId || selectedModel || DEFAULT_IMAGE_MODEL, {
+                const snapshot = {
                     prompt: jobPrompt || '',
                     showAdvanced: true,
-                    randomizeSeed: typeof parsedOptions.randomizeSeed === 'boolean' ? parsedOptions.randomizeSeed : randomizeSeed,
+                    randomizeSeed: typeof parsedOptions.randomizeSeed === 'boolean' ? parsedOptions.randomizeSeed : false,
                     parameterValues: allParamValues,
                     previewUrl: shouldReusePrimaryImage && imagePath ? imagePath : '',
                     previewUrl2: shouldReuseSecondaryImage && imagePath2 ? imagePath2 : '',
-                });
+                };
 
-                console.log('✅ Applied all input values from job in parent-first order');
+                await applySnapshot(nextModelId, snapshot);
+
+                if (shouldReusePrimaryImage && imagePath) {
+                    console.log('📥 Loading image from path:', imagePath);
+                    const file = await loadFileFromPath(imagePath);
+                    if (file) {
+                        setImageFile(file);
+                        console.log('✅ Image file loaded successfully');
+                    } else {
+                        console.warn('⚠️ Failed to load image file');
+                    }
+                }
+
+                if (shouldReuseSecondaryImage && imagePath2) {
+                    console.log('📥 Loading second image from path:', imagePath2);
+                    const file2 = await loadFileFromPath(imagePath2);
+                    if (file2) {
+                        setImageFile2(file2);
+                        console.log('✅ Second image file loaded successfully');
+                    } else {
+                        console.warn('⚠️ Failed to load second image file');
+                    }
+                }
+
+                saveWorkflowDraft('image', nextModelId, snapshot);
+
+                console.log('✅ Applied image snapshot from reuse');
 
                 // Show success feedback
                 setShowReuseSuccess(true);
