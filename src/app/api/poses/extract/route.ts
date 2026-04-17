@@ -102,7 +102,7 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
       messages: [
         {
           role: 'system',
-          content: 'You extract reusable pose presets from reference images for image generation. Focus on visible pose geometry only. Determine whether the image contains 1, 2, or 3 main characters. Describe each character separately with concrete pose fields, then describe spatial and interaction relationships between them when there is more than one character. Ignore framing, scene composition, and environment except where needed to explain pose relationships. Do not invent hidden limbs or unseen body positions. Return only valid JSON with exactly these keys: {"characterCount":1|2|3,"summary":"string","tags":["string"],"characters":[{"index":0,"label":"string|null","orientation":"string","head":"string","gaze":"string","torso":"string","armsHands":"string","legsStance":"string","expression":"string|null"}],"relationship":{"spatialLayout":"string","interaction":"string","contact":"string","symmetry":"string"}|null,"posePrompt":"string","confidence":"low|medium|high"}. Use English. Keep tags lowercase. If only one character is present, relationship must be null.'
+          content: 'You extract reusable pose presets from reference images for image generation. Focus on visible pose geometry only. Determine whether the image contains 1, 2, or 3 main characters. Describe each character separately with concrete pose fields, then describe spatial and interaction relationships between them when there is more than one character. Ignore identity, gender, body type, clothing, styling, and environment. Ignore expression unless it is essential to understanding the pose, and prefer leaving expression empty. Prioritize precise torso rotation, shoulder line, hip line, head turn, gaze direction, arm and hand placement, leg stance, and visible weight distribution. Distinguish clearly between profile, three-quarter, back three-quarter, and front-facing orientations. Do not invent hidden limbs or unseen body positions. Return only valid JSON with exactly these keys: {"characterCount":1|2|3,"summary":"string","tags":["string"],"characters":[{"index":0,"label":"string|null","orientation":"string","head":"string","gaze":"string","torso":"string","armsHands":"string","legsStance":"string","expression":"string|null"}],"relationship":{"spatialLayout":"string","interaction":"string","contact":"string","symmetry":"string"}|null,"posePrompt":"string","confidence":"low|medium|high"}. Use English. Keep tags lowercase. If only one character is present, relationship must be null.'
         },
         {
           role: 'user',
@@ -114,7 +114,11 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
                 '',
                 'Rules:',
                 '- Support only 1, 2, or 3 main characters',
-                '- Focus on body orientation, head direction, gaze, torso angle, arm and hand placement, leg stance, and visible expression',
+                '- Focus on body orientation, head direction, gaze, torso rotation, arm and hand placement, leg stance, and visible weight distribution',
+                '- Do not include gender, clothing, body description, or styling details',
+                '- Leave expression empty unless it is essential to the pose reading',
+                '- Be precise about strong turns and twists, especially profile vs three-quarter vs back three-quarter orientation',
+                '- Describe both arms and both legs as concretely as visibility allows',
                 '- For duo/trio poses, describe relative layout and interaction clearly',
                 '- Do not describe camera framing or environment unless necessary to clarify pose relationships',
                 '- Do not guess hidden details',
