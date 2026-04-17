@@ -126,6 +126,7 @@ model Workspace {
   // 관계 설정
   jobs        Job[]     @relation("WorkspaceJobs")
   galleryAssets GalleryAsset[]
+  posePresets PosePreset[]
   loras       LoRA[]
   
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
@@ -294,4 +295,29 @@ model VibePreset {
   @@index([status, updatedAt(sort: Desc)])
   @@index([updatedAt(sort: Desc)])
   @@map("vibe_presets")
+}
+
+model PosePreset {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  name             String
+  characterCount   Int
+  summary          String
+  posePrompt       String
+  tags             String    @default("[]")
+  source           String    @default("manual")
+  sourceImageUrl   String?
+  modelHint        String?
+  charactersJson   String
+  relationshipJson String?
+  status           String    @default("active")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@index([workspaceId, characterCount, status, updatedAt(sort: Desc)])
+  @@index([updatedAt(sort: Desc)])
+  @@map("pose_presets")
 }
