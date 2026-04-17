@@ -31,15 +31,20 @@ export default function MobileStudioLayout() {
   }, [activeTab]);
 
   useEffect(() => {
+    const openCreate = () => setActiveTab('create');
     const openPreview = () => setActiveTab('preview');
     const openPreviewInfo = () => setActiveTab('preview');
     const openLibrary = () => setActiveTab('library');
 
+    window.addEventListener('mobileOpenCreateTab', openCreate as EventListener);
+    window.addEventListener('reuseJobInput', openCreate as EventListener);
     window.addEventListener('mobileOpenPreviewTab', openPreview as EventListener);
     window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
     window.addEventListener('galleryAssetChanged', openLibrary as EventListener);
 
     return () => {
+      window.removeEventListener('mobileOpenCreateTab', openCreate as EventListener);
+      window.removeEventListener('reuseJobInput', openCreate as EventListener);
       window.removeEventListener('mobileOpenPreviewTab', openPreview as EventListener);
       window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
       window.removeEventListener('galleryAssetChanged', openLibrary as EventListener);

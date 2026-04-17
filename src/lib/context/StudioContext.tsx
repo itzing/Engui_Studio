@@ -627,6 +627,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 // Dispatch custom event with complete job data including media paths
                 // Add a small delay to allow LeftPanel to switch tabs and mount the correct form
                 if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
                     console.log('⏰ Scheduling reuseJobInput event dispatch in 100ms...');
                     setTimeout(() => {
                         try {
@@ -665,6 +666,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // Fallback to basic reuse without options
             // Add a small delay to allow LeftPanel to switch tabs and mount the correct form
             if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
                 setTimeout(() => {
                     try {
                         window.dispatchEvent(new CustomEvent('reuseJobInput', {

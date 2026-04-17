@@ -100,6 +100,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       }
 
       if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
         window.dispatchEvent(new CustomEvent('reuseJobInput', {
           detail: data.payload,
         }));
