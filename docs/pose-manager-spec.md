@@ -35,7 +35,8 @@ The user should be able to:
 - Generated pose prompt text for injection
 - Manual creation/editing of pose presets
 - Apply pose to Create prompt
-- Mobile and desktop UX where relevant
+- Desktop full manager UI
+- Mobile pose picker/apply UX only
 
 ### Out of scope
 - camera framing / shot composition metadata
@@ -231,13 +232,13 @@ This matches the Vibe Manager style and avoids polluting the library with low-qu
 
 ## UX specification
 
-### A. Pose Manager entry points
-Recommended entry points:
+### A. Desktop Pose Manager entry points
+Recommended desktop entry points:
 - dedicated `Pose Manager` button near Vibe Manager / tools area
 - `Extract Pose` action near image reference tools
 - `Apply Pose` action from Create prompt area
 
-### B. Pose library screen
+### B. Desktop Pose library screen
 Required sections:
 - search input
 - character count filters: `All / Single / Duo / Trio`
@@ -258,8 +259,8 @@ Primary item actions:
 - Duplicate
 - Delete
 
-### C. Pose extraction flow
-Recommended modal or panel flow:
+### C. Desktop pose extraction flow
+Recommended desktop modal or panel flow:
 1. select/upload image
 2. run extraction
 3. show loading state
@@ -278,10 +279,17 @@ Review form should include:
 
 ### D. Create integration
 For image creation, the user should be able to:
-- open Pose Manager
+- open Pose Manager on desktop
 - pick a preset
 - apply it to prompt
 - continue editing prompt normally
+
+On mobile, Create integration should be limited to:
+- open a lightweight pose picker
+- search/filter/select an existing pose preset
+- apply it to prompt
+
+Mobile must not include the full manager editor, extraction workflow, or full preset authoring UI in MVP.
 
 Recommended UX label examples:
 - `Apply Pose`
@@ -429,13 +437,14 @@ If extracted text is too vague:
 
 ## MVP checklist
 ### Must have
-- pose library
+- desktop pose library
 - single/duo/trio support
 - extract from image
 - structured pose schema
 - generated pose prompt
-- save/edit/delete/apply flows
+- desktop save/edit/delete/apply flows
 - Create prompt injection
+- mobile picker/apply flow for existing presets only
 
 ### Nice to have if cheap
 - duplicate preset
@@ -457,7 +466,7 @@ If extracted text is too vague:
 3. manual create/edit flow
 4. pose extraction endpoint and review flow
 5. apply-to-prompt integration in Create
-6. quality pass for mobile UX
+6. desktop polish plus mobile picker/apply QA
 
 ## Open product decisions
 These are still worth confirming before implementation:
@@ -465,6 +474,21 @@ These are still worth confirming before implementation:
 2. should `Apply Pose` always append, or should it support replace mode from day one?
 3. should pose extraction use the same vision stack as Vibe extraction, or a separate tuned prompt/path?
 4. should saved poses support favorites or folders in MVP, or wait?
+
+## Platform split recommendation
+Desktop gets the full Pose Manager experience:
+- library
+- create/edit
+- extraction
+- review-before-save
+- apply
+
+Mobile gets only the lightweight consumption flow:
+- browse/search/filter existing pose presets as needed
+- choose a pose
+- apply it to Create
+
+This keeps the high-complexity authoring workflow on desktop while preserving the practical mobile use case.
 
 ## Recommendation
 Build Pose Manager as a sibling concept to Vibe Manager, not as a minor prompt helper.
