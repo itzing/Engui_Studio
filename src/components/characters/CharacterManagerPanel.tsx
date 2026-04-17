@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CopyPlus, Download, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import { CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { characterTraitDefinitionMap, characterTraitDefinitionsByGroup } from '@/lib/characters/schema';
-import type { CharacterSummary, CharacterTraitMap, CharacterVersionSummary } from '@/lib/characters/types';
+import type { CharacterExtractResult, CharacterSummary, CharacterTraitMap, CharacterVersionSummary } from '@/lib/characters/types';
 
 type DraftCharacter = {
   id: string | null;
@@ -35,6 +35,10 @@ type ImportPreview = {
   name: string;
   gender: string;
   traits: CharacterTraitMap;
+};
+
+type ImageExtractPreview = CharacterExtractResult & {
+  sourceImageUrl: string | null;
 };
 
 function createEmptyDraft(): DraftCharacter {
@@ -400,8 +404,11 @@ export default function CharacterManagerPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExtractDialogOpen, setIsExtractDialogOpen] = useState(false);
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExtractingImage, setIsExtractingImage] = useState(false);
+  const [isCreatingFromExtract, setIsCreatingFromExtract] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [search, setSearch] = useState('');
@@ -412,6 +419,12 @@ export default function CharacterManagerPanel() {
   const [modalValues, setModalValues] = useState<Record<string, string>>({});
   const [importText, setImportText] = useState('');
   const [importOverrideName, setImportOverrideName] = useState('');
+  const [extractImageUrl, setExtractImageUrl] = useState('');
+  const [extractImageDataUrl, setExtractImageDataUrl] = useState('');
+  const [extractFileName, setExtractFileName] = useState('');
+  const [extractOverrideName, setExtractOverrideName] = useState('');
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractPreview, setExtractPreview] = useState<ImageExtractPreview | null>(null);
   const [cloneName, setCloneName] = useState('');
   const [selectedCloneVersionId, setSelectedCloneVersionId] = useState<string | null>(null);
   const [assistantInstruction, setAssistantInstruction] = useState('');
@@ -423,9 +436,11 @@ export default function CharacterManagerPanel() {
   const [sortMode, setSortMode] = useState<CharacterSortMode>('updated_desc');
   const [isTrashMutating, setIsTrashMutating] = useState(false);
   const characterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const extractFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
+  const effectiveExtractName = extractOverrideName.trim() || extractPreview?.name?.trim() || '';
 
   const fetchCharacters = async (preferredCharacterId?: string | null) => {
     setIsLoading(true);
@@ -736,6 +751,119 @@ export default function CharacterManagerPanel() {
     setImportText('');
     setImportOverrideName('');
     setIsImportDialogOpen(true);
+  };
+
+  const openExtractDialog = () => {
+    setExtractImageUrl('');
+    setExtractImageDataUrl('');
+    setExtractFileName('');
+    setExtractOverrideName('');
+    setExtractError(null);
+    setExtractPreview(null);
+    setIsExtractDialogOpen(true);
+  };
+
+  const onSelectExtractFile = async (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setExtractImageDataUrl(reader.result);
+        setExtractFileName(file.name);
+        setExtractImageUrl('');
+        setExtractPreview(null);
+        setExtractError(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitImageExtract = async () => {
+    if (!extractImageUrl.trim() && !extractImageDataUrl) {
+      setExtractError('Provide an image URL or upload an image first');
+      return;
+    }
+
+    setIsExtractingImage(true);
+    setExtractError(null);
+    setExtractPreview(null);
+
+    try {
+      const response = await fetch('/api/characters/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: extractImageUrl.trim() || undefined,
+          imageDataUrl: extractImageDataUrl || undefined,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to extract character traits');
+      }
+
+      setExtractPreview({
+        ...(data.extracted as CharacterExtractResult),
+        sourceImageUrl: extractImageUrl.trim() || extractImageDataUrl || null,
+      });
+      setExtractOverrideName('');
+    } catch (nextError: any) {
+      console.error('Failed to extract character traits:', nextError);
+      setExtractError(nextError?.message || 'Failed to extract character traits');
+    } finally {
+      setIsExtractingImage(false);
+    }
+  };
+
+  const confirmCreateFromExtract = async () => {
+    if (!extractPreview) {
+      setExtractError('Run extraction first');
+      return;
+    }
+
+    if (!effectiveExtractName) {
+      setExtractError('Extraction requires a name before confirmation');
+      return;
+    }
+
+    setIsCreatingFromExtract(true);
+
+    try {
+      const response = await fetch('/api/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: effectiveExtractName,
+          gender: extractPreview.gender,
+          traits: extractPreview.traits,
+          editorState: {},
+          previewStatusSummary: extractPreview.summary || null,
+          changeSummary: 'Initial image extraction snapshot',
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create character from extraction');
+      }
+
+      const savedCharacter = data.character as CharacterSummary;
+      showToast('Character created from image extraction', 'success');
+      setIsExtractDialogOpen(false);
+      setExtractImageUrl('');
+      setExtractImageDataUrl('');
+      setExtractFileName('');
+      setExtractOverrideName('');
+      setExtractError(null);
+      setExtractPreview(null);
+      await fetchCharacters(savedCharacter.id);
+    } catch (nextError: any) {
+      console.error('Failed to create character from extraction:', nextError);
+      setExtractError(nextError?.message || 'Failed to create character from extraction');
+    } finally {
+      setIsCreatingFromExtract(false);
+    }
   };
 
   const confirmImport = async () => {
@@ -1050,10 +1178,14 @@ export default function CharacterManagerPanel() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openImportDialog}>
               <Download className="w-3.5 h-3.5 mr-1" />
               Import
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openExtractDialog}>
+              <ImagePlus className="w-3.5 h-3.5 mr-1" />
+              Extract
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={startNewCharacter}>
               <Plus className="w-3.5 h-3.5 mr-1" />
@@ -1576,6 +1708,103 @@ export default function CharacterManagerPanel() {
             <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancel</Button>
             <Button onClick={confirmImport} disabled={!effectiveImportName || isImporting}>
               {isImporting ? 'Importing...' : 'Create from import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isExtractDialogOpen} onOpenChange={setIsExtractDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Extract character from image</DialogTitle>
+            <DialogDescription>
+              Uses the configured vision helper to build a structured visible trait profile. v1 creates a new character preset from the extracted result.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">Image URL</div>
+                <Input
+                  value={extractImageUrl}
+                  onChange={(event) => {
+                    setExtractImageUrl(event.target.value);
+                    setExtractImageDataUrl('');
+                    setExtractFileName('');
+                    setExtractPreview(null);
+                    setExtractError(null);
+                  }}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-medium">Or upload image</div>
+                    <div className="text-[11px] text-muted-foreground">Best for local references and screenshots.</div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => extractFileInputRef.current?.click()}>
+                    <Upload className="mr-1 h-3.5 w-3.5" />
+                    Choose file
+                  </Button>
+                </div>
+                <input ref={extractFileInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void onSelectExtractFile(event.target.files?.[0] || null)} />
+                <div className="text-[11px] text-muted-foreground">
+                  {extractFileName ? `Selected: ${extractFileName}` : extractImageDataUrl ? 'Image uploaded' : 'No local file selected'}
+                </div>
+              </div>
+              <Button onClick={submitImageExtract} disabled={isExtractingImage || (!extractImageUrl.trim() && !extractImageDataUrl)} className="w-full">
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+                {isExtractingImage ? 'Extracting...' : 'Run extraction'}
+              </Button>
+              {extractError && <div className="text-[11px] text-red-400">{extractError}</div>}
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">Resolved name</div>
+                <Input value={extractOverrideName} onChange={(event) => setExtractOverrideName(event.target.value)} placeholder={extractPreview?.name || 'Set name if extractor returns none'} disabled={!extractPreview} />
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2 min-h-[260px]">
+                <div className="text-xs font-medium">Extraction preview</div>
+                {extractPreview ? (
+                  <>
+                    <div className="text-[11px] text-muted-foreground">Name: <span className="text-foreground">{effectiveExtractName || 'Missing, confirmation blocked'}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Gender: <span className="text-foreground">{extractPreview.gender || 'Not provided'}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Confidence: <span className="text-foreground">{extractPreview.confidence}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Summary: <span className="text-foreground">{extractPreview.summary}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Traits extracted: <span className="text-foreground">{Object.keys(extractPreview.traits).length}</span></div>
+                    {extractPreview.warnings.length > 0 && (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
+                        <div className="text-[11px] font-medium text-amber-200">Warnings</div>
+                        <ul className="mt-1 space-y-1 pl-4 text-[11px] text-amber-100 list-disc">
+                          {extractPreview.warnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="max-h-40 overflow-y-auto flex flex-wrap gap-1.5 pt-1">
+                      {Object.entries(extractPreview.traits).map(([key, value]) => (
+                        <span key={key} className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+                          {traitLabel(key)}: {value}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[11px] text-muted-foreground">Run extraction to preview the generated character trait profile.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExtractDialogOpen(false)}>Cancel</Button>
+            <Button onClick={confirmCreateFromExtract} disabled={!extractPreview || !effectiveExtractName || isCreatingFromExtract}>
+              {isCreatingFromExtract ? 'Creating...' : 'Create from extraction'}
             </Button>
           </DialogFooter>
         </DialogContent>

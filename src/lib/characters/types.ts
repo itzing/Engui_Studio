@@ -33,3 +33,12 @@ export type CharacterVersionSummary = {
   changeSummary: string;
   createdAt: string;
 };
+
+export type CharacterExtractResult = {
+  name: string;
+  gender: string;
+  summary: string;
+  traits: CharacterTraitMap;
+  confidence: 'low' | 'medium' | 'high';
+  warnings: string[];
+};
