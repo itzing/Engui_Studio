@@ -38,7 +38,8 @@ type PendingNavigation =
   | { kind: 'select'; pose: PosePresetSummary }
   | { kind: 'new' }
   | { kind: 'clone' }
-  | { kind: 'switch_mode'; mode: PoseListMode };
+  | { kind: 'switch_mode'; mode: PoseListMode }
+  | { kind: 'close_manager' };
 
 function emptyCharacter(index: number): PoseCharacter {
   return {
@@ -250,7 +251,7 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
         onRequestClose?.();
         return;
       }
-      setPendingNavigation(null);
+      setPendingNavigation({ kind: 'close_manager' });
       setIsDirtyGuardOpen(true);
     };
 
@@ -294,6 +295,12 @@ export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: 
     }
     if (nav.kind === 'switch_mode') {
       setListMode(nav.mode);
+      return;
+    }
+    if (nav.kind === 'close_manager') {
+      setTagInput('');
+      setDraft(selectedPose ? buildDraft(selectedPose) : emptyDraft(activeWorkspaceId));
+      onRequestClose?.();
     }
   };
 
