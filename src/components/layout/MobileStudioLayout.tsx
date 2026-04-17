@@ -22,13 +22,11 @@ export default function MobileStudioLayout() {
     const openLibrary = () => setActiveTab('library');
 
     window.addEventListener('jobHoverPreview', openPreview as EventListener);
-    window.addEventListener('rightPanelGallerySelect', openPreview as EventListener);
     window.addEventListener('openPreviewInfo', openPreview as EventListener);
     window.addEventListener('galleryAssetChanged', openLibrary as EventListener);
 
     return () => {
       window.removeEventListener('jobHoverPreview', openPreview as EventListener);
-      window.removeEventListener('rightPanelGallerySelect', openPreview as EventListener);
       window.removeEventListener('openPreviewInfo', openPreview as EventListener);
       window.removeEventListener('galleryAssetChanged', openLibrary as EventListener);
     };
