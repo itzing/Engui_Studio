@@ -35,8 +35,8 @@ export default function MobileStudioLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
-      <div className="min-h-0 flex-1 overflow-hidden">
+    <div className="flex h-screen min-h-[100dvh] w-full flex-col overflow-hidden bg-background text-foreground">
+      <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
         {activeTab === 'create' && <LeftPanel mobile />}
         {activeTab === 'preview' && <CenterPanel mobile />}
         {activeTab === 'library' && <RightPanel mobile />}

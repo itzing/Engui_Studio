@@ -15,6 +15,7 @@ import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 
 export default function VideoGenerationForm() {
+    const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
@@ -47,6 +48,21 @@ export default function VideoGenerationForm() {
     const [loraLow3Weight, setLoraLow3Weight] = useState(0.8);
     const [loraHigh4Weight, setLoraHigh4Weight] = useState(0.8);
     const [loraLow4Weight, setLoraLow4Weight] = useState(0.8);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia('(max-width: 767px)');
+        const updateLayout = () => {
+            const isPhone = mediaQuery.matches;
+            setIsPhoneLayout(isPhone);
+            if (isPhone) {
+                setShowAdvanced(false);
+            }
+        };
+        updateLayout();
+        mediaQuery.addEventListener('change', updateLayout);
+        return () => mediaQuery.removeEventListener('change', updateLayout);
+    }, []);
 
     const videoModels = getModelsByType('video');
 
@@ -1015,7 +1031,7 @@ export default function VideoGenerationForm() {
                 )}
 
                 {/* Advanced Settings */}
-                <div className="border-t border-border pt-4">
+                <div className={`border-t border-border ${isPhoneLayout ? 'pt-3' : 'pt-4'}`}>
                     <button
                         type="button"
                         onClick={() => setShowAdvanced(!showAdvanced)}

@@ -422,7 +422,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   if (mode === 'video') {
     return (
       <div className={mobile ? 'flex flex-1 flex-col h-full overflow-hidden pb-20' : 'flex-1 flex flex-col h-full overflow-hidden'}>
-        <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-background/80 backdrop-blur-sm">
+        <div className={`border-b border-border bg-background/80 backdrop-blur-sm ${mobile ? 'px-3 py-2' : 'h-12 px-4'} flex items-center justify-between`}>
           <h2 className="font-semibold text-sm">Workspace</h2>
           <div className="inline-flex rounded-md border border-border overflow-hidden">
             <button
@@ -446,9 +446,14 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
 
   return (
     <div className={mobile ? 'flex-1 bg-background/50 flex flex-col relative overflow-hidden pb-20' : 'flex-1 bg-background/50 flex flex-col relative overflow-hidden'}>
-      <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-background/80 backdrop-blur-sm z-10">
-        <h2 className="font-semibold text-sm">Workspace</h2>
-        <div className="flex items-center gap-2">
+      <div className={`${mobile ? 'px-3 py-2 gap-2 flex-col items-stretch' : 'h-12 px-4 items-center justify-between'} border-b border-border flex bg-background/80 backdrop-blur-sm z-10`}>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-semibold text-sm">Workspace</h2>
+          {mobile && previewJob?.modelId && (
+            <div className="text-[10px] text-muted-foreground truncate max-w-[45vw] text-right">{previewJob.modelId}</div>
+          )}
+        </div>
+        <div className={`flex items-center gap-2 ${mobile ? 'justify-between' : ''}`}>
           <div className="inline-flex rounded-md border border-border overflow-hidden">
             <button
               onClick={() => setImageViewMode('native')}
@@ -480,43 +485,43 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden bg-black/30">
+      <div className={`flex-1 min-h-0 overflow-hidden ${mobile ? 'bg-black' : 'bg-black/30'}`}>
         {previewJob && previewJob.url ? (
           <div className="relative w-full h-full">
-            <div className={`absolute inset-0 p-2 ${imageViewMode === 'fit' ? 'overflow-hidden flex items-center justify-center' : 'overflow-auto'}`}>
+            <div className={`absolute inset-0 ${mobile ? 'p-0' : 'p-2'} ${imageViewMode === 'fit' ? 'overflow-hidden flex items-center justify-center' : 'overflow-auto'}`}>
               <img
                 src={previewJob.url}
                 alt={previewJob.prompt || 'Preview'}
                 className={imageViewMode === 'fit'
-                  ? 'max-w-full max-h-full object-contain rounded-md border border-border/40 shadow-2xl'
-                  : 'block max-w-none max-h-none rounded-md border border-border/40 shadow-2xl'}
+                  ? `${mobile ? 'max-w-full max-h-full object-contain' : 'max-w-full max-h-full object-contain rounded-md border border-border/40 shadow-2xl'}`
+                  : `${mobile ? 'block max-w-none max-h-none' : 'block max-w-none max-h-none rounded-md border border-border/40 shadow-2xl'}`}
                 draggable={false}
               />
             </div>
-            <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={handleOpenInfo}>
+            <div className={`absolute flex flex-wrap gap-2 ${mobile ? 'top-3 left-3 right-3 justify-start max-w-none' : 'top-3 right-3 justify-end max-w-[calc(100%-1.5rem)]'}`}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={handleOpenInfo}>
                 <Info className="w-4 h-4 mr-1.5" />
                 Info
               </Button>
               {shouldShowAddToGallery && (
-                <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+                <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}
                 </Button>
               )}
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || isSavingToGallery}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || isSavingToGallery}>
                 {isUpscaling ? 'Upscaling...' : 'Upscale'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'img2img' ? 'Opening...' : 'To img2img'}
               </Button>
-              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                 {reuseAction === 'img2vid' ? 'Opening...' : 'To img2vid'}
               </Button>
             </div>
-            <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-black/60 text-white text-xs rounded-md truncate pointer-events-none">
+            <div className={`absolute left-3 right-3 px-3 py-2 bg-black/60 text-white text-xs rounded-md truncate pointer-events-none ${mobile ? 'bottom-24' : 'bottom-3'}`}>
               {hoverPreview
                 ? (previewJob.modelId === 'gallery' ? 'Hovered gallery preview' : 'Hovered job preview')
                 : rightPanelMode === 'gallery' && previewJob?.modelId === 'gallery'
