@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { FolderOpen, Image as ImageIcon, Sparkles, Rows3 } from 'lucide-react';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 
-type MobileTab = 'create' | 'preview' | 'library';
+type MobileTab = 'create' | 'preview' | 'jobs' | 'gallery';
 
 const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'create', label: 'Create', icon: Sparkles },
   { id: 'preview', label: 'Preview', icon: ImageIcon },
-  { id: 'library', label: 'Library', icon: FolderOpen },
+  { id: 'jobs', label: 'Jobs', icon: Rows3 },
+  { id: 'gallery', label: 'Gallery', icon: FolderOpen },
 ];
 
 export default function MobileStudioLayout() {
@@ -20,7 +21,7 @@ export default function MobileStudioLayout() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const savedTab = window.localStorage.getItem('engui.mobile.active-tab');
-    if (savedTab === 'create' || savedTab === 'preview' || savedTab === 'library') {
+    if (savedTab === 'create' || savedTab === 'preview' || savedTab === 'jobs' || savedTab === 'gallery') {
       setActiveTab(savedTab);
     }
   }, []);
@@ -34,20 +35,25 @@ export default function MobileStudioLayout() {
     const openCreate = () => setActiveTab('create');
     const openPreview = () => setActiveTab('preview');
     const openPreviewInfo = () => setActiveTab('preview');
-    const openLibrary = () => setActiveTab('library');
+    const openJobs = () => setActiveTab('jobs');
+    const openGallery = () => setActiveTab('gallery');
 
     window.addEventListener('mobileOpenCreateTab', openCreate as EventListener);
     window.addEventListener('reuseJobInput', openCreate as EventListener);
     window.addEventListener('mobileOpenPreviewTab', openPreview as EventListener);
     window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
-    window.addEventListener('galleryAssetChanged', openLibrary as EventListener);
+    window.addEventListener('mobileOpenJobsTab', openJobs as EventListener);
+    window.addEventListener('mobileOpenGalleryTab', openGallery as EventListener);
+    window.addEventListener('galleryAssetChanged', openGallery as EventListener);
 
     return () => {
       window.removeEventListener('mobileOpenCreateTab', openCreate as EventListener);
       window.removeEventListener('reuseJobInput', openCreate as EventListener);
       window.removeEventListener('mobileOpenPreviewTab', openPreview as EventListener);
       window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
-      window.removeEventListener('galleryAssetChanged', openLibrary as EventListener);
+      window.removeEventListener('mobileOpenJobsTab', openJobs as EventListener);
+      window.removeEventListener('mobileOpenGalleryTab', openGallery as EventListener);
+      window.removeEventListener('galleryAssetChanged', openGallery as EventListener);
     };
   }, []);
 
@@ -60,13 +66,16 @@ export default function MobileStudioLayout() {
         <div className={activeTab === 'preview' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
           <CenterPanel mobile />
         </div>
-        <div className={activeTab === 'library' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
-          <RightPanel mobile />
+        <div className={activeTab === 'jobs' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
+          <RightPanel mobile mobileMode="jobs" />
+        </div>
+        <div className={activeTab === 'gallery' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
+          <RightPanel mobile mobileMode="gallery" />
         </div>
       </div>
 
       <nav className="border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {tabs.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
             return (

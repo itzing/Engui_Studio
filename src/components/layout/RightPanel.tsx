@@ -43,7 +43,7 @@ const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
 type MediaFilter = typeof TYPE_FILTERS[number];
 const galleryFilter = (asset: GalleryAsset, filters: MediaFilter[]) => filters.includes(asset.type);
 
-export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
+export default function RightPanel({ mobile = false, mobileMode }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery' }) {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
@@ -112,7 +112,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
         const panelModeKey = mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode';
         const savedPanelMode = window.localStorage.getItem(panelModeKey);
-        if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
+        if (!mobileMode && (savedPanelMode === 'jobs' || savedPanelMode === 'gallery')) {
             setPanelMode(savedPanelMode);
         }
 
@@ -137,11 +137,18 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 setGallerySort(savedSort);
             }
         }
-    }, [mobile]);
+    }, [mobile, mobileMode]);
+
+    useEffect(() => {
+        if (!mobile || !mobileMode) return;
+        setPanelMode(mobileMode);
+    }, [mobile, mobileMode]);
 
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined') return;
-        window.localStorage.setItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode', panelMode);
+        if (!mobileMode) {
+            window.localStorage.setItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode', panelMode);
+        }
         if (mobile) {
             window.localStorage.setItem('engui.mobile.library.filter', selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','));
             window.localStorage.setItem('engui.mobile.library.search', gallerySearchQuery);
@@ -150,7 +157,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
             detail: panelMode,
         }));
-    }, [gallerySearchQuery, gallerySort, isMounted, mobile, panelMode, selectedFilters]);
+    }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters]);
 
     useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
@@ -763,6 +770,9 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     };
 
     const handleGalleryTagClick = (tag: string) => {
+        if (mobile && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('mobileOpenGalleryTab'));
+        }
         setPanelMode('gallery');
         setGallerySearchQuery(prev => {
             const tokens = Array.from(new Set(prev.split(/\s+/).map(token => token.trim()).filter(Boolean)));
@@ -1035,7 +1045,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
                 {/* Filters & Actions */}
                 <div className="space-y-2">
-                    <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5 w-fit">
+                    {!mobile && <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5 w-fit">
                         {(['jobs', 'gallery'] as const).map((mode) => (
                             <button
                                 key={mode}
@@ -1048,7 +1058,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 {mode}
                             </button>
                         ))}
-                    </div>
+                    </div>}
                     <div className={mobile ? 'flex flex-col items-stretch gap-1.5' : 'flex items-center justify-between gap-2'}>
                         <div className={`${mobile ? 'grid grid-cols-6 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
                             {([
