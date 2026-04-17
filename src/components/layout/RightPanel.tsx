@@ -1049,7 +1049,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                             </button>
                         ))}
                     </div>
-                    <div className={mobile ? 'flex flex-col items-stretch gap-2' : 'flex items-center justify-between gap-2'}>
+                    <div className={mobile ? 'flex flex-col items-stretch gap-1.5' : 'flex items-center justify-between gap-2'}>
                         <div className={`${mobile ? 'grid grid-cols-6 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
                             {([
                                 { key: 'all', label: 'All' },
@@ -1074,7 +1074,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 );
                             })}
                         </div>
-                        <div className={`${mobile ? 'flex items-center gap-2' : 'flex items-center gap-1'}`}>
+                        <div className={`${mobile ? 'flex items-center gap-2 pt-0.5' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (
                                 <div className={`${mobile ? 'flex items-center gap-2' : 'flex items-center gap-1'}`}>
                                     <button
@@ -1244,6 +1244,18 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                         )}
                                     </div>
                                     <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedGalleryAsset(asset);
+                                                setGalleryDetailsOpen(true);
+                                            }}
+                                            className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
+                                            title="Info"
+                                        >
+                                            <Info className="w-3 h-3" />
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={(e) => void handleGalleryFavorite(e, asset)}
