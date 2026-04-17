@@ -36,7 +36,7 @@ type RightPanelMode = 'jobs' | 'gallery';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 
-export default function CenterPanel() {
+export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const { activeArtifactId, activeTool, jobs, activeWorkspaceId, addJob } = useStudio();
   const { showToast } = useToast();
   const [mode, setMode] = useState<CenterMode>('image');
@@ -421,7 +421,7 @@ export default function CenterPanel() {
 
   if (mode === 'video') {
     return (
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className={mobile ? 'flex flex-1 flex-col h-full overflow-hidden pb-20' : 'flex-1 flex flex-col h-full overflow-hidden'}>
         <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-background/80 backdrop-blur-sm">
           <h2 className="font-semibold text-sm">Workspace</h2>
           <div className="inline-flex rounded-md border border-border overflow-hidden">
@@ -445,7 +445,7 @@ export default function CenterPanel() {
   }
 
   return (
-    <div className="flex-1 bg-background/50 flex flex-col relative overflow-hidden">
+    <div className={mobile ? 'flex-1 bg-background/50 flex flex-col relative overflow-hidden pb-20' : 'flex-1 bg-background/50 flex flex-col relative overflow-hidden'}>
       <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-background/80 backdrop-blur-sm z-10">
         <h2 className="font-semibold text-sm">Workspace</h2>
         <div className="flex items-center gap-2">

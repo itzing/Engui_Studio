@@ -41,7 +41,7 @@ type GalleryAsset = {
 
 const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 'audio') => filter === 'all' ? true : asset.type === filter;
 
-export default function RightPanel() {
+export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
@@ -816,7 +816,7 @@ export default function RightPanel() {
     };
 
     return (
-        <div className="flex h-full flex-col bg-card border-l border-border w-[320px]">
+        <div className={mobile ? 'flex h-full w-full flex-col bg-card' : 'flex h-full flex-col bg-card border-l border-border w-[320px]'}>
             {/* Header */}
             <div className="p-3 border-b border-border flex flex-col gap-3 bg-muted/5">
                 {/* Workspace Selector */}

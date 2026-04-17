@@ -33,7 +33,7 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
-export default function LeftPanel() {
+export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isStorageOpen, setIsStorageOpen] = useState(false);
@@ -96,9 +96,9 @@ export default function LeftPanel() {
     }, []);
 
     return (
-        <div className="flex h-full border-r border-border bg-card">
+        <div className={mobile ? 'flex h-full bg-card' : 'flex h-full border-r border-border bg-card'}>
             {/* Form Area */}
-            <div className="w-[340px] flex flex-col overflow-hidden flex-shrink-0">
+            <div className={mobile ? 'w-full flex flex-col overflow-hidden' : 'w-[340px] flex flex-col overflow-hidden flex-shrink-0'}>
                 {/* Header with Logo, Socials, and Settings */}
                 <div className="p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10">
                     <div className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function LeftPanel() {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <div className={mobile ? 'flex-1 overflow-y-auto p-4 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
                     <div className="grid grid-cols-3 gap-1 p-1 bg-muted/20 rounded-lg mb-4">
                         <button
                             type="button"
