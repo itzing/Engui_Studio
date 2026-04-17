@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
-import { getModelsByType } from '@/lib/models/modelConfig';
 import type { CharacterSummary } from '@/lib/characters/types';
 import type { VibePresetSummary } from '@/lib/vibes/types';
 import type { PosePresetSummary } from '@/lib/poses/types';
@@ -232,7 +231,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
     () => poses.filter((pose) => pose.characterCount === draft.characterCount),
     [poses, draft.characterCount],
   );
-  const defaultPreviewModelId = getModelsByType('image')[0]?.id || 'flux-krea';
+  const defaultPreviewModelId = 'z-image';
 
   const focusNameSoon = () => {
     window.requestAnimationFrame(() => nameInputRef.current?.focus());
@@ -501,6 +500,11 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
       formData.append('language', 'en');
       formData.append('modelId', defaultPreviewModelId);
       formData.append('prompt', draft.generatedScenePrompt.trim());
+      formData.append('use_controlnet', 'false');
+      formData.append('width', '1024');
+      formData.append('height', '1024');
+      formData.append('steps', '9');
+      formData.append('cfg', '1.0');
 
       const response = await fetch('/api/generate', {
         method: 'POST',
