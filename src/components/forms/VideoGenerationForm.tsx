@@ -13,9 +13,9 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
+import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function VideoGenerationForm() {
-    const STORAGE_KEY = 'engui.create.draft.video';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
@@ -42,6 +42,9 @@ export default function VideoGenerationForm() {
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
     const [loraHigh1Weight, setLoraHigh1Weight] = useState(0.8);
+    const hasRestoredDraftRef = useRef(false);
+    const isApplyingDraftModelRef = useRef(false);
+    const hydratedModelRef = useRef<string | null>(null);
     const [loraLow1Weight, setLoraLow1Weight] = useState(0.8);
     const [loraHigh2Weight, setLoraHigh2Weight] = useState(0.8);
     const [loraLow2Weight, setLoraLow2Weight] = useState(0.8);
@@ -71,6 +74,7 @@ export default function VideoGenerationForm() {
     }, []);
 
     const videoModels = getModelsByType('video');
+    const DEFAULT_VIDEO_MODEL = videoModels[0]?.id || 'wan22';
 
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
@@ -79,53 +83,59 @@ export default function VideoGenerationForm() {
     };
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        const modelId = getWorkflowActiveModel('video') || DEFAULT_VIDEO_MODEL;
+        isApplyingDraftModelRef.current = true;
+        setSelectedModel(modelId);
+        hasRestoredDraftRef.current = true;
+    }, [DEFAULT_VIDEO_MODEL, setSelectedModel]);
+
+    useEffect(() => {
         const restoreDraft = async () => {
+            if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
+            hydratedModelRef.current = selectedModel;
             try {
-                const raw = window.localStorage.getItem(STORAGE_KEY);
-                if (!raw) return;
-                const draft = JSON.parse(raw);
-                if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
-                if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
-                if (typeof draft.showAdvanced === 'boolean') setShowAdvanced(draft.showAdvanced);
-                if (draft.parameterValues && typeof draft.parameterValues === 'object') setParameterValues(draft.parameterValues);
-                if (typeof draft.imagePreviewUrl === 'string') {
-                    setImagePreviewUrl(draft.imagePreviewUrl);
-                    if (draft.imagePreviewUrl.startsWith('data:')) {
-                        setImageFile(await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input'));
-                    }
+                const draft = getWorkflowDraft<{
+                    prompt?: string;
+                    showAdvanced?: boolean;
+                    parameterValues?: Record<string, any>;
+                    imagePreviewUrl?: string;
+                    videoPreviewUrl?: string;
+                }>('video', selectedModel);
+                setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
+                setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
+                setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
+                setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
+                setVideoPreviewUrl(typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '');
+                setImageFile(null);
+                setVideoFile(null);
+                if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl.startsWith('data:')) {
+                    setImageFile(await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input'));
                 }
-                if (typeof draft.videoPreviewUrl === 'string') {
-                    setVideoPreviewUrl(draft.videoPreviewUrl);
-                    if (draft.videoPreviewUrl.startsWith('data:')) {
-                        setVideoFile(await dataUrlToFile(draft.videoPreviewUrl, 'video-input'));
-                    }
+                if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl.startsWith('data:')) {
+                    setVideoFile(await dataUrlToFile(draft.videoPreviewUrl, 'video-input'));
                 }
             } catch (error) {
                 console.warn('Failed to restore video draft', error);
             }
         };
         void restoreDraft();
-    }, []);
+    }, [selectedModel]);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                selectedModel,
-                prompt,
-                showAdvanced,
-                parameterValues,
-                imagePreviewUrl,
-                videoPreviewUrl,
-            }));
-        } catch (error) {
-            console.warn('Failed to persist video draft', error);
-        }
-    }, [imagePreviewUrl, parameterValues, prompt, selectedModel, showAdvanced, videoPreviewUrl]);
+        if (!hasRestoredDraftRef.current) return;
+        setWorkflowActiveModel('video', selectedModel || DEFAULT_VIDEO_MODEL);
+        saveWorkflowDraft('video', selectedModel || DEFAULT_VIDEO_MODEL, {
+            prompt,
+            showAdvanced,
+            parameterValues,
+            imagePreviewUrl,
+            videoPreviewUrl,
+        });
+    }, [DEFAULT_VIDEO_MODEL, imagePreviewUrl, parameterValues, prompt, selectedModel, showAdvanced, videoPreviewUrl]);
 
     // Initialize selected model if not set
     useEffect(() => {
+        if (!hasRestoredDraftRef.current) return;
         const isVideoModel = videoModels.some(m => m.id === selectedModel);
         if (!selectedModel || !isVideoModel) {
             if (videoModels.length > 0) {
@@ -166,15 +176,20 @@ export default function VideoGenerationForm() {
 
     // Initialize parameter values with defaults
     useEffect(() => {
-        if (currentModel) {
-            const initialValues: Record<string, any> = {};
-            currentModel.parameters.forEach(param => {
-                if (param.default !== undefined) {
-                    initialValues[param.name] = param.default;
-                }
-            });
-            setParameterValues(initialValues);
-        }
+        if (!currentModel) return;
+        const initialValues: Record<string, any> = {};
+        currentModel.parameters.forEach(param => {
+            if (param.default !== undefined) {
+                initialValues[param.name] = param.default;
+            }
+        });
+        setParameterValues(prev => {
+            if (isApplyingDraftModelRef.current) {
+                isApplyingDraftModelRef.current = false;
+                return { ...initialValues, ...prev };
+            }
+            return initialValues;
+        });
     }, [currentModel]);
 
     // Fetch LoRAs when model changes or dialog closes

@@ -1,24 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n/context';
 import { getModelsByType } from '@/lib/models/modelConfig';
 import { useStudio } from '@/lib/context/StudioContext';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
+import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function MusicGenerationForm() {
-    const STORAGE_KEY = 'engui.create.draft.music';
+    const DEFAULT_MODEL = 'elevenlabs-music';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
-    const [selectedModel, setSelectedModel] = useState('elevenlabs-music');
+    const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
     const [duration, setDuration] = useState(60);
     const [isGenerating, setIsGenerating] = useState(false);
 
     const musicModels = getModelsByType('music');
+    const hydratedModelRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -35,30 +37,24 @@ export default function MusicGenerationForm() {
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            const raw = window.localStorage.getItem(STORAGE_KEY);
-            if (!raw) return;
-            const draft = JSON.parse(raw);
-            if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
-            if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
-            if (typeof draft.duration === 'number') setDuration(draft.duration);
-        } catch (error) {
-            console.warn('Failed to restore music draft', error);
-        }
+        const modelId = getWorkflowActiveModel('music') || DEFAULT_MODEL;
+        setSelectedModel(modelId);
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                prompt,
-                selectedModel,
-                duration,
-            }));
-        } catch (error) {
-            console.warn('Failed to persist music draft', error);
-        }
+        if (!selectedModel || hydratedModelRef.current === selectedModel) return;
+        hydratedModelRef.current = selectedModel;
+        const draft = getWorkflowDraft<{ prompt?: string; duration?: number }>('music', selectedModel);
+        setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
+        setDuration(typeof draft?.duration === 'number' ? draft.duration : 60);
+    }, [selectedModel]);
+
+    useEffect(() => {
+        setWorkflowActiveModel('music', selectedModel);
+        saveWorkflowDraft('music', selectedModel, {
+            prompt,
+            duration,
+        });
     }, [duration, prompt, selectedModel]);
 
     // Listen for reuseJobInput event

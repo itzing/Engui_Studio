@@ -13,9 +13,9 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function ImageGenerationForm() {
-    const STORAGE_KEY = 'engui.create.draft.image';
     const { t } = useI18n();
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
@@ -37,6 +37,7 @@ export default function ImageGenerationForm() {
     const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
     const hasRestoredDraftRef = useRef(false);
     const isApplyingDraftModelRef = useRef(false);
+    const hydratedModelRef = useRef<string | null>(null);
 
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -77,6 +78,7 @@ export default function ImageGenerationForm() {
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
 
     const imageModels = getModelsByType('image');
+    const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
 
     const RANDOMIZE_SEED_STORAGE_KEY = 'engui:image:randomize-seed';
     const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
@@ -101,58 +103,55 @@ export default function ImageGenerationForm() {
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        const modelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
+        isApplyingDraftModelRef.current = true;
+        setSelectedModel(modelId);
+        hasRestoredDraftRef.current = true;
+    }, [DEFAULT_IMAGE_MODEL, setSelectedModel]);
+
+    useEffect(() => {
         const restoreDraft = async () => {
+            if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
+            hydratedModelRef.current = selectedModel;
             try {
-                const raw = window.localStorage.getItem(STORAGE_KEY);
-                if (!raw) {
-                    hasRestoredDraftRef.current = true;
-                    return;
+                const draft = getWorkflowDraft<{
+                    prompt?: string;
+                    showAdvanced?: boolean;
+                    parameterValues?: Record<string, any>;
+                    previewUrl?: string;
+                    previewUrl2?: string;
+                }>('image', selectedModel);
+                setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
+                setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
+                setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
+                setPreviewUrl(typeof draft?.previewUrl === 'string' ? draft.previewUrl : '');
+                setPreviewUrl2(typeof draft?.previewUrl2 === 'string' ? draft.previewUrl2 : '');
+                setImageFile(null);
+                setImageFile2(null);
+                if (typeof draft?.previewUrl === 'string' && draft.previewUrl.startsWith('data:')) {
+                    setImageFile(await dataUrlToFile(draft.previewUrl, 'image-input'));
                 }
-                const draft = JSON.parse(raw);
-                if (typeof draft.selectedModel === 'string') {
-                    isApplyingDraftModelRef.current = true;
-                    setSelectedModel(draft.selectedModel);
-                }
-                if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
-                if (typeof draft.showAdvanced === 'boolean') setShowAdvanced(draft.showAdvanced);
-                if (draft.parameterValues && typeof draft.parameterValues === 'object') setParameterValues(draft.parameterValues);
-                if (typeof draft.previewUrl === 'string') {
-                    setPreviewUrl(draft.previewUrl);
-                    if (draft.previewUrl.startsWith('data:')) {
-                        setImageFile(await dataUrlToFile(draft.previewUrl, 'image-input'));
-                    }
-                }
-                if (typeof draft.previewUrl2 === 'string') {
-                    setPreviewUrl2(draft.previewUrl2);
-                    if (draft.previewUrl2.startsWith('data:')) {
-                        setImageFile2(await dataUrlToFile(draft.previewUrl2, 'image-input-2'));
-                    }
+                if (typeof draft?.previewUrl2 === 'string' && draft.previewUrl2.startsWith('data:')) {
+                    setImageFile2(await dataUrlToFile(draft.previewUrl2, 'image-input-2'));
                 }
             } catch (error) {
                 console.warn('Failed to restore image draft', error);
-            } finally {
-                hasRestoredDraftRef.current = true;
             }
         };
         void restoreDraft();
-    }, []);
+    }, [selectedModel]);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                selectedModel,
-                prompt,
-                showAdvanced,
-                parameterValues,
-                previewUrl,
-                previewUrl2,
-            }));
-        } catch (error) {
-            console.warn('Failed to persist image draft', error);
-        }
-    }, [parameterValues, previewUrl, previewUrl2, prompt, selectedModel, showAdvanced]);
+        if (!hasRestoredDraftRef.current) return;
+        setWorkflowActiveModel('image', selectedModel || DEFAULT_IMAGE_MODEL);
+        saveWorkflowDraft('image', selectedModel || DEFAULT_IMAGE_MODEL, {
+            prompt,
+            showAdvanced,
+            parameterValues,
+            previewUrl,
+            previewUrl2,
+        });
+    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, selectedModel, showAdvanced]);
 
     useEffect(() => {
         try {

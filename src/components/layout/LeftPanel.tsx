@@ -13,6 +13,7 @@ import { S3BucketViewerDialog } from '../storage/S3BucketViewerDialog';
 import CharacterManagerPanel from '../characters/CharacterManagerPanel';
 import VibeManagerPanel from '../vibes/VibeManagerPanel';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { getActiveMode, setActiveMode } from '@/lib/createDrafts';
 
 // Simple icons for social media
 const DiscordIcon = ({ className }: { className?: string }) => (
@@ -35,23 +36,20 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
 
 export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
-    const GENERATION_MODE_STORAGE_KEY = 'engui.create.active-mode';
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isStorageOpen, setIsStorageOpen] = useState(false);
     const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
     const [isVibeManagerOpen, setIsVibeManagerOpen] = useState(false);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const savedMode = window.localStorage.getItem(GENERATION_MODE_STORAGE_KEY);
+        const savedMode = getActiveMode();
         if (savedMode === 'image' || savedMode === 'video' || savedMode === 'tts' || savedMode === 'music') {
             setGenerationMode(savedMode);
         }
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(GENERATION_MODE_STORAGE_KEY, generationMode);
+        setActiveMode(generationMode);
     }, [generationMode]);
 
     // Listen for job reuse events and switch to appropriate tab

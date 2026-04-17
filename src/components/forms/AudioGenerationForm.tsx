@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n/context';
@@ -9,14 +9,15 @@ import { useStudio } from '@/lib/context/StudioContext';
 import { useElevenLabsVoices } from '@/hooks/useElevenLabsVoices';
 import { PlayIcon, SpeakerWaveIcon, TrashIcon as TrashIcon2 } from '@heroicons/react/24/outline';
 import VoiceDialog from '@/components/voice/VoiceDialog';
+import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function AudioGenerationForm() {
-    const STORAGE_KEY = 'engui.create.draft.tts';
+    const DEFAULT_MODEL = 'elevenlabs-tts';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId, updateSettings } = useStudio();
     const [prompt, setPrompt] = useState('');
-    const [selectedModel, setSelectedModel] = useState('elevenlabs-tts');
+    const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
 
@@ -24,6 +25,7 @@ export default function AudioGenerationForm() {
     // Initialize with saved voice ID from settings
     const [selectedVoice, setSelectedVoice] = useState(settings.elevenlabs?.voiceId || '');
     const { voices, isLoading, fetchVoiceSamples, playSample } = useElevenLabsVoices();
+    const hydratedModelRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -40,30 +42,24 @@ export default function AudioGenerationForm() {
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            const raw = window.localStorage.getItem(STORAGE_KEY);
-            if (!raw) return;
-            const draft = JSON.parse(raw);
-            if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
-            if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
-            if (typeof draft.selectedVoice === 'string') setSelectedVoice(draft.selectedVoice);
-        } catch (error) {
-            console.warn('Failed to restore audio draft', error);
-        }
+        const modelId = getWorkflowActiveModel('tts') || DEFAULT_MODEL;
+        setSelectedModel(modelId);
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                prompt,
-                selectedModel,
-                selectedVoice,
-            }));
-        } catch (error) {
-            console.warn('Failed to persist audio draft', error);
-        }
+        if (!selectedModel || hydratedModelRef.current === selectedModel) return;
+        hydratedModelRef.current = selectedModel;
+        const draft = getWorkflowDraft<{ prompt?: string; selectedVoice?: string }>('tts', selectedModel);
+        setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
+        setSelectedVoice(typeof draft?.selectedVoice === 'string' ? draft.selectedVoice : (settings.elevenlabs?.voiceId || ''));
+    }, [selectedModel, settings.elevenlabs?.voiceId]);
+
+    useEffect(() => {
+        setWorkflowActiveModel('tts', selectedModel);
+        saveWorkflowDraft('tts', selectedModel, {
+            prompt,
+            selectedVoice,
+        });
     }, [prompt, selectedModel, selectedVoice]);
 
     // Update local state if settings change externally (e.g. initial load)
