@@ -18,16 +18,21 @@ export default function MobileStudioLayout() {
   const [activeTab, setActiveTab] = useState<MobileTab>('create');
 
   useEffect(() => {
-    const openPreview = () => setActiveTab('preview');
+    const openPreview = (event: Event) => {
+      const custom = event as CustomEvent<{ modelId?: string; type?: string } | null>;
+      if (custom.detail?.modelId === 'gallery') return;
+      setActiveTab('preview');
+    };
+    const openPreviewInfo = () => setActiveTab('preview');
     const openLibrary = () => setActiveTab('library');
 
     window.addEventListener('jobHoverPreview', openPreview as EventListener);
-    window.addEventListener('openPreviewInfo', openPreview as EventListener);
+    window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
     window.addEventListener('galleryAssetChanged', openLibrary as EventListener);
 
     return () => {
       window.removeEventListener('jobHoverPreview', openPreview as EventListener);
-      window.removeEventListener('openPreviewInfo', openPreview as EventListener);
+      window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
       window.removeEventListener('galleryAssetChanged', openLibrary as EventListener);
     };
   }, []);
