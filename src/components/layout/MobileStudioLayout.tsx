@@ -17,7 +17,6 @@ const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ cl
 
 export default function MobileStudioLayout() {
   const [activeTab, setActiveTab] = useState<MobileTab>('create');
-  const [lastNonPreviewTab, setLastNonPreviewTab] = useState<Exclude<MobileTab, 'preview'>>('create');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -25,26 +24,17 @@ export default function MobileStudioLayout() {
     if (savedTab === 'create' || savedTab === 'preview' || savedTab === 'jobs' || savedTab === 'gallery') {
       setActiveTab(savedTab);
     }
-    const savedLastTab = window.localStorage.getItem('engui.mobile.last-non-preview-tab');
-    if (savedLastTab === 'create' || savedLastTab === 'jobs' || savedLastTab === 'gallery') {
-      setLastNonPreviewTab(savedLastTab);
-    }
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('engui.mobile.active-tab', activeTab);
-    if (activeTab !== 'preview') {
-      setLastNonPreviewTab(activeTab);
-      window.localStorage.setItem('engui.mobile.last-non-preview-tab', activeTab);
-    }
   }, [activeTab]);
 
   useEffect(() => {
     const openCreate = () => setActiveTab('create');
     const openPreview = () => setActiveTab('preview');
     const openPreviewInfo = () => setActiveTab('preview');
-    const closePreview = () => setActiveTab(lastNonPreviewTab);
     const openJobs = () => setActiveTab('jobs');
     const openGallery = () => setActiveTab('gallery');
 
@@ -52,7 +42,6 @@ export default function MobileStudioLayout() {
     window.addEventListener('reuseJobInput', openCreate as EventListener);
     window.addEventListener('mobileOpenPreviewTab', openPreview as EventListener);
     window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
-    window.addEventListener('mobileClosePreviewTab', closePreview as EventListener);
     window.addEventListener('mobileOpenJobsTab', openJobs as EventListener);
     window.addEventListener('mobileOpenGalleryTab', openGallery as EventListener);
     window.addEventListener('galleryAssetChanged', openGallery as EventListener);
@@ -62,12 +51,11 @@ export default function MobileStudioLayout() {
       window.removeEventListener('reuseJobInput', openCreate as EventListener);
       window.removeEventListener('mobileOpenPreviewTab', openPreview as EventListener);
       window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
-      window.removeEventListener('mobileClosePreviewTab', closePreview as EventListener);
       window.removeEventListener('mobileOpenJobsTab', openJobs as EventListener);
       window.removeEventListener('mobileOpenGalleryTab', openGallery as EventListener);
       window.removeEventListener('galleryAssetChanged', openGallery as EventListener);
     };
-  }, [lastNonPreviewTab]);
+  }, []);
 
   return (
     <div className="flex h-screen min-h-[100dvh] w-full flex-col overflow-hidden bg-background text-foreground">

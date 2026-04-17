@@ -140,6 +140,12 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
 
+    if (Math.abs(deltaY) >= 60 && Math.abs(deltaY) > Math.abs(deltaX)) {
+      suppressClickRef.current = true;
+      onClose();
+      return;
+    }
+
     if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY)) {
       suppressClickRef.current = false;
       return;
@@ -153,7 +159,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     }
 
     goNext();
-  }, [goNext, goPrevious]);
+  }, [goNext, goPrevious, onClose]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
