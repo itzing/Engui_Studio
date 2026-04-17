@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon } from '@heroicons/react/24/outline';
+import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon, HandRaisedIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
 import AudioGenerationForm from '../forms/AudioGenerationForm';
@@ -12,6 +12,7 @@ import SettingsDialog from '../settings/SettingsDialog';
 import { S3BucketViewerDialog } from '../storage/S3BucketViewerDialog';
 import CharacterManagerPanel from '../characters/CharacterManagerPanel';
 import VibeManagerPanel from '../vibes/VibeManagerPanel';
+import PoseManagerPanel from '../poses/PoseManagerPanel';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { getActiveMode, setActiveMode } from '@/lib/createDrafts';
 
@@ -40,6 +41,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [isStorageOpen, setIsStorageOpen] = useState(false);
     const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
     const [isVibeManagerOpen, setIsVibeManagerOpen] = useState(false);
+    const [isPoseManagerOpen, setIsPoseManagerOpen] = useState(false);
 
     useEffect(() => {
         const savedMode = getActiveMode();
@@ -158,7 +160,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                 </div>
 
                 <div className={mobile ? 'flex-1 overflow-y-auto p-3 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
-                    <div className={`grid grid-cols-3 gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
+                    <div className={`grid grid-cols-4 gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
                         <button
                             type="button"
                             className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 bg-muted text-foreground shadow-sm"
@@ -187,6 +189,17 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                         >
                             <SwatchIcon className="w-4 h-4" />
                             Vibes
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsPoseManagerOpen(true)}
+                            className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${isPoseManagerOpen
+                                ? 'bg-muted text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            <HandRaisedIcon className="w-4 h-4" />
+                            Poses
                         </button>
                     </div>
 
@@ -257,6 +270,41 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                     </DialogHeader>
                     <div className="flex-1 overflow-y-auto p-5">
                         <VibeManagerPanel onRequestClose={() => setIsVibeManagerOpen(false)} />
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isPoseManagerOpen} onOpenChange={(open) => {
+                if (open) {
+                    setIsPoseManagerOpen(true);
+                }
+            }}>
+                <DialogContent
+                    className="w-[96vw] max-w-[1700px] h-[94vh] p-0 gap-0 overflow-hidden flex flex-col [&>button]:hidden"
+                    onEscapeKeyDown={(event) => event.preventDefault()}
+                    onPointerDownOutside={(event) => event.preventDefault()}
+                    onInteractOutside={(event) => event.preventDefault()}
+                >
+                    <DialogHeader className="border-b border-border px-5 py-4 pr-14 space-y-1 text-left">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <DialogTitle className="text-base">Pose Manager</DialogTitle>
+                                <DialogDescription className="text-xs">
+                                    Manage reusable pose presets in a dedicated desktop workspace.
+                                </DialogDescription>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new CustomEvent('pose-manager-request-close'))}
+                                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                                <XMarkIcon className="h-4 w-4" />
+                                Close
+                            </button>
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-5">
+                        <PoseManagerPanel onRequestClose={() => setIsPoseManagerOpen(false)} />
                     </div>
                 </DialogContent>
             </Dialog>
