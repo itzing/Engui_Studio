@@ -1074,24 +1074,24 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 );
                             })}
                         </div>
-                        <div className={`${mobile ? 'flex flex-wrap items-center gap-1 justify-between' : 'flex items-center gap-1'}`}>
+                        <div className={`${mobile ? 'flex items-center gap-2' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (
-                                <>
+                                <div className={`${mobile ? 'flex items-center gap-2' : 'flex items-center gap-1'}`}>
                                     <button
                                         type="button"
                                         onClick={toggleGalleryFavorites}
-                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                                        className={`h-7 w-7 rounded border text-[10px] transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                     >
                                         <Heart className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                         type="button"
                                         onClick={toggleGalleryTrash}
-                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                                        className={`h-7 w-7 rounded border text-[10px] transition-colors inline-flex items-center justify-center shrink-0 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
-                                </>
+                                </div>
                             )}
                             {panelMode === 'jobs' && (
                                 <Button
@@ -1108,7 +1108,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                className={`${mobile ? 'ml-auto h-7 w-7 rounded border border-border/40' : 'h-6 w-6'} text-muted-foreground hover:text-foreground hover:bg-muted/20`}
                                 title={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
                                 aria-label={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
                                 onClick={() => {
