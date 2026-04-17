@@ -332,6 +332,16 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     }, [jobs, activeWorkspaceId, filter, jobMatchesFilter, mergeUniqueJobs]);
 
     const handleJobClick = (job: Job) => {
+        if (mobile) {
+            const isSameJob = selectedJob?.id === job.id;
+            setSelectedJob(job);
+
+            if (isSameJob) {
+                emitHoverPreview(job);
+            }
+            return;
+        }
+
         setSelectedJob(job);
         setDetailsOpen(true);
     };
@@ -345,9 +355,16 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
     const handleGalleryAssetClick = (asset: GalleryAsset) => {
         const itemIndex = filteredGalleryAssets.findIndex(item => item.id === asset.id);
+        const isSameAsset = selectedGalleryAsset?.id === asset.id;
+
         setSelectedGalleryAsset(asset);
         emitGallerySelection(asset);
         setGalleryDetailsOpen(false);
+
+        if (mobile && !isSameAsset) {
+            return;
+        }
+
         setGalleryViewerItems(filteredGalleryAssets);
         setGalleryViewerPage(galleryPage);
         setGalleryViewerHasNextPage(galleryHasNextPage);
@@ -1062,7 +1079,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                     onClick={() => handleGalleryAssetClick(asset)}
                                     onMouseEnter={() => emitGalleryHoverPreview(asset)}
                                     onMouseLeave={() => emitGalleryHoverPreview(null)}
-                                    className="group text-left rounded-lg overflow-hidden border border-border bg-muted/10 hover:bg-muted/20 transition-colors relative"
+                                    className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && selectedGalleryAsset?.id === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
                                         {asset.type === 'video' ? (
@@ -1077,7 +1094,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                             <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
                                         )}
                                     </div>
-                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${mobile && selectedGalleryAsset?.id === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                         <button
                                             type="button"
                                             onClick={(e) => void handleGalleryFavorite(e, asset)}
@@ -1162,7 +1179,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                 onClick={() => handleJobClick(job)}
                                 onMouseEnter={() => emitHoverPreview(job)}
                                 onMouseLeave={() => emitHoverPreview(null)}
-                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'}`}
+                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${mobile && selectedJob?.id === job.id ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
                                     if (job.status === 'completed' && job.resultUrl) {
@@ -1264,7 +1281,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
                                 {/* Action Buttons (Bottom Right - Hover) */}
                                 {job.status === 'completed' && job.resultUrl && (
-                                    <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                    <div className={`absolute bottom-2 right-2 flex gap-1 transition-all duration-200 ${mobile && selectedJob?.id === job.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                         <div className="relative group/tooltip">
                                             <button
                                                 onClick={(e) => {
