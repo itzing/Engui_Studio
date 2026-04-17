@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowPathIcon, ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PlusIcon, TrashIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PhotoIcon, PlusIcon, TrashIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
+import { getModelsByType } from '@/lib/models/modelConfig';
 import type { CharacterSummary } from '@/lib/characters/types';
 import type { VibePresetSummary } from '@/lib/vibes/types';
 import type { PosePresetSummary } from '@/lib/poses/types';
@@ -188,7 +189,7 @@ function formatDate(value: string | null | undefined): string {
 }
 
 export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?: () => void }) {
-  const { activeWorkspaceId } = useStudio();
+  const { activeWorkspaceId, addJob, jobs } = useStudio();
   const { showToast } = useToast();
 
   const [scenes, setScenes] = useState<ScenePresetSummary[]>([]);
@@ -198,6 +199,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAssembling, setIsAssembling] = useState(false);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [search, setSearch] = useState('');
   const [listMode, setListMode] = useState<SceneListMode>('active');
   const [countFilter, setCountFilter] = useState<CharacterCountFilter>('all');
@@ -208,6 +210,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
   const [isDirtyGuardOpen, setIsDirtyGuardOpen] = useState(false);
   const [assembleWarnings, setAssembleWarnings] = useState<string[]>([]);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const handledPreviewStateRef = useRef<string | null>(null);
 
   const filteredScenes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -219,6 +222,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
   }, [countFilter, scenes, search]);
 
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === selectedId) || null, [scenes, selectedId]);
+  const previewJob = useMemo(() => jobs.find((job) => job.id === draft.latestPreviewJobId) || null, [jobs, draft.latestPreviewJobId]);
   const isDirty = useMemo(() => baselineFromDraft({ ...draft, baseline: '' }) !== draft.baseline, [draft]);
   const hasBoundCharacter = useMemo(() => draft.bindings.some((binding) => !!binding.characterPresetId), [draft.bindings]);
   const isValid = !!activeWorkspaceId && !!draft.name.trim() && !!draft.summary.trim() && !!draft.generatedScenePrompt.trim() && hasBoundCharacter;
@@ -228,6 +232,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
     () => poses.filter((pose) => pose.characterCount === draft.characterCount),
     [poses, draft.characterCount],
   );
+  const defaultPreviewModelId = getModelsByType('image')[0]?.id || 'flux-krea';
 
   const focusNameSoon = () => {
     window.requestAnimationFrame(() => nameInputRef.current?.focus());
@@ -471,8 +476,116 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
     }
   };
 
+  const handleGeneratePreview = async () => {
+    if (!activeWorkspaceId) {
+      showToast('Select a workspace first', 'error');
+      return;
+    }
+
+    if (!draft.generatedScenePrompt.trim()) {
+      showToast('Build the scene prompt before generating preview', 'error');
+      return;
+    }
+
+    const effectiveSceneId = draft.id;
+    if (!effectiveSceneId) {
+      showToast('Save the scene once before generating preview', 'error');
+      return;
+    }
+
+    setIsGeneratingPreview(true);
+    try {
+      const formData = new FormData();
+      formData.append('userId', 'user-with-settings');
+      formData.append('workspaceId', activeWorkspaceId);
+      formData.append('language', 'en');
+      formData.append('modelId', defaultPreviewModelId);
+      formData.append('prompt', draft.generatedScenePrompt.trim());
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.jobId) {
+        throw new Error(data.error || 'Failed to start preview generation');
+      }
+
+      addJob({
+        id: data.jobId,
+        modelId: defaultPreviewModelId,
+        type: 'image',
+        status: 'queued',
+        prompt: draft.generatedScenePrompt.trim(),
+        createdAt: Date.now(),
+        workspaceId: activeWorkspaceId,
+      });
+
+      await fetch(`/api/scenes/${effectiveSceneId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latestPreviewJobId: data.jobId,
+          latestPreviewImageUrl: null,
+        }),
+      });
+
+      handledPreviewStateRef.current = null;
+      setDraft((current) => ({
+        ...current,
+        latestPreviewJobId: data.jobId,
+        latestPreviewImageUrl: null,
+      }));
+      showToast('Scene preview job started', 'success');
+    } catch (error: any) {
+      console.error('Failed to generate scene preview:', error);
+      showToast(error?.message || 'Failed to generate scene preview', 'error');
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
+
   const selectedPose = poses.find((pose) => pose.id === draft.posePresetId) || null;
   const selectedVibe = vibes.find((vibe) => vibe.id === draft.vibePresetId) || null;
+
+  useEffect(() => {
+    if (!draft.id || !previewJob) return;
+
+    const marker = `${previewJob.id}:${previewJob.status}:${previewJob.resultUrl || ''}:${previewJob.error || ''}`;
+    if (handledPreviewStateRef.current === marker) return;
+
+    if (previewJob.status === 'completed' && previewJob.resultUrl) {
+      handledPreviewStateRef.current = marker;
+      setDraft((current) => ({
+        ...current,
+        latestPreviewJobId: previewJob.id,
+        latestPreviewImageUrl: previewJob.resultUrl || null,
+      }));
+
+      void fetch(`/api/scenes/${draft.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latestPreviewJobId: previewJob.id,
+          latestPreviewImageUrl: previewJob.resultUrl,
+        }),
+      }).then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || 'Failed to persist preview result');
+        }
+        setScenes((current) => current.map((scene) => scene.id === draft.id ? data.scene : scene));
+      }).catch((error) => {
+        console.error('Failed to persist scene preview result:', error);
+      });
+      return;
+    }
+
+    if (previewJob.status === 'failed') {
+      handledPreviewStateRef.current = marker;
+      showToast(previewJob.error || 'Scene preview generation failed', 'error');
+    }
+  }, [draft.id, previewJob, showToast]);
 
   return (
     <>
@@ -531,6 +644,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
               <Button size="sm" variant="outline" onClick={() => void handleTrashAction('soft_delete')} disabled={!selectedScene || !draft.id}><TrashIcon className="mr-2 h-4 w-4" />Delete</Button>
             )}
             <Button size="sm" variant="outline" onClick={() => void handleAssemble()} disabled={listMode === 'trash' || isAssembling}><ArrowPathIcon className="mr-2 h-4 w-4" />{isAssembling ? 'Building...' : 'Build prompt'}</Button>
+            <Button size="sm" variant="outline" onClick={() => void handleGeneratePreview()} disabled={listMode === 'trash' || isGeneratingPreview || !draft.generatedScenePrompt.trim()}><PhotoIcon className="mr-2 h-4 w-4" />{isGeneratingPreview ? 'Starting preview...' : 'Generate preview'}</Button>
             <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(draft.generatedScenePrompt || ''); showToast('Prompt copied', 'success'); }} disabled={!draft.generatedScenePrompt}><ClipboardDocumentIcon className="mr-2 h-4 w-4" />Copy prompt</Button>
             <div className="ml-auto flex items-center gap-3">
               <div className="text-xs text-muted-foreground">{listMode === 'trash' ? 'Read-only trash view' : (isDirty ? 'Unsaved changes' : 'Saved')}</div>
@@ -656,6 +770,36 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
                 </div>
 
                 <div className="space-y-5">
+                  <div className="rounded-xl border border-border bg-background p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prototype preview</div>
+                      {previewJob && <Badge variant="outline" className="capitalize">{previewJob.status}</Badge>}
+                    </div>
+                    {draft.latestPreviewImageUrl ? (
+                      <div className="overflow-hidden rounded-lg border border-border bg-card">
+                        <img src={draft.latestPreviewImageUrl} alt="Scene preview" className="h-auto w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+                        {previewJob && (previewJob.status === 'queued' || previewJob.status === 'processing' || previewJob.status === 'finalizing')
+                          ? 'Preview generation is running. The image will appear here automatically.'
+                          : 'No preview yet. Save the scene, build a prompt, then generate a prototype preview.'}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{draft.latestPreviewJobId ? `Job ${draft.latestPreviewJobId}` : 'No preview job linked'}</span>
+                      {draft.latestPreviewImageUrl && (
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => window.open(draft.latestPreviewImageUrl || '', '_blank', 'noopener,noreferrer')}
+                        >
+                          Open full image
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="rounded-xl border border-border bg-background p-4 space-y-4">
                     <div className="space-y-2">
                       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Linked pose</div>
