@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const onlyProcessing = searchParams.get('onlyProcessing') === 'true';
     const workspaceId = searchParams.get('workspaceId'); // 워크스페이스 필터 추가
-    const type = (searchParams.get('type') || '').toLowerCase(); // image | video | audio
+    const type = (searchParams.get('type') || '').toLowerCase(); // image | video | audio or csv
 
     if (jobId) {
       // 특정 작업 조회
@@ -132,10 +132,12 @@ export async function GET(request: NextRequest) {
 
       // 타입 필터링
       if (type) {
-        if (type === 'audio') {
+        const types = Array.from(new Set(type.split(',').map((entry) => entry.trim()).filter(Boolean)));
+        if (types.length === 1 && types[0] === 'audio') {
           whereCondition.type = { in: ['audio', 'tts', 'music'] };
-        } else if (type === 'image' || type === 'video') {
-          whereCondition.type = type;
+        } else if (types.length > 0) {
+          const expandedTypes = types.flatMap((entry) => entry === 'audio' ? ['audio', 'tts', 'music'] : entry);
+          whereCondition.type = { in: Array.from(new Set(expandedTypes.filter((entry) => entry === 'image' || entry === 'video' || entry === 'audio' || entry === 'tts' || entry === 'music'))) };
         }
       }
 

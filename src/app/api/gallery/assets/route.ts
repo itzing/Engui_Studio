@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const includeTrashed = searchParams.get('includeTrashed') === 'true';
     const onlyTrashed = searchParams.get('onlyTrashed') === 'true';
     const type = searchParams.get('type');
+    const types = Array.from(new Set((type || '').split(',').map(entry => entry.trim()).filter(Boolean)));
     const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     const where = {
       workspaceId,
       ...(onlyTrashed ? { trashed: true } : includeTrashed ? {} : { trashed: false }),
-      ...(type && type !== 'all' ? { type } : {}),
+      ...(types.length > 0 && !types.includes('all') ? { type: { in: types } } : {}),
       ...(favoritesOnly ? { favorited: true } : {}),
     };
 

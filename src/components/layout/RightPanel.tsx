@@ -6,7 +6,7 @@ import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
-import { Search, Filter, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X } from 'lucide-react';
+import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,9 @@ type GalleryAsset = {
     updatedAt?: string;
 };
 
-const galleryFilter = (asset: GalleryAsset, filter: 'all' | 'image' | 'video' | 'audio') => filter === 'all' ? true : asset.type === filter;
+const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
+type MediaFilter = typeof TYPE_FILTERS[number];
+const galleryFilter = (asset: GalleryAsset, filters: MediaFilter[]) => filters.includes(asset.type);
 
 export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
@@ -56,7 +58,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const [galleryViewerHasNextPage, setGalleryViewerHasNextPage] = useState(false);
     const [isLoadingMoreViewerItems, setIsLoadingMoreViewerItems] = useState(false);
     const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
-    const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
+    const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
     const [isMounted, setIsMounted] = useState(false);
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
     const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
@@ -89,11 +91,10 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const { showToast } = useToast();
 
 
-    const jobMatchesFilter = useCallback((job: Job, currentFilter: 'all' | 'image' | 'video' | 'audio') => {
+    const jobMatchesFilter = useCallback((job: Job, filters: MediaFilter[]) => {
         const jobType = (job.type || '').toLowerCase();
-        if (currentFilter === 'all') return true;
-        if (currentFilter === 'audio') return ['audio', 'tts', 'music'].includes(jobType);
-        return jobType === currentFilter;
+        if (filters.includes('audio') && ['audio', 'tts', 'music'].includes(jobType)) return true;
+        return filters.includes(jobType as MediaFilter);
     }, []);
 
     const mergeUniqueJobs = useCallback((items: Job[]) => {
@@ -117,8 +118,13 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
         if (mobile) {
             const savedFilter = window.localStorage.getItem('engui.mobile.library.filter');
-            if (savedFilter === 'all' || savedFilter === 'image' || savedFilter === 'video' || savedFilter === 'audio') {
-                setFilter(savedFilter);
+            if (savedFilter) {
+                const parsed = savedFilter === 'all'
+                    ? [...TYPE_FILTERS]
+                    : savedFilter.split(',').map(entry => entry.trim()).filter((entry): entry is MediaFilter => TYPE_FILTERS.includes(entry as MediaFilter));
+                if (parsed.length > 0) {
+                    setSelectedFilters(Array.from(new Set(parsed)));
+                }
             }
 
             const savedSearch = window.localStorage.getItem('engui.mobile.library.search');
@@ -137,14 +143,14 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         if (!isMounted || typeof window === 'undefined') return;
         window.localStorage.setItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode', panelMode);
         if (mobile) {
-            window.localStorage.setItem('engui.mobile.library.filter', filter);
+            window.localStorage.setItem('engui.mobile.library.filter', selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','));
             window.localStorage.setItem('engui.mobile.library.search', gallerySearchQuery);
             window.localStorage.setItem('engui.mobile.library.sort', gallerySort);
         }
         window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
             detail: panelMode,
         }));
-    }, [filter, gallerySearchQuery, gallerySort, isMounted, mobile, panelMode]);
+    }, [gallerySearchQuery, gallerySort, isMounted, mobile, panelMode, selectedFilters]);
 
     useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
@@ -184,9 +190,9 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         return () => window.clearTimeout(timeout);
     }, [gallerySearchQuery]);
 
-    const getApiType = (currentFilter: 'all' | 'image' | 'video' | 'audio') => {
-        if (currentFilter === 'all') return '';
-        return currentFilter;
+    const getApiType = (filters: MediaFilter[]) => {
+        if (filters.length === TYPE_FILTERS.length) return '';
+        return filters.join(',');
     };
 
     const fetchJobsPage = useCallback(async (page: number, append = false) => {
@@ -206,7 +212,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 limit: String(pageSize),
             });
 
-            const apiType = getApiType(filter);
+            const apiType = getApiType(selectedFilters);
             if (apiType) {
                 params.set('type', apiType);
             }
@@ -231,7 +237,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setIsLoadingJobs(false);
             setIsLoadingMore(false);
         }
-    }, [activeWorkspaceId, filter, mergeUniqueJobs]);
+    }, [activeWorkspaceId, mergeUniqueJobs, selectedFilters]);
 
     const fetchGalleryAssetsPage = useCallback(async (page: number) => {
         if (!activeWorkspaceId) return null;
@@ -242,7 +248,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             limit: String(pageSize),
             includeTrashed: showTrashed ? 'true' : 'false',
             onlyTrashed: showTrashed ? 'true' : 'false',
-            type: filter,
+            type: getApiType(selectedFilters) || 'all',
             favoritesOnly: favoritesOnly ? 'true' : 'false',
             q: debouncedGallerySearchQuery,
             sort: gallerySort,
@@ -260,7 +266,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             assets: (data.assets || []) as GalleryAsset[],
             hasNextPage: !!data.pagination?.hasNextPage,
         };
-    }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, filter, gallerySort, showTrashed]);
+    }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, gallerySort, selectedFilters, showTrashed]);
 
     const fetchGalleryAssets = useCallback(async (page: number, append = false) => {
         if (!activeWorkspaceId) return;
@@ -310,7 +316,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             return;
         }
         void fetchJobsPage(1, false);
-    }, [filter, activeWorkspaceId, fetchJobsPage]);
+    }, [activeWorkspaceId, fetchJobsPage, selectedFilters]);
 
     useEffect(() => {
         if (!activeWorkspaceId) return;
@@ -355,12 +361,12 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         if (!activeWorkspaceId) return;
 
         const liveWorkspaceJobs = jobs.filter(job =>
-            job.workspaceId === activeWorkspaceId && jobMatchesFilter(job, filter)
+            job.workspaceId === activeWorkspaceId && jobMatchesFilter(job, selectedFilters)
         );
 
         // Keep live state as source of truth: it must overwrite stale paginated items.
         setLoadedJobs(prev => mergeUniqueJobs([...prev, ...liveWorkspaceJobs]));
-    }, [jobs, activeWorkspaceId, filter, jobMatchesFilter, mergeUniqueJobs]);
+    }, [jobs, activeWorkspaceId, jobMatchesFilter, mergeUniqueJobs, selectedFilters]);
 
     const handleJobClick = (job: Job) => {
         if (mobile) {
@@ -657,18 +663,10 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         }));
     }, [filteredGalleryAssets]);
     const gallerySearchTokens = Array.from(new Set(gallerySearchQuery.split(/\s+/).map(token => token.trim()).filter(Boolean)));
-    const activeGalleryPreset = showTrashed
-        ? 'trash'
-        : favoritesOnly
-            ? 'favorites'
-            : filter === 'image'
-                ? 'images'
-                : filter === 'video'
-                    ? 'videos'
-                    : 'all';
+    const isAllFilterActive = selectedFilters.length === TYPE_FILTERS.length;
     const gallerySummaryParts = [
         `${filteredGalleryAssets.length} assets`,
-        filter !== 'all' ? filter : null,
+        !isAllFilterActive ? selectedFilters.join(', ') : null,
         favoritesOnly ? 'favorites' : null,
         showTrashed ? 'trash' : 'active',
     ].filter(Boolean);
@@ -778,15 +776,25 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
         setGallerySearchQuery(prev => prev.split(/\s+/).map(token => token.trim()).filter(Boolean).filter(token => token !== tokenToRemove).join(' '));
     };
 
-    const applyGalleryPreset = (preset: 'all' | 'favorites' | 'images' | 'videos' | 'trash') => {
-        setPanelMode('gallery');
-        setShowTrashed(preset === 'trash');
-        setFavoritesOnly(preset === 'favorites');
-        setFilter(preset === 'images' ? 'image' : preset === 'videos' ? 'video' : 'all');
-        if (preset === 'trash') {
-            setFavoritesOnly(false);
-            setFilter('all');
-        }
+    const toggleMediaFilter = (target: 'all' | MediaFilter) => {
+        setSelectedFilters(prev => {
+            if (target === 'all') {
+                return [...TYPE_FILTERS];
+            }
+            const allSelected = prev.length === TYPE_FILTERS.length;
+            if (allSelected) {
+                return TYPE_FILTERS.filter(entry => entry !== target);
+            }
+            const hasTarget = prev.includes(target);
+            const next = hasTarget ? prev.filter(entry => entry !== target) : [...prev, target];
+            if (next.length === 0) {
+                return [...TYPE_FILTERS];
+            }
+            if (next.length === TYPE_FILTERS.length) {
+                return [...TYPE_FILTERS];
+            }
+            return next;
+        });
     };
 
     const toggleGalleryFavorites = () => {
@@ -1042,29 +1050,47 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                         ))}
                     </div>
                     <div className={mobile ? 'flex flex-col items-stretch gap-2' : 'flex items-center justify-between gap-2'}>
-                        <div className={`${mobile ? 'grid grid-cols-4 gap-1 bg-muted/30 rounded-md p-0.5 w-full' : 'flex items-center gap-1 bg-muted/30 rounded-md p-0.5'}`}>
-                            {(['all', 'image', 'video', 'audio'] as const).map((t) => (
-                                <button
-                                    key={t}
-                                    onClick={() => setFilter(t)}
-                                    className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${filter === t
-                                        ? 'bg-background shadow-sm text-foreground font-medium'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                        }`}
-                                >
-                                    {t}
-                                </button>
-                            ))}
+                        <div className={`${mobile ? 'grid grid-cols-6 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
+                            {([
+                                { key: 'all', label: 'All' },
+                                { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                                { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                                { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+                            ] as const).map((item) => {
+                                const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+                                const Icon = 'icon' in item ? item.icon : null;
+                                return (
+                                    <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={() => toggleMediaFilter(item.key)}
+                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
+                                            ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                                            : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                    >
+                                        {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+                                        {!Icon ? item.label : null}
+                                    </button>
+                                );
+                            })}
                         </div>
                         <div className={`${mobile ? 'flex flex-wrap items-center gap-1 justify-between' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (
                                 <>
-                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${favoritesOnly ? 'text-pink-400' : 'text-muted-foreground'}`} onClick={toggleGalleryFavorites}>
-                                        ♥
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className={`h-6 px-2 text-[10px] ${showTrashed ? 'text-red-400' : 'text-muted-foreground'}`} onClick={toggleGalleryTrash}>
-                                        {showTrashed ? 'Trash' : 'Active'}
-                                    </Button>
+                                    <button
+                                        type="button"
+                                        onClick={toggleGalleryFavorites}
+                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                    >
+                                        <Heart className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={toggleGalleryTrash}
+                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </>
                             )}
                             {panelMode === 'jobs' && (
