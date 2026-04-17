@@ -41,7 +41,8 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState<CenterMode>('image');
   const [hoverPreview, setHoverPreview] = useState<HoverPreview>(null);
-  const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('native');
+  const [imageViewMode, setImageViewMode] = useState<ImageViewMode>('fit');
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [selectedImageJobId, setSelectedImageJobId] = useState<string | null>(null);
   const [selectedGalleryItemId, setSelectedGalleryItemId] = useState<string | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('jobs');
@@ -196,11 +197,15 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   useEffect(() => {
     try {
       const savedViewMode = localStorage.getItem('engui:center-image-view-mode');
+      if (mobile) {
+        setImageViewMode('fit');
+        return;
+      }
       if (savedViewMode === 'native' || savedViewMode === 'fit') {
         setImageViewMode(savedViewMode);
       }
     } catch {}
-  }, []);
+  }, [mobile]);
 
   useEffect(() => {
     try {
@@ -209,14 +214,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   }, [imageViewMode]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (mode !== 'image') return;
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
+    const navigatePreview = (direction: 'previous' | 'next') => {
       const navigationItems = rightPanelMode === 'gallery' ? galleryItems : completedImageJobs;
       if (navigationItems.length === 0) return;
 
@@ -224,8 +222,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       const baseId = (hoverPreview && hoverPreview.id) ? hoverPreview.id : (selectedId || navigationItems[0].id);
       const currentIndex = navigationItems.findIndex(item => item.id === baseId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-
-      const nextIndex = event.key === 'ArrowRight'
+      const nextIndex = direction === 'next'
         ? (safeIndex + 1) % navigationItems.length
         : (safeIndex - 1 + navigationItems.length) % navigationItems.length;
 
@@ -235,12 +232,47 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       } else {
         setSelectedImageJobId(navigationItems[nextIndex].id);
       }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (mode !== 'image') return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      navigatePreview(event.key === 'ArrowRight' ? 'next' : 'previous');
       event.preventDefault();
     };
 
+    const onTouchStart = (event: TouchEvent) => {
+      if (!mobile || mode !== 'image') return;
+      setTouchStartX(event.touches[0]?.clientX ?? null);
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      if (!mobile || mode !== 'image' || touchStartX === null) return;
+      const endX = event.changedTouches[0]?.clientX;
+      if (typeof endX !== 'number') {
+        setTouchStartX(null);
+        return;
+      }
+      const deltaX = endX - touchStartX;
+      setTouchStartX(null);
+      if (Math.abs(deltaX) < 40) return;
+      navigatePreview(deltaX < 0 ? 'next' : 'previous');
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [mode, hoverPreview, rightPanelMode, selectedImageJobId, selectedGalleryItemId, completedImageJobs, galleryItems]);
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [mode, hoverPreview, rightPanelMode, selectedImageJobId, selectedGalleryItemId, completedImageJobs, galleryItems, mobile, touchStartX]);
 
   const selectedImageJob = useMemo(() => {
     if (!selectedImageJobId) return latestSuccessfulJob;
