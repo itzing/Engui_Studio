@@ -18,6 +18,19 @@ export default function MobileStudioLayout() {
   const [activeTab, setActiveTab] = useState<MobileTab>('create');
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedTab = window.localStorage.getItem('engui.mobile.active-tab');
+    if (savedTab === 'create' || savedTab === 'preview' || savedTab === 'library') {
+      setActiveTab(savedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('engui.mobile.active-tab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
     const openPreview = () => setActiveTab('preview');
     const openPreviewInfo = () => setActiveTab('preview');
     const openLibrary = () => setActiveTab('library');
