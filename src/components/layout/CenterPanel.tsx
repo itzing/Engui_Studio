@@ -5,6 +5,7 @@ import { useStudio, Job } from '@/lib/context/StudioContext';
 import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+import { Info } from 'lucide-react';
 
 type CenterMode = 'image' | 'video';
 type ImageViewMode = 'native' | 'fit';
@@ -115,6 +116,13 @@ export default function CenterPanel() {
       setGalleryItems(nextItems);
     };
 
+    const gallerySelectionHandler = (event: Event) => {
+      const custom = event as CustomEvent<{ id?: string } | null>;
+      if (custom.detail?.id) {
+        setSelectedGalleryItemId(custom.detail.id);
+      }
+    };
+
     if (typeof window !== 'undefined') {
       const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
       if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
@@ -125,10 +133,12 @@ export default function CenterPanel() {
     window.addEventListener('jobHoverPreview', handler as EventListener);
     window.addEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
     window.addEventListener('rightPanelGalleryItemsChanged', galleryItemsHandler as EventListener);
+    window.addEventListener('rightPanelGallerySelect', gallerySelectionHandler as EventListener);
     return () => {
       window.removeEventListener('jobHoverPreview', handler as EventListener);
       window.removeEventListener('rightPanelModeChanged', panelModeHandler as EventListener);
       window.removeEventListener('rightPanelGalleryItemsChanged', galleryItemsHandler as EventListener);
+      window.removeEventListener('rightPanelGallerySelect', gallerySelectionHandler as EventListener);
     };
   }, []);
 
@@ -361,6 +371,16 @@ export default function CenterPanel() {
     }
   };
 
+  const handleOpenInfo = () => {
+    if (!previewJob || typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('openPreviewInfo', {
+      detail: {
+        id: previewJob.id,
+        kind: previewJob.modelId === 'gallery' ? 'gallery' : 'job',
+      },
+    }));
+  };
+
   const handleUpscale = async () => {
     if (!previewJob || isUpscaling) return;
     if (previewJob.type !== 'image' && previewJob.type !== 'video') {
@@ -474,6 +494,10 @@ export default function CenterPanel() {
               />
             </div>
             <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-2 max-w-[calc(100%-1.5rem)]">
+              <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={handleOpenInfo}>
+                <Info className="w-4 h-4 mr-1.5" />
+                Info
+              </Button>
               {shouldShowAddToGallery && (
                 <Button size="sm" variant="secondary" className="bg-black/70 hover:bg-black/80 text-white border border-white/10" onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
                   {isSavingToGallery ? 'Adding...' : 'Add to gallery'}

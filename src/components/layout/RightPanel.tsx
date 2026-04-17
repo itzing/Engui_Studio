@@ -5,6 +5,7 @@ import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
 import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
+import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { Search, Filter, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,8 @@ export default function RightPanel() {
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [galleryDetailsOpen, setGalleryDetailsOpen] = useState(false);
+    const [galleryViewerOpen, setGalleryViewerOpen] = useState(false);
+    const [galleryViewerIndex, setGalleryViewerIndex] = useState(0);
     const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
     const [filter, setFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
     const [isMounted, setIsMounted] = useState(false);
@@ -116,6 +119,30 @@ export default function RightPanel() {
             inputRef.current.focus();
         }
     }, [isCreatingWorkspace]);
+
+    useEffect(() => {
+        const handleOpenPreviewInfo = (event: Event) => {
+            const custom = event as CustomEvent<{ id?: string; kind?: 'gallery' | 'job' }>;
+            const detail = custom.detail;
+            if (!detail?.id || !detail?.kind) return;
+
+            if (detail.kind === 'gallery') {
+                const asset = galleryAssets.find(item => item.id === detail.id);
+                if (!asset) return;
+                setSelectedGalleryAsset(asset);
+                setGalleryDetailsOpen(true);
+                return;
+            }
+
+            const job = loadedJobs.find(item => item.id === detail.id) || jobs.find(item => item.id === detail.id) || null;
+            if (!job) return;
+            setSelectedJob(job);
+            setDetailsOpen(true);
+        };
+
+        window.addEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
+        return () => window.removeEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
+    }, [galleryAssets, jobs, loadedJobs]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -290,9 +317,19 @@ export default function RightPanel() {
         setDetailsOpen(true);
     };
 
+    const emitGallerySelection = useCallback((asset: GalleryAsset | null) => {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('rightPanelGallerySelect', {
+            detail: asset ? { id: asset.id } : null,
+        }));
+    }, []);
+
     const handleGalleryAssetClick = (asset: GalleryAsset) => {
+        const itemIndex = filteredGalleryAssets.findIndex(item => item.id === asset.id);
         setSelectedGalleryAsset(asset);
-        setGalleryDetailsOpen(true);
+        emitGallerySelection(asset);
+        setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
+        setGalleryViewerOpen(true);
     };
 
     const emitHoverPreview = (job: Job | null) => {
@@ -401,6 +438,25 @@ export default function RightPanel() {
     const filteredJobs = loadedJobs;
     const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
     const filteredGalleryAssets = galleryAssets;
+
+    const handleGalleryViewerIndexChange = useCallback((index: number) => {
+        const asset = filteredGalleryAssets[index];
+        if (!asset) return;
+        setGalleryViewerIndex(index);
+        setSelectedGalleryAsset(asset);
+        emitGallerySelection(asset);
+    }, [emitGallerySelection, filteredGalleryAssets]);
+
+    useEffect(() => {
+        if (!galleryViewerOpen) return;
+        if (filteredGalleryAssets.length === 0) {
+            setGalleryViewerOpen(false);
+            return;
+        }
+        if (galleryViewerIndex >= filteredGalleryAssets.length) {
+            setGalleryViewerIndex(filteredGalleryAssets.length - 1);
+        }
+    }, [filteredGalleryAssets, galleryViewerIndex, galleryViewerOpen]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1316,6 +1372,17 @@ export default function RightPanel() {
                 onPermanentDelete={() => selectedGalleryAsset && void handleGalleryPermanentDelete(selectedGalleryAsset)}
                 onSaveTags={(tags) => selectedGalleryAsset ? handleGallerySaveTags(selectedGalleryAsset, tags) : undefined}
                 onTagClick={(tag) => handleGalleryTagClick(tag)}
+            />
+
+            <GalleryFullscreenViewer
+                open={galleryViewerOpen}
+                items={filteredGalleryAssets.map(asset => ({
+                    id: asset.id,
+                    url: asset.originalUrl,
+                }))}
+                currentIndex={galleryViewerIndex}
+                onIndexChange={handleGalleryViewerIndexChange}
+                onClose={() => setGalleryViewerOpen(false)}
             />
         </div>
     );
