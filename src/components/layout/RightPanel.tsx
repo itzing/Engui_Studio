@@ -1066,7 +1066,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                         onClick={() => toggleMediaFilter(item.key)}
                                         className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
                                             ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
-                                            : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                            : 'text-muted-foreground border-border/50 bg-transparent grayscale opacity-70 hover:opacity-100 hover:border-border hover:bg-muted/30'}`}
                                     >
                                         {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
                                         {!Icon ? item.label : null}
@@ -1080,14 +1080,14 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                     <button
                                         type="button"
                                         onClick={toggleGalleryFavorites}
-                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/50 bg-transparent grayscale opacity-70 hover:opacity-100 hover:border-border hover:bg-muted/30'}`}
                                     >
                                         <Heart className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                         type="button"
                                         onClick={toggleGalleryTrash}
-                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/50 bg-transparent hover:text-foreground hover:bg-muted/30'}`}
+                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/50 bg-transparent grayscale opacity-70 hover:opacity-100 hover:border-border hover:bg-muted/30'}`}
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
