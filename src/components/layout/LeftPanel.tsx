@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
@@ -35,10 +35,24 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
 
 export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
+    const GENERATION_MODE_STORAGE_KEY = 'engui.create.active-mode';
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isStorageOpen, setIsStorageOpen] = useState(false);
     const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
     const [isVibeManagerOpen, setIsVibeManagerOpen] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const savedMode = window.localStorage.getItem(GENERATION_MODE_STORAGE_KEY);
+        if (savedMode === 'image' || savedMode === 'video' || savedMode === 'tts' || savedMode === 'music') {
+            setGenerationMode(savedMode);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(GENERATION_MODE_STORAGE_KEY, generationMode);
+    }, [generationMode]);
 
     // Listen for job reuse events and switch to appropriate tab
     React.useEffect(() => {

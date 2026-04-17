@@ -15,6 +15,7 @@ import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function ImageGenerationForm() {
+    const STORAGE_KEY = 'engui.create.draft.image';
     const { t } = useI18n();
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [prompt, setPrompt] = useState('');
@@ -80,6 +81,12 @@ export default function ImageGenerationForm() {
 
     const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
+    const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        return new File([blob], filename, { type: blob.type || fallbackType });
+    };
+
     useEffect(() => {
         try {
             const storedValue = localStorage.getItem(RANDOMIZE_SEED_STORAGE_KEY);
@@ -90,6 +97,52 @@ export default function ImageGenerationForm() {
             console.warn('Failed to restore randomize seed preference', error);
         }
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const restoreDraft = async () => {
+            try {
+                const raw = window.localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const draft = JSON.parse(raw);
+                if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
+                if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
+                if (typeof draft.showAdvanced === 'boolean') setShowAdvanced(draft.showAdvanced);
+                if (draft.parameterValues && typeof draft.parameterValues === 'object') setParameterValues(draft.parameterValues);
+                if (typeof draft.previewUrl === 'string') {
+                    setPreviewUrl(draft.previewUrl);
+                    if (draft.previewUrl.startsWith('data:')) {
+                        setImageFile(await dataUrlToFile(draft.previewUrl, 'image-input'));
+                    }
+                }
+                if (typeof draft.previewUrl2 === 'string') {
+                    setPreviewUrl2(draft.previewUrl2);
+                    if (draft.previewUrl2.startsWith('data:')) {
+                        setImageFile2(await dataUrlToFile(draft.previewUrl2, 'image-input-2'));
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to restore image draft', error);
+            }
+        };
+        void restoreDraft();
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                selectedModel,
+                prompt,
+                showAdvanced,
+                parameterValues,
+                previewUrl,
+                previewUrl2,
+            }));
+        } catch (error) {
+            console.warn('Failed to persist image draft', error);
+        }
+    }, [parameterValues, previewUrl, previewUrl2, prompt, selectedModel, showAdvanced]);
 
     useEffect(() => {
         try {

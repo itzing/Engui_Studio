@@ -9,6 +9,7 @@ import { useStudio } from '@/lib/context/StudioContext';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 
 export default function MusicGenerationForm() {
+    const STORAGE_KEY = 'engui.create.draft.music';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId } = useStudio();
@@ -32,6 +33,33 @@ export default function MusicGenerationForm() {
         mediaQuery.addListener(updateLayout);
         return () => mediaQuery.removeListener(updateLayout);
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
+            if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
+            if (typeof draft.duration === 'number') setDuration(draft.duration);
+        } catch (error) {
+            console.warn('Failed to restore music draft', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                prompt,
+                selectedModel,
+                duration,
+            }));
+        } catch (error) {
+            console.warn('Failed to persist music draft', error);
+        }
+    }, [duration, prompt, selectedModel]);
 
     // Listen for reuseJobInput event
     React.useEffect(() => {

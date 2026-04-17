@@ -11,6 +11,7 @@ import { PlayIcon, SpeakerWaveIcon, TrashIcon as TrashIcon2 } from '@heroicons/r
 import VoiceDialog from '@/components/voice/VoiceDialog';
 
 export default function AudioGenerationForm() {
+    const STORAGE_KEY = 'engui.create.draft.tts';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { settings, addJob, addCompletedJob, activeWorkspaceId, updateSettings } = useStudio();
@@ -37,6 +38,33 @@ export default function AudioGenerationForm() {
         mediaQuery.addListener(updateLayout);
         return () => mediaQuery.removeListener(updateLayout);
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
+            if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
+            if (typeof draft.selectedVoice === 'string') setSelectedVoice(draft.selectedVoice);
+        } catch (error) {
+            console.warn('Failed to restore audio draft', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                prompt,
+                selectedModel,
+                selectedVoice,
+            }));
+        } catch (error) {
+            console.warn('Failed to persist audio draft', error);
+        }
+    }, [prompt, selectedModel, selectedVoice]);
 
     // Update local state if settings change externally (e.g. initial load)
     React.useEffect(() => {

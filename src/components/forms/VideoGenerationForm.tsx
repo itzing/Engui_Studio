@@ -15,6 +15,7 @@ import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 
 export default function VideoGenerationForm() {
+    const STORAGE_KEY = 'engui.create.draft.video';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
     const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
@@ -70,6 +71,58 @@ export default function VideoGenerationForm() {
     }, []);
 
     const videoModels = getModelsByType('video');
+
+    const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        return new File([blob], filename, { type: blob.type || fallbackType });
+    };
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const restoreDraft = async () => {
+            try {
+                const raw = window.localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const draft = JSON.parse(raw);
+                if (typeof draft.selectedModel === 'string') setSelectedModel(draft.selectedModel);
+                if (typeof draft.prompt === 'string') setPrompt(draft.prompt);
+                if (typeof draft.showAdvanced === 'boolean') setShowAdvanced(draft.showAdvanced);
+                if (draft.parameterValues && typeof draft.parameterValues === 'object') setParameterValues(draft.parameterValues);
+                if (typeof draft.imagePreviewUrl === 'string') {
+                    setImagePreviewUrl(draft.imagePreviewUrl);
+                    if (draft.imagePreviewUrl.startsWith('data:')) {
+                        setImageFile(await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input'));
+                    }
+                }
+                if (typeof draft.videoPreviewUrl === 'string') {
+                    setVideoPreviewUrl(draft.videoPreviewUrl);
+                    if (draft.videoPreviewUrl.startsWith('data:')) {
+                        setVideoFile(await dataUrlToFile(draft.videoPreviewUrl, 'video-input'));
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to restore video draft', error);
+            }
+        };
+        void restoreDraft();
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                selectedModel,
+                prompt,
+                showAdvanced,
+                parameterValues,
+                imagePreviewUrl,
+                videoPreviewUrl,
+            }));
+        } catch (error) {
+            console.warn('Failed to persist video draft', error);
+        }
+    }, [imagePreviewUrl, parameterValues, prompt, selectedModel, showAdvanced, videoPreviewUrl]);
 
     // Initialize selected model if not set
     useEffect(() => {
