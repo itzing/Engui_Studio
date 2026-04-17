@@ -607,6 +607,14 @@ export default function ImageGenerationForm() {
         }
     };
 
+    const applyAllFromScene = async () => {
+        if (!selectedScene) return;
+        applySelectedSceneToPrompt();
+        if (selectedScene.latestPreviewImageUrl) {
+            await applySelectedScenePreviewImage();
+        }
+    };
+
     const openSceneManager = () => {
         window.dispatchEvent(new CustomEvent('openSceneManager'));
     };
@@ -1380,7 +1388,15 @@ export default function ImageGenerationForm() {
                                         {selectedScene.posePresetName && <span>pose: {selectedScene.posePresetName}</span>}
                                         {selectedScene.vibePresetName && <span>vibe: {selectedScene.vibePresetName}</span>}
                                     </div>
-                                    <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-2'}`}>
+                                    {currentModel?.id === 'z-image' && (
+                                        <div className="rounded-md border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+                                            Scene apply keeps the current Z-Image model dropdown choice and its parameter selections intact.
+                                        </div>
+                                    )}
+                                    <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-3'}`}>
+                                        <Button type="button" variant="outline" onClick={() => void applyAllFromScene()} className="w-full">
+                                            Apply all from scene
+                                        </Button>
                                         <Button type="button" variant="outline" onClick={applySelectedSceneToPrompt} className="w-full">
                                             {promptMatchesSelectedScene ? 'Re-apply scene prompt' : 'Apply scene prompt'}
                                         </Button>
