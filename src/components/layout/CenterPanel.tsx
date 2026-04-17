@@ -93,9 +93,6 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     const handler = (event: Event) => {
       const custom = event as CustomEvent;
       const detail = (custom.detail ?? null) as HoverPreview;
-      if (mobile && detail?.modelId === 'gallery') {
-        setRightPanelMode('jobs');
-      }
       applyPreviewDetail(detail);
     };
 
@@ -141,11 +138,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         const pendingPreview = window.localStorage.getItem('engui.mobile.pending-preview');
         if (pendingPreview) {
           try {
-            const parsedPreview = JSON.parse(pendingPreview) as HoverPreview;
-            if (parsedPreview?.modelId === 'gallery') {
-              setRightPanelMode('jobs');
-            }
-            applyPreviewDetail(parsedPreview);
+            applyPreviewDetail(JSON.parse(pendingPreview) as HoverPreview);
           } catch {
             // ignore invalid stored preview payload
           }
@@ -222,10 +215,10 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
 
   useEffect(() => {
     const navigatePreview = (direction: 'previous' | 'next') => {
-      const navigationItems = rightPanelMode === 'gallery' ? galleryItems : completedImageJobs;
+      const navigationItems = mobile ? completedImageJobs : (rightPanelMode === 'gallery' ? galleryItems : completedImageJobs);
       if (navigationItems.length === 0) return;
 
-      const selectedId = rightPanelMode === 'gallery' ? selectedGalleryItemId : selectedImageJobId;
+      const selectedId = mobile ? selectedImageJobId : (rightPanelMode === 'gallery' ? selectedGalleryItemId : selectedImageJobId);
       const baseId = (hoverPreview && hoverPreview.id) ? hoverPreview.id : (selectedId || navigationItems[0].id);
       const currentIndex = navigationItems.findIndex(item => item.id === baseId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -234,11 +227,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         : (safeIndex - 1 + navigationItems.length) % navigationItems.length;
 
       setHoverPreview(null);
-      if (rightPanelMode === 'gallery') {
-        setSelectedGalleryItemId(navigationItems[nextIndex].id);
-      } else {
-        setSelectedImageJobId(navigationItems[nextIndex].id);
-      }
+      setSelectedImageJobId(navigationItems[nextIndex].id);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -291,23 +280,20 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     return galleryItems.find(item => item.id === selectedGalleryItemId) || null;
   }, [selectedGalleryItemId, galleryItems]);
 
-  const selectedGallerySourceJob = useMemo(() => {
-    if (!selectedGalleryItem?.sourceJobId) return null;
-    return completedImageJobs.find(job => job.id === selectedGalleryItem.sourceJobId) || null;
-  }, [completedImageJobs, selectedGalleryItem]);
-
   const previewJob = useMemo(() => {
-    if (hoverPreview && hoverPreview.status === 'completed' && hoverPreview.url && hoverPreview.type === 'image') {
-      if (mobile && hoverPreview.modelId === 'gallery') {
-        const sourceJob = hoverPreview.sourceJobId
-          ? completedImageJobs.find(job => job.id === hoverPreview.sourceJobId) || null
-          : null;
-        return sourceJob || selectedImageJob;
+    if (mobile) {
+      if (hoverPreview && hoverPreview.status === 'completed' && hoverPreview.type === 'image') {
+        const hoveredJob = completedImageJobs.find(job => job.id === hoverPreview.id);
+        return hoveredJob || selectedImageJob;
       }
+      return selectedImageJob;
+    }
+
+    if (hoverPreview && hoverPreview.status === 'completed' && hoverPreview.url && hoverPreview.type === 'image') {
       return hoverPreview;
     }
 
-    if (!mobile && rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
+    if (rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
       return {
         id: selectedGalleryItem.id,
         type: 'image',
@@ -321,12 +307,8 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       };
     }
 
-    if (mobile && rightPanelMode === 'gallery') {
-      return selectedGallerySourceJob || selectedImageJob;
-    }
-
     return selectedImageJob;
-  }, [completedImageJobs, hoverPreview, mobile, rightPanelMode, selectedGalleryItem, selectedGallerySourceJob, selectedImageJob]);
+  }, [completedImageJobs, hoverPreview, mobile, rightPanelMode, selectedGalleryItem, selectedImageJob]);
 
   const isGalleryPreview = !mobile && previewJob?.modelId === 'gallery';
   const shouldShowAddToGallery = !!previewJob && !isGalleryPreview && !isPreviewAlreadyInGallery;
