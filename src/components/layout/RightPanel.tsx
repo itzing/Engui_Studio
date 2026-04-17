@@ -1456,6 +1456,12 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 currentIndex={galleryViewerIndex}
                 onIndexChange={handleGalleryViewerIndexChange}
                 onClose={() => setGalleryViewerOpen(false)}
+                onOpenInfo={(itemId) => {
+                    const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId) || null;
+                    if (!asset) return;
+                    setSelectedGalleryAsset(asset);
+                    setGalleryDetailsOpen(true);
+                }}
                 onToggleFavorite={async (itemId) => {
                     const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId);
                     if (!asset) return false;

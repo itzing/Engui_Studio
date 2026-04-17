@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Heart, HeartOff, X } from 'lucide-react';
+import { Heart, HeartOff, Info, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type GalleryFullscreenViewerItem = {
@@ -16,10 +16,11 @@ interface GalleryFullscreenViewerProps {
   currentIndex: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
+  onOpenInfo?: (itemId: string) => void;
   onToggleFavorite?: (itemId: string) => Promise<boolean | void>;
 }
 
-export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onToggleFavorite }: GalleryFullscreenViewerProps) {
+export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onOpenInfo, onToggleFavorite }: GalleryFullscreenViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
@@ -188,17 +189,33 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       onKeyDown={handleKeyDown}
     >
       {showCloseButton && (
-        <div className="absolute top-3 right-3 z-10">
-          <Button
-            size="icon"
-            variant="secondary"
-            className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-            onClick={onClose}
-            aria-label="Close viewer"
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+        <>
+          {onOpenInfo && currentItem?.id && (
+            <div className="absolute top-3 left-3 z-10">
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                onClick={() => onOpenInfo(currentItem.id)}
+                aria-label="Open gallery item info"
+                title="Info"
+              >
+                <Info className="w-5 h-5" />
+              </Button>
+            </div>
+          )}
+          <div className="absolute top-3 right-3 z-10">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+              onClick={onClose}
+              aria-label="Close viewer"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+        </>
       )}
 
       <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4" onClick={handleViewerClick} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>

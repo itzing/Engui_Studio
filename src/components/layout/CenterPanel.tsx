@@ -499,9 +499,16 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
               />
             </div>
             <div className={`absolute flex flex-wrap gap-2 ${mobile ? 'top-3 left-3 right-3 justify-start max-w-none' : 'top-3 right-3 justify-end max-w-[calc(100%-1.5rem)]'}`}>
-              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={handleOpenInfo}>
-                <Info className="w-4 h-4 mr-1.5" />
-                Info
+              <Button
+                size={mobile ? 'icon' : 'sm'}
+                variant="secondary"
+                className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 w-9' : ''}`}
+                onClick={handleOpenInfo}
+                aria-label="Open preview info"
+                title="Info"
+              >
+                <Info className={`w-4 h-4 ${mobile ? '' : 'mr-1.5'}`} />
+                {!mobile && 'Info'}
               </Button>
               {shouldShowAddToGallery && (
                 <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
