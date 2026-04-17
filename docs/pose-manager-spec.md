@@ -1,11 +1,11 @@
 # Pose Manager Spec
 
 ## Goal
-Add a Pose Manager for image generation, similar in product shape to Vibe Manager, so users can:
+Add a desktop Pose Manager for image generation, similar in product shape to Vibe Manager, so users can:
 - maintain reusable pose presets
 - extract pose descriptions from reference images
 - support `single`, `duo`, and `trio` character compositions
-- inject a saved pose into the active Create prompt without rewriting pose instructions manually each time
+- manage reusable pose knowledge without rewriting pose instructions manually each time
 
 This feature is primarily aimed at image workflows, with special usefulness for `z-image`, where long detailed pose descriptions are valuable.
 
@@ -21,10 +21,10 @@ That creates several problems:
 ## Product outcome
 The user should be able to:
 1. upload an image into a pose extractor
-2. receive a structured pose result plus a ready-to-inject pose prompt
+2. receive a structured pose result plus a generated pose prompt
 3. save that result as a reusable pose preset
 4. browse/search/filter pose presets by character count and tags
-5. apply a selected pose to the current Create prompt in one action
+5. manage and refine pose presets in a dedicated desktop manager
 
 ## Scope
 ### In scope
@@ -32,9 +32,8 @@ The user should be able to:
 - Pose extraction from image
 - Support for `1`, `2`, and `3` characters
 - Structured pose schema
-- Generated pose prompt text for injection
+- Generated pose prompt text
 - Manual creation/editing of pose presets
-- Apply pose to Create prompt on desktop
 - Desktop full manager UI
 
 ### Out of scope
@@ -183,24 +182,7 @@ Rendering rules:
 - `duo` pose text emphasizes both individual poses and relationship geometry
 - `trio` pose text emphasizes arrangement and interactions among all three characters
 
-### 5. Apply flow
-A pose preset can be applied from Pose Manager into Create.
-
-Expected behavior:
-- user selects a pose preset
-- user presses `Apply to prompt`
-- the preset's `posePrompt` is injected into the active image prompt
-
-Recommended MVP behavior:
-- append pose text into the current prompt with predictable spacing
-- avoid destructive overwrite by default
-
-Optional future modes, not required in MVP:
-- replace existing pose block
-- insert into dedicated prompt section
-- model-specific formatting modes
-
-### 6. Manual authoring
+### 5. Manual authoring
 The user must be able to create pose presets without extraction.
 
 Manual editing UI should expose:
@@ -217,7 +199,7 @@ Recommended behavior:
 - `posePrompt` is auto-generated from structured data
 - user may optionally refine `posePrompt` before saving
 
-### 7. Review before save
+### 6. Review before save
 Extraction should not save automatically.
 
 Expected flow:
@@ -235,7 +217,6 @@ This matches the Vibe Manager style and avoids polluting the library with low-qu
 Recommended desktop entry points:
 - dedicated `Pose Manager` button near Vibe Manager / tools area
 - `Extract Pose` action near image reference tools
-- `Apply Pose` action from Create prompt area
 
 ### B. Desktop Pose library screen
 Required sections:
@@ -253,7 +234,6 @@ Each list item should show:
 - source badge: `manual` or `extracted`
 
 Primary item actions:
-- Apply
 - Edit
 - Duplicate
 - Delete
@@ -277,24 +257,13 @@ Review form should include:
 - save button
 
 ### D. Create integration
-For image creation, the user should be able to:
-- open Pose Manager on desktop
-- pick a preset
-- apply it to prompt
-- continue editing prompt normally
+Create integration is out of scope for the current task set.
 
-On mobile, Pose Manager integration is out of scope for the current task set.
+The current implementation should not include desktop or mobile apply-to-prompt behavior.
 
-Mobile must not include:
-- the full manager editor
-- extraction workflow
-- preset authoring UI
-- apply-to-prompt flow
+Any future pose selection or apply behavior should be defined later in a separate task and separate spec.
 
-Any mobile pose selection or apply behavior should be defined later in a separate task and separate spec.
-
-Recommended UX label examples:
-- `Apply Pose`
+Recommended UX label examples for the manager itself:
 - `Extract Pose`
 - `Save as Pose`
 
@@ -444,14 +413,18 @@ If extracted text is too vague:
 - extract from image
 - structured pose schema
 - generated pose prompt
-- desktop save/edit/delete/apply flows
-- desktop Create prompt injection
+- desktop save/edit/delete flows
 
 ### Nice to have if cheap
 - duplicate preset
 - tags
 - source image preview in editor
 - model hint such as `best for z-image`
+
+### Explicitly not in current scope
+- desktop apply-to-prompt
+- mobile apply-to-prompt
+- mobile picker flow
 
 ### Not for MVP
 - framing
@@ -472,22 +445,23 @@ If extracted text is too vague:
 ## Open product decisions
 These are still worth confirming before implementation:
 1. should pose presets be workspace-scoped, global, or both?
-2. should `Apply Pose` always append, or should it support replace mode from day one?
-3. should pose extraction use the same vision stack as Vibe extraction, or a separate tuned prompt/path?
-4. should saved poses support favorites or folders in MVP, or wait?
+2. should pose extraction use the same vision stack as Vibe extraction, or a separate tuned prompt/path?
+3. should saved poses support favorites or folders in MVP, or wait?
+4. when apply-to-prompt is added later, should it append, replace, or support both modes?
 
 ## Platform split recommendation
-Desktop gets the full Pose Manager experience:
+Desktop gets the full Pose Manager experience for management only:
 - library
 - create/edit
 - extraction
 - review-before-save
-- apply
 
 Mobile is out of scope for the current Pose Manager implementation.
 Any mobile pose picker or mobile apply flow should be specified later as a separate follow-up.
 
-This keeps the high-complexity authoring workflow on desktop and prevents premature mobile UX expansion.
+Any desktop apply-to-prompt flow should also be specified later as a separate follow-up.
+
+This keeps the current scope focused on authoring and reuse infrastructure without mixing in Create integration yet.
 
 ## Recommendation
 Build Pose Manager as a sibling concept to Vibe Manager, not as a minor prompt helper.

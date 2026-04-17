@@ -11,5 +11,5 @@ dependencies: [ENGUI-102, ENGUI-103, ENGUI-104]
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Run a QA and polish pass for the desktop Pose Manager. Verify library browsing, extraction, review-before-save, create/edit flows, and apply-to-prompt behavior in desktop Create. Mobile pose selection/apply is out of scope for this ticket and should be covered later by a separate task.
+Run a QA and polish pass for the desktop Pose Manager. Verify library browsing, extraction, review-before-save, generated pose prompt quality, and create/edit flows. Apply-to-prompt behavior is out of scope for this ticket and should be covered later by a separate task.
 <!-- SECTION:DESCRIPTION:END -->
