@@ -254,6 +254,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        const randomizeSeed = formData.get('randomizeSeed') === 'true';
+
         // Collect all parameters from formData
         const parameters: Record<string, any> = {};
         model.parameters.forEach(param => {
@@ -361,7 +363,9 @@ export async function POST(request: NextRequest) {
                 type: model.type,
                 modelId: model.id,
                 prompt: prompt || null,
-                options: JSON.stringify(buildPersistedOptions(parameters, inputData)),
+                options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                    randomizeSeed,
+                })),
                 imageInputPath: imageInputPath || null,
                 videoInputPath: videoInputPath || null,
                 audioInputPath: audioInputPath || null,

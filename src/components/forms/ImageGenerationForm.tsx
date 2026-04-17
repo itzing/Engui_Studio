@@ -38,6 +38,7 @@ export default function ImageGenerationForm() {
     const hasRestoredDraftRef = useRef(false);
     const isApplyingDraftModelRef = useRef(false);
     const hydratedModelRef = useRef<string | null>(null);
+    const isHydratingDraftRef = useRef(false);
 
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -80,7 +81,6 @@ export default function ImageGenerationForm() {
     const imageModels = getModelsByType('image');
     const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
 
-    const RANDOMIZE_SEED_STORAGE_KEY = 'engui:image:randomize-seed';
     const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
     const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
@@ -92,15 +92,11 @@ export default function ImageGenerationForm() {
     };
 
     useEffect(() => {
-        try {
-            const storedValue = localStorage.getItem(RANDOMIZE_SEED_STORAGE_KEY);
-            if (storedValue) {
-                setRandomizeSeed(storedValue === '1');
-            }
-        } catch (error) {
-            console.warn('Failed to restore randomize seed preference', error);
+        const draft = getWorkflowDraft<{ randomizeSeed?: boolean }>('image', getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL);
+        if (typeof draft?.randomizeSeed === 'boolean') {
+            setRandomizeSeed(draft.randomizeSeed);
         }
-    }, []);
+    }, [DEFAULT_IMAGE_MODEL]);
 
     useEffect(() => {
         const modelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
@@ -114,15 +110,18 @@ export default function ImageGenerationForm() {
             if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
             hydratedModelRef.current = selectedModel;
             try {
+                isHydratingDraftRef.current = true;
                 const draft = getWorkflowDraft<{
                     prompt?: string;
                     showAdvanced?: boolean;
+                    randomizeSeed?: boolean;
                     parameterValues?: Record<string, any>;
                     previewUrl?: string;
                     previewUrl2?: string;
                 }>('image', selectedModel);
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
+                setRandomizeSeed(typeof draft?.randomizeSeed === 'boolean' ? draft.randomizeSeed : false);
                 setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
                 setPreviewUrl(typeof draft?.previewUrl === 'string' ? draft.previewUrl : '');
                 setPreviewUrl2(typeof draft?.previewUrl2 === 'string' ? draft.previewUrl2 : '');
@@ -136,30 +135,25 @@ export default function ImageGenerationForm() {
                 }
             } catch (error) {
                 console.warn('Failed to restore image draft', error);
+            } finally {
+                isHydratingDraftRef.current = false;
             }
         };
         void restoreDraft();
     }, [selectedModel]);
 
     useEffect(() => {
-        if (!hasRestoredDraftRef.current) return;
+        if (!hasRestoredDraftRef.current || isHydratingDraftRef.current) return;
         setWorkflowActiveModel('image', selectedModel || DEFAULT_IMAGE_MODEL);
         saveWorkflowDraft('image', selectedModel || DEFAULT_IMAGE_MODEL, {
             prompt,
             showAdvanced,
+            randomizeSeed,
             parameterValues,
             previewUrl,
             previewUrl2,
         });
-    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, selectedModel, showAdvanced]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(RANDOMIZE_SEED_STORAGE_KEY, randomizeSeed ? '1' : '0');
-        } catch (error) {
-            console.warn('Failed to persist randomize seed preference', error);
-        }
-    }, [randomizeSeed]);
+    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedModel, showAdvanced]);
 
     useEffect(() => {
         try {
@@ -558,6 +552,7 @@ export default function ImageGenerationForm() {
 
                 // Switch to correct model if different from current
                 if (modelId && modelId !== selectedModel) {
+                    isApplyingDraftModelRef.current = true;
                     setSelectedModel(modelId);
                 }
 
@@ -658,6 +653,10 @@ export default function ImageGenerationForm() {
                     setPreviewUrl2('');
                 }
 
+                if (typeof parsedOptions.randomizeSeed === 'boolean') {
+                    setRandomizeSeed(parsedOptions.randomizeSeed);
+                }
+
                 // Apply parameter values in parent-first order
                 // First, collect all parameter values from options
                 const allParamValues: Record<string, any> = {};
@@ -717,6 +716,15 @@ export default function ImageGenerationForm() {
                     // Fallback: apply all at once if model not found
                     setParameterValues(prev => ({ ...prev, ...allParamValues }));
                 }
+
+                saveWorkflowDraft('image', modelId || selectedModel || DEFAULT_IMAGE_MODEL, {
+                    prompt: jobPrompt || '',
+                    showAdvanced: true,
+                    randomizeSeed: typeof parsedOptions.randomizeSeed === 'boolean' ? parsedOptions.randomizeSeed : randomizeSeed,
+                    parameterValues: allParamValues,
+                    previewUrl: shouldReusePrimaryImage && imagePath ? imagePath : '',
+                    previewUrl2: shouldReuseSecondaryImage && imagePath2 ? imagePath2 : '',
+                });
 
                 console.log('✅ Applied all input values from job in parent-first order');
 
@@ -892,18 +900,15 @@ export default function ImageGenerationForm() {
             const url = URL.createObjectURL(file);
             setPreviewUrl(url);
 
-            // 이미지 로드 후 width와 height 자동 설정
+            // Auto-set dimensions in React state so draft persistence sees them
             const img = new Image();
             img.onload = () => {
-                // width와 height 입력 필드를 찾아서 값 설정
-                const form = document.querySelector('form');
-                if (form) {
-                    const widthInput = form.elements.namedItem('width') as HTMLInputElement;
-                    const heightInput = form.elements.namedItem('height') as HTMLInputElement;
-                    if (widthInput) widthInput.value = img.width.toString();
-                    if (heightInput) heightInput.value = img.height.toString();
-                }
-                console.log('✅ 이미지 크기 자동 설정:', img.width, 'x', img.height);
+                setParameterValues(prev => ({
+                    ...prev,
+                    width: img.width,
+                    height: img.height,
+                }));
+                console.log('✅ Auto-set image dimensions:', img.width, 'x', img.height);
             };
             img.src = url;
         }
@@ -929,13 +934,11 @@ export default function ImageGenerationForm() {
                     // Auto-set dimensions
                     const img = new Image();
                     img.onload = () => {
-                        const form = document.querySelector('form');
-                        if (form) {
-                            const widthInput = form.elements.namedItem('width') as HTMLInputElement;
-                            const heightInput = form.elements.namedItem('height') as HTMLInputElement;
-                            if (widthInput) widthInput.value = img.width.toString();
-                            if (heightInput) heightInput.value = img.height.toString();
-                        }
+                        setParameterValues(prev => ({
+                            ...prev,
+                            width: img.width,
+                            height: img.height,
+                        }));
                     };
                     img.src = mediaData.url;
                 }
@@ -1054,6 +1057,8 @@ export default function ImageGenerationForm() {
                     formData.append(param.name, value.toString());
                 }
             });
+
+            formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
 
             // Handle Dimensions
             if (currentModel.capabilities.dimensions?.length) {
