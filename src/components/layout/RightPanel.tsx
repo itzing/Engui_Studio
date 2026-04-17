@@ -82,6 +82,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
     const [newWorkspaceName, setNewWorkspaceName] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const restoredMobileViewerRef = useRef(false);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
@@ -106,19 +107,43 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
     useEffect(() => {
         setIsMounted(true);
         if (typeof window === 'undefined') return;
-        const savedPanelMode = window.localStorage.getItem('engui.rightPanel.mode');
+
+        const panelModeKey = mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode';
+        const savedPanelMode = window.localStorage.getItem(panelModeKey);
         if (savedPanelMode === 'jobs' || savedPanelMode === 'gallery') {
             setPanelMode(savedPanelMode);
         }
-    }, []);
+
+        if (mobile) {
+            const savedFilter = window.localStorage.getItem('engui.mobile.library.filter');
+            if (savedFilter === 'all' || savedFilter === 'image' || savedFilter === 'video' || savedFilter === 'audio') {
+                setFilter(savedFilter);
+            }
+
+            const savedSearch = window.localStorage.getItem('engui.mobile.library.search');
+            if (typeof savedSearch === 'string') {
+                setGallerySearchQuery(savedSearch);
+            }
+
+            const savedSort = window.localStorage.getItem('engui.mobile.library.sort');
+            if (savedSort === 'newest' || savedSort === 'oldest' || savedSort === 'favorites') {
+                setGallerySort(savedSort);
+            }
+        }
+    }, [mobile]);
 
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined') return;
-        window.localStorage.setItem('engui.rightPanel.mode', panelMode);
+        window.localStorage.setItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode', panelMode);
+        if (mobile) {
+            window.localStorage.setItem('engui.mobile.library.filter', filter);
+            window.localStorage.setItem('engui.mobile.library.search', gallerySearchQuery);
+            window.localStorage.setItem('engui.mobile.library.sort', gallerySort);
+        }
         window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
             detail: panelMode,
         }));
-    }, [isMounted, panelMode]);
+    }, [filter, gallerySearchQuery, gallerySort, isMounted, mobile, panelMode]);
 
     useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
@@ -278,6 +303,7 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setGalleryViewerPage(1);
             setGalleryViewerHasNextPage(false);
             setGalleryViewerOpen(false);
+            restoredMobileViewerRef.current = false;
             return;
         }
         void fetchJobsPage(1, false);
@@ -511,6 +537,48 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
             setGalleryViewerIndex(galleryViewerItems.length - 1);
         }
     }, [galleryViewerItems, galleryViewerIndex, galleryViewerOpen]);
+
+    useEffect(() => {
+        if (!mobile || typeof window === 'undefined') return;
+        if (panelMode !== 'gallery' || galleryAssets.length === 0 || restoredMobileViewerRef.current) return;
+
+        const raw = window.localStorage.getItem('engui.mobile.library.viewer');
+        if (!raw) {
+            restoredMobileViewerRef.current = true;
+            return;
+        }
+
+        try {
+            const saved = JSON.parse(raw) as { open?: boolean; assetId?: string | null };
+            if (!saved?.open || !saved.assetId) {
+                restoredMobileViewerRef.current = true;
+                return;
+            }
+
+            const asset = galleryAssets.find((entry) => entry.id === saved.assetId);
+            if (!asset) return;
+
+            const itemIndex = filteredGalleryAssets.findIndex((entry) => entry.id === asset.id);
+            setSelectedGalleryAsset(asset);
+            setMobileSelectedGalleryAssetId(asset.id);
+            setGalleryViewerItems(filteredGalleryAssets);
+            setGalleryViewerPage(galleryPage);
+            setGalleryViewerHasNextPage(galleryHasNextPage);
+            setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
+            setGalleryViewerOpen(true);
+            restoredMobileViewerRef.current = true;
+        } catch {
+            restoredMobileViewerRef.current = true;
+        }
+    }, [filteredGalleryAssets, galleryAssets, galleryHasNextPage, galleryPage, mobile, panelMode]);
+
+    useEffect(() => {
+        if (!mobile || typeof window === 'undefined') return;
+        window.localStorage.setItem('engui.mobile.library.viewer', JSON.stringify({
+            open: galleryViewerOpen,
+            assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || selectedGalleryAsset?.id || null) : null,
+        }));
+    }, [galleryViewerIndex, galleryViewerItems, galleryViewerOpen, mobile, selectedGalleryAsset?.id]);
 
     useEffect(() => {
         if (!galleryViewerOpen || isLoadingMoreViewerItems || !galleryViewerHasNextPage) return;
