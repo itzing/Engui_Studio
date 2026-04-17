@@ -1638,7 +1638,7 @@ export default function ImageGenerationForm() {
                                     <>
                                         <Input
                                             type={param.name === 'loraWeight' ? 'text' : 'number'}
-                                            inputMode={param.name === 'loraWeight' ? 'decimal' : undefined}
+                                            inputMode={param.name === 'loraWeight' ? 'text' : undefined}
                                             name={param.name}
                                             value={parameterValues[param.name] ?? param.default}
                                             onChange={(e) => handleNumericParameterInput(param.name, e.target.value)}
