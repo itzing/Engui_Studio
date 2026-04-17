@@ -1112,27 +1112,6 @@ export default function RightPanel({ mobile = false }: { mobile?: boolean }) {
                                     )}
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                                {([
-                                    ['all', 'All'],
-                                    ['favorites', 'Favorites'],
-                                    ['images', 'Images'],
-                                    ['videos', 'Videos'],
-                                    ['trash', 'Trash'],
-                                ] as const).map(([preset, label]) => (
-                                    <button
-                                        key={preset}
-                                        type="button"
-                                        onClick={() => applyGalleryPreset(preset)}
-                                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${activeGalleryPreset === preset
-                                            ? 'bg-background text-foreground border-border shadow-sm'
-                                            : 'bg-muted/20 text-muted-foreground border-border/50 hover:text-foreground hover:bg-muted/40'
-                                            }`}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
                             <div className={`${mobile ? 'grid grid-cols-1 gap-2' : 'flex gap-2'}`}>
                                 <Input
                                     value={gallerySearchQuery}
