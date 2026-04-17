@@ -34,9 +34,8 @@ The user should be able to:
 - Structured pose schema
 - Generated pose prompt text for injection
 - Manual creation/editing of pose presets
-- Apply pose to Create prompt
+- Apply pose to Create prompt on desktop
 - Desktop full manager UI
-- Mobile pose picker/apply UX only
 
 ### Out of scope
 - camera framing / shot composition metadata
@@ -284,12 +283,15 @@ For image creation, the user should be able to:
 - apply it to prompt
 - continue editing prompt normally
 
-On mobile, Create integration should be limited to:
-- open a lightweight pose picker
-- search/filter/select an existing pose preset
-- apply it to prompt
+On mobile, Pose Manager integration is out of scope for the current task set.
 
-Mobile must not include the full manager editor, extraction workflow, or full preset authoring UI in MVP.
+Mobile must not include:
+- the full manager editor
+- extraction workflow
+- preset authoring UI
+- apply-to-prompt flow
+
+Any mobile pose selection or apply behavior should be defined later in a separate task and separate spec.
 
 Recommended UX label examples:
 - `Apply Pose`
@@ -443,8 +445,7 @@ If extracted text is too vague:
 - structured pose schema
 - generated pose prompt
 - desktop save/edit/delete/apply flows
-- Create prompt injection
-- mobile picker/apply flow for existing presets only
+- desktop Create prompt injection
 
 ### Nice to have if cheap
 - duplicate preset
@@ -466,7 +467,7 @@ If extracted text is too vague:
 3. manual create/edit flow
 4. pose extraction endpoint and review flow
 5. apply-to-prompt integration in Create
-6. desktop polish plus mobile picker/apply QA
+6. desktop polish and QA
 
 ## Open product decisions
 These are still worth confirming before implementation:
@@ -483,12 +484,10 @@ Desktop gets the full Pose Manager experience:
 - review-before-save
 - apply
 
-Mobile gets only the lightweight consumption flow:
-- browse/search/filter existing pose presets as needed
-- choose a pose
-- apply it to Create
+Mobile is out of scope for the current Pose Manager implementation.
+Any mobile pose picker or mobile apply flow should be specified later as a separate follow-up.
 
-This keeps the high-complexity authoring workflow on desktop while preserving the practical mobile use case.
+This keeps the high-complexity authoring workflow on desktop and prevents premature mobile UX expansion.
 
 ## Recommendation
 Build Pose Manager as a sibling concept to Vibe Manager, not as a minor prompt helper.

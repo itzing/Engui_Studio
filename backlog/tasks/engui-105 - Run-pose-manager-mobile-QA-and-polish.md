@@ -1,6 +1,6 @@
 ---
 id: ENGUI-105
-title: Run pose picker mobile QA and polish
+title: Run pose manager desktop QA and polish
 status: Inbox
 assignee: []
 created_date: '2026-04-17 15:50'
@@ -11,5 +11,5 @@ dependencies: [ENGUI-102, ENGUI-103, ENGUI-104]
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Run a QA and polish pass for the mobile pose picker/apply flow and the desktop Pose Manager. On mobile, verify only lightweight selection and apply behavior for existing presets, plus safe interaction with current Create UX. Do not scope full manager editing or extraction UI into mobile.
+Run a QA and polish pass for the desktop Pose Manager. Verify library browsing, extraction, review-before-save, create/edit flows, and apply-to-prompt behavior in desktop Create. Mobile pose selection/apply is out of scope for this ticket and should be covered later by a separate task.
 <!-- SECTION:DESCRIPTION:END -->
