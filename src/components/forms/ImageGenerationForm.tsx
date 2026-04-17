@@ -14,6 +14,7 @@ import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
+import type { ScenePresetSummary } from '@/lib/scenes/types';
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
@@ -77,6 +78,9 @@ export default function ImageGenerationForm() {
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
+    const [availableScenes, setAvailableScenes] = useState<ScenePresetSummary[]>([]);
+    const [selectedSceneId, setSelectedSceneId] = useState('');
+    const [isLoadingScenes, setIsLoadingScenes] = useState(false);
 
     const imageModels = getModelsByType('image');
     const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
@@ -109,6 +113,7 @@ export default function ImageGenerationForm() {
         parameterValues,
         previewUrl,
         previewUrl2,
+        selectedSceneId,
     });
 
     const applySnapshot = async (modelId: string, snapshot?: {
@@ -118,6 +123,7 @@ export default function ImageGenerationForm() {
         parameterValues?: Record<string, any>;
         previewUrl?: string;
         previewUrl2?: string;
+        selectedSceneId?: string;
     } | null) => {
         isHydratingDraftRef.current = true;
         try {
@@ -137,6 +143,7 @@ export default function ImageGenerationForm() {
 
             setPreviewUrl(nextPreviewUrl);
             setPreviewUrl2(nextPreviewUrl2);
+            setSelectedSceneId(typeof snapshot?.selectedSceneId === 'string' ? snapshot.selectedSceneId : '');
             setImageFile(null);
             setImageFile2(null);
 
@@ -170,6 +177,7 @@ export default function ImageGenerationForm() {
                     parameterValues?: Record<string, any>;
                     previewUrl?: string;
                     previewUrl2?: string;
+                    selectedSceneId?: string;
                 }>('image', selectedModel);
                 await applySnapshot(selectedModel, draft);
             } catch (error) {
@@ -549,6 +557,54 @@ export default function ImageGenerationForm() {
             fetchAvailableLoras();
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
+
+    const fetchAvailableScenes = async () => {
+        if (!activeWorkspaceId) {
+            setAvailableScenes([]);
+            return;
+        }
+
+        setIsLoadingScenes(true);
+        try {
+            const response = await fetch(`/api/scenes?workspaceId=${encodeURIComponent(activeWorkspaceId)}&status=active`, { cache: 'no-store' });
+            const data = await response.json();
+            if (response.ok && data.success && Array.isArray(data.scenes)) {
+                setAvailableScenes(data.scenes);
+            } else {
+                setAvailableScenes([]);
+            }
+        } catch (error) {
+            console.error('Failed to fetch scenes:', error);
+            setAvailableScenes([]);
+        } finally {
+            setIsLoadingScenes(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAvailableScenes();
+    }, [activeWorkspaceId]);
+
+    const selectedScene = availableScenes.find((scene) => scene.id === selectedSceneId) || null;
+
+    const applySelectedSceneToPrompt = () => {
+        if (!selectedScene) return;
+        setPrompt(selectedScene.generatedScenePrompt || '');
+    };
+
+    const applySelectedScenePreviewImage = async () => {
+        if (!selectedScene?.latestPreviewImageUrl) return;
+        try {
+            setIsLoadingMedia(true);
+            setPreviewUrl(selectedScene.latestPreviewImageUrl);
+            const file = await loadFileFromPath(selectedScene.latestPreviewImageUrl);
+            setImageFile(file);
+        } catch (error) {
+            console.error('Failed to load scene preview image:', error);
+        } finally {
+            setIsLoadingMedia(false);
+        }
+    };
 
     // Handle reuse job input event
     useEffect(() => {
@@ -1276,7 +1332,45 @@ export default function ImageGenerationForm() {
 
                 {/* Prompt - only show if model accepts text input */}
                 {currentModel.inputs.includes('text') && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                        <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <Label className="text-xs">Scene preset</Label>
+                                {isLoadingScenes && <span className="text-xs text-muted-foreground">Loading scenes...</span>}
+                            </div>
+                            <select
+                                className="w-full p-2 rounded-md border border-border bg-background text-sm"
+                                value={selectedSceneId}
+                                onChange={(e) => setSelectedSceneId(e.target.value)}
+                                disabled={!activeWorkspaceId || isLoadingScenes}
+                            >
+                                <option value="">No scene preset</option>
+                                {availableScenes.map(scene => (
+                                    <option key={scene.id} value={scene.id} className="bg-zinc-950 text-zinc-100">
+                                        {scene.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedScene && (
+                                <div className="space-y-2 rounded-md border border-border bg-background/70 p-3">
+                                    <div className="text-sm font-medium text-foreground">{selectedScene.name}</div>
+                                    <div className="text-xs text-muted-foreground">{selectedScene.summary}</div>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{selectedScene.characterCount === 1 ? 'single' : selectedScene.characterCount === 2 ? 'duo' : 'trio'}</span>
+                                        {selectedScene.posePresetName && <span>pose: {selectedScene.posePresetName}</span>}
+                                        {selectedScene.vibePresetName && <span>vibe: {selectedScene.vibePresetName}</span>}
+                                    </div>
+                                    <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-2'}`}>
+                                        <Button type="button" variant="outline" onClick={applySelectedSceneToPrompt} className="w-full">
+                                            Apply scene prompt
+                                        </Button>
+                                        <Button type="button" variant="outline" onClick={() => void applySelectedScenePreviewImage()} disabled={!selectedScene.latestPreviewImageUrl || isLoadingMedia} className="w-full">
+                                            Use latest preview
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <div className="relative">
                             <textarea
                                 className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
