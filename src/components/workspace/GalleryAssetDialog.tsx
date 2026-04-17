@@ -117,8 +117,8 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   return (
     <Dialog open={safeOpen} onOpenChange={onOpenChange}>
       {asset && (
-        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="max-w-4xl w-[90vw] h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
-          <div className="flex-1 bg-black/90 flex items-center justify-center relative min-h-[300px] md:h-full overflow-hidden p-4">
+        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="max-w-4xl w-[96vw] md:w-[90vw] h-[92dvh] md:h-[85vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col md:flex-row">
+          <div className="flex-none bg-black/90 flex items-center justify-center relative min-h-[220px] max-h-[32dvh] md:min-h-[300px] md:max-h-none md:flex-1 md:h-full overflow-hidden p-4">
             {asset.type === 'video' ? (
               <video src={asset.previewUrl || asset.originalUrl} controls className="max-w-full max-h-full object-contain" />
             ) : asset.type === 'audio' ? (
@@ -131,7 +131,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
             )}
           </div>
 
-          <div className="w-full md:w-[350px] flex flex-col border-t md:border-t-0 md:border-l border-border bg-card">
+          <div className="w-full md:w-[350px] min-h-0 flex-1 md:flex-initial flex flex-col border-t md:border-t-0 md:border-l border-border bg-card overflow-hidden">
             <DialogHeader className="p-4 border-b border-border">
               <DialogTitle className="text-lg font-semibold">Gallery Asset</DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground font-mono flex flex-col gap-1">
@@ -140,7 +140,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 overscroll-contain">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground">Source Job</span>
@@ -239,7 +239,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               </div>
             </div>
 
-            <div className="p-4 border-t border-border bg-muted/10 flex gap-2 flex-wrap">
+            <div className="p-4 border-t border-border bg-muted/10 flex gap-2 flex-wrap shrink-0">
               <Button className="flex-1" variant="outline" onClick={handleDownload}>
                 <Download className="w-4 h-4 mr-2" />
                 Download
