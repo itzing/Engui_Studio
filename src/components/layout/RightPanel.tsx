@@ -86,6 +86,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const inputRef = useRef<HTMLInputElement>(null);
     const restoredMobileViewerRef = useRef(false);
     const mobileViewerPersistenceReadyRef = useRef(false);
+    const mobileTouchHandledRef = useRef<{ kind: 'job' | 'gallery'; id: string } | null>(null);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
@@ -394,6 +395,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setDetailsOpen(true);
     };
 
+    const handleMobileJobTouchEnd = (job: Job) => {
+        mobileTouchHandledRef.current = { kind: 'job', id: job.id };
+        handleJobClick(job);
+        window.setTimeout(() => {
+            if (mobileTouchHandledRef.current?.kind === 'job' && mobileTouchHandledRef.current?.id === job.id) {
+                mobileTouchHandledRef.current = null;
+            }
+        }, 350);
+    };
+
     const emitGallerySelection = useCallback((asset: GalleryAsset | null) => {
         if (typeof window === 'undefined') return;
         window.dispatchEvent(new CustomEvent('rightPanelGallerySelect', {
@@ -426,6 +437,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setGalleryViewerHasNextPage(galleryHasNextPage);
         setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
         setGalleryViewerOpen(true);
+    };
+
+    const handleMobileGalleryTouchEnd = (asset: GalleryAsset) => {
+        mobileTouchHandledRef.current = { kind: 'gallery', id: asset.id };
+        handleGalleryAssetClick(asset);
+        window.setTimeout(() => {
+            if (mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
+                mobileTouchHandledRef.current = null;
+            }
+        }, 350);
     };
 
     const emitHoverPreview = (job: Job | null) => {
@@ -1212,7 +1233,18 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 <button
                                     key={asset.id}
                                     type="button"
-                                    onClick={() => handleGalleryAssetClick(asset)}
+                                    onClick={() => {
+                                        if (mobile && mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
+                                            mobileTouchHandledRef.current = null;
+                                            return;
+                                        }
+                                        handleGalleryAssetClick(asset);
+                                    }}
+                                    onTouchEnd={() => {
+                                        if (mobile) {
+                                            handleMobileGalleryTouchEnd(asset);
+                                        }
+                                    }}
                                     className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
                                 >
                                     <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
@@ -1322,7 +1354,18 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                         return (
                             <div
                                 key={job.id}
-                                onClick={() => handleJobClick(job)}
+                                onClick={() => {
+                                    if (mobile && mobileTouchHandledRef.current?.kind === 'job' && mobileTouchHandledRef.current?.id === job.id) {
+                                        mobileTouchHandledRef.current = null;
+                                        return;
+                                    }
+                                    handleJobClick(job);
+                                }}
+                                onTouchEnd={() => {
+                                    if (mobile) {
+                                        handleMobileJobTouchEnd(job);
+                                    }
+                                }}
                                 onMouseEnter={() => { if (!mobile) emitHoverPreview(job); }}
                                 onMouseLeave={() => { if (!mobile) emitHoverPreview(null); }}
                                 className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${mobile && mobileSelectedJobId === job.id ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
