@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
+    const focusAssetId = searchParams.get('focusAssetId')?.trim() || null;
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
-    const skip = (page - 1) * limit;
 
     if (!workspaceId) {
       return NextResponse.json({ success: false, error: 'workspaceId is required' }, { status: 400 });
@@ -78,18 +78,28 @@ export async function GET(request: NextRequest) {
     }
 
     const totalCount = normalizedAssets.length;
+    const focusAbsoluteIndex = focusAssetId ? normalizedAssets.findIndex(asset => asset.id === focusAssetId) : -1;
+    const resolvedPage = focusAbsoluteIndex >= 0 ? Math.floor(focusAbsoluteIndex / limit) + 1 : page;
+    const skip = (resolvedPage - 1) * limit;
     const paginatedAssets = normalizedAssets.slice(skip, skip + limit);
-    const hasNextPage = totalCount > page * limit;
+    const hasNextPage = totalCount > resolvedPage * limit;
 
     return NextResponse.json({
       success: true,
       assets: paginatedAssets,
+      focus: focusAssetId ? {
+        assetId: focusAssetId,
+        found: focusAbsoluteIndex >= 0,
+        page: focusAbsoluteIndex >= 0 ? resolvedPage : null,
+        indexOnPage: focusAbsoluteIndex >= 0 ? focusAbsoluteIndex % limit : null,
+        absoluteIndex: focusAbsoluteIndex >= 0 ? focusAbsoluteIndex : null,
+      } : undefined,
       pagination: {
-        page,
+        page: resolvedPage,
         limit,
         totalCount,
         hasNextPage,
-        hasPrevPage: page > 1,
+        hasPrevPage: resolvedPage > 1,
       },
     }, {
       headers: {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
 import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
@@ -39,6 +39,27 @@ type GalleryAsset = {
     updatedAt?: string;
 };
 
+type GalleryPageData = {
+    page: number;
+    assets: GalleryAsset[];
+    imagesHydrated: boolean;
+};
+
+type GalleryFetchResult = {
+    assets: GalleryAsset[];
+    page: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    totalCount: number;
+    focus?: {
+        assetId: string;
+        found: boolean;
+        page: number | null;
+        indexOnPage: number | null;
+        absoluteIndex: number | null;
+    };
+};
+
 const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
 type MediaFilter = typeof TYPE_FILTERS[number];
 const galleryFilter = (asset: GalleryAsset, filters: MediaFilter[]) => filters.includes(asset.type);
@@ -61,7 +82,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
     const [isMounted, setIsMounted] = useState(false);
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
-    const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
+    const [galleryPages, setGalleryPages] = useState<Record<number, GalleryPageData>>({});
     const [showTrashed, setShowTrashed] = useState(false);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [gallerySearchQuery, setGallerySearchQuery] = useState('');
@@ -69,16 +90,30 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
-    const [galleryPage, setGalleryPage] = useState(1);
+    const [galleryAnchorPage, setGalleryAnchorPage] = useState(1);
+    const [galleryLowestPage, setGalleryLowestPage] = useState(1);
+    const [galleryHighestPage, setGalleryHighestPage] = useState(1);
     const [galleryHasNextPage, setGalleryHasNextPage] = useState(false);
+    const [galleryHasPrevPage, setGalleryHasPrevPage] = useState(false);
     const [isLoadingJobs, setIsLoadingJobs] = useState(false);
     const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+    const [isLoadingPreviousGallery, setIsLoadingPreviousGallery] = useState(false);
     const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
     const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
-    const pageSize = 50;
+    const pageSize = 10;
+    const galleryScrollContainerRef = useRef<HTMLDivElement>(null);
+    const panelScrollPositionsRef = useRef<{ jobs: number; gallery: number }>({ jobs: 0, gallery: 0 });
+    const galleryTopSentinelRef = useRef<HTMLDivElement>(null);
+    const galleryBottomSentinelRef = useRef<HTMLDivElement>(null);
+    const galleryPageRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const galleryFocusRestoreRef = useRef<{ assetId: string; page: number; indexOnPage: number } | null>(null);
+    const galleryRestoreInProgressRef = useRef(false);
+    const galleryScrollAnchorRef = useRef<{ assetId: string; top: number } | null>(null);
+    const galleryScrollDirectionRef = useRef<'up' | 'down' | null>(null);
+    const lastViewedGalleryAssetIdRef = useRef<string | null>(null);
 
     // Workspace Creation State
     const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
@@ -87,10 +122,30 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const restoredMobileViewerRef = useRef(false);
     const mobileViewerPersistenceReadyRef = useRef(false);
     const mobileTouchHandledRef = useRef<{ kind: 'job' | 'gallery'; id: string } | null>(null);
+    const galleryRestoreHydratedRef = useRef(false);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
-
+    const sortedGalleryPageNumbers = useMemo(
+        () => Object.keys(galleryPages).map(Number).sort((a, b) => a - b),
+        [galleryPages]
+    );
+    const filteredGalleryAssets = useMemo(
+        () => sortedGalleryPageNumbers.flatMap((pageNumber) => galleryPages[pageNumber]?.assets || []),
+        [galleryPages, sortedGalleryPageNumbers]
+    );
+    const updateGalleryPages = useCallback((updater: (asset: GalleryAsset) => GalleryAsset | null) => {
+        setGalleryPages(prev => {
+            const next: Record<number, GalleryPageData> = {};
+            for (const [pageKey, pageData] of Object.entries(prev)) {
+                next[Number(pageKey)] = {
+                    ...pageData,
+                    assets: pageData.assets.map((asset) => updater(asset)).filter((asset): asset is GalleryAsset => asset !== null),
+                };
+            }
+            return next;
+        });
+    }, []);
 
     const jobMatchesFilter = useCallback((job: Job, filters: MediaFilter[]) => {
         const jobType = (job.type || '').toLowerCase();
@@ -161,6 +216,29 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters]);
 
     useEffect(() => {
+        const container = galleryScrollContainerRef.current;
+        if (!container) return;
+
+        const handleScrollPositionSave = () => {
+            panelScrollPositionsRef.current[panelMode] = container.scrollTop;
+        };
+
+        handleScrollPositionSave();
+        container.addEventListener('scroll', handleScrollPositionSave, { passive: true });
+        return () => container.removeEventListener('scroll', handleScrollPositionSave);
+    }, [panelMode]);
+
+    useEffect(() => {
+        const container = galleryScrollContainerRef.current;
+        if (!container) return;
+        window.requestAnimationFrame(() => {
+            const node = galleryScrollContainerRef.current;
+            if (!node) return;
+            node.scrollTop = panelScrollPositionsRef.current[panelMode] || 0;
+        });
+    }, [panelMode, isMounted]);
+
+    useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
             inputRef.current.focus();
         }
@@ -173,7 +251,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (!detail?.id || !detail?.kind) return;
 
             if (detail.kind === 'gallery') {
-                const asset = galleryAssets.find(item => item.id === detail.id);
+                const asset = filteredGalleryAssets.find(item => item.id === detail.id);
                 if (!asset) return;
                 setSelectedGalleryAsset(asset);
                 setGalleryDetailsOpen(true);
@@ -188,7 +266,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         window.addEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
         return () => window.removeEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
-    }, [galleryAssets, jobs, loadedJobs]);
+    }, [filteredGalleryAssets, jobs, loadedJobs]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -247,7 +325,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
     }, [activeWorkspaceId, mergeUniqueJobs, selectedFilters]);
 
-    const fetchGalleryAssetsPage = useCallback(async (page: number) => {
+    const fetchGalleryAssetsPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }): Promise<GalleryFetchResult | null> => {
         if (!activeWorkspaceId) return null;
 
         const params = new URLSearchParams({
@@ -262,6 +340,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             sort: gallerySort,
         });
 
+        if (options?.focusAssetId) {
+            params.set('focusAssetId', options.focusAssetId);
+        }
+
         const response = await fetch(`/api/gallery/assets?${params.toString()}`, {
             cache: 'no-store',
         });
@@ -272,36 +354,160 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         return {
             assets: (data.assets || []) as GalleryAsset[],
+            page: Number(data.pagination?.page || page),
             hasNextPage: !!data.pagination?.hasNextPage,
+            hasPrevPage: !!data.pagination?.hasPrevPage,
+            totalCount: Number(data.pagination?.totalCount || 0),
+            focus: data.focus,
         };
     }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, gallerySort, selectedFilters, showTrashed]);
 
-    const fetchGalleryAssets = useCallback(async (page: number, append = false) => {
-        if (!activeWorkspaceId) return;
+    const applyGalleryImageRetention = useCallback((pages: Record<number, GalleryPageData>, anchorPage: number) => {
+        const nextPages: Record<number, GalleryPageData> = {};
+        for (const [pageKey, pageData] of Object.entries(pages)) {
+            const pageNumber = Number(pageKey);
+            nextPages[pageNumber] = {
+                ...pageData,
+                imagesHydrated: Math.abs(pageNumber - anchorPage) <= 3,
+            };
+        }
+        return nextPages;
+    }, []);
 
-        if (append) {
+    const mergeGalleryPage = useCallback((
+        resolvedPage: number,
+        assets: GalleryAsset[],
+        options?: { preserveScroll?: boolean; keepAnchor?: boolean; anchorPage?: number; recomputeRetention?: boolean }
+    ) => {
+        const container = galleryScrollContainerRef.current;
+        let anchorSnapshot: { assetId: string; top: number } | null = null;
+        if (options?.preserveScroll && container) {
+            const visibleAnchor = Array.from(container.querySelectorAll<HTMLElement>('[data-gallery-asset-id]')).find((node) => {
+                const rect = node.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                return rect.bottom > containerRect.top;
+            });
+            if (visibleAnchor?.dataset.galleryAssetId) {
+                const containerRect = container.getBoundingClientRect();
+                const rect = visibleAnchor.getBoundingClientRect();
+                anchorSnapshot = {
+                    assetId: visibleAnchor.dataset.galleryAssetId,
+                    top: rect.top - containerRect.top,
+                };
+                galleryScrollAnchorRef.current = anchorSnapshot;
+            }
+        }
+        const nextAnchorPage = options?.anchorPage ?? galleryAnchorPage;
+
+        setGalleryPages(prev => {
+            const merged = {
+                ...prev,
+                [resolvedPage]: {
+                    page: resolvedPage,
+                    assets,
+                    imagesHydrated: true,
+                },
+            };
+            return options?.recomputeRetention === false
+                ? merged
+                : applyGalleryImageRetention(merged, nextAnchorPage);
+        });
+        setGalleryLowestPage(prev => Math.min(prev, resolvedPage));
+        setGalleryHighestPage(prev => Math.max(prev, resolvedPage));
+        if (!options?.keepAnchor) {
+            setGalleryAnchorPage(nextAnchorPage);
+        }
+
+        if (options?.preserveScroll && anchorSnapshot) {
+            window.requestAnimationFrame(() => {
+                const node = galleryScrollContainerRef.current;
+                if (!node) return;
+                const anchorNode = node.querySelector<HTMLElement>(`[data-gallery-asset-id="${anchorSnapshot?.assetId}"]`);
+                if (!anchorNode) return;
+                const containerRect = node.getBoundingClientRect();
+                const rect = anchorNode.getBoundingClientRect();
+                node.scrollTop += (rect.top - containerRect.top) - anchorSnapshot.top;
+            });
+        }
+    }, [applyGalleryImageRetention, galleryAnchorPage]);
+
+    const fetchGalleryAssets = useCallback(async (
+        page: number,
+        options?: { append?: boolean; prepend?: boolean; focusAssetId?: string | null; preserveScroll?: boolean }
+    ) => {
+        if (!activeWorkspaceId) return null;
+
+        const append = options?.append === true;
+        const prepend = options?.prepend === true;
+
+        if (prepend) {
+            setIsLoadingPreviousGallery(true);
+        } else if (append) {
             setIsLoadingMoreGallery(true);
         } else {
             setIsLoadingGallery(true);
         }
 
+        const container = galleryScrollContainerRef.current;
+        const previousScrollHeight = prepend && options?.preserveScroll && container ? container.scrollHeight : null;
+        const previousScrollTop = prepend && options?.preserveScroll && container ? container.scrollTop : null;
+
         try {
-            const result = await fetchGalleryAssetsPage(page);
-            if (!result) return;
-            const nextAssets = result.assets;
-            setGalleryAssets(prev => append ? [...prev, ...nextAssets] : nextAssets);
-            setGalleryPage(page);
+            const result = await fetchGalleryAssetsPage(page, { focusAssetId: options?.focusAssetId });
+            if (!result) return null;
+
+            const resolvedPage = result.page;
             setGalleryHasNextPage(result.hasNextPage);
+            setGalleryHasPrevPage(result.hasPrevPage);
+
+            if (!append && !prepend) {
+                const initialPages = applyGalleryImageRetention({
+                    [resolvedPage]: {
+                        page: resolvedPage,
+                        assets: result.assets,
+                        imagesHydrated: true,
+                    },
+                }, resolvedPage);
+                setGalleryPages(initialPages);
+                setGalleryAnchorPage(resolvedPage);
+                setGalleryLowestPage(resolvedPage);
+                setGalleryHighestPage(resolvedPage);
+            } else {
+                let nextAnchorPage = galleryAnchorPage;
+                setGalleryAnchorPage(prev => {
+                    nextAnchorPage = prepend ? Math.min(prev, resolvedPage) : Math.max(prev, resolvedPage);
+                    return nextAnchorPage;
+                });
+                mergeGalleryPage(resolvedPage, result.assets, {
+                    preserveScroll: prepend && options?.preserveScroll,
+                    keepAnchor: true,
+                    anchorPage: nextAnchorPage,
+                });
+            }
+
+            if (result.focus?.found && result.focus.assetId && result.focus.page && result.focus.indexOnPage !== null) {
+                lastViewedGalleryAssetIdRef.current = result.focus.assetId;
+                setMobileSelectedGalleryAssetId(result.focus.assetId);
+                galleryFocusRestoreRef.current = {
+                    assetId: result.focus.assetId,
+                    page: result.focus.page,
+                    indexOnPage: result.focus.indexOnPage,
+                };
+            }
+
+            return result;
         } catch (error) {
             console.error('Failed to fetch gallery assets:', error);
-            if (!append) {
-                setGalleryAssets([]);
+            if (!append && !prepend) {
+                setGalleryPages({});
             }
+            return null;
         } finally {
             setIsLoadingGallery(false);
             setIsLoadingMoreGallery(false);
+            setIsLoadingPreviousGallery(false);
         }
-    }, [activeWorkspaceId, fetchGalleryAssetsPage]);
+    }, [activeWorkspaceId, applyGalleryImageRetention, fetchGalleryAssetsPage]);
 
     useEffect(() => {
         setSelectedJob(null);
@@ -310,11 +516,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setGalleryDetailsOpen(false);
         if (!activeWorkspaceId) {
             setLoadedJobs([]);
-            setGalleryAssets([]);
+            setGalleryPages({});
             setCurrentPage(1);
             setHasNextPage(false);
-            setGalleryPage(1);
+            setGalleryAnchorPage(1);
+            setGalleryLowestPage(1);
+            setGalleryHighestPage(1);
             setGalleryHasNextPage(false);
+            setGalleryHasPrevPage(false);
             setGalleryViewerItems([]);
             setGalleryViewerPage(1);
             setGalleryViewerHasNextPage(false);
@@ -327,8 +536,17 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [activeWorkspaceId, fetchJobsPage, selectedFilters]);
 
     useEffect(() => {
-        if (!activeWorkspaceId) return;
-        void fetchGalleryAssets(1, false);
+        if (!activeWorkspaceId || typeof window === 'undefined') return;
+        const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
+        const savedAssetId = window.localStorage.getItem(storageKey);
+        if (savedAssetId) {
+            lastViewedGalleryAssetIdRef.current = savedAssetId;
+            void fetchGalleryAssets(1, { focusAssetId: savedAssetId });
+            galleryRestoreHydratedRef.current = true;
+            return;
+        }
+        void fetchGalleryAssets(1);
+        galleryRestoreHydratedRef.current = true;
     }, [activeWorkspaceId, fetchGalleryAssets]);
 
     useEffect(() => {
@@ -337,7 +555,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         const handleGalleryAssetChanged = (event: Event) => {
             const customEvent = event as CustomEvent<{ workspaceId?: string; assetId?: string; reason?: string }>;
             if (!customEvent.detail?.workspaceId || customEvent.detail.workspaceId !== activeWorkspaceId) return;
-            void fetchGalleryAssets(1, false);
+            void fetchGalleryAssets(1);
         };
 
         window.addEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
@@ -347,7 +565,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     useEffect(() => {
         if (!activeWorkspaceId || panelMode !== 'gallery') return;
 
-        const hasPendingGalleryWork = galleryAssets.some(asset =>
+        const hasPendingGalleryWork = filteredGalleryAssets.some(asset =>
             asset.derivativeStatus === 'pending'
             || asset.derivativeStatus === 'processing'
             || asset.enrichmentStatus === 'pending'
@@ -357,11 +575,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (!hasPendingGalleryWork) return;
 
         const interval = window.setInterval(() => {
-            void fetchGalleryAssets(1, false);
+            void fetchGalleryAssets(1);
         }, 2500);
 
         return () => window.clearInterval(interval);
-    }, [activeWorkspaceId, panelMode, galleryAssets, fetchGalleryAssets]);
+    }, [activeWorkspaceId, panelMode, fetchGalleryAssets, filteredGalleryAssets]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
@@ -432,8 +650,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             setGalleryDetailsOpen(false);
         }
 
+        lastViewedGalleryAssetIdRef.current = asset.id;
         setGalleryViewerItems(filteredGalleryAssets);
-        setGalleryViewerPage(galleryPage);
+        setGalleryViewerPage(galleryHighestPage);
         setGalleryViewerHasNextPage(galleryHasNextPage);
         setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
         setGalleryViewerOpen(true);
@@ -548,13 +767,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const filteredJobs = loadedJobs;
     const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
-    const filteredGalleryAssets = galleryAssets;
 
     const handleGalleryViewerIndexChange = useCallback((index: number) => {
         const asset = galleryViewerItems[index];
         if (!asset) return;
+        lastViewedGalleryAssetIdRef.current = asset.id;
         setGalleryViewerIndex(index);
         setSelectedGalleryAsset(asset);
+        setMobileSelectedGalleryAssetId(asset.id);
         emitGallerySelection(asset);
     }, [emitGallerySelection, galleryViewerItems]);
 
@@ -571,7 +791,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (!mobile || typeof window === 'undefined') return;
-        if (panelMode !== 'gallery' || galleryAssets.length === 0 || restoredMobileViewerRef.current) return;
+        if (panelMode !== 'gallery' || filteredGalleryAssets.length === 0 || restoredMobileViewerRef.current) return;
 
         const raw = window.localStorage.getItem('engui.mobile.library.viewer');
         if (!raw) {
@@ -588,14 +808,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 return;
             }
 
-            const asset = galleryAssets.find((entry) => entry.id === saved.assetId);
+            const asset = filteredGalleryAssets.find((entry) => entry.id === saved.assetId);
             if (!asset) return;
 
             const itemIndex = filteredGalleryAssets.findIndex((entry) => entry.id === asset.id);
             setSelectedGalleryAsset(asset);
             setMobileSelectedGalleryAssetId(asset.id);
             setGalleryViewerItems(filteredGalleryAssets);
-            setGalleryViewerPage(galleryPage);
+            setGalleryViewerPage(galleryHighestPage);
             setGalleryViewerHasNextPage(galleryHasNextPage);
             setGalleryViewerIndex(itemIndex >= 0 ? itemIndex : 0);
             setGalleryViewerOpen(true);
@@ -605,7 +825,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             restoredMobileViewerRef.current = true;
             mobileViewerPersistenceReadyRef.current = true;
         }
-    }, [filteredGalleryAssets, galleryAssets, galleryHasNextPage, galleryPage, mobile, panelMode]);
+    }, [filteredGalleryAssets, galleryHasNextPage, galleryHighestPage, mobile, panelMode]);
 
     useEffect(() => {
         if (!mobile || typeof window === 'undefined' || !mobileViewerPersistenceReadyRef.current) return;
@@ -614,6 +834,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || selectedGalleryAsset?.id || null) : null,
         }));
     }, [galleryViewerIndex, galleryViewerItems, galleryViewerOpen, mobile, selectedGalleryAsset?.id]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !activeWorkspaceId || !galleryRestoreHydratedRef.current) return;
+        const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
+        const assetId = lastViewedGalleryAssetIdRef.current || mobileSelectedGalleryAssetId || selectedGalleryAsset?.id || null;
+        if (assetId) {
+            window.localStorage.setItem(storageKey, assetId);
+        }
+    }, [activeWorkspaceId, mobileSelectedGalleryAssetId, selectedGalleryAsset?.id]);
 
     useEffect(() => {
         if (!galleryViewerOpen || isLoadingMoreViewerItems || !galleryViewerHasNextPage) return;
@@ -655,6 +884,122 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             return updated || item;
         }));
     }, [filteredGalleryAssets, galleryViewerOpen]);
+
+    useEffect(() => {
+        const restore = galleryFocusRestoreRef.current;
+        if (!restore) return;
+        const container = galleryScrollContainerRef.current;
+        const pageNode = galleryPageRefs.current[restore.page];
+        const element = typeof document !== 'undefined' ? document.querySelector(`[data-gallery-asset-id="${restore.assetId}"]`) : null;
+        if (!container || !(element instanceof HTMLElement) || !pageNode) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const targetTop = container.scrollTop + (elementRect.top - containerRect.top);
+        container.scrollTop = Math.max(0, targetTop);
+        galleryScrollAnchorRef.current = {
+            assetId: restore.assetId,
+            top: 0,
+        };
+        galleryFocusRestoreRef.current = null;
+        setGalleryAnchorPage(restore.page);
+        window.setTimeout(() => {
+            galleryRestoreInProgressRef.current = false;
+        }, 80);
+    }, [filteredGalleryAssets]);
+
+    const loadPreviousGalleryPages = useCallback(() => {
+        if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;
+        const pagesToLoad = [galleryLowestPage - 1, galleryLowestPage - 2, galleryLowestPage - 3].filter(page => page >= 1);
+        void (async () => {
+            for (const page of pagesToLoad) {
+                await fetchGalleryAssets(page, { prepend: true, preserveScroll: true });
+            }
+        })();
+    }, [fetchGalleryAssets, galleryHasPrevPage, galleryLowestPage, isLoadingPreviousGallery]);
+
+    const loadNextGalleryPages = useCallback(() => {
+        if (galleryRestoreInProgressRef.current || !galleryHasNextPage || isLoadingMoreGallery) return;
+        const pagesToLoad = [galleryHighestPage + 1, galleryHighestPage + 2, galleryHighestPage + 3];
+        void (async () => {
+            for (const page of pagesToLoad) {
+                await fetchGalleryAssets(page, { append: true });
+            }
+        })();
+    }, [fetchGalleryAssets, galleryHasNextPage, galleryHighestPage, isLoadingMoreGallery]);
+
+    useEffect(() => {
+        if (panelMode !== 'gallery') return;
+        const container = galleryScrollContainerRef.current;
+        const topTarget = galleryTopSentinelRef.current;
+        const bottomTarget = galleryBottomSentinelRef.current;
+        if (!container || !topTarget || !bottomTarget) return;
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting || galleryRestoreInProgressRef.current) return;
+                if (entry.target === topTarget && galleryScrollDirectionRef.current === 'up') {
+                    loadPreviousGalleryPages();
+                }
+                if (entry.target === bottomTarget && galleryScrollDirectionRef.current === 'down') {
+                    loadNextGalleryPages();
+                }
+            });
+        }, {
+            root: container,
+            rootMargin: '400px 0px 400px 0px',
+            threshold: 0.01,
+        });
+
+        observer.observe(topTarget);
+        observer.observe(bottomTarget);
+        return () => observer.disconnect();
+    }, [loadNextGalleryPages, loadPreviousGalleryPages, panelMode]);
+
+    useEffect(() => {
+        if (panelMode !== 'gallery' || sortedGalleryPageNumbers.length === 0) return;
+        const container = galleryScrollContainerRef.current;
+        if (!container) return;
+
+        let lastScrollTop = container.scrollTop;
+
+        const handleScroll = () => {
+            if (galleryRestoreInProgressRef.current) return;
+            galleryScrollDirectionRef.current = container.scrollTop > lastScrollTop ? 'down' : container.scrollTop < lastScrollTop ? 'up' : galleryScrollDirectionRef.current;
+            lastScrollTop = container.scrollTop;
+
+            const nearTop = container.scrollTop <= 300;
+            const nearBottom = (container.scrollHeight - (container.scrollTop + container.clientHeight)) <= 300;
+            if (galleryScrollDirectionRef.current === 'up' && nearTop) {
+                loadPreviousGalleryPages();
+            }
+            if (galleryScrollDirectionRef.current === 'down' && nearBottom) {
+                loadNextGalleryPages();
+            }
+
+            const midline = container.scrollTop + (container.clientHeight / 2);
+            let nextAnchor = galleryAnchorPage;
+            for (const pageNumber of sortedGalleryPageNumbers) {
+                const node = galleryPageRefs.current[pageNumber];
+                if (!node) continue;
+                const top = node.offsetTop;
+                const bottom = top + node.offsetHeight;
+                if (midline >= top && midline <= bottom) {
+                    nextAnchor = pageNumber;
+                    break;
+                }
+            }
+            if (nextAnchor !== galleryAnchorPage) {
+                setGalleryAnchorPage(nextAnchor);
+                setGalleryPages(prev => applyGalleryImageRetention(prev, nextAnchor));
+            }
+        };
+
+        handleScroll();
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [applyGalleryImageRetention, galleryAnchorPage, loadNextGalleryPages, loadPreviousGalleryPages, panelMode, sortedGalleryPageNumbers]);
+
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -742,7 +1087,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const updateGalleryFavorite = useCallback(async (asset: GalleryAsset) => {
         const nextFavorited = !asset.favorited;
-        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
+        updateGalleryPages(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item);
         setGalleryViewerItems(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: nextFavorited } : item));
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: nextFavorited } : prev);
         try {
@@ -759,7 +1104,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             return nextFavorited;
         } catch (error) {
             console.error('Failed to update favorite:', error);
-            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
+            updateGalleryPages(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item);
             setGalleryViewerItems(prev => prev.map(item => item.id === asset.id ? { ...item, favorited: asset.favorited } : item));
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, favorited: asset.favorited } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to update favorite', 'error');
@@ -831,7 +1176,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     };
 
     const handleGallerySaveTags = async (asset: GalleryAsset, tags: string[]) => {
-        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: tags } : item));
+        updateGalleryPages(item => item.id === asset.id ? { ...item, userTags: tags } : item);
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: tags } : prev);
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/tags`, {
@@ -846,7 +1191,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             showToast('Tags saved', 'success');
         } catch (error) {
             console.error('Failed to save tags:', error);
-            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, userTags: asset.userTags || [] } : item));
+            updateGalleryPages(item => item.id === asset.id ? { ...item, userTags: asset.userTags || [] } : item);
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, userTags: asset.userTags || [] } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to save tags', 'error');
         }
@@ -854,7 +1199,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const handleGalleryRemoveAutoTag = async (asset: GalleryAsset, tagToRemove: string) => {
         const nextAutoTags = (asset.autoTags || []).filter(tag => tag !== tagToRemove);
-        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, autoTags: nextAutoTags } : item));
+        updateGalleryPages(item => item.id === asset.id ? { ...item, autoTags: nextAutoTags } : item);
         setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, autoTags: nextAutoTags } : prev);
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}/tags`, {
@@ -869,7 +1214,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             showToast('Auto tag removed', 'success');
         } catch (error) {
             console.error('Failed to remove auto tag:', error);
-            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, autoTags: asset.autoTags || [] } : item));
+            updateGalleryPages(item => item.id === asset.id ? { ...item, autoTags: asset.autoTags || [] } : item);
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, autoTags: asset.autoTags || [] } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to remove auto tag', 'error');
         }
@@ -889,7 +1234,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 throw new Error(data.error || 'Failed to backfill gallery enrichment');
             }
             showToast(`Enriched ${data.processed || 0} gallery assets`, 'success');
-            void fetchGalleryAssets(1, false);
+            void fetchGalleryAssets(1);
         } catch (error) {
             console.error('Failed to backfill gallery enrichment:', error);
             showToast(error instanceof Error ? error.message : 'Failed to backfill gallery enrichment', 'error');
@@ -912,7 +1257,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 throw new Error(data.error || 'Failed to backfill gallery derivatives');
             }
             showToast(`Generated derivatives for ${data.processed || 0} gallery assets`, 'success');
-            void fetchGalleryAssets(1, false);
+            void fetchGalleryAssets(1);
         } catch (error) {
             console.error('Failed to backfill gallery derivatives:', error);
             showToast(error instanceof Error ? error.message : 'Failed to backfill gallery derivatives', 'error');
@@ -929,7 +1274,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Failed to permanently delete asset');
             }
-            setGalleryAssets(prev => prev.filter(item => item.id !== asset.id));
+            updateGalleryPages(item => item.id === asset.id ? null : item);
             if (selectedGalleryAsset?.id === asset.id) {
                 setSelectedGalleryAsset(null);
                 setGalleryDetailsOpen(false);
@@ -952,7 +1297,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 throw new Error(data.error || 'Failed to empty gallery trash');
             }
             showToast(`Deleted ${data.deletedCount || 0} trashed assets`, 'success');
-            void fetchGalleryAssets(1, false);
+            void fetchGalleryAssets(1);
             if (selectedGalleryAsset?.trashed) {
                 setSelectedGalleryAsset(null);
                 setGalleryDetailsOpen(false);
@@ -967,7 +1312,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const handleGalleryTrash = async (e: React.MouseEvent, asset: GalleryAsset, nextTrashed = true) => {
         e.stopPropagation();
-        setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item));
+        updateGalleryPages(item => item.id === asset.id ? { ...item, trashed: nextTrashed } : item);
         if (selectedGalleryAsset?.id === asset.id) {
             setSelectedGalleryAsset(prev => prev ? { ...prev, trashed: nextTrashed } : prev);
             if (!showTrashed && nextTrashed) {
@@ -987,15 +1332,45 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             }
             showToast(nextTrashed ? 'Moved asset to trash' : 'Restored asset from trash', 'success');
             if (!showTrashed) {
-                setGalleryAssets(prev => prev.filter(item => !item.trashed));
+                updateGalleryPages(item => item.trashed ? null : item);
             }
         } catch (error) {
             console.error('Failed to update trash state:', error);
-            setGalleryAssets(prev => prev.map(item => item.id === asset.id ? { ...item, trashed: asset.trashed } : item));
+            updateGalleryPages(item => item.id === asset.id ? { ...item, trashed: asset.trashed } : item);
             setSelectedGalleryAsset(prev => prev && prev.id === asset.id ? { ...prev, trashed: asset.trashed } : prev);
             showToast(error instanceof Error ? error.message : 'Failed to update trash state', 'error');
         }
     };
+
+    const handleGalleryViewerClose = useCallback(() => {
+        const assetId = galleryViewerItems[galleryViewerIndex]?.id || lastViewedGalleryAssetIdRef.current;
+        setGalleryViewerOpen(false);
+        if (!assetId) return;
+        lastViewedGalleryAssetIdRef.current = assetId;
+        setMobileSelectedGalleryAssetId(assetId);
+        const selectedAsset = filteredGalleryAssets.find(item => item.id === assetId) || galleryViewerItems.find(item => item.id === assetId) || null;
+        setSelectedGalleryAsset(selectedAsset);
+        emitGallerySelection(selectedAsset);
+
+        const loadedPageEntry = Object.entries(galleryPages).find(([, pageData]) =>
+            pageData.assets.some(asset => asset.id === assetId)
+        );
+
+        if (loadedPageEntry) {
+            const loadedPage = Number(loadedPageEntry[0]);
+            const indexOnPage = loadedPageEntry[1].assets.findIndex(asset => asset.id === assetId);
+            galleryRestoreInProgressRef.current = true;
+            galleryFocusRestoreRef.current = {
+                assetId,
+                page: loadedPage,
+                indexOnPage,
+            };
+            return;
+        }
+
+        galleryRestoreInProgressRef.current = true;
+        void fetchGalleryAssets(1, { focusAssetId: assetId });
+    }, [emitGallerySelection, fetchGalleryAssets, filteredGalleryAssets, galleryPages, galleryViewerIndex, galleryViewerItems]);
 
     return (
         <div className={mobile ? 'flex h-full w-full flex-col bg-card' : 'flex h-full flex-col bg-card border-l border-border w-[320px]'}>
@@ -1126,7 +1501,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 aria-label={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
                                 onClick={() => {
                                     if (panelMode === 'gallery') {
-                                        void fetchGalleryAssets(1, false);
+                                        void fetchGalleryAssets(1);
                                     } else {
                                         void fetchJobsPage(1, false);
                                     }
@@ -1209,7 +1584,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             </div>
 
             {/* Content List */}
-            <div className="flex-1 overflow-y-auto">
+            <div ref={galleryScrollContainerRef} className="flex-1 overflow-y-auto">
                 {!isMounted || (panelMode === 'jobs' ? isLoadingJobs : isLoadingGallery) ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                         <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
@@ -1233,122 +1608,152 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                             </div>
                         </div>
                     ) : (
-                        <div className={`${mobile ? 'grid grid-cols-3 gap-2 p-2' : 'grid grid-cols-2 gap-2 p-2'}`}>
-                            {filteredGalleryAssets.map(asset => (
-                                <button
-                                    key={asset.id}
-                                    type="button"
-                                    onClick={() => {
-                                        if (mobile && mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
-                                            mobileTouchHandledRef.current = null;
-                                            return;
-                                        }
-                                        handleGalleryAssetClick(asset);
-                                    }}
-                                    onTouchEnd={(event) => {
-                                        if (mobile) {
-                                            handleMobileGalleryTouchEnd(event, asset);
-                                        }
-                                    }}
-                                    className={`group text-left rounded-lg overflow-hidden border bg-muted/10 hover:bg-muted/20 transition-colors relative ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'border-border'}`}
-                                >
-                                    <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
-                                        {asset.type === 'video' ? (
-                                            asset.thumbnailUrl ? (
-                                                <img src={asset.thumbnailUrl} alt="Gallery video thumbnail" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="w-full h-full object-cover" muted />
-                                            )
-                                        ) : asset.type === 'audio' ? (
-                                            <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
-                                        ) : (
-                                            <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
-                                        )}
-                                    </div>
-                                    <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${mobile && mobileSelectedGalleryAssetId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                        <button
-                                            type="button"
-                                            data-gallery-overlay-action="true"
-                                            onTouchEnd={(e) => e.stopPropagation()}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedGalleryAsset(asset);
-                                                setGalleryDetailsOpen(true);
-                                            }}
-                                            className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
-                                            title="Info"
-                                        >
-                                            <Info className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            data-gallery-overlay-action="true"
-                                            onTouchEnd={(e) => e.stopPropagation()}
-                                            onClick={(e) => void handleGalleryFavorite(e, asset)}
-                                            className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
-                                            title={asset.favorited ? 'Unfavorite' : 'Favorite'}
-                                        >
-                                            ♥
-                                        </button>
-                                        <button
-                                            type="button"
-                                            data-gallery-overlay-action="true"
-                                            onTouchEnd={(e) => e.stopPropagation()}
-                                            onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
-                                            className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
-                                            title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                    <div className={`${mobile ? 'p-1.5 space-y-1' : 'p-2 space-y-1'}`}>
-                                        <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
-                                            <span>{asset.type}</span>
-                                            {asset.favorited && <span className="text-pink-400">♥</span>}
-                                            {asset.enrichmentStatus === 'completed' && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
-                                            )}
-                                            {(asset.enrichmentStatus === 'pending' || asset.enrichmentStatus === 'processing') && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Tagging…</span>
-                                            )}
-                                            {(asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing') && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
-                                            )}
+                        <div className="p-2 space-y-3">
+                            <div ref={galleryTopSentinelRef} className="h-1" />
+                            {sortedGalleryPageNumbers.map((pageNumber) => {
+                                const pageData = galleryPages[pageNumber];
+                                if (!pageData) return null;
+                                return (
+                                    <div
+                                        key={pageNumber}
+                                        ref={(node) => { galleryPageRefs.current[pageNumber] = node; }}
+                                        className="space-y-2"
+                                    >
+                                        <div className="px-1 text-[10px] text-muted-foreground">
+                                            Page {pageNumber}
                                         </div>
-                                        {!mobile && <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>}
-                                        {!mobile && !!(asset.userTags?.length || asset.autoTags?.length) && (
-                                            <div className="flex flex-wrap gap-1 pt-1">
-                                                {(asset.userTags || []).slice(0, 2).map(tag => (
+                                        <div className={`${mobile ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}`}>
+                                            {pageData.assets.map(asset => {
+                                                const isSelected = mobileSelectedGalleryAssetId === asset.id;
+                                                return (
                                                     <button
-                                                        key={tag}
+                                                        key={asset.id}
+                                                        data-gallery-asset-id={asset.id}
                                                         type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleGalleryTagClick(tag);
+                                                        onClick={() => {
+                                                            if (mobile && mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
+                                                                mobileTouchHandledRef.current = null;
+                                                                return;
+                                                            }
+                                                            handleGalleryAssetClick(asset);
                                                         }}
-                                                        className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
-                                                    >
-                                                        {tag}
-                                                    </button>
-                                                ))}
-                                                {(asset.autoTags || []).slice(0, Math.max(0, 2 - (asset.userTags || []).length)).map(tag => (
-                                                    <button
-                                                        key={tag}
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleGalleryTagClick(tag);
+                                                        onTouchEnd={(event) => {
+                                                            if (mobile) {
+                                                                handleMobileGalleryTouchEnd(event, asset);
+                                                            }
                                                         }}
-                                                        className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                                                        className={`group text-left rounded-lg overflow-hidden border transition-all relative ${isSelected ? 'border-primary ring-2 ring-primary/60 bg-primary/12 shadow-[0_0_0_1px_rgba(99,102,241,0.35)] scale-[1.01]' : 'border-border bg-muted/10 hover:bg-muted/20'}`}
                                                     >
-                                                        {tag}
+                                                        <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
+                                                            {pageData.imagesHydrated ? (
+                                                                asset.type === 'video' ? (
+                                                                    asset.thumbnailUrl ? (
+                                                                        <img src={asset.thumbnailUrl} alt="Gallery video thumbnail" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="w-full h-full object-cover" muted />
+                                                                    )
+                                                                ) : asset.type === 'audio' ? (
+                                                                    <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
+                                                                ) : (
+                                                                    <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
+                                                                )
+                                                            ) : (
+                                                                <div className="w-full h-full bg-muted/20" />
+                                                            )}
+                                                        </div>
+                                                        <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                            <button
+                                                                type="button"
+                                                                data-gallery-overlay-action="true"
+                                                                onTouchEnd={(e) => e.stopPropagation()}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedGalleryAsset(asset);
+                                                                    setGalleryDetailsOpen(true);
+                                                                }}
+                                                                className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
+                                                                title="Info"
+                                                            >
+                                                                <Info className="w-3 h-3" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                data-gallery-overlay-action="true"
+                                                                onTouchEnd={(e) => e.stopPropagation()}
+                                                                onClick={(e) => void handleGalleryFavorite(e, asset)}
+                                                                className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
+                                                                title={asset.favorited ? 'Unfavorite' : 'Favorite'}
+                                                            >
+                                                                ♥
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                data-gallery-overlay-action="true"
+                                                                onTouchEnd={(e) => e.stopPropagation()}
+                                                                onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
+                                                                className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
+                                                                title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                        <div className={`${mobile ? 'p-1.5 space-y-1' : 'p-2 space-y-1'}`}>
+                                                            <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
+                                                                <span>{asset.type}</span>
+                                                                {asset.favorited && <span className="text-pink-400">♥</span>}
+                                                                {asset.enrichmentStatus === 'completed' && (
+                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
+                                                                )}
+                                                                {(asset.enrichmentStatus === 'pending' || asset.enrichmentStatus === 'processing') && (
+                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Tagging…</span>
+                                                                )}
+                                                                {(asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing') && (
+                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
+                                                                )}
+                                                            </div>
+                                                            {!mobile && <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>}
+                                                            {!mobile && !!(asset.userTags?.length || asset.autoTags?.length) && (
+                                                                <div className="flex flex-wrap gap-1 pt-1">
+                                                                    {(asset.userTags || []).slice(0, 2).map(tag => (
+                                                                        <button
+                                                                            key={tag}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleGalleryTagClick(tag);
+                                                                            }}
+                                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                                                                        >
+                                                                            {tag}
+                                                                        </button>
+                                                                    ))}
+                                                                    {(asset.autoTags || []).slice(0, Math.max(0, 2 - (asset.userTags || []).length)).map(tag => (
+                                                                        <button
+                                                                            key={tag}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleGalleryTagClick(tag);
+                                                                            }}
+                                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                                                                        >
+                                                                            {tag}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </button>
-                                                ))}
-                                            </div>
-                                        )}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </button>
-                            ))}
+                                );
+                            })}
+                            {(isLoadingPreviousGallery || isLoadingMoreGallery) && (
+                                <div className="px-2 text-[10px] text-muted-foreground">Loading more gallery items…</div>
+                            )}
+                            <div ref={galleryBottomSentinelRef} className="h-1" />
                         </div>
                     )
                 ) : filteredJobs.length === 0 ? (
@@ -1613,19 +2018,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     })
                 )}
 
-                {panelMode === 'gallery' && isMounted && galleryHasNextPage && (
-                    <div className="p-3 border-t border-border/60">
-                        <Button
-                            variant="outline"
-                            className="w-full h-8 text-xs"
-                            onClick={() => void fetchGalleryAssets(galleryPage + 1, true)}
-                            disabled={isLoadingMoreGallery}
-                        >
-                            {isLoadingMoreGallery ? 'Loading...' : 'Load more'}
-                        </Button>
-                    </div>
-                )}
-
                 {panelMode === 'jobs' && isMounted && hasNextPage && (
                     <div className="p-3 border-t border-border/60">
                         <Button
@@ -1673,7 +2065,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 }))}
                 currentIndex={galleryViewerIndex}
                 onIndexChange={handleGalleryViewerIndexChange}
-                onClose={() => setGalleryViewerOpen(false)}
+                onClose={handleGalleryViewerClose}
                 onOpenInfo={(itemId) => {
                     const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId) || null;
                     if (!asset) return;
