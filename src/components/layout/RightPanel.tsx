@@ -19,6 +19,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
+import { VirtuosoGrid, VirtuosoGridHandle } from 'react-virtuoso';
 
 type GalleryAsset = {
     id: string;
@@ -58,6 +59,12 @@ type GalleryFetchResult = {
         indexOnPage: number | null;
         absoluteIndex: number | null;
     };
+};
+
+type GalleryGridItem = {
+    asset: GalleryAsset;
+    pageNumber: number;
+    imagesHydrated: boolean;
 };
 
 const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
@@ -103,8 +110,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
+    const [galleryScrollerEl, setGalleryScrollerEl] = useState<HTMLElement | null>(null);
     const pageSize = 12;
-    const galleryScrollContainerRef = useRef<HTMLDivElement>(null);
+    const galleryScrollContainerRef = useRef<HTMLElement | null>(null);
+    const galleryGridRef = useRef<VirtuosoGridHandle | null>(null);
     const panelScrollPositionsRef = useRef<{ jobs: number; gallery: number }>({ jobs: 0, gallery: 0 });
     const galleryTopSentinelRef = useRef<HTMLDivElement>(null);
     const galleryBottomSentinelRef = useRef<HTMLDivElement>(null);
@@ -133,9 +142,21 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         () => Object.keys(galleryPages).map(Number).sort((a, b) => a - b),
         [galleryPages]
     );
-    const filteredGalleryAssets = useMemo(
-        () => sortedGalleryPageNumbers.flatMap((pageNumber) => galleryPages[pageNumber]?.assets || []),
+    const galleryGridItems = useMemo<GalleryGridItem[]>(
+        () => sortedGalleryPageNumbers.flatMap((pageNumber) => {
+            const pageData = galleryPages[pageNumber];
+            if (!pageData) return [];
+            return pageData.assets.map((asset) => ({
+                asset,
+                pageNumber,
+                imagesHydrated: pageData.imagesHydrated,
+            }));
+        }),
         [galleryPages, sortedGalleryPageNumbers]
+    );
+    const filteredGalleryAssets = useMemo(
+        () => galleryGridItems.map((item) => item.asset),
+        [galleryGridItems]
     );
     const updateGalleryPages = useCallback((updater: (asset: GalleryAsset) => GalleryAsset | null) => {
         setGalleryPages(prev => {
@@ -148,6 +169,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             }
             return next;
         });
+    }, []);
+
+    const handleGalleryScrollerRef = useCallback((node: HTMLElement | null) => {
+        galleryScrollContainerRef.current = node;
+        setGalleryScrollerEl(prev => prev === node ? prev : node);
     }, []);
 
     const jobMatchesFilter = useCallback((job: Job, filters: MediaFilter[]) => {
@@ -219,7 +245,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters]);
 
     useEffect(() => {
-        const container = galleryScrollContainerRef.current;
+        const container = galleryScrollerEl || galleryScrollContainerRef.current;
         if (!container) return;
 
         const handleScrollPositionSave = () => {
@@ -229,17 +255,17 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         handleScrollPositionSave();
         container.addEventListener('scroll', handleScrollPositionSave, { passive: true });
         return () => container.removeEventListener('scroll', handleScrollPositionSave);
-    }, [panelMode]);
+    }, [galleryScrollerEl, panelMode]);
 
     useEffect(() => {
-        const container = galleryScrollContainerRef.current;
+        const container = galleryScrollerEl || galleryScrollContainerRef.current;
         if (!container) return;
         window.requestAnimationFrame(() => {
             const node = galleryScrollContainerRef.current;
             if (!node) return;
             node.scrollTop = panelScrollPositionsRef.current[panelMode] || 0;
         });
-    }, [panelMode, isMounted]);
+    }, [galleryScrollerEl, panelMode, isMounted]);
 
     useEffect(() => {
         if (isCreatingWorkspace && inputRef.current) {
@@ -376,6 +402,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
         return nextPages;
     }, []);
+
+    const handleGalleryGridRangeChange = useCallback((range: { startIndex: number; endIndex: number }) => {
+        const midIndex = Math.max(0, Math.floor((range.startIndex + range.endIndex) / 2));
+        const nextAnchor = galleryGridItems[midIndex]?.pageNumber;
+        if (!nextAnchor || nextAnchor === galleryAnchorPage) return;
+        setGalleryAnchorPage(nextAnchor);
+        setGalleryPages(prev => applyGalleryImageRetention(prev, nextAnchor));
+    }, [applyGalleryImageRetention, galleryAnchorPage, galleryGridItems]);
 
     const mergeGalleryPage = useCallback((
         resolvedPage: number,
@@ -922,15 +956,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     useEffect(() => {
         const restore = galleryFocusRestoreRef.current;
         if (!restore) return;
-        const container = galleryScrollContainerRef.current;
-        const pageNode = galleryPageRefs.current[restore.page];
-        const element = typeof document !== 'undefined' ? document.querySelector(`[data-gallery-asset-id="${restore.assetId}"]`) : null;
-        if (!container || !(element instanceof HTMLElement) || !pageNode) return;
+        const targetIndex = filteredGalleryAssets.findIndex(asset => asset.id === restore.assetId);
+        if (targetIndex === -1) return;
 
-        const containerRect = container.getBoundingClientRect();
-        const elementRect = element.getBoundingClientRect();
-        const targetTop = container.scrollTop + (elementRect.top - containerRect.top);
-        container.scrollTop = Math.max(0, targetTop);
+        window.requestAnimationFrame(() => {
+            galleryGridRef.current?.scrollToIndex({
+                index: targetIndex,
+                align: 'start',
+                behavior: 'auto',
+            });
+        });
         galleryScrollAnchorRef.current = {
             assetId: restore.assetId,
             top: 0,
@@ -996,7 +1031,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (sortedGalleryPageNumbers.length === 1 && lastViewedGalleryAssetIdRef.current) {
             galleryPostRestoreAwaitDirectionRef.current = true;
         }
-        const container = galleryScrollContainerRef.current;
+        const container = galleryScrollerEl || galleryScrollContainerRef.current;
         if (!container) return;
 
         let lastScrollTop = container.scrollTop;
@@ -1023,29 +1058,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (galleryScrollDirectionRef.current === 'down' && nearBottom) {
                 loadNextGalleryPages();
             }
-
-            const midline = container.scrollTop + (container.clientHeight / 2);
-            let nextAnchor = galleryAnchorPage;
-            for (const pageNumber of sortedGalleryPageNumbers) {
-                const node = galleryPageRefs.current[pageNumber];
-                if (!node) continue;
-                const top = node.offsetTop;
-                const bottom = top + node.offsetHeight;
-                if (midline >= top && midline <= bottom) {
-                    nextAnchor = pageNumber;
-                    break;
-                }
-            }
-            if (nextAnchor !== galleryAnchorPage) {
-                setGalleryAnchorPage(nextAnchor);
-                setGalleryPages(prev => applyGalleryImageRetention(prev, nextAnchor));
-            }
         };
 
         handleScroll();
         container.addEventListener('scroll', handleScroll, { passive: true });
         return () => container.removeEventListener('scroll', handleScroll);
-    }, [applyGalleryImageRetention, galleryAnchorPage, loadNextGalleryPages, loadPreviousGalleryPages, panelMode, sortedGalleryPageNumbers]);
+    }, [galleryScrollerEl, loadNextGalleryPages, loadPreviousGalleryPages, panelMode, sortedGalleryPageNumbers]);
 
 
     useEffect(() => {
@@ -1420,6 +1438,144 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         void fetchGalleryAssets(1, { focusAssetId: assetId });
     }, [emitGallerySelection, fetchGalleryAssets, filteredGalleryAssets, galleryPages, galleryViewerIndex, galleryViewerItems]);
 
+    const renderGalleryGridItem = (_index: number, item: GalleryGridItem) => {
+        const asset = item.asset;
+        const isSelected = mobileSelectedGalleryAssetId === asset.id;
+        const visibleUserTags = (asset.userTags || []).slice(0, 2);
+        const visibleAutoTags = (asset.autoTags || []).slice(0, Math.max(0, 2 - visibleUserTags.length));
+
+        return (
+            <button
+                key={asset.id}
+                data-gallery-asset-id={asset.id}
+                type="button"
+                onClick={() => {
+                    if (mobile && mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
+                        mobileTouchHandledRef.current = null;
+                        return;
+                    }
+                    handleGalleryAssetClick(asset);
+                }}
+                onTouchStart={(event) => {
+                    if (mobile) {
+                        handleMobileGalleryTouchStart(event, asset);
+                    }
+                }}
+                onTouchMove={(event) => {
+                    if (mobile) {
+                        handleMobileGalleryTouchMove(event, asset);
+                    }
+                }}
+                onTouchEnd={(event) => {
+                    if (mobile) {
+                        handleMobileGalleryTouchEnd(event, asset);
+                    }
+                }}
+                className={`group relative h-full w-full overflow-hidden rounded-lg border text-left transition-all ${isSelected ? 'border-primary ring-2 ring-primary/60 bg-primary/12 shadow-[0_0_0_1px_rgba(99,102,241,0.35)] scale-[1.01]' : 'border-border bg-muted/10 hover:bg-muted/20'}`}
+            >
+                <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
+                    {item.imagesHydrated ? (
+                        asset.type === 'video' ? (
+                            asset.thumbnailUrl ? (
+                                <img src={asset.thumbnailUrl} alt="Gallery video thumbnail" className="w-full h-full object-cover" />
+                            ) : (
+                                <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="w-full h-full object-cover" muted />
+                            )
+                        ) : asset.type === 'audio' ? (
+                            <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
+                        ) : (
+                            <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
+                        )
+                    ) : (
+                        <div className="w-full h-full bg-muted/20" />
+                    )}
+                </div>
+                <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <button
+                        type="button"
+                        data-gallery-overlay-action="true"
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedGalleryAsset(asset);
+                            setGalleryDetailsOpen(true);
+                        }}
+                        className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
+                        title="Info"
+                    >
+                        <Info className="w-3 h-3" />
+                    </button>
+                    <button
+                        type="button"
+                        data-gallery-overlay-action="true"
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onClick={(e) => void handleGalleryFavorite(e, asset)}
+                        className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
+                        title={asset.favorited ? 'Unfavorite' : 'Favorite'}
+                    >
+                        ♥
+                    </button>
+                    <button
+                        type="button"
+                        data-gallery-overlay-action="true"
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
+                        className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
+                        title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
+                    >
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
+                <div className={`${mobile ? 'p-1.5 min-h-[42px]' : 'p-2 min-h-[78px]'} flex flex-col gap-1`}>
+                    <div className="min-h-[14px] text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
+                        <span>{asset.type}</span>
+                        {asset.favorited && <span className="text-pink-400">♥</span>}
+                        {asset.enrichmentStatus === 'completed' && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
+                        )}
+                        {(asset.enrichmentStatus === 'pending' || asset.enrichmentStatus === 'processing') && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Tagging…</span>
+                        )}
+                        {(asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing') && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
+                        )}
+                    </div>
+                    {!mobile && <div className="h-3 text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>}
+                    {!mobile && (
+                        <div className="flex h-[28px] flex-wrap content-start gap-1 overflow-hidden pt-1">
+                            {visibleUserTags.map(tag => (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleGalleryTagClick(tag);
+                                    }}
+                                    className="max-w-full truncate text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                            {visibleAutoTags.map(tag => (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleGalleryTagClick(tag);
+                                    }}
+                                    className="max-w-full truncate text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </button>
+        );
+    };
+
     return (
         <div className={mobile ? 'flex h-full w-full flex-col bg-card' : 'flex h-full flex-col bg-card border-l border-border w-[320px]'}>
             {/* Header */}
@@ -1633,44 +1789,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
             {/* Content List */}
             <div
-                ref={galleryScrollContainerRef}
-                className="flex-1 overflow-y-auto"
-                onTouchStart={(event) => {
-                    if (!mobile) return;
-                    const touch = event.changedTouches[0];
-                    if (!touch) return;
-                    galleryContainerTouchRef.current = { startY: touch.clientY, direction: null };
-                }}
-                onTouchMove={(event) => {
-                    if (!mobile) return;
-                    const touch = event.changedTouches[0];
-                    const current = galleryContainerTouchRef.current;
-                    if (!touch || !current) return;
-                    const deltaY = touch.clientY - current.startY;
-                    if (Math.abs(deltaY) > 8) {
-                        galleryContainerTouchRef.current = {
-                            startY: current.startY,
-                            direction: deltaY < 0 ? 'down' : 'up',
-                        };
-                    }
-                }}
-                onTouchEnd={() => {
-                    if (!mobile) return;
-                    const current = galleryContainerTouchRef.current;
-                    const container = galleryScrollContainerRef.current;
-                    if (current?.direction && container && !galleryRestoreInProgressRef.current) {
-                        galleryScrollDirectionRef.current = current.direction;
-                        if (galleryPostRestoreAwaitDirectionRef.current || container.scrollHeight <= container.clientHeight + 24) {
-                            if (current.direction === 'up') {
-                                loadPreviousGalleryPages();
-                            } else {
-                                loadNextGalleryPages();
-                            }
-                            galleryPostRestoreAwaitDirectionRef.current = false;
-                        }
-                    }
-                    galleryContainerTouchRef.current = null;
-                }}
+                ref={panelMode === 'gallery' ? undefined : handleGalleryScrollerRef}
+                className={panelMode === 'gallery' ? 'flex-1 min-h-0' : 'flex-1 overflow-y-auto'}
             >
                 {!isMounted || (panelMode === 'jobs' ? isLoadingJobs : isLoadingGallery) ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
@@ -1695,162 +1815,31 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                             </div>
                         </div>
                     ) : (
-                        <div className="p-2 space-y-3">
-                            <div ref={galleryTopSentinelRef} className="h-1" />
-                            {sortedGalleryPageNumbers.map((pageNumber) => {
-                                const pageData = galleryPages[pageNumber];
-                                if (!pageData) return null;
-                                return (
-                                    <div
-                                        key={pageNumber}
-                                        ref={(node) => { galleryPageRefs.current[pageNumber] = node; }}
-                                        className="space-y-2"
-                                    >
-                                        <div className="px-1 text-[10px] text-muted-foreground">
-                                            Page {pageNumber}
-                                        </div>
-                                        <div className={`${mobile ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}`}>
-                                            {pageData.assets.map(asset => {
-                                                const isSelected = mobileSelectedGalleryAssetId === asset.id;
-                                                return (
-                                                    <button
-                                                        key={asset.id}
-                                                        data-gallery-asset-id={asset.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (mobile && mobileTouchHandledRef.current?.kind === 'gallery' && mobileTouchHandledRef.current?.id === asset.id) {
-                                                                mobileTouchHandledRef.current = null;
-                                                                return;
-                                                            }
-                                                            handleGalleryAssetClick(asset);
-                                                        }}
-                                                        onTouchStart={(event) => {
-                                                            if (mobile) {
-                                                                handleMobileGalleryTouchStart(event, asset);
-                                                            }
-                                                        }}
-                                                        onTouchMove={(event) => {
-                                                            if (mobile) {
-                                                                handleMobileGalleryTouchMove(event, asset);
-                                                            }
-                                                        }}
-                                                        onTouchEnd={(event) => {
-                                                            if (mobile) {
-                                                                handleMobileGalleryTouchEnd(event, asset);
-                                                            }
-                                                        }}
-                                                        className={`group text-left rounded-lg overflow-hidden border transition-all relative ${isSelected ? 'border-primary ring-2 ring-primary/60 bg-primary/12 shadow-[0_0_0_1px_rgba(99,102,241,0.35)] scale-[1.01]' : 'border-border bg-muted/10 hover:bg-muted/20'}`}
-                                                    >
-                                                        <div className="aspect-square bg-black/30 flex items-center justify-center overflow-hidden">
-                                                            {pageData.imagesHydrated ? (
-                                                                asset.type === 'video' ? (
-                                                                    asset.thumbnailUrl ? (
-                                                                        <img src={asset.thumbnailUrl} alt="Gallery video thumbnail" className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="w-full h-full object-cover" muted />
-                                                                    )
-                                                                ) : asset.type === 'audio' ? (
-                                                                    <div className="w-full h-full flex items-center justify-center text-orange-400 text-xs font-medium">AUDIO</div>
-                                                                ) : (
-                                                                    <img src={asset.previewUrl || asset.originalUrl} alt="Gallery asset" className="w-full h-full object-cover" />
-                                                                )
-                                                            ) : (
-                                                                <div className="w-full h-full bg-muted/20" />
-                                                            )}
-                                                        </div>
-                                                        <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                                            <button
-                                                                type="button"
-                                                                data-gallery-overlay-action="true"
-                                                                onTouchEnd={(e) => e.stopPropagation()}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedGalleryAsset(asset);
-                                                                    setGalleryDetailsOpen(true);
-                                                                }}
-                                                                className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
-                                                                title="Info"
-                                                            >
-                                                                <Info className="w-3 h-3" />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                data-gallery-overlay-action="true"
-                                                                onTouchEnd={(e) => e.stopPropagation()}
-                                                                onClick={(e) => void handleGalleryFavorite(e, asset)}
-                                                                className={`p-1 rounded-md backdrop-blur-sm border ${asset.favorited ? 'bg-pink-500/20 text-pink-400 border-pink-500/30' : 'bg-background/80 text-muted-foreground border-border/50 hover:text-pink-400'}`}
-                                                                title={asset.favorited ? 'Unfavorite' : 'Favorite'}
-                                                            >
-                                                                ♥
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                data-gallery-overlay-action="true"
-                                                                onTouchEnd={(e) => e.stopPropagation()}
-                                                                onClick={(e) => void handleGalleryTrash(e, asset, !asset.trashed)}
-                                                                className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-red-400"
-                                                                title={asset.trashed ? 'Restore from trash' : 'Move to trash'}
-                                                            >
-                                                                <Trash2 className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                        <div className={`${mobile ? 'p-1.5 space-y-1' : 'p-2 space-y-1'}`}>
-                                                            <div className="text-[10px] font-medium capitalize text-foreground flex items-center gap-1 flex-wrap">
-                                                                <span>{asset.type}</span>
-                                                                {asset.favorited && <span className="text-pink-400">♥</span>}
-                                                                {asset.enrichmentStatus === 'completed' && (
-                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tagged</span>
-                                                                )}
-                                                                {(asset.enrichmentStatus === 'pending' || asset.enrichmentStatus === 'processing') && (
-                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Tagging…</span>
-                                                                )}
-                                                                {(asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing') && (
-                                                                    <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Preview…</span>
-                                                                )}
-                                                            </div>
-                                                            {!mobile && <div className="text-[9px] text-muted-foreground truncate">{asset.sourceOutputId || asset.id}</div>}
-                                                            {!mobile && !!(asset.userTags?.length || asset.autoTags?.length) && (
-                                                                <div className="flex flex-wrap gap-1 pt-1">
-                                                                    {(asset.userTags || []).slice(0, 2).map(tag => (
-                                                                        <button
-                                                                            key={tag}
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleGalleryTagClick(tag);
-                                                                            }}
-                                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
-                                                                        >
-                                                                            {tag}
-                                                                        </button>
-                                                                    ))}
-                                                                    {(asset.autoTags || []).slice(0, Math.max(0, 2 - (asset.userTags || []).length)).map(tag => (
-                                                                        <button
-                                                                            key={tag}
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleGalleryTagClick(tag);
-                                                                            }}
-                                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
-                                                                        >
-                                                                            {tag}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        <div className="relative h-full min-h-0">
+                            <VirtuosoGrid
+                                ref={galleryGridRef}
+                                scrollerRef={handleGalleryScrollerRef}
+                                style={{ height: '100%' }}
+                                data={galleryGridItems}
+                                computeItemKey={(_, item) => item.asset.id}
+                                listClassName="flex flex-wrap content-start px-1 py-2"
+                                itemClassName={mobile ? 'box-border flex-none w-1/3 p-1' : 'box-border flex-none w-1/2 p-1'}
+                                increaseViewportBy={{ top: 600, bottom: 900 }}
+                                overscan={{ main: 700, reverse: 400 }}
+                                rangeChanged={handleGalleryGridRangeChange}
+                                startReached={() => {
+                                    loadPreviousGalleryPages();
+                                }}
+                                endReached={() => {
+                                    loadNextGalleryPages();
+                                }}
+                                itemContent={renderGalleryGridItem}
+                            />
                             {(isLoadingPreviousGallery || isLoadingMoreGallery) && (
-                                <div className="px-2 text-[10px] text-muted-foreground">Loading more gallery items…</div>
+                                <div className="pointer-events-none absolute inset-x-0 bottom-0 px-2 pb-2 text-[10px] text-muted-foreground">
+                                    Loading more gallery items…
+                                </div>
                             )}
-                            <div ref={galleryBottomSentinelRef} className="h-1" />
                         </div>
                     )
                 ) : filteredJobs.length === 0 ? (
