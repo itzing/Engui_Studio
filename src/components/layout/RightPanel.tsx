@@ -122,6 +122,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const restoredMobileViewerRef = useRef(false);
     const mobileViewerPersistenceReadyRef = useRef(false);
     const mobileTouchHandledRef = useRef<{ kind: 'job' | 'gallery'; id: string } | null>(null);
+    const mobileGalleryTouchRef = useRef<{ id: string; startX: number; startY: number; moved: boolean } | null>(null);
+    const galleryContainerTouchRef = useRef<{ startY: number; direction: 'up' | 'down' | null } | null>(null);
     const galleryRestoreHydratedRef = useRef(false);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
@@ -658,9 +660,39 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setGalleryViewerOpen(true);
     };
 
+    const handleMobileGalleryTouchStart = (event: React.TouchEvent, asset: GalleryAsset) => {
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        mobileGalleryTouchRef.current = {
+            id: asset.id,
+            startX: touch.clientX,
+            startY: touch.clientY,
+            moved: false,
+        };
+    };
+
+    const handleMobileGalleryTouchMove = (event: React.TouchEvent, asset: GalleryAsset) => {
+        const touch = event.changedTouches[0];
+        const current = mobileGalleryTouchRef.current;
+        if (!touch || !current || current.id !== asset.id) return;
+        if (Math.abs(touch.clientX - current.startX) > 8 || Math.abs(touch.clientY - current.startY) > 8) {
+            mobileGalleryTouchRef.current = {
+                ...current,
+                moved: true,
+            };
+        }
+    };
+
     const handleMobileGalleryTouchEnd = (event: React.TouchEvent, asset: GalleryAsset) => {
         const target = event.target as HTMLElement | null;
         if (target?.closest('[data-gallery-overlay-action="true"]')) {
+            mobileGalleryTouchRef.current = null;
+            return;
+        }
+
+        const current = mobileGalleryTouchRef.current;
+        mobileGalleryTouchRef.current = null;
+        if (!current || current.id !== asset.id || current.moved) {
             return;
         }
 
@@ -1584,7 +1616,43 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             </div>
 
             {/* Content List */}
-            <div ref={galleryScrollContainerRef} className="flex-1 overflow-y-auto">
+            <div
+                ref={galleryScrollContainerRef}
+                className="flex-1 overflow-y-auto"
+                onTouchStart={(event) => {
+                    if (!mobile) return;
+                    const touch = event.changedTouches[0];
+                    if (!touch) return;
+                    galleryContainerTouchRef.current = { startY: touch.clientY, direction: null };
+                }}
+                onTouchMove={(event) => {
+                    if (!mobile) return;
+                    const touch = event.changedTouches[0];
+                    const current = galleryContainerTouchRef.current;
+                    if (!touch || !current) return;
+                    const deltaY = touch.clientY - current.startY;
+                    if (Math.abs(deltaY) > 8) {
+                        galleryContainerTouchRef.current = {
+                            startY: current.startY,
+                            direction: deltaY < 0 ? 'down' : 'up',
+                        };
+                    }
+                }}
+                onTouchEnd={() => {
+                    if (!mobile) return;
+                    const current = galleryContainerTouchRef.current;
+                    const container = galleryScrollContainerRef.current;
+                    if (current?.direction && container && container.scrollHeight <= container.clientHeight + 24 && !galleryRestoreInProgressRef.current) {
+                        galleryScrollDirectionRef.current = current.direction;
+                        if (current.direction === 'up') {
+                            loadPreviousGalleryPages();
+                        } else {
+                            loadNextGalleryPages();
+                        }
+                    }
+                    galleryContainerTouchRef.current = null;
+                }}
+            >
                 {!isMounted || (panelMode === 'jobs' ? isLoadingJobs : isLoadingGallery) ? (
                     <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                         <div className="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
@@ -1636,6 +1704,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                                                 return;
                                                             }
                                                             handleGalleryAssetClick(asset);
+                                                        }}
+                                                        onTouchStart={(event) => {
+                                                            if (mobile) {
+                                                                handleMobileGalleryTouchStart(event, asset);
+                                                            }
+                                                        }}
+                                                        onTouchMove={(event) => {
+                                                            if (mobile) {
+                                                                handleMobileGalleryTouchMove(event, asset);
+                                                            }
                                                         }}
                                                         onTouchEnd={(event) => {
                                                             if (mobile) {
