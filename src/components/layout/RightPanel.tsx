@@ -392,15 +392,22 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, gallerySort, selectedFilters, showTrashed]);
 
     const applyGalleryImageRetention = useCallback((pages: Record<number, GalleryPageData>, anchorPage: number) => {
+        let changed = false;
         const nextPages: Record<number, GalleryPageData> = {};
         for (const [pageKey, pageData] of Object.entries(pages)) {
             const pageNumber = Number(pageKey);
-            nextPages[pageNumber] = {
-                ...pageData,
-                imagesHydrated: Math.abs(pageNumber - anchorPage) <= 3,
-            };
+            const shouldHydrate = pageData.imagesHydrated || Math.abs(pageNumber - anchorPage) <= 3;
+            if (shouldHydrate !== pageData.imagesHydrated) {
+                changed = true;
+                nextPages[pageNumber] = {
+                    ...pageData,
+                    imagesHydrated: shouldHydrate,
+                };
+            } else {
+                nextPages[pageNumber] = pageData;
+            }
         }
-        return nextPages;
+        return changed ? nextPages : pages;
     }, []);
 
     const handleGalleryGridRangeChange = useCallback((range: { startIndex: number; endIndex: number }) => {
