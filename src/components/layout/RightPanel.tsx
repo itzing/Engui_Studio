@@ -135,6 +135,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const mobileGalleryTouchRef = useRef<{ id: string; startX: number; startY: number; moved: boolean } | null>(null);
     const galleryContainerTouchRef = useRef<{ startY: number; direction: 'up' | 'down' | null } | null>(null);
     const galleryRestoreHydratedRef = useRef(false);
+    const previousPanelModeRef = useRef<'jobs' | 'gallery'>('jobs');
+    const centerGallerySelectionOnEntryRef = useRef(false);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
@@ -158,6 +160,19 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         () => galleryGridItems.map((item) => item.asset),
         [galleryGridItems]
     );
+    const scrollGalleryAssetIntoView = useCallback((assetId: string, align: 'start' | 'center' = 'center') => {
+        const targetIndex = filteredGalleryAssets.findIndex(asset => asset.id === assetId);
+        if (targetIndex === -1) return false;
+
+        window.requestAnimationFrame(() => {
+            galleryGridRef.current?.scrollToIndex({
+                index: targetIndex,
+                align,
+                behavior: 'auto',
+            });
+        });
+        return true;
+    }, [filteredGalleryAssets]);
     const updateGalleryPages = useCallback((updater: (asset: GalleryAsset) => GalleryAsset | null) => {
         setGalleryPages(prev => {
             const next: Record<number, GalleryPageData> = {};
@@ -228,6 +243,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (!mobile || !mobileMode) return;
         setPanelMode(mobileMode);
     }, [mobile, mobileMode]);
+
+    useEffect(() => {
+        const previousMode = previousPanelModeRef.current;
+        previousPanelModeRef.current = panelMode;
+        if (previousMode !== 'gallery' && panelMode === 'gallery') {
+            centerGallerySelectionOnEntryRef.current = true;
+        }
+    }, [panelMode]);
 
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined') return;
@@ -963,16 +986,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     useEffect(() => {
         const restore = galleryFocusRestoreRef.current;
         if (!restore) return;
-        const targetIndex = filteredGalleryAssets.findIndex(asset => asset.id === restore.assetId);
-        if (targetIndex === -1) return;
+        const centered = scrollGalleryAssetIntoView(restore.assetId, 'center');
+        if (!centered) return;
 
-        window.requestAnimationFrame(() => {
-            galleryGridRef.current?.scrollToIndex({
-                index: targetIndex,
-                align: 'start',
-                behavior: 'auto',
-            });
-        });
         galleryScrollAnchorRef.current = {
             assetId: restore.assetId,
             top: 0,
@@ -983,7 +999,21 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             galleryRestoreInProgressRef.current = false;
             galleryPostRestoreAwaitDirectionRef.current = true;
         }, 80);
-    }, [filteredGalleryAssets]);
+    }, [scrollGalleryAssetIntoView]);
+
+    useEffect(() => {
+        if (panelMode !== 'gallery' || !centerGallerySelectionOnEntryRef.current) return;
+        const assetId = mobileSelectedGalleryAssetId || selectedGalleryAsset?.id || lastViewedGalleryAssetIdRef.current;
+        if (!assetId) {
+            centerGallerySelectionOnEntryRef.current = false;
+            return;
+        }
+
+        const centered = scrollGalleryAssetIntoView(assetId, 'center');
+        if (centered) {
+            centerGallerySelectionOnEntryRef.current = false;
+        }
+    }, [mobileSelectedGalleryAssetId, panelMode, scrollGalleryAssetIntoView, selectedGalleryAsset?.id]);
 
     const loadPreviousGalleryPages = useCallback(() => {
         if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;
