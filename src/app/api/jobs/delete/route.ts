@@ -27,7 +27,7 @@ export async function DELETE(request: NextRequest) {
       const settingsService = new SettingsService();
       const { settings } = await settingsService.getSettings('user-with-settings');
 
-      const runpodApiKey = settings.apiKeys?.runpod || request.headers.get('x-runpod-key') || undefined;
+      const runpodApiKey = settings.runpod?.apiKey || request.headers.get('x-runpod-key') || undefined;
       const endpointFromModelMap = settings.runpod?.endpoints?.[job.modelId || ''];
       const endpointId = job.endpointId || endpointFromModelMap;
       const runpodJobId = job.runpodJobId || (() => {

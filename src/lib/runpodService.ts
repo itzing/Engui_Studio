@@ -573,14 +573,29 @@ class RunPodService {
 
 
   async cancelJob(jobId: string): Promise<boolean> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/cancel/${jobId}`, {
+    const cancelUrl = `${this.baseUrl}/cancel/${jobId}`;
+    console.log('Submitting RunPod cancel request', {
+      endpointId: this.endpointId,
+      jobId,
+      url: cancelUrl,
+    });
+
+    const response = await this.fetchWithRetry(cancelUrl, {
       method: 'POST',
       headers: this.getHeaders(),
     });
 
+    const responseText = await response.text();
+    console.log('RunPod cancel response received', {
+      endpointId: this.endpointId,
+      jobId,
+      status: response.status,
+      ok: response.ok,
+      body: responseText,
+    });
+
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`RunPod cancel API error: ${response.status} - ${errorText}`);
+      throw new Error(`RunPod cancel API error: ${response.status} - ${responseText}`);
     }
 
     return true;
