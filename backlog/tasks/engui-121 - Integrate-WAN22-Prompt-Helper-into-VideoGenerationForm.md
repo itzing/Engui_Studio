@@ -1,9 +1,10 @@
 ---
 id: ENGUI-121
 title: Integrate WAN 2.2 Prompt Helper into VideoGenerationForm
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-18 21:06'
+updated_date: '2026-04-18 21:47'
 labels:
   - prompt-helper
   - frontend
@@ -14,6 +15,7 @@ dependencies:
   - ENGUI-120
 references:
   - /home/engui/Engui_Studio/specs/prompt-helper-mvp-spec.md
+  - /home/engui/Engui_Studio/specs/wan22-video-prompt-helper-profile.md
 priority: high
 ---
 
@@ -29,10 +31,16 @@ Match the proven image Prompt Helper UX where practical: modal instruction entry
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 VideoGenerationForm shows a Prompt Helper entry point for WAN 2.2
-- [ ] #2 The helper can generate a new WAN 2.2 prompt when the video prompt is empty
-- [ ] #3 The helper can rewrite the current WAN 2.2 prompt when the user gives an edit instruction
-- [ ] #4 Success replaces the main video prompt immediately
-- [ ] #5 Failure keeps the instruction intact for retry and does not clear the current prompt
-- [ ] #6 No new Prompt Helper settings section is introduced for WAN 2.2 specifically
+- [x] #1 VideoGenerationForm shows a Prompt Helper entry point for WAN 2.2
+- [x] #2 The helper can generate a new WAN 2.2 prompt when the video prompt is empty
+- [x] #3 The helper can rewrite the current WAN 2.2 prompt when the user gives an edit instruction
+- [x] #4 Success replaces the main video prompt immediately
+- [x] #5 Failure keeps the instruction intact for retry and does not clear the current prompt
+- [x] #6 No new Prompt Helper settings section is introduced for WAN 2.2 specifically
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Integrated Prompt Helper into `VideoGenerationForm` for `wan22` only. The video form now exposes a WAN-only Prompt Helper button plus saved-instruction quick-apply action, stores a separate video helper instruction draft in localStorage, sends `helperProfile: "wan22-video"` through the existing `/api/prompt-helper/improve` route, optionally applies the returned negative prompt, preserves the current video prompt on failure, and immediately replaces the main prompt on success.
+<!-- SECTION:FINAL_SUMMARY:END -->

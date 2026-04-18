@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getPromptHelperProvider, PromptHelperProviderError } from '@/lib/promptHelper';
+import type { PromptHelperProfile } from '@/lib/promptHelper';
 import { ensureHelperMode } from '@/lib/helperMode';
 
 const settingsService = new SettingsService();
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest) {
     const negativePrompt = typeof body?.negativePrompt === 'string' ? body.negativePrompt : '';
     const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
     const modelId = typeof body?.modelId === 'string' ? body.modelId : undefined;
+    const helperProfile: PromptHelperProfile = body?.helperProfile === 'wan22-video' ? 'wan22-video' : 'default';
 
     if (!instruction) {
       return NextResponse.json({ success: false, error: 'Instruction is required' }, { status: 400 });
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
     const settingsResult = await settingsService.getSettings(userId);
     await ensureHelperMode('text');
     const provider = getPromptHelperProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
-    const result = await provider.improve({ prompt, negativePrompt, instruction, modelId });
+    const result = await provider.improve({ prompt, negativePrompt, instruction, modelId, helperProfile });
 
     return NextResponse.json({
       success: true,

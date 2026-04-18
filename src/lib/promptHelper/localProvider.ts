@@ -1,4 +1,4 @@
-import { PromptHelperProvider, PromptHelperProviderError, PromptHelperRequest, PromptHelperResult, PromptHelperSettings } from './types';
+import { PromptHelperProfile, PromptHelperProvider, PromptHelperProviderError, PromptHelperRequest, PromptHelperResult, PromptHelperSettings } from './types';
 
 interface OpenAIChatResponse {
   choices?: Array<{
@@ -86,7 +86,7 @@ function buildFramingHint(width: number | null, height: number | null): string |
   return 'Use composition cues that fit a moderately rectangular frame, balancing subject emphasis with enough surrounding context.';
 }
 
-function buildUserMessage(request: PromptHelperRequest): string {
+function buildDefaultUserMessage(request: PromptHelperRequest): string {
   const instruction = sanitizePromptHelperText(request.instruction.trim());
   const currentPrompt = sanitizePromptHelperText(request.prompt.trim());
   const currentNegativePrompt = sanitizePromptHelperText(request.negativePrompt?.trim() || '');
@@ -122,6 +122,72 @@ function buildUserMessage(request: PromptHelperRequest): string {
     'Return JSON with exactly these keys:',
     '{"prompt":"...","negativePrompt":"..."}'
   ].filter(Boolean).join('\n');
+}
+
+function buildWan22UserMessage(request: PromptHelperRequest): string {
+  const instruction = sanitizePromptHelperText(request.instruction.trim());
+  const currentPrompt = sanitizePromptHelperText(request.prompt.trim());
+  const currentNegativePrompt = sanitizePromptHelperText(request.negativePrompt?.trim() || '');
+  const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
+  const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
+  const aspectRatio = width && height ? `${width}:${height}` : null;
+  const framingHint = buildFramingHint(width, height);
+
+  return [
+    currentPrompt || currentNegativePrompt
+      ? 'Rewrite the current WAN 2.2 image-to-video prompts according to the user instruction.'
+      : 'Create new WAN 2.2 image-to-video prompts from the user instruction below.',
+    request.modelId ? `Target model: ${request.modelId}` : 'Target model: wan22',
+    width && height ? `Target dimensions: ${width}x${height}` : null,
+    aspectRatio ? `Target aspect ratio: ${aspectRatio}` : null,
+    '',
+    'Current positive prompt:',
+    currentPrompt || '(empty)',
+    '',
+    'Current negative prompt:',
+    currentNegativePrompt || '(empty)',
+    '',
+    'Instruction:',
+    instruction,
+    '',
+    'WAN 2.2 profile rules:',
+    'Default assumption: this is image-to-video or photo animation from a still image.',
+    'Focus on motion rather than re-describing static appearance that would already be visible in the image.',
+    'Prefer one clear motion beat per clip.',
+    'Prefer micro-motion first: blinking, gaze shift, slight head turn, breathing, hair movement, clothing movement, subtle environmental motion.',
+    'Use zero or one simple camera move only, such as slow push-in, gentle pan, slight dolly in, subtle handheld, or subtle orbit.',
+    'Avoid multiple sequential actions, stacked camera moves, scene reinvention, and style-soup adjective chains unless the instruction explicitly asks for them.',
+    'Keep the positive prompt concise, usually 1 to 2 short sentences.',
+    'Bias empty-prompt generation toward a balanced, believable result rather than the most dramatic result.',
+    'If the instruction is a narrow edit, preserve all existing useful prompt content and change only what the instruction requires.',
+    'If the instruction asks to improve, optimize, rewrite, or generate, you may make broader WAN-aware prompt-engineering improvements.',
+    'Use target dimensions, aspect ratio, and framing guidance only when they help composition or when the instruction asks for prompt improvement or new prompt creation.',
+    framingHint,
+    'Default negative prompt direction: keep it compact and focused on artifacts like blurry, flicker, jitter, distortion, warped face, extra fingers, extra limbs, identity drift, text, watermark, logo, low quality.',
+    '',
+    'Return JSON with exactly these keys:',
+    '{"prompt":"...","negativePrompt":"..."}'
+  ].filter(Boolean).join('\n');
+}
+
+function resolveHelperProfile(request: PromptHelperRequest): PromptHelperProfile {
+  return request.helperProfile === 'wan22-video' ? 'wan22-video' : 'default';
+}
+
+function buildPromptHelperMessages(request: PromptHelperRequest): { systemPrompt: string; userMessage: string } {
+  const profile = resolveHelperProfile(request);
+
+  if (profile === 'wan22-video') {
+    return {
+      systemPrompt: 'You are an instruction-following prompt editor for WAN 2.2 image-to-video prompting. Your first priority is to apply the user instruction exactly. If the current prompt is non-empty and the instruction is narrow, preserve the existing prompt and make only the requested change. If the instruction asks for improvement, optimization, rewriting, or if the current prompt is empty, produce one balanced WAN 2.2-friendly result. Focus on motion, secondary motion, one simple camera move, atmosphere, and realism. Avoid re-describing static appearance unless required by the instruction. Avoid multiple sequential actions, stacked camera moves, scene reinvention, and verbose style soups unless explicitly requested. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.',
+      userMessage: buildWan22UserMessage(request)
+    };
+  }
+
+  return {
+    systemPrompt: 'You are an instruction-following prompt editor for image generation. Your first priority is to apply the user instruction exactly. Preserve the existing positive and negative prompts unless the instruction explicitly asks you to change, improve, expand, shorten, or rewrite them. If the user asks for a narrow edit, formatting change, or substitution, make only that change and keep everything else intact. Only perform broader prompt-engineering improvements when the instruction explicitly requests improvement, rewriting, generation, or optimization. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.',
+    userMessage: buildDefaultUserMessage(request)
+  };
 }
 
 export class LocalPromptHelperProvider implements PromptHelperProvider {
@@ -161,6 +227,8 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
   }
 
   private async callModel(request: PromptHelperRequest): Promise<PromptHelperResult> {
+    const { systemPrompt, userMessage } = buildPromptHelperMessages(request);
+
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -175,11 +243,11 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
         messages: [
           {
             role: 'system',
-            content: 'You are an instruction-following prompt editor for image generation. Your first priority is to apply the user instruction exactly. Preserve the existing positive and negative prompts unless the instruction explicitly asks you to change, improve, expand, shorten, or rewrite them. If the user asks for a narrow edit, formatting change, or substitution, make only that change and keep everything else intact. Only perform broader prompt-engineering improvements when the instruction explicitly requests improvement, rewriting, generation, or optimization. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.'
+            content: systemPrompt
           },
           {
             role: 'user',
-            content: buildUserMessage(request)
+            content: userMessage
           }
         ]
       })

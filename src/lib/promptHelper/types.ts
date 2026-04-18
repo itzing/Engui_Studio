@@ -1,4 +1,5 @@
 export type PromptHelperProviderType = 'disabled' | 'local';
+export type PromptHelperProfile = 'default' | 'wan22-video';
 
 export interface PromptHelperSettings {
   provider?: PromptHelperProviderType;
@@ -14,6 +15,7 @@ export interface PromptHelperRequest {
   negativePrompt?: string;
   instruction: string;
   modelId?: string;
+  helperProfile?: PromptHelperProfile;
   width?: number;
   height?: number;
 }

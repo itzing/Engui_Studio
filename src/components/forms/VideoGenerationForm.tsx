@@ -6,7 +6,8 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeftRight, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
@@ -35,6 +36,13 @@ export default function VideoGenerationForm() {
     const [isLoadingMedia, setIsLoadingMedia] = useState(false);
     const [showReuseSuccess, setShowReuseSuccess] = useState(false);
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+    const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
+    const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+    const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
+    const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
+    const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
+    const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
+    const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
 
     // LoRA state
@@ -75,6 +83,7 @@ export default function VideoGenerationForm() {
 
     const videoModels = getModelsByType('video');
     const DEFAULT_VIDEO_MODEL = videoModels[0]?.id || 'wan22';
+    const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:video-prompt-helper:instruction';
 
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
@@ -133,6 +142,29 @@ export default function VideoGenerationForm() {
         });
     }, [DEFAULT_VIDEO_MODEL, imagePreviewUrl, parameterValues, prompt, selectedModel, showAdvanced, videoPreviewUrl]);
 
+    useEffect(() => {
+        try {
+            const storedInstruction = localStorage.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            if (storedInstruction !== null) {
+                setPromptHelperInstruction(storedInstruction);
+            }
+        } catch (error) {
+            console.warn('Failed to restore video prompt helper instruction', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            if (promptHelperInstruction.trim()) {
+                localStorage.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
+            } else {
+                localStorage.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            }
+        } catch (error) {
+            console.warn('Failed to persist video prompt helper instruction', error);
+        }
+    }, [promptHelperInstruction]);
+
     // Initialize selected model if not set
     useEffect(() => {
         if (!hasRestoredDraftRef.current) return;
@@ -145,6 +177,115 @@ export default function VideoGenerationForm() {
     }, [selectedModel, setSelectedModel, videoModels]);
 
     const currentModel = getModelById(selectedModel || '') || videoModels[0];
+    const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
+    const isPromptHelperConfigured = promptHelperProvider === 'local'
+        && !!settings.promptHelper?.local?.baseUrl?.trim()
+        && !!settings.promptHelper?.local?.model?.trim();
+    const isWanPromptHelperVisible = currentModel?.id === 'wan22' && currentModel.inputs.includes('text');
+    const negativePromptParameterName = currentModel?.parameters.find(
+        (param) => param.name === 'negativePrompt' || param.name === 'negative_prompt'
+    )?.name;
+    const currentNegativePrompt = negativePromptParameterName
+        ? String(parameterValues[negativePromptParameterName] ?? currentModel?.parameters.find((param) => param.name === negativePromptParameterName)?.default ?? '')
+        : '';
+    const widthParameter = currentModel?.parameters.find((param) => param.name === 'width');
+    const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
+    const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
+    const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+
+    const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
+        return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+    };
+
+    const submitPromptHelper = async ({
+        instructionOverride,
+        openOnError = false,
+        closeOnSuccess = true,
+        animatePromptOnSuccess = false,
+    }: {
+        instructionOverride?: string;
+        openOnError?: boolean;
+        closeOnSuccess?: boolean;
+        animatePromptOnSuccess?: boolean;
+    } = {}) => {
+        const instruction = (instructionOverride ?? promptHelperInstruction).trim();
+
+        if (!instruction || isPromptHelperLoading || !isWanPromptHelperVisible) {
+            return;
+        }
+
+        setPromptHelperError(null);
+        setPromptHelperDebug(null);
+        setIsPromptHelperLoading(true);
+
+        try {
+            const response = await fetch('/api/prompt-helper/improve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    negativePrompt: currentNegativePrompt,
+                    instruction,
+                    modelId: currentModel.id,
+                    helperProfile: 'wan22-video',
+                    width: Number.isFinite(currentWidth) ? currentWidth : undefined,
+                    height: Number.isFinite(currentHeight) ? currentHeight : undefined,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success || !data.improvedPrompt) {
+                const error = new Error(data.error || 'Prompt Helper request failed') as Error & {
+                    debug?: { content?: string; reasoningContent?: string };
+                };
+                error.debug = data.debug;
+                throw error;
+            }
+
+            setPrompt(data.improvedPrompt);
+
+            if (promptHelperChangeNegative && negativePromptParameterName && typeof data.improvedNegativePrompt === 'string') {
+                setParameterValues((prev) => ({
+                    ...prev,
+                    [negativePromptParameterName]: data.improvedNegativePrompt,
+                }));
+            }
+
+            if (animatePromptOnSuccess) {
+                setIsPromptHelperQuickAnimating(true);
+                window.setTimeout(() => setIsPromptHelperQuickAnimating(false), 1200);
+            }
+
+            setPromptHelperError(null);
+            setPromptHelperDebug(null);
+            if (closeOnSuccess) {
+                setIsPromptHelperOpen(false);
+            }
+        } catch (error) {
+            setPromptHelperError(error instanceof Error ? error.message : 'Prompt Helper request failed');
+            const debug = (error as Error & { debug?: { content?: string; reasoningContent?: string } }).debug;
+            setPromptHelperDebug(debug || null);
+            if (openOnError) {
+                setIsPromptHelperOpen(true);
+            }
+        } finally {
+            setIsPromptHelperLoading(false);
+        }
+    };
+
+    const runSavedPromptHelperInstruction = async () => {
+        if (!promptHelperInstruction.trim() || isPromptHelperLoading || !isWanPromptHelperVisible) {
+            return;
+        }
+
+        await submitPromptHelper({
+            instructionOverride: promptHelperInstruction,
+            openOnError: true,
+            closeOnSuccess: false,
+            animatePromptOnSuccess: true,
+        });
+    };
 
     // Check if current model has LoRA parameters
     const hasLoRAParameter = (model: typeof currentModel) => {
@@ -1027,13 +1168,54 @@ export default function VideoGenerationForm() {
 
                 {/* Prompt */}
                 {currentModel.inputs.includes('text') && (
-                    <div className="relative">
-                        <textarea
-                            className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
-                            placeholder={t('generationForm.describeYourVideo')}
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                        />
+                    <div className="space-y-2">
+                        <div className="relative">
+                            <textarea
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                placeholder={t('generationForm.describeYourVideo')}
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                disabled={isPromptHelperLoading}
+                            />
+                        </div>
+                        {isWanPromptHelperVisible && (
+                            <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setPromptHelperError(null);
+                                        setPromptHelperDebug(null);
+                                        setIsPromptHelperOpen(true);
+                                    }}
+                                    disabled={!isPromptHelperConfigured || isPromptHelperLoading || isGenerating || isLoadingMedia}
+                                    className="w-full justify-center gap-2"
+                                >
+                                    {isPromptHelperLoading ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Prompt Helper is working...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="h-4 w-4" />
+                                            Prompt Helper
+                                        </>
+                                    )}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => void runSavedPromptHelperInstruction()}
+                                    disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isGenerating || isLoadingMedia}
+                                    className={isPhoneLayout ? 'h-11 w-full shrink-0' : 'h-10 w-10 shrink-0'}
+                                    title={promptHelperInstruction.trim() ? 'Apply saved WAN 2.2 Prompt Helper instruction' : 'Save a WAN 2.2 Prompt Helper instruction first'}
+                                >
+                                    {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1282,13 +1464,93 @@ export default function VideoGenerationForm() {
                     )}
                     <Button
                         type="submit"
-                        disabled={isGenerating || isLoadingMedia}
+                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-2.5"
                     >
                         {isLoadingMedia ? t('generationForm.loadingMedia') : isGenerating ? t('generationForm.generating') : t('generationForm.generate')}
                     </Button>
                 </div>
             </form>
+
+            <Dialog
+                open={isPromptHelperOpen}
+                onOpenChange={(open) => {
+                    setIsPromptHelperOpen(open);
+                    if (!open) {
+                        setPromptHelperError(null);
+                        setPromptHelperDebug(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>Prompt Helper</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 overflow-y-auto pr-1">
+                        <Label htmlFor="video-prompt-helper-instruction">Instruction</Label>
+                        <textarea
+                            id="video-prompt-helper-instruction"
+                            className="w-full min-h-[140px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                            placeholder="Describe how to improve or generate the WAN 2.2 video prompt"
+                            value={promptHelperInstruction}
+                            onChange={(e) => setPromptHelperInstruction(e.target.value)}
+                            onKeyDown={(event) => {
+                                if (!isSubmitShortcut(event)) return;
+                                event.preventDefault();
+                                void submitPromptHelper();
+                            }}
+                        />
+                        <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                            <div>
+                                <div className="text-sm font-medium">Change negative</div>
+                                <div className="text-xs text-muted-foreground">If enabled, apply the negative prompt returned by the model.</div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={promptHelperChangeNegative}
+                                onClick={() => setPromptHelperChangeNegative((prev) => !prev)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${promptHelperChangeNegative ? 'bg-primary' : 'bg-muted'}`}
+                            >
+                                <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${promptHelperChangeNegative ? 'translate-x-5' : 'translate-x-0'}`}
+                                />
+                            </button>
+                        </div>
+                        {promptHelperError && (
+                            <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400 space-y-3">
+                                <div>{promptHelperError}</div>
+                                {promptHelperDebug && (
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                        <div className="rounded-md border border-border bg-background/60 p-3">
+                                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">content</div>
+                                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-foreground">{promptHelperDebug.content || '(empty)'}</pre>
+                                        </div>
+                                        <div className="rounded-md border border-border bg-background/60 p-3">
+                                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">reasoning_content</div>
+                                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-foreground">{promptHelperDebug.reasoningContent || '(empty)'}</pre>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsPromptHelperOpen(false)} disabled={isPromptHelperLoading}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => void submitPromptHelper()}
+                            disabled={isPromptHelperLoading || !promptHelperInstruction.trim() || !isPromptHelperConfigured}
+                            className="gap-2"
+                        >
+                            {isPromptHelperLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isPromptHelperLoading ? 'Applying...' : 'Apply'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* LoRA Management Dialog */}
             <LoRAManagementDialog
