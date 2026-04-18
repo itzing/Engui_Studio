@@ -6,6 +6,7 @@ import SettingsService from '@/lib/settingsService';
 import RunPodService from '@/lib/runpodService';
 import S3Service from '@/lib/s3Service';
 import { buildAttemptPaths, buildOutputFileName, createSecureStateSkeleton, decodeMasterKey, storagePathToS3Key, uploadEncryptedMediaInput } from '@/lib/secureTransport';
+import { startRunPodSupervisor } from '@/lib/runpodSupervisor';
 import { getModelById } from '@/lib/models/modelConfig';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -335,7 +336,7 @@ export async function POST(request: NextRequest) {
             await prisma.job.update({
                 where: { id: newJob.id },
                 data: {
-                    status: 'processing',
+                    status: 'queued',
                     options: updatedOptions,
                     secureState: JSON.stringify({
                         ...secureState,
@@ -348,11 +349,13 @@ export async function POST(request: NextRequest) {
                 }
             });
 
+            startRunPodSupervisor();
+
             return NextResponse.json({
                 success: true,
                 job: {
                     ...newJob,
-                    status: 'processing',
+                    status: 'queued',
                     options: updatedOptions,
                     secureState: JSON.stringify({
                         ...secureState,

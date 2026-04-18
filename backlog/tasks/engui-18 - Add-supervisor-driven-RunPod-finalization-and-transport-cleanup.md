@@ -1,7 +1,7 @@
 ---
 id: ENGUI-18
 title: Add supervisor-driven RunPod finalization and transport cleanup
-status: Planned
+status: Done
 assignee: []
 created_date: '2026-04-10 17:59'
 labels:
@@ -26,9 +26,9 @@ Implement the Engui server-side supervisor loop that polls RunPod, decrypts `tra
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Supervisor is the only lifecycle owner for active RunPod jobs
-- [ ] #2 Successful jobs are marked `completed` only after local result materialization and `job.resultUrl` write
-- [ ] #3 Finalization failures become `failed` with normalized `source`, `error.code`, and `error.message`
-- [ ] #4 Transport cleanup runs for every terminal job and records warning state on cleanup failure without changing the main terminal status
-- [ ] #5 Supervisor can resume unfinished jobs after service restart
+- [x] #1 Supervisor is the only lifecycle owner for active RunPod jobs
+- [x] #2 Successful jobs are marked `completed` only after local result materialization and `job.resultUrl` write
+- [x] #3 Finalization failures become `failed` with normalized `source`, `error.code`, and `error.message`
+- [x] #4 Transport cleanup runs for every terminal job and records warning state on cleanup failure without changing the main terminal status
+- [x] #5 Supervisor can resume unfinished jobs after service restart
 <!-- AC:END -->

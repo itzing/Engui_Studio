@@ -1,7 +1,7 @@
 ---
 id: ENGUI-20
 title: Add secure RunPod regression coverage for submit, status, and finalization flows
-status: Planned
+status: Done
 assignee: []
 created_date: '2026-04-10 17:59'
 labels:
@@ -27,9 +27,9 @@ Add regression coverage for the secure-only Engui RunPod path, including key val
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Tests cover submit rejection when the global key is missing or invalid
-- [ ] #2 Tests cover request construction for `_secure`, `media_inputs[]`, and `transport_request`
-- [ ] #3 Tests cover read-only status mapping from local Engui job state
-- [ ] #4 Tests cover supervisor success and normalized failure cases
-- [ ] #5 Tests cover cleanup warning persistence without changing completed or failed terminal status
+- [x] #1 Tests cover submit rejection when the global key is missing or invalid
+- [x] #2 Tests cover request construction for `_secure`, `media_inputs[]`, and `transport_request`
+- [x] #3 Tests cover read-only status mapping from local Engui job state
+- [x] #4 Tests cover supervisor success and normalized failure cases
+- [x] #5 Tests cover cleanup warning persistence without changing completed or failed terminal status
 <!-- AC:END -->

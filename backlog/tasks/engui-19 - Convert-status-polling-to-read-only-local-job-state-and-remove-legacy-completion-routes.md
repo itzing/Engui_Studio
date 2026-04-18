@@ -1,7 +1,7 @@
 ---
 id: ENGUI-19
 title: Convert status polling to read-only local job state and remove legacy completion routes
-status: Planned
+status: Done
 assignee: []
 created_date: '2026-04-10 17:59'
 labels:
@@ -26,9 +26,9 @@ Make `/api/generate/status` a read-only view over local Engui state, remove brow
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `/api/generate/status` no longer polls RunPod or mutates lifecycle state
-- [ ] #2 Frontend polling no longer calls `/api/download` or performs result finalization
-- [ ] #3 `/api/webhook/complete` is removed from the repo
-- [ ] #4 `/api/download` is removed from the repo
-- [ ] #5 Completed polling responses expose the ready local result URL for current jobs UI compatibility
+- [x] #1 `/api/generate/status` no longer polls RunPod or mutates lifecycle state
+- [x] #2 Frontend polling no longer calls `/api/download` or performs result finalization
+- [x] #3 `/api/webhook/complete` is removed from the repo
+- [x] #4 `/api/download` is removed from the repo
+- [x] #5 Completed polling responses expose the ready local result URL for current jobs UI compatibility
 <!-- AC:END -->

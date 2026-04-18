@@ -730,200 +730,69 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
             if (activeJobs.length === 0) return;
 
-            // Check all active jobs using unified status API
             for (const job of activeJobs) {
                 try {
-
-                    // Use unified status API (no headers needed)
                     const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`);
-
                     const data = await response.json();
 
-                    if (data.success) {
-                        if (data.status === 'IN_QUEUE') {
-                            if (job.status !== 'queued') {
-                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'queued' } : j));
-                                await fetch(`/api/jobs/${job.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ status: 'queued' })
-                                });
-                            }
-                            continue;
-                        }
+                    if (!data.success) {
+                        continue;
+                    }
 
-                        if (data.status === 'IN_PROGRESS') {
-                            const rawOptions = (job as any).options;
-                            const parsedOptions = typeof rawOptions === 'string'
-                                ? (() => { try { return JSON.parse(rawOptions); } catch { return {}; } })()
-                                : (rawOptions || {});
-                            const hasPersistedOptions = typeof rawOptions === 'string'
-                                ? rawOptions.trim().length > 0
-                                : !!(rawOptions && typeof rawOptions === 'object' && Object.keys(rawOptions).length > 0);
+                    const rawExec = data.executionTime ?? data.execution_time ?? data?.metrics?.executionTime;
+                    let executionMs: number | undefined;
+                    if (typeof rawExec === 'number' && Number.isFinite(rawExec)) {
+                        executionMs = Math.max(0, Math.round(rawExec));
+                    } else if (typeof rawExec === 'string' && rawExec.trim() !== '' && !Number.isNaN(Number(rawExec))) {
+                        executionMs = Math.max(0, Math.round(Number(rawExec)));
+                    }
 
-                            if (!parsedOptions.runStartedAt) {
-                                const nextOptions = {
-                                    ...parsedOptions,
-                                    runStartedAt: Date.now(),
-                                };
+                    if (data.status === 'IN_QUEUE') {
+                        setJobs(prev => prev.map(j => j.id === job.id
+                            ? { ...j, status: 'queued', ...(executionMs !== undefined ? { executionMs } : {}) }
+                            : j));
+                        continue;
+                    }
 
-                                setJobs(prev => prev.map(j => {
-                                    if (j.id !== job.id) return j;
-                                    return hasPersistedOptions
-                                        ? { ...j, status: 'processing', options: nextOptions }
-                                        : { ...j, status: 'processing' };
-                                }));
+                    if (data.status === 'IN_PROGRESS') {
+                        const nextStatus = data?.meta?.localPhase === 'finalizing' ? 'finalizing' : 'processing';
+                        setJobs(prev => prev.map(j => j.id === job.id
+                            ? { ...j, status: nextStatus, ...(executionMs !== undefined ? { executionMs } : {}) }
+                            : j));
+                        continue;
+                    }
 
-                                await fetch(`/api/jobs/${job.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(hasPersistedOptions
-                                        ? { status: 'processing', options: JSON.stringify(nextOptions) }
-                                        : { status: 'processing' })
-                                });
-                            } else if (job.status !== 'processing') {
-                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing' } : j));
-                                await fetch(`/api/jobs/${job.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ status: 'processing' })
-                                });
-                            }
-                            continue;
-                        }
+                    if (data.status === 'COMPLETED') {
+                        const resultUrl = typeof data.output === 'string'
+                            ? data.output
+                            : data.output?.url || data.output?.image_url || data.output?.video_url || data.output?.audioUrl || '';
 
-                        if (data.status === 'COMPLETED') {
-                            console.log('Job completed:', {
-                                jobId: job.id,
-                                hasOutput: !!data.output,
-                                secureFinalized: data?.meta?.secureFinalized === true,
-                            });
+                        setJobs(prev => prev.map(j => j.id === job.id ? {
+                            ...j,
+                            status: 'completed',
+                            resultUrl,
+                            error: undefined,
+                            ...(executionMs !== undefined ? { executionMs } : {}),
+                        } : j));
+                        continue;
+                    }
 
-                            // RunPod often returns output as an object with 'image_url' or similar, or just a string.
-                            // Adjust based on actual model output.
-                            let resultUrl = '';
-
-                            if (!data.output) {
-                                console.warn('Job completed but no output found');
-                            } else if (typeof data.output === 'string') {
-                                resultUrl = data.output;
-                            } else if (typeof data.output === 'object') {
-                                // Common patterns - check S3 paths first
-                                if (data.output.s3_path) resultUrl = data.output.s3_path;
-                                else if (data.output.output_path) resultUrl = data.output.output_path;
-                                else if (data.output.image_path) resultUrl = data.output.image_path;
-                                else if (data.output.video_path) resultUrl = data.output.video_path;
-                                else if (data.output.image) resultUrl = data.output.image;
-                                else if (data.output.image_url) resultUrl = data.output.image_url;
-                                else if (data.output.video) resultUrl = data.output.video;
-                                else if (data.output.video_url) resultUrl = data.output.video_url;
-                                else if (data.output.audioUrl) resultUrl = data.output.audioUrl;
-                                else if (data.output.url) resultUrl = data.output.url;
-                                else if (data.output.images && Array.isArray(data.output.images) && data.output.images.length > 0) resultUrl = data.output.images[0];
-                                else if (data.output.videos && Array.isArray(data.output.videos) && data.output.videos.length > 0) resultUrl = data.output.videos[0];
-                                else if (data.output.message) resultUrl = data.output.message;
-                                else if (Array.isArray(data.output) && data.output.length > 0) {
-                                    // If output is an array of strings
-                                    if (typeof data.output[0] === 'string') resultUrl = data.output[0];
-                                }
-                            }
-
-                            if (!resultUrl) {
-                                console.warn('Unknown output format for completed job', {
-                                    jobId: job.id,
-                                    outputType: Array.isArray(data.output) ? 'array' : typeof data.output,
-                                    outputKeys: data.output && typeof data.output === 'object' && !Array.isArray(data.output)
-                                        ? Object.keys(data.output)
-                                        : undefined,
-                                });
-                            }
-
-                            // Add base64 prefix if missing and looks like base64
-                            if (resultUrl && !resultUrl.startsWith('http') && !resultUrl.startsWith('data:')) {
-                                // Simple check for base64 characters
-                                if (/^[A-Za-z0-9+/=]+$/.test(resultUrl.substring(0, 100))) {
-                                    resultUrl = `data:image/png;base64,${resultUrl}`;
-                                }
-                            }
-
-                            const rawJobOptions = (job as any).options;
-                            const parsedJobOptions = typeof rawJobOptions === 'string'
-                                ? (() => { try { return JSON.parse(rawJobOptions); } catch { return {}; } })()
-                                : (rawJobOptions || {});
-                            const secureMode = parsedJobOptions.secureMode === true || data?.meta?.secureFinalized === true;
-
-                            // Download the result to local workspace only for legacy non-secure jobs.
-                            if (resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
-                                if (secureMode) {
-                                    console.warn('Secure job returned non-local completed URL, skipping legacy download fallback', {
-                                        jobId: job.id,
-                                    });
-                                } else {
-                                    try {
-                                        const ext = job.type === 'video' ? '.mp4' : '.png';
-                                        // Sanitize modelId to remove slashes and other unsafe characters
-                                        const safeModelId = job.modelId.replace(/[^a-zA-Z0-9-_]/g, '_');
-                                        const filename = `${safeModelId}-${job.id}${ext}`;
-
-                                        const downloadRes = await fetch('/api/download', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                url: resultUrl,
-                                                filename: filename,
-                                                folder: 'generations'
-                                            })
-                                        });
-
-                                        const downloadData = await downloadRes.json();
-                                        if (downloadData.success) {
-                                            resultUrl = downloadData.path;
-                                        } else {
-                                            console.error('Failed to download result:', downloadData.error);
-                                        }
-                                    } catch (err) {
-                                        console.error('Error calling download API:', err);
-                                    }
-                                }
-                            }
-
-                            if (secureMode && resultUrl && !resultUrl.startsWith('/generations/') && !resultUrl.startsWith('/results/')) {
-                                console.warn('Secure completed job is missing a local finalized result URL', {
-                                    jobId: job.id,
-                                });
-                            }
-
-                            const rawOptions = (job as any).options;
-                            const parsedOptions = typeof rawOptions === 'string'
-                                ? (() => { try { return JSON.parse(rawOptions); } catch { return {}; } })()
-                                : (rawOptions || {});
-
-                            const rawExec = data.executionTime ?? data.execution_time ?? data?.metrics?.executionTime;
-                            let executionMs: number | undefined;
-                            if (typeof rawExec === 'number' && Number.isFinite(rawExec)) {
-                                executionMs = Math.max(0, Math.round(rawExec));
-                            } else if (typeof rawExec === 'string' && rawExec.trim() !== '' && !Number.isNaN(Number(rawExec))) {
-                                executionMs = Math.max(0, Math.round(Number(rawExec)));
-                            }
-
-                            if (executionMs !== undefined) {
-                                setJobs(prev => prev.map(j => j.id === job.id ? { ...j, executionMs } : j));
-                            }
-
-                            updateJobStatus(job.id, 'completed', resultUrl, undefined, undefined, executionMs);
-                        } else if (data.status === 'FAILED') {
-                            updateJobStatus(job.id, 'failed', undefined, data.error || 'RunPod job failed');
-                        }
-                        // If IN_QUEUE or IN_PROGRESS, do nothing (keep polling)
+                    if (data.status === 'FAILED') {
+                        setJobs(prev => prev.map(j => j.id === job.id ? {
+                            ...j,
+                            status: 'failed',
+                            error: data.error || 'RunPod job failed',
+                            ...(executionMs !== undefined ? { executionMs } : {}),
+                        } : j));
                     }
                 } catch (error) {
                     console.error('Polling error for job', job.id, error);
                 }
             }
-        }, 5000); // Poll every 5 seconds
+        }, 5000);
 
         return () => clearInterval(interval);
-    }, [jobs, settings, activeWorkspaceId]);
+    }, [jobs, activeWorkspaceId]);
 
     // --- Video Editor Actions ---
 

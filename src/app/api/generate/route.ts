@@ -6,6 +6,7 @@ import ElevenLabsService from '@/lib/elevenlabsService';
 import S3Service from '@/lib/s3Service';
 import { processFileUpload } from '@/lib/serverFileUtils';
 import { createSecureStateSkeleton, createStructuredEnvelope, decodeMasterKey, uploadEncryptedMediaInput, buildAttemptPaths, buildOutputFileName } from '@/lib/secureTransport';
+import { startRunPodSupervisor } from '@/lib/runpodSupervisor';
 import { mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -592,6 +593,8 @@ export async function POST(request: NextRequest) {
                         }) : null,
                     }
                 });
+
+                startRunPodSupervisor();
 
                 return NextResponse.json({
                     success: true,
