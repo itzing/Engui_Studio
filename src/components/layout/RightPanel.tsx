@@ -111,6 +111,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const galleryPageRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const galleryFocusRestoreRef = useRef<{ assetId: string; page: number; indexOnPage: number } | null>(null);
     const galleryRestoreInProgressRef = useRef(false);
+    const galleryPostRestoreAwaitDirectionRef = useRef(false);
     const galleryScrollAnchorRef = useRef<{ assetId: string; top: number } | null>(null);
     const galleryScrollDirectionRef = useRef<'up' | 'down' | null>(null);
     const lastViewedGalleryAssetIdRef = useRef<string | null>(null);
@@ -937,6 +938,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setGalleryAnchorPage(restore.page);
         window.setTimeout(() => {
             galleryRestoreInProgressRef.current = false;
+            galleryPostRestoreAwaitDirectionRef.current = true;
         }, 80);
     }, [filteredGalleryAssets]);
 
@@ -1002,6 +1004,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
             const nearTop = container.scrollTop <= 300;
             const nearBottom = (container.scrollHeight - (container.scrollTop + container.clientHeight)) <= 300;
+            if (galleryPostRestoreAwaitDirectionRef.current && galleryScrollDirectionRef.current) {
+                if (galleryScrollDirectionRef.current === 'up') {
+                    loadPreviousGalleryPages();
+                } else {
+                    loadNextGalleryPages();
+                }
+                galleryPostRestoreAwaitDirectionRef.current = false;
+            }
+
             if (galleryScrollDirectionRef.current === 'up' && nearTop) {
                 loadPreviousGalleryPages();
             }
@@ -1642,12 +1653,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     if (!mobile) return;
                     const current = galleryContainerTouchRef.current;
                     const container = galleryScrollContainerRef.current;
-                    if (current?.direction && container && container.scrollHeight <= container.clientHeight + 24 && !galleryRestoreInProgressRef.current) {
+                    if (current?.direction && container && !galleryRestoreInProgressRef.current) {
                         galleryScrollDirectionRef.current = current.direction;
-                        if (current.direction === 'up') {
-                            loadPreviousGalleryPages();
-                        } else {
-                            loadNextGalleryPages();
+                        if (galleryPostRestoreAwaitDirectionRef.current || container.scrollHeight <= container.clientHeight + 24) {
+                            if (current.direction === 'up') {
+                                loadPreviousGalleryPages();
+                            } else {
+                                loadNextGalleryPages();
+                            }
+                            galleryPostRestoreAwaitDirectionRef.current = false;
                         }
                     }
                     galleryContainerTouchRef.current = null;
