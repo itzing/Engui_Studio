@@ -1407,6 +1407,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             const loadedPage = Number(loadedPageEntry[0]);
             const indexOnPage = loadedPageEntry[1].assets.findIndex(asset => asset.id === assetId);
             galleryRestoreInProgressRef.current = true;
+            galleryPostRestoreAwaitDirectionRef.current = true;
             galleryFocusRestoreRef.current = {
                 assetId,
                 page: loadedPage,
