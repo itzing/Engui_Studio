@@ -42,6 +42,7 @@ function buildStructuredInventoryInstruction(request: VisionPromptHelperRequest)
     'Do not guess hidden limbs, exact unseen hand or foot positions, unreadable text, or body parts outside the frame.',
     'If a detail is cropped, occluded, or unclear, say unclear instead of inventing specifics.',
     'Pay special attention to body orientation, which side faces the camera, whether the view is front, side, back, or three-quarter, torso angle, hip angle, back arch, stance width, and whether one or both hands hold an object.',
+    'Pay equally close attention to head turn and gaze direction. Explicitly note whether the face is frontal, slightly turned, or strongly turned, and whether the eyes look into the camera, past the camera, or off-frame to the left or right.',
     'Explicitly determine camera height and viewpoint: low-angle, eye-level, or high-angle; side-view, rear-side view, front-side view, or frontal view; close-up, medium, medium full-body, or full-body.',
     'Also note if clothing is lifted, displaced, bunched, tied, exposing another garment layer, or emphasizing specific body regions.',
     'State which body regions are visually dominant or emphasized by the composition if that is clearly visible.',
@@ -66,7 +67,7 @@ function buildRewriteInstruction(request: VisionPromptHelperRequest, inventory: 
     'Rewrite the structured visual inventory below into one reusable image-generation prompt in English.',
     request.modelId ? `Target model: ${request.modelId}` : null,
     'Keep as many concrete visible details as possible.',
-    'Preserve concrete pose, body orientation, hand placement, stance, camera angle, emphasized regions, clothing displacement, accessories, and photographic style cues.',
+    'Preserve concrete pose, body orientation, head turn, gaze direction, hand placement, stance, camera angle, emphasized regions, clothing displacement, accessories, and photographic style cues.',
     'Do not add facts that are not present in the inventory.',
     'Do not remove small visible details for brevity.',
     'Return one concise but detail-rich paragraph of plain text only.',
@@ -128,7 +129,7 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
     const inventory = await this.chat([
       {
         role: 'system',
-        content: 'Extract a structured visual inventory from the image. Preserve fine visible details, body orientation, pose, limb placement, hand-object interaction, stance, framing, camera angle, camera height, viewpoint, crop size, clothing construction, clothing displacement, emphasized body regions, accessories, and photographic style cues. Do not guess hidden details. Use the requested labeled-line format exactly. Plain text only.'
+        content: 'Extract a structured visual inventory from the image. Preserve fine visible details, body orientation, head turn, gaze direction, pose, limb placement, hand-object interaction, stance, framing, camera angle, camera height, viewpoint, crop size, clothing construction, clothing displacement, emphasized body regions, accessories, and photographic style cues. Do not guess hidden details. Use the requested labeled-line format exactly. Plain text only.'
       },
       {
         role: 'user',
@@ -142,7 +143,7 @@ export class LocalVisionPromptHelperProvider implements VisionPromptHelperProvid
     const prompt = await this.chat([
       {
         role: 'system',
-        content: 'Rewrite structured visual inventories into concise, detail-rich image-generation prompts in English. Preserve concrete details and do not invent new facts. Be especially faithful to body orientation, hand placement, stance, camera viewpoint, camera height, crop size, emphasized regions, and clothing displacement. Plain text only.'
+        content: 'Rewrite structured visual inventories into concise, detail-rich image-generation prompts in English. Preserve concrete details and do not invent new facts. Be especially faithful to body orientation, head turn, gaze direction, hand placement, stance, camera viewpoint, camera height, crop size, emphasized regions, and clothing displacement. Do not frontalize the face or redirect the eyes toward the camera unless the inventory explicitly says that. Plain text only.'
       },
       {
         role: 'user',

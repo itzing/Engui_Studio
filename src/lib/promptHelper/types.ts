@@ -21,6 +21,7 @@ export interface PromptHelperRequest {
 export interface PromptHelperDebugInfo {
   content?: string;
   reasoningContent?: string;
+  finishReason?: string;
 }
 
 export interface PromptHelperResult {

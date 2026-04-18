@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { ensureHelperMode } from '@/lib/helperMode';
-import { buildPosePrompt, normalizeCharacterCount, normalizeChipArray, normalizePoseCharacters, normalizePoseRelationship } from '@/lib/poses/utils';
+import { heuristicExtractPose } from '@/lib/poses/utils';
 import type { PoseExtractResult } from '@/lib/poses/types';
 
 export const dynamic = 'force-dynamic';
@@ -10,13 +10,25 @@ export const revalidate = 0;
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
 
+const FORBIDDEN_STYLE_PATTERN = /\b(?:girl|boy|woman|man|female|male|lady|gentleman|person|people|sunglasses?|glasses|metallic|outfit|clothing|dress|shirt|top|pants|trousers|shorts|skirt|jacket|coat|hoodie|sweater|jewelry|necklace|earrings?|hairstyle|hair|bun|ponytail|beautiful|pretty|handsome|stylish|fashion|leather|shiny|silver|gold|makeup)\b/gi;
+
+const SUBJECT_PREFIX_PATTERN = /^(?:a|an|the)?\s*(?:girl|boy|woman|man|female|male|lady|gentleman|person|figure|character)\s+/i;
+
 type ExtractedPayload = {
   characterCount?: unknown;
+  poseType?: unknown;
   summary?: unknown;
   tags?: unknown;
-  characters?: unknown;
-  relationship?: unknown;
   confidence?: unknown;
+  warnings?: unknown;
+  supportContact?: unknown;
+  pelvisHips?: unknown;
+  torsoShoulders?: unknown;
+  leftArm?: unknown;
+  rightArm?: unknown;
+  leftLeg?: unknown;
+  rightLeg?: unknown;
+  headGaze?: unknown;
   posePrompt?: unknown;
 };
 
@@ -61,19 +73,103 @@ function normalizeConfidence(value: unknown): 'low' | 'medium' | 'high' {
   return 'medium';
 }
 
+function normalizeCharacterCount(value: unknown): 1 | 2 | 3 {
+  return value === 2 || value === 3 ? value : 1;
+}
+
+function sanitizeFragment(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(SUBJECT_PREFIX_PATTERN, '')
+    .replace(FORBIDDEN_STYLE_PATTERN, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,;:.])/g, '$1')
+    .replace(/^[,;:.\-\s]+/, '')
+    .replace(/[,;:.\-\s]+$/, '')
+    .trim();
+}
+
+function containsForbiddenStyle(value: string): boolean {
+  FORBIDDEN_STYLE_PATTERN.lastIndex = 0;
+  return FORBIDDEN_STYLE_PATTERN.test(value);
+}
+
+function normalizeChipArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((item) => !containsForbiddenStyle(item))
+    .slice(0, 12);
+}
+
+function normalizeWarnings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => sanitizeFragment(item))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function normalizePoseType(value: unknown, summary: string, supportContact: string): string {
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  const source = `${text} ${summary.toLowerCase()} ${supportContact.toLowerCase()}`;
+
+  if (source.includes('duo') && source.includes('seated')) return 'duo seated pose';
+  if (source.includes('duo') && source.includes('standing')) return 'duo standing pose';
+  if (source.includes('trio') && source.includes('seated')) return 'trio seated pose';
+  if (source.includes('trio') && source.includes('standing')) return 'trio standing pose';
+  if (source.includes('kneel')) return 'kneeling pose';
+  if (source.includes('crouch')) return 'crouching pose';
+  if (source.includes('seat') || source.includes('sit') || source.includes('couch') || source.includes('chair') || source.includes('sofa') || source.includes('bench')) return 'seated pose';
+  if (source.includes('stand')) return 'standing pose';
+  return 'standing pose';
+}
+
+function buildPosePromptFromSlots(payload: ExtractedPayload): string {
+  const summary = sanitizeFragment(payload.summary);
+  const supportContact = sanitizeFragment(payload.supportContact);
+  const poseType = normalizePoseType(payload.poseType, summary, supportContact);
+  const clauses = [
+    supportContact,
+    sanitizeFragment(payload.pelvisHips),
+    sanitizeFragment(payload.torsoShoulders),
+    sanitizeFragment(payload.leftArm),
+    sanitizeFragment(payload.rightArm),
+    sanitizeFragment(payload.leftLeg),
+    sanitizeFragment(payload.rightLeg),
+    sanitizeFragment(payload.headGaze),
+  ].filter(Boolean);
+
+  if (!clauses.length) return '';
+  return [poseType, ...clauses].join('; ');
+}
+
+function normalizeSummary(value: unknown, posePrompt: string): string {
+  const summary = sanitizeFragment(value);
+  if (summary) return summary;
+
+  const lowerPrompt = posePrompt.toLowerCase();
+  if (lowerPrompt.includes('seated pose')) return 'seated pose';
+  if (lowerPrompt.includes('standing pose')) return 'standing pose';
+  if (lowerPrompt.includes('kneeling pose')) return 'kneeling pose';
+  if (lowerPrompt.includes('crouching pose')) return 'crouching pose';
+  return 'single character pose';
+}
+
+function sanitizePosePrompt(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(FORBIDDEN_STYLE_PATTERN, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,;:.])/g, '$1')
+    .trim();
+}
+
 function buildFallbackResult(): PoseExtractResult {
-  const characterCount = 1;
-  const characters = normalizePoseCharacters([{}], characterCount);
-  const relationship = normalizePoseRelationship(null, characterCount);
-  return {
-    characterCount,
-    summary: 'Single character pose',
-    posePrompt: buildPosePrompt(characters, relationship) || 'one character, neutral standing pose',
-    tags: ['single'],
-    characters,
-    relationship,
-    confidence: 'low',
-  };
+  return heuristicExtractPose('');
 }
 
 async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): Promise<PoseExtractResult> {
@@ -96,13 +192,13 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
     },
     body: JSON.stringify({
       model: local.model,
-      temperature: 0.2,
+      temperature: 0.1,
       max_tokens: 1400,
       stream: false,
       messages: [
         {
           role: 'system',
-          content: 'You extract reusable pose presets from reference images for image generation. Focus on visible pose geometry only. Determine whether the image contains 1, 2, or 3 main characters. Describe each character separately with concrete pose fields, then describe spatial and interaction relationships between them when there is more than one character. Ignore identity, gender, body type, clothing, styling, and environment. Never write gendered subjects such as "woman", "man", "female", or "male" in posePrompt or summary. Ignore expression unless it is essential to understanding the pose, and prefer leaving expression empty. Prioritize precise torso rotation, shoulder line, hip line, head turn, gaze direction, arm and hand placement, leg stance, and visible weight distribution. Distinguish clearly between profile, three-quarter, back three-quarter, and front-facing orientations. Start posePrompt with pose geometry wording such as "standing pose" or "seated pose", not with a person label. Do not invent hidden limbs or unseen body positions. Do not claim weight is on one leg unless the opposite leg is clearly unloaded. Return only valid JSON with exactly these keys: {"characterCount":1|2|3,"summary":"string","tags":["string"],"characters":[{"index":0,"label":"string|null","orientation":"string","head":"string","gaze":"string","torso":"string","armsHands":"string","legsStance":"string","expression":"string|null"}],"relationship":{"spatialLayout":"string","interaction":"string","contact":"string","symmetry":"string"}|null,"posePrompt":"string","confidence":"low|medium|high"}. Use English. Keep tags lowercase. If only one character is present, relationship must be null.'
+          content: 'You extract generation-ready pose presets from reference images for image generation. Do not write a caption. Do not describe styling. Internally read the pose as structured spatial geometry, then return JSON only. Return exactly these keys: {"characterCount":1|2|3,"poseType":"string","summary":"string","supportContact":"string","pelvisHips":"string","torsoShoulders":"string","leftArm":"string","rightArm":"string","leftLeg":"string","rightLeg":"string","headGaze":"string","tags":["string"],"confidence":"low|medium|high","warnings":["string"]}. Rules: focus only on support/contact, pelvis placement, hip line or pelvic tilt, weight distribution, torso and shoulder line, left arm, right arm, left leg, right leg, and head/gaze. Each body field must be a short spatial phrase, not a full sentence. Describe side, bend/extension, direction, and contact/support when visible. Use concrete geometry such as braced behind the hip, extended outward to the side, bent upward in front of the torso, folded inward along the seat, crossed over the opposite leg, foot tucked near the opposite thigh. If subject-left versus subject-right is unclear, keep the fields consistent and mention the ambiguity in warnings. Never mention gender, clothing, accessories, hair, attractiveness, mood, environment, lighting, or camera framing. Do not guess hidden limbs or unseen positions. Use English. Keep tags lowercase. Output only valid JSON.'
         },
         {
           role: 'user',
@@ -110,25 +206,12 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
             {
               type: 'text',
               text: [
-                'Extract a reusable pose preset from this image.',
-                '',
-                'Rules:',
-                '- Support only 1, 2, or 3 main characters',
-                '- Focus on body orientation, head direction, gaze, torso rotation, arm and hand placement, leg stance, and visible weight distribution',
-                '- Do not include gender, clothing, body description, or styling details',
-                '- Do not start the posePrompt with person labels like woman, man, female, male, model, subject, or person',
-                '- Start posePrompt with pose geometry wording like standing pose, seated pose, kneeling pose, or duo standing pose',
-                '- Leave expression empty unless it is essential to the pose reading',
-                '- Be precise about strong turns and twists, especially profile vs three-quarter vs back three-quarter orientation',
-                '- Describe both arms and both legs as concretely as visibility allows',
-                '- Only say weight is on one leg if the other leg is clearly unloaded; otherwise describe a balanced or distributed stance',
-                '- For duo/trio poses, describe relative layout and interaction clearly',
-                '- Do not describe camera framing or environment unless necessary to clarify pose relationships',
-                '- Do not guess hidden details',
-                '- summary should be short and human-readable',
-                '- posePrompt should be a detailed reusable pose description for image generation, especially suitable for z-image',
-                '- tags should be concise lowercase chips like single, duo, trio, standing, embrace, confrontation, seated, action',
-                '- if uncertain, still return best-effort JSON',
+                'Extract a reusable pose preset from this image for z-image.',
+                'Return spatial pose geometry, not styling.',
+                'Follow this internal read order exactly: support/contact, pelvis/hips, torso/shoulders, left arm, right arm, left leg, right leg, head/gaze.',
+                'Describe limb placement relative to the torso, pelvis, seat surface, and the other limbs.',
+                'Do not mention clothing, accessories, hairstyle, sunglasses, or other styling details.',
+                'If something is unclear, keep the geometry useful and note uncertainty in warnings.',
               ].join('\n')
             },
             {
@@ -157,14 +240,9 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
 
   const parsed = JSON.parse(extractJsonObject(rawText)) as ExtractedPayload;
   const characterCount = normalizeCharacterCount(parsed.characterCount);
-  const characters = normalizePoseCharacters(parsed.characters, characterCount);
-  const relationship = normalizePoseRelationship(parsed.relationship, characterCount);
-  const posePrompt = typeof parsed.posePrompt === 'string' && parsed.posePrompt.trim()
-    ? parsed.posePrompt.trim()
-    : buildPosePrompt(characters, relationship);
-  const summary = typeof parsed.summary === 'string' && parsed.summary.trim()
-    ? parsed.summary.trim()
-    : `${characterCount === 1 ? 'Single' : characterCount === 2 ? 'Duo' : 'Trio'} character pose`;
+  const builtPosePrompt = buildPosePromptFromSlots(parsed);
+  const fallbackPosePrompt = sanitizePosePrompt(parsed.posePrompt);
+  const posePrompt = builtPosePrompt || fallbackPosePrompt;
 
   if (!posePrompt) {
     throw new Error('Pose extraction provider returned empty posePrompt');
@@ -172,11 +250,10 @@ async function extractWithVisionHelper(imageUrl: string, imageDataUrl: string): 
 
   return {
     characterCount,
-    summary,
+    summary: normalizeSummary(parsed.summary, posePrompt),
     posePrompt,
     tags: normalizeChipArray(parsed.tags),
-    characters,
-    relationship,
+    warnings: normalizeWarnings(parsed.warnings),
     confidence: normalizeConfidence(parsed.confidence),
   };
 }

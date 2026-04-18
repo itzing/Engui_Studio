@@ -44,7 +44,8 @@ export interface PoseExtractResult {
   summary: string;
   posePrompt: string;
   tags: string[];
-  characters: PoseCharacter[];
-  relationship: PoseRelationship | null;
+  warnings?: string[];
+  characters?: PoseCharacter[];
+  relationship?: PoseRelationship | null;
   confidence: 'low' | 'medium' | 'high';
 }

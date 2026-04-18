@@ -2,6 +2,7 @@ import { PromptHelperProvider, PromptHelperProviderError, PromptHelperRequest, P
 
 interface OpenAIChatResponse {
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       content?: string | Array<{ type?: string; text?: string }>;
       reasoning_content?: string | Array<{ type?: string; text?: string }>;
@@ -60,6 +61,10 @@ function extractJsonObject(value: string): string {
   return trimmed.slice(firstBrace, lastBrace + 1);
 }
 
+function sanitizePromptHelperText(value: string): string {
+  return value.replaceAll('"', "'");
+}
+
 function buildFramingHint(width: number | null, height: number | null): string | null {
   if (!width || !height) {
     return null;
@@ -82,9 +87,9 @@ function buildFramingHint(width: number | null, height: number | null): string |
 }
 
 function buildUserMessage(request: PromptHelperRequest): string {
-  const instruction = request.instruction.trim();
-  const currentPrompt = request.prompt.trim();
-  const currentNegativePrompt = request.negativePrompt?.trim() || '';
+  const instruction = sanitizePromptHelperText(request.instruction.trim());
+  const currentPrompt = sanitizePromptHelperText(request.prompt.trim());
+  const currentNegativePrompt = sanitizePromptHelperText(request.negativePrompt?.trim() || '');
   const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
   const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
   const aspectRatio = width && height ? `${width}:${height}` : null;
@@ -164,8 +169,8 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        temperature: 0.4,
-        max_tokens: 400,
+        temperature: 0.1,
+        max_tokens: 4000,
         stream: false,
         messages: [
           {
@@ -181,7 +186,8 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     });
 
     const data = await response.json() as OpenAIChatResponse;
-    const message = data?.choices?.[0]?.message;
+    const choice = data?.choices?.[0];
+    const message = choice?.message;
     const contentText = extractTextContent(message?.content);
     const reasoningText = extractTextContent(message?.reasoning_content);
     const rawText = contentText || reasoningText;
@@ -189,6 +195,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     const debug = {
       content: contentText || undefined,
       reasoningContent: reasoningText || undefined,
+      finishReason: choice?.finish_reason || undefined,
     };
 
     if (!response.ok) {
@@ -197,6 +204,10 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
 
     if (!normalizedText) {
       throw new PromptHelperProviderError('Prompt Helper provider returned empty text', debug);
+    }
+
+    if (choice?.finish_reason === 'length') {
+      throw new PromptHelperProviderError('Prompt Helper response was truncated by max_tokens before completing valid JSON', debug);
     }
 
     let parsed: { prompt?: unknown; negativePrompt?: unknown };

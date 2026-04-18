@@ -188,16 +188,12 @@ export function buildPosePrompt(characters: PoseCharacter[], relationship: PoseR
 }
 
 export function heuristicExtractPose(_prompt: string): PoseExtractResult {
-  const characters = normalizePoseCharacters([{}], 1);
-  const posePrompt = buildPosePrompt(characters, null) || 'one character, neutral standing pose';
-
   return {
     characterCount: 1,
     summary: 'Single character pose',
-    posePrompt,
-    tags: ['single'],
-    characters,
-    relationship: null,
+    posePrompt: 'standing pose, neutral upright stance',
+    tags: ['single', 'standing'],
+    warnings: ['heuristic fallback result'],
     confidence: 'low',
   };
 }

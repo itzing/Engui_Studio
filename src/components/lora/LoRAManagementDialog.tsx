@@ -207,7 +207,7 @@ export function LoRAManagementDialog({
       const response = await fetch('/api/lora/upload', {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(60000), // 60 second timeout for uploads
+        signal: AbortSignal.timeout(300000), // 5 minute timeout for uploads
       });
 
       clearInterval(progressInterval);
