@@ -75,6 +75,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
+    const [gallerySelectedAssetId, setGallerySelectedAssetId] = useState<string | null>(null);
     const [mobileSelectedJobId, setMobileSelectedJobId] = useState<string | null>(null);
     const [mobileSelectedGalleryAssetId, setMobileSelectedGalleryAssetId] = useState<string | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -173,6 +174,40 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         });
         return true;
     }, [filteredGalleryAssets]);
+    const resolveGalleryAssetById = useCallback((assetId: string | null | undefined) => {
+        if (!assetId) return null;
+        return filteredGalleryAssets.find(item => item.id === assetId)
+            || galleryViewerItems.find(item => item.id === assetId)
+            || (selectedGalleryAsset?.id === assetId ? selectedGalleryAsset : null)
+            || null;
+    }, [filteredGalleryAssets, galleryViewerItems, selectedGalleryAsset]);
+    const emitGallerySelection = useCallback((asset: GalleryAsset | null) => {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('rightPanelGallerySelect', {
+            detail: asset ? { id: asset.id } : null,
+        }));
+    }, []);
+    const applyGallerySelection = useCallback((asset: GalleryAsset | null) => {
+        const assetId = asset?.id || null;
+        setGallerySelectedAssetId(assetId);
+        setSelectedGalleryAsset(asset);
+        setMobileSelectedGalleryAssetId(assetId);
+        if (assetId) {
+            lastViewedGalleryAssetIdRef.current = assetId;
+        }
+        emitGallerySelection(asset);
+    }, [emitGallerySelection]);
+    useEffect(() => {
+        if (!gallerySelectedAssetId) return;
+        const nextSelectedAsset = resolveGalleryAssetById(gallerySelectedAssetId);
+        if (!nextSelectedAsset) return;
+        if (selectedGalleryAsset !== nextSelectedAsset) {
+            setSelectedGalleryAsset(nextSelectedAsset);
+        }
+        if (mobileSelectedGalleryAssetId !== gallerySelectedAssetId) {
+            setMobileSelectedGalleryAssetId(gallerySelectedAssetId);
+        }
+    }, [gallerySelectedAssetId, mobileSelectedGalleryAssetId, resolveGalleryAssetById, selectedGalleryAsset]);
     const updateGalleryPages = useCallback((updater: (asset: GalleryAsset) => GalleryAsset | null) => {
         setGalleryPages(prev => {
             const next: Record<number, GalleryPageData> = {};
@@ -305,7 +340,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (detail.kind === 'gallery') {
                 const asset = filteredGalleryAssets.find(item => item.id === detail.id);
                 if (!asset) return;
-                setSelectedGalleryAsset(asset);
+                applyGallerySelection(asset);
                 setGalleryDetailsOpen(true);
                 return;
             }
@@ -318,7 +353,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         window.addEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
         return () => window.removeEventListener('openPreviewInfo', handleOpenPreviewInfo as EventListener);
-    }, [filteredGalleryAssets, jobs, loadedJobs]);
+    }, [applyGallerySelection, filteredGalleryAssets, jobs, loadedJobs]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -554,6 +589,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
             if (result.focus?.found && result.focus.assetId && result.focus.page && result.focus.indexOnPage !== null) {
                 lastViewedGalleryAssetIdRef.current = result.focus.assetId;
+                setGallerySelectedAssetId(result.focus.assetId);
                 setMobileSelectedGalleryAssetId(result.focus.assetId);
                 galleryPostRestoreAwaitDirectionRef.current = true;
                 galleryFocusRestoreRef.current = {
@@ -580,11 +616,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     useEffect(() => {
         setSelectedJob(null);
         setSelectedGalleryAsset(null);
+        setGallerySelectedAssetId(null);
+        setMobileSelectedGalleryAssetId(null);
+        lastViewedGalleryAssetIdRef.current = null;
         setDetailsOpen(false);
         setGalleryDetailsOpen(false);
         if (!activeWorkspaceId) {
             setLoadedJobs([]);
             setGalleryPages({});
+            setGallerySelectedAssetId(null);
             setCurrentPage(1);
             setHasNextPage(false);
             setGalleryAnchorPage(1);
@@ -609,6 +649,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         const savedAssetId = window.localStorage.getItem(storageKey);
         if (savedAssetId) {
             lastViewedGalleryAssetIdRef.current = savedAssetId;
+            setGallerySelectedAssetId(savedAssetId);
             void fetchGalleryAssets(1, { focusAssetId: savedAssetId });
             galleryRestoreHydratedRef.current = true;
             return;
@@ -666,7 +707,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (mobile) {
             const isSameJob = mobileSelectedJobId === job.id;
             setMobileSelectedJobId(job.id);
-            setMobileSelectedGalleryAssetId(null);
 
             if (isSameJob) {
                 emitHoverPreview(job);
@@ -691,34 +731,23 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }, 350);
     };
 
-    const emitGallerySelection = useCallback((asset: GalleryAsset | null) => {
-        if (typeof window === 'undefined') return;
-        window.dispatchEvent(new CustomEvent('rightPanelGallerySelect', {
-            detail: asset ? { id: asset.id } : null,
-        }));
-    }, []);
-
     const handleGalleryAssetClick = (asset: GalleryAsset) => {
         const itemIndex = filteredGalleryAssets.findIndex(item => item.id === asset.id);
 
         if (mobile) {
-            const isSameAsset = mobileSelectedGalleryAssetId === asset.id;
-            setSelectedGalleryAsset(asset);
-            setMobileSelectedGalleryAssetId(asset.id);
+            const isSameAsset = gallerySelectedAssetId === asset.id;
+            applyGallerySelection(asset);
             setMobileSelectedJobId(null);
-            emitGallerySelection(asset);
             setGalleryDetailsOpen(false);
 
             if (!isSameAsset) {
                 return;
             }
         } else {
-            setSelectedGalleryAsset(asset);
-            emitGallerySelection(asset);
+            applyGallerySelection(asset);
             setGalleryDetailsOpen(false);
         }
 
-        lastViewedGalleryAssetIdRef.current = asset.id;
         setGalleryViewerItems(filteredGalleryAssets);
         setGalleryViewerPage(galleryHighestPage);
         setGalleryViewerHasNextPage(galleryHasNextPage);
@@ -869,12 +898,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const handleGalleryViewerIndexChange = useCallback((index: number) => {
         const asset = galleryViewerItems[index];
         if (!asset) return;
-        lastViewedGalleryAssetIdRef.current = asset.id;
         setGalleryViewerIndex(index);
-        setSelectedGalleryAsset(asset);
-        setMobileSelectedGalleryAssetId(asset.id);
-        emitGallerySelection(asset);
-    }, [emitGallerySelection, galleryViewerItems]);
+        applyGallerySelection(asset);
+    }, [applyGallerySelection, galleryViewerItems]);
 
     useEffect(() => {
         if (!galleryViewerOpen) return;
@@ -910,8 +936,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (!asset) return;
 
             const itemIndex = filteredGalleryAssets.findIndex((entry) => entry.id === asset.id);
-            setSelectedGalleryAsset(asset);
-            setMobileSelectedGalleryAssetId(asset.id);
+            applyGallerySelection(asset);
             setGalleryViewerItems(filteredGalleryAssets);
             setGalleryViewerPage(galleryHighestPage);
             setGalleryViewerHasNextPage(galleryHasNextPage);
@@ -923,24 +948,24 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             restoredMobileViewerRef.current = true;
             mobileViewerPersistenceReadyRef.current = true;
         }
-    }, [filteredGalleryAssets, galleryHasNextPage, galleryHighestPage, mobile, panelMode]);
+    }, [applyGallerySelection, filteredGalleryAssets, galleryHasNextPage, galleryHighestPage, mobile, panelMode]);
 
     useEffect(() => {
         if (!mobile || typeof window === 'undefined' || !mobileViewerPersistenceReadyRef.current) return;
         window.localStorage.setItem('engui.mobile.library.viewer', JSON.stringify({
             open: galleryViewerOpen,
-            assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || selectedGalleryAsset?.id || null) : null,
+            assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || gallerySelectedAssetId || null) : null,
         }));
-    }, [galleryViewerIndex, galleryViewerItems, galleryViewerOpen, mobile, selectedGalleryAsset?.id]);
+    }, [gallerySelectedAssetId, galleryViewerIndex, galleryViewerItems, galleryViewerOpen, mobile]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !activeWorkspaceId || !galleryRestoreHydratedRef.current) return;
         const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
-        const assetId = lastViewedGalleryAssetIdRef.current || mobileSelectedGalleryAssetId || selectedGalleryAsset?.id || null;
+        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current || null;
         if (assetId) {
             window.localStorage.setItem(storageKey, assetId);
         }
-    }, [activeWorkspaceId, mobileSelectedGalleryAssetId, selectedGalleryAsset?.id]);
+    }, [activeWorkspaceId, gallerySelectedAssetId]);
 
     useEffect(() => {
         if (!galleryViewerOpen || isLoadingMoreViewerItems || !galleryViewerHasNextPage) return;
@@ -1003,7 +1028,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (panelMode !== 'gallery' || !centerGallerySelectionOnEntryRef.current) return;
-        const assetId = mobileSelectedGalleryAssetId || selectedGalleryAsset?.id || lastViewedGalleryAssetIdRef.current;
+        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current;
         if (!assetId) {
             centerGallerySelectionOnEntryRef.current = false;
             return;
@@ -1013,7 +1038,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (centered) {
             centerGallerySelectionOnEntryRef.current = false;
         }
-    }, [mobileSelectedGalleryAssetId, panelMode, scrollGalleryAssetIntoView, selectedGalleryAsset?.id]);
+    }, [gallerySelectedAssetId, panelMode, scrollGalleryAssetIntoView]);
 
     const loadPreviousGalleryPages = useCallback(() => {
         if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;
@@ -1378,7 +1403,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             }
             updateGalleryPages(item => item.id === asset.id ? null : item);
             if (selectedGalleryAsset?.id === asset.id) {
-                setSelectedGalleryAsset(null);
+                applyGallerySelection(null);
                 setGalleryDetailsOpen(false);
             }
             showToast('Gallery asset permanently deleted', 'success');
@@ -1401,7 +1426,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             showToast(`Deleted ${data.deletedCount || 0} trashed assets`, 'success');
             void fetchGalleryAssets(1);
             if (selectedGalleryAsset?.trashed) {
-                setSelectedGalleryAsset(null);
+                applyGallerySelection(null);
                 setGalleryDetailsOpen(false);
             }
         } catch (error) {
@@ -1419,7 +1444,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             setSelectedGalleryAsset(prev => prev ? { ...prev, trashed: nextTrashed } : prev);
             if (!showTrashed && nextTrashed) {
                 setGalleryDetailsOpen(false);
-                setSelectedGalleryAsset(null);
+                applyGallerySelection(null);
             }
         }
         try {
@@ -1445,14 +1470,17 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     };
 
     const handleGalleryViewerClose = useCallback(() => {
-        const assetId = galleryViewerItems[galleryViewerIndex]?.id || lastViewedGalleryAssetIdRef.current;
+        const assetId = galleryViewerItems[galleryViewerIndex]?.id || gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current;
         setGalleryViewerOpen(false);
         if (!assetId) return;
-        lastViewedGalleryAssetIdRef.current = assetId;
-        setMobileSelectedGalleryAssetId(assetId);
-        const selectedAsset = filteredGalleryAssets.find(item => item.id === assetId) || galleryViewerItems.find(item => item.id === assetId) || null;
-        setSelectedGalleryAsset(selectedAsset);
-        emitGallerySelection(selectedAsset);
+        const selectedAsset = resolveGalleryAssetById(assetId);
+        if (selectedAsset) {
+            applyGallerySelection(selectedAsset);
+        } else {
+            setGallerySelectedAssetId(assetId);
+            setMobileSelectedGalleryAssetId(assetId);
+            lastViewedGalleryAssetIdRef.current = assetId;
+        }
 
         const loadedPageEntry = Object.entries(galleryPages).find(([, pageData]) =>
             pageData.assets.some(asset => asset.id === assetId)
@@ -1473,11 +1501,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         galleryRestoreInProgressRef.current = true;
         void fetchGalleryAssets(1, { focusAssetId: assetId });
-    }, [emitGallerySelection, fetchGalleryAssets, filteredGalleryAssets, galleryPages, galleryViewerIndex, galleryViewerItems]);
+    }, [applyGallerySelection, fetchGalleryAssets, galleryPages, gallerySelectedAssetId, galleryViewerIndex, galleryViewerItems, resolveGalleryAssetById]);
 
     const renderGalleryGridItem = (_index: number, item: GalleryGridItem) => {
         const asset = item.asset;
-        const isSelected = mobileSelectedGalleryAssetId === asset.id;
+        const isSelected = gallerySelectedAssetId === asset.id;
         const visibleUserTags = (asset.userTags || []).slice(0, 2);
         const visibleAutoTags = (asset.autoTags || []).slice(0, Math.max(0, 2 - visibleUserTags.length));
 
@@ -1534,7 +1562,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                         onTouchEnd={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedGalleryAsset(asset);
+                            applyGallerySelection(asset);
                             setGalleryDetailsOpen(true);
                         }}
                         className="p-1 rounded-md backdrop-blur-sm border bg-background/80 text-muted-foreground border-border/50 hover:text-blue-400"
@@ -2192,7 +2220,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 onOpenInfo={(itemId) => {
                     const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId) || null;
                     if (!asset) return;
-                    setSelectedGalleryAsset(asset);
+                    applyGallerySelection(asset);
                     setGalleryDetailsOpen(true);
                 }}
                 onToggleFavorite={async (itemId) => {
