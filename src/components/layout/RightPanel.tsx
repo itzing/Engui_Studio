@@ -491,6 +491,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (result.focus?.found && result.focus.assetId && result.focus.page && result.focus.indexOnPage !== null) {
                 lastViewedGalleryAssetIdRef.current = result.focus.assetId;
                 setMobileSelectedGalleryAssetId(result.focus.assetId);
+                galleryPostRestoreAwaitDirectionRef.current = true;
                 galleryFocusRestoreRef.current = {
                     assetId: result.focus.assetId,
                     page: result.focus.page,
@@ -992,6 +993,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (panelMode !== 'gallery' || sortedGalleryPageNumbers.length === 0) return;
+        if (sortedGalleryPageNumbers.length === 1 && lastViewedGalleryAssetIdRef.current) {
+            galleryPostRestoreAwaitDirectionRef.current = true;
+        }
         const container = galleryScrollContainerRef.current;
         if (!container) return;
 
