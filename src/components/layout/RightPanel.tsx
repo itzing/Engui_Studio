@@ -138,6 +138,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const galleryRestoreHydratedRef = useRef(false);
     const previousPanelModeRef = useRef<'jobs' | 'gallery'>('jobs');
     const centerGallerySelectionOnEntryRef = useRef(false);
+    const galleryEntryRestoreRequestRef = useRef<string | null>(null);
 
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
     const { showToast } = useToast();
@@ -284,6 +285,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         previousPanelModeRef.current = panelMode;
         if (previousMode !== 'gallery' && panelMode === 'gallery') {
             centerGallerySelectionOnEntryRef.current = true;
+            galleryEntryRestoreRequestRef.current = null;
         }
     }, [panelMode]);
 
@@ -597,6 +599,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     page: result.focus.page,
                     indexOnPage: result.focus.indexOnPage,
                 };
+            } else if (options?.focusAssetId) {
+                galleryRestoreInProgressRef.current = false;
             }
 
             return result;
@@ -604,6 +608,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             console.error('Failed to fetch gallery assets:', error);
             if (!append && !prepend) {
                 setGalleryPages({});
+            }
+            if (options?.focusAssetId) {
+                galleryRestoreInProgressRef.current = false;
             }
             return null;
         } finally {
@@ -1019,6 +1026,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             top: 0,
         };
         galleryFocusRestoreRef.current = null;
+        galleryEntryRestoreRequestRef.current = null;
         setGalleryAnchorPage(restore.page);
         window.setTimeout(() => {
             galleryRestoreInProgressRef.current = false;
@@ -1031,14 +1039,25 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current;
         if (!assetId) {
             centerGallerySelectionOnEntryRef.current = false;
+            galleryEntryRestoreRequestRef.current = null;
             return;
         }
 
         const centered = scrollGalleryAssetIntoView(assetId, 'center');
         if (centered) {
             centerGallerySelectionOnEntryRef.current = false;
+            galleryEntryRestoreRequestRef.current = null;
+            return;
         }
-    }, [gallerySelectedAssetId, panelMode, scrollGalleryAssetIntoView]);
+
+        if (galleryEntryRestoreRequestRef.current === assetId || galleryRestoreInProgressRef.current) {
+            return;
+        }
+
+        galleryEntryRestoreRequestRef.current = assetId;
+        galleryRestoreInProgressRef.current = true;
+        void fetchGalleryAssets(1, { focusAssetId: assetId });
+    }, [fetchGalleryAssets, gallerySelectedAssetId, panelMode, scrollGalleryAssetIntoView]);
 
     const loadPreviousGalleryPages = useCallback(() => {
         if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;
