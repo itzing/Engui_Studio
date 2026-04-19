@@ -81,6 +81,7 @@ export interface Job {
     executionMs?: number;
     options?: any;
     resultUrl?: string;
+    thumbnailUrl?: string;
     error?: string;
     endpointId?: string;
     cost?: number;
@@ -766,11 +767,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                         const resultUrl = typeof data.output === 'string'
                             ? data.output
                             : data.output?.url || data.output?.image_url || data.output?.video_url || data.output?.audioUrl || '';
+                        const thumbnailUrl = typeof data.output === 'object' && data.output !== null
+                            ? data.output.thumbnail_url || data.output.preview_url || undefined
+                            : undefined;
 
                         setJobs(prev => prev.map(j => j.id === job.id ? {
                             ...j,
                             status: 'completed',
                             resultUrl,
+                            ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
                             error: undefined,
                             ...(executionMs !== undefined ? { executionMs } : {}),
                         } : j));

@@ -25,6 +25,7 @@ describe('GET /api/generate/status', () => {
       status: 'completed',
       type: 'image',
       resultUrl: '/generations/wan22-job-1.png',
+      thumbnailUrl: '/generations/job-previews/wan22-job-1-thumb.webp',
       options: JSON.stringify({ secureMode: true }),
       secureState: JSON.stringify({
         phase: 'completed',
@@ -52,6 +53,8 @@ describe('GET /api/generate/status', () => {
       output: {
         url: '/generations/wan22-job-1.png',
         image_url: '/generations/wan22-job-1.png',
+        thumbnail_url: '/generations/job-previews/wan22-job-1-thumb.webp',
+        preview_url: '/generations/job-previews/wan22-job-1-thumb.webp',
       },
       meta: {
         localPhase: 'completed',

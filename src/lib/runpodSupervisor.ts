@@ -68,6 +68,8 @@ function buildCompletedOutput(job: any) {
     image_url: job.type === 'image' ? job.resultUrl : undefined,
     video_url: job.type === 'video' ? job.resultUrl : undefined,
     audioUrl: job.type === 'audio' || job.type === 'tts' || job.type === 'music' ? job.resultUrl : undefined,
+    thumbnail_url: job.type === 'image' ? job.thumbnailUrl || undefined : undefined,
+    preview_url: job.type === 'image' ? job.thumbnailUrl || job.resultUrl : undefined,
   };
 }
 
