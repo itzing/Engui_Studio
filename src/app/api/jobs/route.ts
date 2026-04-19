@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
 
 // 간단한 메모리 캐시 (프로덕션에서는 Redis 사용 권장)
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 5000; // 5초 캐시
+
+async function maybePopulateJobThumbnail(job: any) {
+  const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+    id: job.id,
+    modelId: job.modelId,
+    type: job.type,
+    resultUrl: job.resultUrl,
+    thumbnailUrl: job.thumbnailUrl,
+  });
+
+  if (!thumbnailUrl || thumbnailUrl === job.thumbnailUrl) {
+    return job;
+  }
+
+  return prisma.job.update({
+    where: { id: job.id },
+    data: { thumbnailUrl },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Job 생성 또는 업데이트 (upsert)
-    const job = await prisma.job.upsert({
+    const upsertedJob = await prisma.job.upsert({
       where: { id: id || 'new-job-' + Date.now() },
       update: {
         status,
@@ -65,6 +85,8 @@ export async function POST(request: NextRequest) {
         executionMs: typeof executionMs === 'number' ? executionMs : null
       }
     });
+
+    const job = await maybePopulateJobThumbnail(upsertedJob);
 
     // 캐시 완전 무효화 (모든 캐시 제거)
     cache.clear();

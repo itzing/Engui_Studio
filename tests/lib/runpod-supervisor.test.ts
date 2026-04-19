@@ -6,6 +6,7 @@ const {
   mockGetJobStatus,
   mockDeleteFile,
   mockDownloadAndDecryptResultMedia,
+  mockMaybeGenerateJobImageThumbnail,
   mockExistsSync,
   mockMkdirSync,
   mockWriteFileSync,
@@ -20,6 +21,7 @@ const {
   mockGetJobStatus: vi.fn(),
   mockDeleteFile: vi.fn(),
   mockDownloadAndDecryptResultMedia: vi.fn(),
+  mockMaybeGenerateJobImageThumbnail: vi.fn(),
   mockExistsSync: vi.fn(() => true),
   mockMkdirSync: vi.fn(),
   mockWriteFileSync: vi.fn(),
@@ -63,6 +65,10 @@ vi.mock('@/lib/secureTransport', () => ({
   storagePathToS3Key: vi.fn((value: string) => value.replace(/^\/runpod-volume\//, '')),
 }));
 
+vi.mock('@/lib/jobPreviewDerivatives', () => ({
+  maybeGenerateJobImageThumbnail: mockMaybeGenerateJobImageThumbnail,
+}));
+
 vi.mock('fs', () => ({
   default: {
     existsSync: mockExistsSync,
@@ -79,6 +85,7 @@ import { processRunPodJob } from '@/lib/runpodSupervisor';
 describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMaybeGenerateJobImageThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
     mockGetSettings.mockResolvedValue({
       settings: {
         runpod: {
@@ -155,8 +162,10 @@ describe('runpod supervisor', () => {
     const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
     expect(finalUpdate.data.status).toBe('completed');
     expect(finalUpdate.data.resultUrl).toBe('/generations/wan22-job-1.png');
+    expect(finalUpdate.data.thumbnailUrl).toBe('/generations/job-previews/wan22-job-thumb.webp');
 
     const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(secureState.activeAttempt.finalization.localThumbnailUrl).toBe('/generations/job-previews/wan22-job-thumb.webp');
     expect(secureState.cleanup.transportStatus).toBe('warning');
     expect(secureState.cleanup.warning).toContain('cannot delete input');
   });

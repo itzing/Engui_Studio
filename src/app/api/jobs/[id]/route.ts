@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { deleteFinishedJob } from '@/lib/jobManagement';
+import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
 
 const prisma = new PrismaClient();
+
+async function maybePopulateJobThumbnail(job: any) {
+    const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+        id: job.id,
+        modelId: job.modelId,
+        type: job.type,
+        resultUrl: job.resultUrl,
+        thumbnailUrl: job.thumbnailUrl,
+    });
+
+    if (!thumbnailUrl || thumbnailUrl === job.thumbnailUrl) {
+        return job;
+    }
+
+    return prisma.job.update({
+        where: { id: job.id },
+        data: { thumbnailUrl },
+    });
+}
 
 type NormalizedJobOutput = {
     outputId: string;
@@ -163,10 +183,12 @@ export async function PATCH(
         const { id: jobId } = await params;
         const body = await request.json();
 
-        const job = await prisma.job.update({
+        const updatedJob = await prisma.job.update({
             where: { id: jobId },
             data: body
         });
+
+        const job = await maybePopulateJobThumbnail(updatedJob);
 
         return NextResponse.json({
             success: true,

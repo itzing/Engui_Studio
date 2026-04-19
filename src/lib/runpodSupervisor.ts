@@ -7,6 +7,7 @@ import S3Service from '@/lib/s3Service';
 import { prisma } from '@/lib/prisma';
 import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
+import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
 
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
@@ -549,6 +550,14 @@ async function markJobCompleted(params: {
   cleanup?: JsonObject | null;
 }) {
   const { job, options, secureState, resultUrl, resultPath, executionMs, cleanup } = params;
+  const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+    id: job.id,
+    modelId: job.modelId,
+    type: job.type,
+    resultUrl,
+    thumbnailUrl: job.thumbnailUrl,
+  });
+
   const nextSecureState = secureState
     ? {
         ...secureState,
@@ -559,6 +568,7 @@ async function markJobCompleted(params: {
             status: 'completed',
             localResultPath: resultPath,
             localResultUrl: resultUrl,
+            localThumbnailUrl: thumbnailUrl || secureState?.activeAttempt?.finalization?.localThumbnailUrl || null,
             completedAt: new Date().toISOString(),
           },
         },
@@ -569,6 +579,7 @@ async function markJobCompleted(params: {
   await persistJobUpdate(job.id, {
     status: 'completed',
     resultUrl,
+    thumbnailUrl: thumbnailUrl ?? job.thumbnailUrl ?? undefined,
     error: null,
     completedAt: new Date(),
     executionMs: executionMs ?? undefined,
