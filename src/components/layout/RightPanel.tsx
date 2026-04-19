@@ -6,6 +6,7 @@ import { getModelById } from '@/lib/models/modelConfig';
 import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
+import { JobCardImageThumbnail } from '@/components/layout/JobCardImageThumbnail';
 import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -1937,9 +1938,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     filteredJobs.map(job => {
                         const model = getModelById(job.modelId);
                         const executionLabel = formatExecution(getExecutionMs(job));
-                        const jobCardPreviewUrl = job.type === 'image'
-                            ? (job.thumbnailUrl || job.resultUrl)
-                            : job.resultUrl;
                         return (
                             <div
                                 key={job.id}
@@ -1984,12 +1982,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                                     <path fillRule="evenodd" d="M19.952 1.651a.75.75 0 01.298.599V16.303a3 3 0 01-2.176 2.884l-1.32.377a2.553 2.553 0 11-1.403-4.909l2.311-.66a1.5 1.5 0 001.088-1.442V6.994l-9 2.572v9.737a3 3 0 01-2.176 2.884l-1.32.377a2.553 2.553 0 11-1.402-4.909l2.31-.66a1.5 1.5 0 001.088-1.442V9.017 5.25a.75.75 0 01.544-.721l10.5-3a.75.75 0 01.658.122z" clipRule="evenodd" />
                                                 </svg>
                                             </div>
-                                        ) : jobCardPreviewUrl ? (
-                                            <img src={jobCardPreviewUrl} alt="Thumbnail" className="w-full h-full object-cover" loading="lazy" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-muted/20">
-                                                <span className="text-amber-500 text-[10px]" title="Result missing">?</span>
-                                            </div>
+                                            <JobCardImageThumbnail
+                                                thumbnailUrl={job.thumbnailUrl}
+                                                resultUrl={job.resultUrl}
+                                                alt={job.prompt || 'Generated image preview'}
+                                            />
                                         )
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-muted/20">
