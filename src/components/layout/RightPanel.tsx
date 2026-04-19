@@ -37,6 +37,7 @@ type GalleryAsset = {
     sourceOutputId?: string | null;
     derivativeStatus?: string;
     enrichmentStatus?: string;
+    prompt?: string | null;
     addedToGalleryAt: string;
     updatedAt?: string;
 };

@@ -4,6 +4,16 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function parseGenerationSnapshot(raw: string | null): Record<string, any> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -53,6 +63,10 @@ export async function GET(request: NextRequest) {
       sourceOutputId: asset.sourceOutputId,
       derivativeStatus: asset.derivativeStatus,
       enrichmentStatus: asset.enrichmentStatus,
+      prompt: (() => {
+        const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+        return typeof snapshot.prompt === 'string' && snapshot.prompt.trim().length > 0 ? snapshot.prompt : null;
+      })(),
       addedToGalleryAt: asset.addedToGalleryAt,
       updatedAt: asset.updatedAt,
     }));

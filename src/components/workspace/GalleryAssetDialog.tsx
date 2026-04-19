@@ -22,6 +22,7 @@ export type GalleryAssetDialogAsset = {
   sourceJobId?: string | null;
   sourceOutputId?: string | null;
   enrichmentStatus?: string;
+  prompt?: string | null;
   addedToGalleryAt: string;
 };
 
@@ -144,6 +145,10 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
 
             <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 overscroll-contain">
               <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Prompt</span>
+                  <div className="text-sm whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/20 px-3 py-2 max-h-40 overflow-y-auto">{asset.prompt || '—'}</div>
+                </div>
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground">Source Job</span>
                   <div className="text-sm font-medium break-all">{asset.sourceJobId || '—'}</div>
