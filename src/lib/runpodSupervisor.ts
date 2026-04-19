@@ -636,29 +636,73 @@ async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, setti
   }
 }
 
+function reconstructSecureStateFromTransportResult(job: any, transportResult: any, existingSecureState: JsonObject | null): JsonObject | null {
+  if (existingSecureState?.activeAttempt?.attemptId) {
+    return existingSecureState;
+  }
+
+  const binding = transportResult?.result_media?.envelope?.binding;
+  const attemptId = binding?.attempt_id;
+  if (!attemptId) {
+    return existingSecureState;
+  }
+
+  return {
+    v: 1,
+    phase: 'finalizing',
+    activeAttempt: {
+      attemptId,
+      runpodJobId: job.runpodJobId || null,
+      outputDir: null,
+      request: {
+        secureBlockPresent: true,
+        mediaInputs: [],
+        submittedAt: job.createdAt instanceof Date ? job.createdAt.toISOString() : new Date(job.createdAt || Date.now()).toISOString(),
+      },
+      response: {
+        transportResultSecureReceived: true,
+        transportResultStatus: transportResult?.status || null,
+      },
+      finalization: {
+        status: 'pending',
+        localResultPath: null,
+        localResultUrl: null,
+        completedAt: null,
+      },
+    },
+    attemptHistory: [],
+    failure: null,
+    cleanup: {
+      transportStatus: 'pending',
+      warning: null,
+    },
+  };
+}
+
 async function finalizeSecureTransportResult(params: {
   job: any;
   output: any;
   options: JsonObject;
-  secureState: JsonObject;
+  secureState: JsonObject | null;
   settings: any;
   executionMs: number | null;
 }) {
   const { job, output, options, secureState, settings, executionMs } = params;
   const transportResult = output.transport_result;
-  const attemptId = secureState.activeAttempt?.attemptId;
+  const normalizedSecureState = reconstructSecureStateFromTransportResult(job, transportResult, secureState);
+  const attemptId = normalizedSecureState?.activeAttempt?.attemptId;
   if (!attemptId) {
     throw new Error('Secure attempt id is missing');
   }
 
   const s3 = createS3Service(settings);
   const secureStateWithResponse = {
-    ...secureState,
+    ...normalizedSecureState,
     phase: transportResult.status === 'completed' ? 'finalizing' : 'failed',
     activeAttempt: {
-      ...secureState.activeAttempt,
+      ...normalizedSecureState.activeAttempt,
       response: {
-        ...secureState.activeAttempt?.response,
+        ...normalizedSecureState.activeAttempt?.response,
         transportResultSecureReceived: true,
         transportResultStatus: transportResult.status,
       },
@@ -954,7 +998,7 @@ export async function processRunPodJob(job: any) {
 
   const output = status.output;
 
-  if (output && typeof output === 'object' && output.transport_result && secureState?.activeAttempt?.attemptId) {
+  if (output && typeof output === 'object' && output.transport_result) {
     await finalizeSecureTransportResult({
       job,
       output,
