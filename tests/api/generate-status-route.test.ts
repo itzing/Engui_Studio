@@ -65,6 +65,46 @@ describe('GET /api/generate/status', () => {
     });
   });
 
+  it('returns read-only local completed video state with poster metadata', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-video',
+      status: 'completed',
+      type: 'video',
+      resultUrl: '/generations/wan22-job-video.mp4',
+      thumbnailUrl: '/generations/job-previews/wan22-job-video-poster.jpg',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'completed',
+        activeAttempt: {
+          finalization: {
+            status: 'completed',
+          },
+        },
+      }),
+      executionMs: 6789,
+    });
+
+    const response = await GET(new Request('http://localhost/api/generate/status?jobId=job-video'));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      success: true,
+      status: 'COMPLETED',
+      executionTime: 6789,
+      output: {
+        url: '/generations/wan22-job-video.mp4',
+        video_url: '/generations/wan22-job-video.mp4',
+        thumbnail_url: '/generations/job-previews/wan22-job-video-poster.jpg',
+        preview_url: '/generations/job-previews/wan22-job-video-poster.jpg',
+      },
+      meta: {
+        localPhase: 'completed',
+        secureFinalized: true,
+      },
+    });
+  });
+
   it('returns read-only local failure without polling RunPod', async () => {
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'job-2',

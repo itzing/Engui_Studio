@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { deleteFinishedJob } from '@/lib/jobManagement';
-import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
+import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 
 const prisma = new PrismaClient();
 
 async function maybePopulateJobThumbnail(job: any) {
-    const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+    const thumbnailUrl = await maybeGenerateJobThumbnail({
         id: job.id,
         modelId: job.modelId,
         type: job.type,

@@ -6,7 +6,7 @@ const {
   mockGetJobStatus,
   mockDeleteFile,
   mockDownloadAndDecryptResultMedia,
-  mockMaybeGenerateJobImageThumbnail,
+  mockMaybeGenerateJobThumbnail,
   mockExistsSync,
   mockMkdirSync,
   mockWriteFileSync,
@@ -21,7 +21,7 @@ const {
   mockGetJobStatus: vi.fn(),
   mockDeleteFile: vi.fn(),
   mockDownloadAndDecryptResultMedia: vi.fn(),
-  mockMaybeGenerateJobImageThumbnail: vi.fn(),
+  mockMaybeGenerateJobThumbnail: vi.fn(),
   mockExistsSync: vi.fn(() => true),
   mockMkdirSync: vi.fn(),
   mockWriteFileSync: vi.fn(),
@@ -66,7 +66,7 @@ vi.mock('@/lib/secureTransport', () => ({
 }));
 
 vi.mock('@/lib/jobPreviewDerivatives', () => ({
-  maybeGenerateJobImageThumbnail: mockMaybeGenerateJobImageThumbnail,
+  maybeGenerateJobThumbnail: mockMaybeGenerateJobThumbnail,
 }));
 
 vi.mock('fs', () => ({
@@ -85,7 +85,7 @@ import { processRunPodJob } from '@/lib/runpodSupervisor';
 describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMaybeGenerateJobImageThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
+    mockMaybeGenerateJobThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
     mockGetSettings.mockResolvedValue({
       settings: {
         runpod: {

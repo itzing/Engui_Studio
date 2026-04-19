@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
+import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 
 // 간단한 메모리 캐시 (프로덕션에서는 Redis 사용 권장)
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 5000; // 5초 캐시
 
 async function maybePopulateJobThumbnail(job: any) {
-  const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+  const thumbnailUrl = await maybeGenerateJobThumbnail({
     id: job.id,
     modelId: job.modelId,
     type: job.type,

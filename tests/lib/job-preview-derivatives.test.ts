@@ -3,7 +3,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { generateJobImageThumbnail, maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
+import { generateJobImageThumbnail, maybeGenerateJobImageThumbnail, maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 
 const createdPaths = new Set<string>();
 
@@ -61,13 +61,21 @@ describe('jobPreviewDerivatives', () => {
     expect(stats.size).toBeGreaterThan(0);
   });
 
-  it('returns null for non-image jobs and preserves existing thumbnails', async () => {
-    await expect(maybeGenerateJobImageThumbnail({
+  it('returns null for unsupported jobs and preserves existing image/video thumbnails', async () => {
+    await expect(maybeGenerateJobThumbnail({
       id: 'audio-job',
       modelId: 'elevenlabs-tts',
       type: 'audio',
       resultUrl: '/results/audio.mp3',
     })).resolves.toBeNull();
+
+    await expect(maybeGenerateJobThumbnail({
+      id: 'video-job',
+      modelId: 'wan22',
+      type: 'video',
+      resultUrl: '/generations/already-there.mp4',
+      thumbnailUrl: '/generations/job-previews/existing-poster.jpg',
+    })).resolves.toBe('/generations/job-previews/existing-poster.jpg');
 
     await expect(maybeGenerateJobImageThumbnail({
       id: 'image-job',

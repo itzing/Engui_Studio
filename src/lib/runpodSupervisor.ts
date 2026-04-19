@@ -7,7 +7,7 @@ import S3Service from '@/lib/s3Service';
 import { prisma } from '@/lib/prisma';
 import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
-import { maybeGenerateJobImageThumbnail } from '@/lib/jobPreviewDerivatives';
+import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
@@ -68,8 +68,12 @@ function buildCompletedOutput(job: any) {
     image_url: job.type === 'image' ? job.resultUrl : undefined,
     video_url: job.type === 'video' ? job.resultUrl : undefined,
     audioUrl: job.type === 'audio' || job.type === 'tts' || job.type === 'music' ? job.resultUrl : undefined,
-    thumbnail_url: job.type === 'image' ? job.thumbnailUrl || undefined : undefined,
-    preview_url: job.type === 'image' ? job.thumbnailUrl || job.resultUrl : undefined,
+    thumbnail_url: (job.type === 'image' || job.type === 'video') ? job.thumbnailUrl || undefined : undefined,
+    preview_url: job.type === 'image'
+      ? job.thumbnailUrl || job.resultUrl
+      : job.type === 'video'
+        ? job.thumbnailUrl || undefined
+        : undefined,
   };
 }
 
@@ -552,7 +556,7 @@ async function markJobCompleted(params: {
   cleanup?: JsonObject | null;
 }) {
   const { job, options, secureState, resultUrl, resultPath, executionMs, cleanup } = params;
-  const thumbnailUrl = await maybeGenerateJobImageThumbnail({
+  const thumbnailUrl = await maybeGenerateJobThumbnail({
     id: job.id,
     modelId: job.modelId,
     type: job.type,

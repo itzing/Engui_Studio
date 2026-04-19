@@ -1975,7 +1975,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 <div className={`${mobile ? 'w-12 h-12' : 'w-14 h-14'} bg-black/20 rounded-md overflow-hidden flex-shrink-0 relative shadow-sm group-hover:shadow-md transition-shadow`}>
                                     {job.status === 'completed' && job.resultUrl ? (
                                         job.type === 'video' ? (
-                                            <video src={job.resultUrl} className="w-full h-full object-cover" muted />
+                                            <JobCardImageThumbnail
+                                                thumbnailUrl={job.thumbnailUrl}
+                                                alt={job.prompt || 'Generated video poster'}
+                                            />
                                         ) : ['audio', 'tts', 'music'].includes(job.type) ? (
                                             <div className="w-full h-full flex items-center justify-center bg-purple-900/20 text-purple-400">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
