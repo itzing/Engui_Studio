@@ -183,8 +183,16 @@ export async function GET(request: NextRequest) {
         prisma.job.count({ where: whereCondition })
       ]);
 
+      const hydratedJobs = await Promise.all(jobs.map(async (job) => {
+        if (job.status !== 'completed' || !job.resultUrl || job.thumbnailUrl) {
+          return job;
+        }
+
+        return maybePopulateJobThumbnail(job);
+      }));
+
       // Format jobs for frontend
-      const formattedJobs = jobs.map(job => ({
+      const formattedJobs = hydratedJobs.map(job => ({
         id: job.id,
         modelId: job.modelId,
         type: job.type,
