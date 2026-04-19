@@ -113,15 +113,19 @@ export default function VideoGenerationForm() {
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
                 setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
-                setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
-                setVideoPreviewUrl(typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '');
                 setImageFile(null);
                 setVideoFile(null);
+                setImagePreviewUrl('');
+                setVideoPreviewUrl('');
                 if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl.startsWith('data:')) {
-                    setImageFile(await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input'));
+                    const restoredImageFile = await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input');
+                    setImageFile(restoredImageFile);
+                    setImagePreviewUrl(draft.imagePreviewUrl);
                 }
                 if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl.startsWith('data:')) {
-                    setVideoFile(await dataUrlToFile(draft.videoPreviewUrl, 'video-input'));
+                    const restoredVideoFile = await dataUrlToFile(draft.videoPreviewUrl, 'video-input');
+                    setVideoFile(restoredVideoFile);
+                    setVideoPreviewUrl(draft.videoPreviewUrl);
                 }
             } catch (error) {
                 console.warn('Failed to restore video draft', error);
@@ -991,7 +995,7 @@ export default function VideoGenerationForm() {
                                 <div className="w-8 h-8 mx-auto mb-2 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                                 <span className="text-xs text-muted-foreground">{t('generationForm.loadingMedia')}</span>
                             </div>
-                        ) : imagePreviewUrl ? (
+                        ) : (imageFile && imagePreviewUrl) ? (
                             <div className="relative group rounded-lg overflow-hidden border border-border">
                                 <img src={imagePreviewUrl} alt="Reference" className="w-full h-40 object-cover" />
                                 <button
@@ -1032,7 +1036,7 @@ export default function VideoGenerationForm() {
                 {isInputVisible(currentModel, 'video', parameterValues) && (
                     <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground font-medium">{t('generationForm.videoReference')}</Label>
-                        {videoPreviewUrl ? (
+                        {(videoFile && videoPreviewUrl) ? (
                             <div className="relative group rounded-lg overflow-hidden border border-border">
                                 <video src={videoPreviewUrl} className="w-full h-40 object-cover" controls />
                                 <button
