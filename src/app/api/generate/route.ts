@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
                 id: jobId,
                 userId,
                 workspaceId: resolvedWorkspaceId,
-                status: model.api.type === 'runpod' ? 'queued' : 'processing',
+                status: model.api.type === 'runpod' ? 'queueing_up' : 'processing',
                 type: model.type,
                 modelId: model.id,
                 prompt: prompt || null,

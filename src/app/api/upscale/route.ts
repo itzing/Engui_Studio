@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
                 workspaceId: resolvedWorkspaceId,
                 modelId,
                 type: mediaType as any,
-                status: 'queued',
+                status: 'queueing_up',
                 prompt: `Upscale of: ${source.prompt}`,
                 options: JSON.stringify(buildOptions({
                     source,

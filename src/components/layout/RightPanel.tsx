@@ -2043,6 +2043,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                             {timeAgo(job.createdAt)}
                                         </span>
                                         <div className="flex items-center gap-2">
+                                            {job.status === 'queueing_up' && (
+                                                <span className="text-[9px] text-orange-500 font-medium">Queueing Up</span>
+                                            )}
                                             {job.status === 'queued' && (
                                                 <span className="text-[9px] text-amber-500 font-medium">In Queue</span>
                                             )}

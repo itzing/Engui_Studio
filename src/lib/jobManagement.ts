@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
 
-export const RUNNING_JOB_STATUSES = new Set(['processing', 'queued', 'in_queue', 'in_progress']);
+export const RUNNING_JOB_STATUSES = new Set(['queueing_up', 'processing', 'queued', 'in_queue', 'in_progress']);
 export const FINISHED_JOB_STATUSES = new Set(['completed', 'failed']);
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {

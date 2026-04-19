@@ -785,7 +785,7 @@ export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?:
                       </div>
                     ) : (
                       <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-                        {previewJob && (previewJob.status === 'queued' || previewJob.status === 'processing' || previewJob.status === 'finalizing')
+                        {previewJob && (previewJob.status === 'queueing_up' || previewJob.status === 'queued' || previewJob.status === 'processing' || previewJob.status === 'finalizing')
                           ? 'Preview generation is running. The image will appear here automatically.'
                           : 'No preview yet. Save the scene, build a prompt, then generate a prototype preview.'}
                       </div>

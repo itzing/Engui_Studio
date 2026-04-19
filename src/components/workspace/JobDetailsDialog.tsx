@@ -112,7 +112,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
-    const isRunning = job ? (job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
+    const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
     const isFinished = job ? (job.status === 'completed' || job.status === 'failed') : false;
     const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
 
@@ -301,7 +301,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             )
                         ) : (
                             <div className="text-muted-foreground flex flex-col items-center gap-2">
-                                <div className={`w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin ${job.status === 'processing' || job.status === 'queued' || job.status === 'finalizing' ? 'block' : 'hidden'}`} />
+                                <div className={`w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin ${job.status === 'queueing_up' || job.status === 'processing' || job.status === 'queued' || job.status === 'finalizing' ? 'block' : 'hidden'}`} />
                                 <span>{job.status === 'failed' ? 'Generation Failed' : 'Processing...'}</span>
                             </div>
                         )}

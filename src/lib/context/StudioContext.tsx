@@ -75,7 +75,7 @@ export interface Job {
     id: string;
     modelId: string;
     type: 'image' | 'video' | 'audio' | 'tts' | 'music';
-    status: 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
+    status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
     prompt: string;
     createdAt: number;
     executionMs?: number;
@@ -714,7 +714,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     // Polling Logic
     useEffect(() => {
         const interval = setInterval(async () => {
-            const activeJobs = jobs.filter(job => job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing');
+            const activeJobs = jobs.filter(job => job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing');
 
             if (activeJobs.length === 0) return;
 

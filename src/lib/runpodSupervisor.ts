@@ -12,8 +12,9 @@ import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
 const STALE_NOT_FOUND_THRESHOLD_MS = 5 * 60 * 1000;
+const QUEUEING_UP_GRACE_MS = 30 * 1000;
 const DEFAULT_SUPERVISOR_INTERVAL_MS = 5000;
-const ACTIVE_JOB_STATUSES = ['queued', 'processing', 'finalizing'] as const;
+const ACTIVE_JOB_STATUSES = ['queueing_up', 'queued', 'processing', 'finalizing'] as const;
 
 type LocalStatus = 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
 
@@ -513,6 +514,22 @@ async function markJobQueued(job: any, options: JsonObject, secureState: JsonObj
   });
 }
 
+async function markJobQueueingUp(job: any, options: JsonObject, secureState: JsonObject | null) {
+  const nextSecureState = secureState
+    ? {
+        ...secureState,
+        phase: secureState.phase || 'submitting',
+      }
+    : null;
+
+  await persistJobUpdate(job.id, {
+    status: 'queueing_up',
+    options: JSON.stringify(options),
+    secureState: nextSecureState ? JSON.stringify(nextSecureState) : job.secureState,
+    error: null,
+  });
+}
+
 async function markJobFailed(params: {
   job: any;
   options: JsonObject;
@@ -823,11 +840,18 @@ export async function processRunPodJob(job: any) {
     || null;
 
   if (!runpodJobId) {
+    const jobAgeMs = Date.now() - new Date(job.createdAt).getTime();
+
+    if (job.status === 'queueing_up' && jobAgeMs <= QUEUEING_UP_GRACE_MS) {
+      await markJobQueueingUp(job, options, secureState);
+      return;
+    }
+
     const failure = normalizeFailure(
       'engui.job',
-      new Error('RunPod job id is missing on the Engui job record'),
+      new Error('RunPod job id was not attached within the queueing window'),
       'RUNPOD_JOB_ID_MISSING',
-      'RunPod job id is missing on the Engui job record',
+      'RunPod job id was not attached within the queueing window',
     );
 
     await markJobFailed({

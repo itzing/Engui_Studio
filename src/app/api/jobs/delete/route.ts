@@ -5,7 +5,7 @@ import SettingsService from '@/lib/settingsService';
 
 const prisma = new PrismaClient();
 
-const RUNNING_STATUSES = new Set(['processing', 'queued', 'in_queue', 'in_progress']);
+const RUNNING_STATUSES = new Set(['queueing_up', 'processing', 'queued', 'in_queue', 'in_progress']);
 
 export async function DELETE(request: NextRequest) {
   try {
