@@ -370,27 +370,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
                 // Set default workspace if none active
                 if (!activeWorkspaceId && data.workspaces.length > 0) {
-                    // Try to restore last selected workspace from localStorage
-                    const savedWorkspaceId = typeof window !== 'undefined'
-                        ? localStorage.getItem('activeWorkspaceId')
-                        : null;
-
-                    let workspaceToSelect: Workspace | undefined;
-
-                    if (savedWorkspaceId && data.workspaces.find((w: Workspace) => w.id === savedWorkspaceId)) {
-                        // Use saved workspace if it still exists
-                        workspaceToSelect = data.workspaces.find((w: Workspace) => w.id === savedWorkspaceId);
-                        console.log('✅ Restoring saved workspace:', workspaceToSelect?.id, workspaceToSelect?.name);
-                    } else {
-                        // Prefer default workspace, otherwise first one
-                        workspaceToSelect = data.workspaces.find((w: Workspace) => w.isDefault) || data.workspaces[0];
-                        if (workspaceToSelect) {
-                            console.log('✅ Setting default workspace:', workspaceToSelect.id, workspaceToSelect.name);
-                        }
-                    }
+                    const workspaceToSelect = data.workspaces.find((w: Workspace) => w.isDefault) || data.workspaces[0];
 
                     if (workspaceToSelect) {
+                        console.log('✅ Setting startup workspace:', workspaceToSelect.id, workspaceToSelect.name);
                         setActiveWorkspaceId(workspaceToSelect.id);
+                        if (typeof window !== 'undefined') {
+                            localStorage.setItem('activeWorkspaceId', workspaceToSelect.id);
+                        }
                     }
                 } else if (data.workspaces.length === 0) {
                     console.warn('⚠️ No workspaces found! Creating default workspace...');

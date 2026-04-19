@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
+import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 
 // 간단한 메모리 캐시 (프로덕션에서는 Redis 사용 권장)
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
       executionMs
     } = body;
 
+    const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
+
     // 필수 필드 검증
     if (!type) {
       return NextResponse.json(
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
       create: {
         id: id || undefined, // Use provided ID if available
         userId,
-        workspaceId: workspaceId || null,
+        workspaceId: resolvedWorkspaceId,
         type,
         status,
         prompt: prompt || null,

@@ -12,6 +12,7 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { getApiMessage } from '@/lib/apiMessages';
 import { getModelById } from '@/lib/models/modelConfig';
+import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         const modelId = formData.get('modelId') as string;
         const language = formData.get('language') as 'ko' | 'en' || 'ko';
         const workspaceId = formData.get('workspaceId') as string;
+        const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
 
         if (!modelId) {
             return NextResponse.json({
@@ -366,7 +368,7 @@ export async function POST(request: NextRequest) {
             data: {
                 id: jobId,
                 userId,
-                workspaceId: workspaceId || null,
+                workspaceId: resolvedWorkspaceId,
                 status: model.api.type === 'runpod' ? 'queued' : 'processing',
                 type: model.type,
                 modelId: model.id,

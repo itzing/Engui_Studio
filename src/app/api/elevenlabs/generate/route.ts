@@ -7,6 +7,7 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { writeFile } from 'fs/promises';
+import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
         const modelId = formData.get('modelId') as string;
         const language = formData.get('language') as 'ko' | 'en' || 'ko';
         const workspaceId = formData.get('workspaceId') as string;
+        const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
 
         if (!modelId) {
             return NextResponse.json({
@@ -153,7 +155,7 @@ export async function POST(request: NextRequest) {
         const job = await prisma.job.create({
             data: {
                 userId,
-                workspaceId,
+                workspaceId: resolvedWorkspaceId,
                 modelId,
                 prompt,
                 status: 'completed',
@@ -184,11 +186,12 @@ export async function POST(request: NextRequest) {
             const modelId = (await request.formData()).get('modelId') as string;
             const workspaceId = (await request.formData()).get('workspaceId') as string;
             const prompt = (await request.formData()).get('prompt') as string;
+            const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
 
             await prisma.job.create({
                 data: {
                     userId,
-                    workspaceId,
+                    workspaceId: resolvedWorkspaceId,
                     modelId,
                     prompt: prompt || '',
                     status: 'failed',

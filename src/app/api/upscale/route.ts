@@ -8,6 +8,7 @@ import S3Service from '@/lib/s3Service';
 import { buildAttemptPaths, buildOutputFileName, createSecureStateSkeleton, decodeMasterKey, storagePathToS3Key, uploadEncryptedMediaInput } from '@/lib/secureTransport';
 import { startRunPodSupervisor } from '@/lib/runpodSupervisor';
 import { getModelById } from '@/lib/models/modelConfig';
+import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 import { v4 as uuidv4 } from 'uuid';
 
 const settingsService = new SettingsService();
@@ -256,10 +257,12 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
+        const resolvedWorkspaceId = await resolveJobWorkspaceId(source.userId, source.workspaceId);
+
         const newJob = await prisma.job.create({
             data: {
                 userId: source.userId,
-                workspaceId: source.workspaceId,
+                workspaceId: resolvedWorkspaceId,
                 modelId,
                 type: mediaType as any,
                 status: 'queued',
