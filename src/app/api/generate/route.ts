@@ -255,6 +255,13 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        if (modelId === 'wan22' && !primaryImageFile) {
+            return NextResponse.json({
+                error: 'WAN 2.2 requires an uploaded source image file.',
+                code: 'WAN22_SOURCE_IMAGE_REQUIRED',
+            }, { status: 400 });
+        }
+
         const randomizeSeed = formData.get('randomizeSeed') === 'true';
 
         // Collect all parameters from formData
