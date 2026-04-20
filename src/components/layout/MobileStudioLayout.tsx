@@ -6,8 +6,6 @@ import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 
-const MOBILE_APP_HEIGHT_VAR = '--engui-app-height';
-
 type MobileTab = 'create' | 'preview' | 'jobs' | 'gallery';
 
 const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -57,57 +55,8 @@ export default function MobileStudioLayout() {
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return;
-
-    let syncTimeout: ReturnType<typeof window.setTimeout> | null = null;
-
-    const applyViewportHeight = () => {
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      document.documentElement.style.setProperty(MOBILE_APP_HEIGHT_VAR, `${Math.round(viewportHeight)}px`);
-    };
-
-    const scheduleViewportHeightSync = (delay = 0) => {
-      if (syncTimeout) {
-        window.clearTimeout(syncTimeout);
-      }
-      syncTimeout = window.setTimeout(() => {
-        applyViewportHeight();
-        syncTimeout = null;
-      }, delay);
-    };
-
-    const handleFocusOut = () => {
-      scheduleViewportHeightSync(80);
-      scheduleViewportHeightSync(250);
-      scheduleViewportHeightSync(500);
-    };
-
-    const handleOrientationChange = () => scheduleViewportHeightSync(120);
-
-    applyViewportHeight();
-
-    window.addEventListener('resize', applyViewportHeight);
-    window.addEventListener('orientationchange', handleOrientationChange);
-    window.addEventListener('focusout', handleFocusOut);
-    window.visualViewport?.addEventListener('resize', applyViewportHeight);
-    window.visualViewport?.addEventListener('scroll', applyViewportHeight);
-
-    return () => {
-      if (syncTimeout) {
-        window.clearTimeout(syncTimeout);
-      }
-      window.removeEventListener('resize', applyViewportHeight);
-      window.removeEventListener('orientationchange', handleOrientationChange);
-      window.removeEventListener('focusout', handleFocusOut);
-      window.visualViewport?.removeEventListener('resize', applyViewportHeight);
-      window.visualViewport?.removeEventListener('scroll', applyViewportHeight);
-      document.documentElement.style.removeProperty(MOBILE_APP_HEIGHT_VAR);
-    };
-  }, []);
-
   return (
-    <div className="flex h-[var(--engui-app-height,100dvh)] min-h-[var(--engui-app-height,100dvh)] w-full flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top,0px)] text-foreground">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top,0px)] text-foreground">
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className={activeTab === 'create' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
           <LeftPanel mobile />
