@@ -5,7 +5,7 @@ import MobileScreen from '@/components/mobile/MobileScreen';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useImageCreateState } from '@/hooks/create/useImageCreateState';
+import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobileAdvancedScreen() {
   const {
@@ -16,7 +16,7 @@ export default function MobileAdvancedScreen() {
     handleNumericParameterInput,
     randomizeSeed,
     setRandomizeSeed,
-  } = useImageCreateState();
+  } = useMobileCreate();
 
   const visibleParameters = editableParameters.filter((param) => param.name !== 'negativePrompt' && param.name !== 'negative_prompt');
 

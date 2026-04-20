@@ -4,7 +4,7 @@ import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useImageCreateState } from '@/hooks/create/useImageCreateState';
+import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobileScenesScreen() {
   const {
@@ -16,7 +16,7 @@ export default function MobileScenesScreen() {
     applyScenePreviewImage,
     isLoadingScenes,
     promptMatchesSelectedScene,
-  } = useImageCreateState();
+  } = useMobileCreate();
 
   return (
     <MobileScreen>

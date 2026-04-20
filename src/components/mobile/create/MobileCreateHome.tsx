@@ -8,7 +8,7 @@ import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar'
 import type { CreateMode } from '@/lib/createDrafts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useImageCreateState } from '@/hooks/create/useImageCreateState';
+import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
@@ -48,7 +48,7 @@ export default function MobileCreateHome({
     submit,
     message,
     isLoadingMedia,
-  } = useImageCreateState();
+  } = useMobileCreate();
 
   const currentSeed = parameterValues.seed ?? currentModel?.parameters.find((param) => param.name === 'seed')?.default;
 

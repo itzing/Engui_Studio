@@ -1,11 +1,12 @@
 ---
 id: engui-152
 title: Add route-scoped mobile create provider and migrate image flow
-status: planned
+status: done
 priority: high
 labels: [mobile, create, frontend, pwa]
 created_at: 2026-04-20
 updated_at: 2026-04-20
+completed_at: 2026-04-20
 assignee: openclaw
 ---
 
@@ -27,8 +28,20 @@ All mobile image-create screens read and write one live draft owner across the r
 - Keep existing mobile UX intact unless migration requires targeted UI adjustments.
 
 ## Acceptance criteria
-- [ ] `/m/create/*` mounts one shared provider for create state
-- [ ] Mobile image-create screens no longer own isolated persistence logic independently
-- [ ] Navigating across mobile image-create subroutes preserves live state without rehydration races
-- [ ] Returning from model, prompt, advanced, or scenes screens does not lose current draft edits
-- [ ] Existing image submit behavior still works after the provider migration
+- [x] `/m/create/*` mounts one shared provider for create state
+- [x] Mobile image-create screens no longer own isolated persistence logic independently
+- [x] Navigating across mobile image-create subroutes preserves live state without rehydration races
+- [x] Returning from model, prompt, advanced, or scenes screens does not lose current draft edits
+- [x] Existing image submit behavior still works after the provider migration
+
+## Completion notes
+
+Added route-scoped provider mounting at `src/app/m/create/layout.tsx` and introduced `src/components/mobile/create/MobileCreateProvider.tsx` as the single live owner of mobile image-create state for the `/m/create/*` subtree. Migrated these mobile screens to consume provider state instead of instantiating `useImageCreateState()` independently:
+- `MobileCreateHome`
+- `MobileModelScreen`
+- `MobilePromptScreen`
+- `MobileAdvancedScreen`
+- `MobileScenesScreen`
+
+Validation:
+- `npm run build` ✅

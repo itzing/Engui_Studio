@@ -5,7 +5,7 @@ import { Loader2, WandSparkles } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
-import { useImageCreateState } from '@/hooks/create/useImageCreateState';
+import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobilePromptScreen() {
   const {
@@ -17,7 +17,7 @@ export default function MobilePromptScreen() {
     promptHelperError,
     isPromptHelperLoading,
     runSavedPromptHelperInstruction,
-  } = useImageCreateState();
+  } = useMobileCreate();
 
   return (
     <MobileScreen>

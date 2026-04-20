@@ -5,12 +5,12 @@ import { Check } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Card, CardContent } from '@/components/ui/card';
-import { useImageCreateState } from '@/hooks/create/useImageCreateState';
+import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 import { PENDING_MOBILE_IMAGE_MODEL_KEY } from '@/hooks/create/useImageCreateDraftPersistence';
 
 export default function MobileModelScreen() {
   const router = useRouter();
-  const { imageModels, selectedModel, selectModel } = useImageCreateState();
+  const { imageModels, selectedModel, selectModel } = useMobileCreate();
 
   return (
     <MobileScreen>
