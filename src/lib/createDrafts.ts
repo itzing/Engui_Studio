@@ -1,6 +1,15 @@
 'use client';
 
-export type CreateMode = 'image' | 'video' | 'tts' | 'music';
+import {
+  loadUnifiedCreateDraftState,
+  saveUnifiedCreateDraftState,
+  saveWorkflowDraftInState,
+  setActiveModeInState,
+  setWorkflowActiveModelInState,
+} from '@/lib/create/createDraftStore';
+import type { CreateWorkflow, UnifiedCreateDraftState } from '@/lib/create/createDraftSchema';
+
+export type CreateMode = CreateWorkflow;
 
 type WorkflowDraftState = {
   activeModel?: string;
@@ -13,8 +22,6 @@ export type CreateDraftState = {
   workflows: Record<CreateMode, WorkflowDraftState>;
 };
 
-const STORAGE_KEY = 'engui.create.state.v1';
-
 const defaultState = (): CreateDraftState => ({
   version: 1,
   activeMode: 'image',
@@ -26,59 +33,79 @@ const defaultState = (): CreateDraftState => ({
   },
 });
 
-export const loadCreateDraftState = (): CreateDraftState => {
-  if (typeof window === 'undefined') return defaultState();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
-    const parsed = JSON.parse(raw);
-    return {
-      ...defaultState(),
-      ...parsed,
-      workflows: {
-        ...defaultState().workflows,
-        ...(parsed.workflows || {}),
+function fromUnifiedState(state: UnifiedCreateDraftState): CreateDraftState {
+  return {
+    version: 1,
+    activeMode: state.activeMode,
+    workflows: {
+      image: {
+        activeModel: state.workflows.image.activeModel,
+        drafts: Object.fromEntries(Object.entries(state.workflows.image.drafts).map(([modelId, envelope]) => [modelId, envelope.draft])),
       },
-    };
+      video: {
+        activeModel: state.workflows.video.activeModel,
+        drafts: Object.fromEntries(Object.entries(state.workflows.video.drafts).map(([modelId, envelope]) => [modelId, envelope.draft])),
+      },
+      tts: {
+        activeModel: state.workflows.tts.activeModel,
+        drafts: Object.fromEntries(Object.entries(state.workflows.tts.drafts).map(([modelId, envelope]) => [modelId, envelope.draft])),
+      },
+      music: {
+        activeModel: state.workflows.music.activeModel,
+        drafts: Object.fromEntries(Object.entries(state.workflows.music.drafts).map(([modelId, envelope]) => [modelId, envelope.draft])),
+      },
+    },
+  };
+}
+
+export const loadCreateDraftState = (): CreateDraftState => {
+  try {
+    return fromUnifiedState(loadUnifiedCreateDraftState());
   } catch {
     return defaultState();
   }
 };
 
 export const saveCreateDraftState = (state: CreateDraftState) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  let next = loadUnifiedCreateDraftState();
+  next = setActiveModeInState(next, state.activeMode);
+
+  for (const workflow of Object.keys(state.workflows) as CreateMode[]) {
+    const activeModel = state.workflows[workflow]?.activeModel;
+    if (activeModel) {
+      next = setWorkflowActiveModelInState(next, workflow, activeModel);
+    }
+
+    for (const [modelId, draft] of Object.entries(state.workflows[workflow]?.drafts || {})) {
+      next = saveWorkflowDraftInState(next, workflow, modelId, draft);
+    }
+  }
+
+  saveUnifiedCreateDraftState(next);
 };
 
 export const getActiveMode = (): CreateMode => loadCreateDraftState().activeMode;
 
 export const setActiveMode = (mode: CreateMode) => {
-  const state = loadCreateDraftState();
-  state.activeMode = mode;
-  saveCreateDraftState(state);
+  const next = setActiveModeInState(loadUnifiedCreateDraftState(), mode);
+  saveUnifiedCreateDraftState(next);
 };
 
 export const getWorkflowActiveModel = (mode: CreateMode): string | undefined => {
-  return loadCreateDraftState().workflows[mode]?.activeModel;
+  return loadUnifiedCreateDraftState().workflows[mode]?.activeModel;
 };
 
 export const setWorkflowActiveModel = (mode: CreateMode, modelId: string) => {
-  const state = loadCreateDraftState();
-  state.workflows[mode] = state.workflows[mode] || { drafts: {} };
-  state.workflows[mode].activeModel = modelId;
-  saveCreateDraftState(state);
+  const next = setWorkflowActiveModelInState(loadUnifiedCreateDraftState(), mode, modelId);
+  saveUnifiedCreateDraftState(next);
 };
 
 export const getWorkflowDraft = <T = any>(mode: CreateMode, modelId: string): T | null => {
-  const state = loadCreateDraftState();
-  return (state.workflows[mode]?.drafts?.[modelId] as T) || null;
+  const envelope = loadUnifiedCreateDraftState().workflows[mode]?.drafts?.[modelId];
+  return (envelope?.draft as T) || null;
 };
 
 export const saveWorkflowDraft = <T = any>(mode: CreateMode, modelId: string, draft: T) => {
-  const state = loadCreateDraftState();
-  state.workflows[mode] = state.workflows[mode] || { drafts: {} };
-  state.workflows[mode].activeModel = modelId;
-  state.workflows[mode].drafts = state.workflows[mode].drafts || {};
-  state.workflows[mode].drafts![modelId] = draft;
-  saveCreateDraftState(state);
+  const next = saveWorkflowDraftInState(loadUnifiedCreateDraftState(), mode, modelId, draft);
+  saveUnifiedCreateDraftState(next);
 };

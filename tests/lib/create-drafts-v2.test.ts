@@ -1,0 +1,96 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { collectReferencedMediaIds } from '@/lib/create/createMediaStore';
+import { loadUnifiedCreateDraftState, saveUnifiedCreateDraftState, saveWorkflowDraftInState, setActiveModeInState, setWorkflowActiveModelInState } from '@/lib/create/createDraftStore';
+import { createDefaultUnifiedCreateDraftState } from '@/lib/create/createDraftSchema';
+import { migrateLegacyCreateDraftState } from '@/lib/create/createDraftMigrations';
+
+function createStorage() {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+  };
+}
+
+describe('create draft store v2', () => {
+  beforeEach(() => {
+    const storage = createStorage();
+    (globalThis as any).window = { localStorage: storage };
+  });
+
+  it('loads and saves v2 state', () => {
+    let state = createDefaultUnifiedCreateDraftState();
+    state = setActiveModeInState(state, 'image');
+    state = setWorkflowActiveModelInState(state, 'image', 'flux-krea');
+    state = saveWorkflowDraftInState(state, 'image', 'flux-krea', { prompt: 'test' });
+    saveUnifiedCreateDraftState(state);
+
+    const restored = loadUnifiedCreateDraftState();
+    expect(restored.version).toBe(2);
+    expect(restored.activeMode).toBe('image');
+    expect(restored.workflows.image.activeModel).toBe('flux-krea');
+    expect(restored.workflows.image.drafts['flux-krea']?.draft).toMatchObject({ prompt: 'test' });
+  });
+
+  it('migrates legacy v1 draft maps into envelopes and media refs', () => {
+    const migrated = migrateLegacyCreateDraftState({
+      version: 1,
+      activeMode: 'image',
+      workflows: {
+        image: {
+          activeModel: 'z-image',
+          drafts: {
+            'z-image': {
+              prompt: 'portrait',
+              previewUrl: 'https://example.com/a.png',
+              previewUrl2: 'https://example.com/b.png',
+            },
+          },
+        },
+      },
+    });
+
+    expect(migrated.version).toBe(2);
+    expect(migrated.workflows.image.activeModel).toBe('z-image');
+    expect(migrated.workflows.image.drafts['z-image']?.draft).toMatchObject({
+      prompt: 'portrait',
+      inputs: {
+        primary: { kind: 'remote-url', url: 'https://example.com/a.png' },
+        secondary: { kind: 'remote-url', url: 'https://example.com/b.png' },
+      },
+    });
+  });
+
+  it('collects referenced indexeddb media ids from nested drafts', () => {
+    const state = createDefaultUnifiedCreateDraftState();
+    state.workflows.image.drafts['flux-krea'] = {
+      modelId: 'flux-krea',
+      updatedAt: 1,
+      draft: {
+        inputs: {
+          primary: { kind: 'idb-media', mediaId: 'm1' },
+          secondary: { kind: 'remote-url', url: 'https://example.com' },
+        },
+      },
+    };
+    state.workflows.video.drafts['wan22'] = {
+      modelId: 'wan22',
+      updatedAt: 2,
+      draft: {
+        inputs: {
+          image: { kind: 'idb-media', mediaId: 'm2' },
+        },
+      },
+    };
+
+    expect(collectReferencedMediaIds(state)).toEqual(['m1', 'm2']);
+  });
+});
