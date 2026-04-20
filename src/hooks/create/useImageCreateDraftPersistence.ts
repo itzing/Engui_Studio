@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import type { ImageCreateDraftSnapshot } from '@/lib/create/imageDraft';
 
+export const PENDING_MOBILE_IMAGE_MODEL_KEY = 'engui.mobile.pending-image-model';
+
 export function useImageCreateDraftPersistence({
   defaultModelId,
   selectedModel,
@@ -36,7 +38,21 @@ export function useImageCreateDraftPersistence({
   }, []);
 
   useEffect(() => {
-    const modelId = getWorkflowActiveModel('image') || defaultModelId;
+    let modelId = getWorkflowActiveModel('image') || defaultModelId;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const pendingModelId = window.localStorage.getItem(PENDING_MOBILE_IMAGE_MODEL_KEY);
+        if (pendingModelId) {
+          modelId = pendingModelId;
+          setWorkflowActiveModel('image', pendingModelId);
+          window.localStorage.removeItem(PENDING_MOBILE_IMAGE_MODEL_KEY);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+
     setSelectedModel(modelId);
     hasRestoredDraftRef.current = true;
   }, [defaultModelId, setSelectedModel]);
