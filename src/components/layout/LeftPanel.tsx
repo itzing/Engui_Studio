@@ -16,6 +16,7 @@ import PoseManagerPanel from '../poses/PoseManagerPanel';
 import SceneManagerPanel from '../scenes/SceneManagerPanel';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { getActiveMode, setActiveMode } from '@/lib/createDrafts';
+import { CREATE_MODE_EVENT } from '@/lib/create/createModeEvents';
 
 // Simple icons for social media
 const DiscordIcon = ({ className }: { className?: string }) => (
@@ -56,59 +57,17 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
         setActiveMode(generationMode);
     }, [generationMode]);
 
-    // Listen for job reuse events and switch to appropriate tab
     React.useEffect(() => {
-        const handleReuseInput = (event: CustomEvent) => {
-            const { type, _redispatched } = event.detail;
-
-            // Ignore re-dispatched events to prevent infinite loop
-            if (_redispatched) {
-                return;
-            }
-
-            console.log('🎯 LeftPanel received reuseJobInput event, type:', type);
-
-            if (type === 'video') {
-                setGenerationMode('video');
-                // Re-dispatch event after tab switch to ensure form is mounted
-                setTimeout(() => {
-                    console.log('🔄 Re-dispatching event after tab switch');
-                    window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                        detail: { ...event.detail, _redispatched: true }
-                    }));
-                }, 150);
-            } else if (type === 'image') {
-                setGenerationMode('image');
-                // Re-dispatch event after tab switch to ensure form is mounted
-                setTimeout(() => {
-                    console.log('🔄 Re-dispatching event after tab switch');
-                    window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                        detail: { ...event.detail, _redispatched: true }
-                    }));
-                }, 150);
-            } else if (type === 'music') {
-                setGenerationMode('music');
-                // Re-dispatch event after tab switch to ensure form is mounted
-                setTimeout(() => {
-                    console.log('🔄 Re-dispatching event after tab switch');
-                    window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                        detail: { ...event.detail, _redispatched: true }
-                    }));
-                }, 150);
-            } else if (type === 'audio' || type === 'tts') {
-                setGenerationMode('tts');
-                // Re-dispatch event after tab switch to ensure form is mounted
-                setTimeout(() => {
-                    console.log('🔄 Re-dispatching event after tab switch');
-                    window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                        detail: { ...event.detail, _redispatched: true }
-                    }));
-                }, 150);
+        const handleCreateModeChanged = (event: Event) => {
+            const customEvent = event as CustomEvent<{ mode?: GenerationMode }>;
+            const mode = customEvent.detail?.mode || getActiveMode();
+            if (mode === 'image' || mode === 'video' || mode === 'tts' || mode === 'music') {
+                setGenerationMode(mode);
             }
         };
 
-        window.addEventListener('reuseJobInput', handleReuseInput as any);
-        return () => window.removeEventListener('reuseJobInput', handleReuseInput as any);
+        window.addEventListener(CREATE_MODE_EVENT, handleCreateModeChanged as EventListener);
+        return () => window.removeEventListener(CREATE_MODE_EVENT, handleCreateModeChanged as EventListener);
     }, []);
 
     React.useEffect(() => {

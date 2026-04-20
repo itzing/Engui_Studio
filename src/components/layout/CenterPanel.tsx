@@ -408,10 +408,12 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       }
 
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
-        window.dispatchEvent(new CustomEvent('reuseJobInput', {
-          detail: data.payload,
-        }));
+        const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+        const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
+        const result = persistCreateReuseDraft(data.payload);
+        if (result?.workflow) {
+          announceCreateModeChange(result.workflow);
+        }
       }
 
       showToast(`Opened in ${action}`, 'success');

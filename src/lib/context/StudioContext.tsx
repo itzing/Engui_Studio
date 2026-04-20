@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { persistImageReuseDraft } from '@/lib/create/persistImageReuseDraft';
+import { announceCreateModeChange } from '@/lib/create/createModeEvents';
+import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 
 export type StudioTool =
     | 'video-generation'
@@ -580,12 +581,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        console.log('🔄 Reusing job input:', job);
-
-        // Set the model
-        setSelectedModel(job.modelId);
-
-        // Fetch full job details from API to get options and media paths
         try {
             const response = await fetch(`/api/jobs/${jobId}`);
             if (!response.ok) {
@@ -593,89 +588,45 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             }
 
             const data = await response.json();
+            if (!data.success || !data.job) {
+                throw new Error(data.error || 'Failed to load job details');
+            }
 
-            if (data.success && data.job) {
-                // Parse options JSON safely with error handling
-                let options = {};
-                try {
-                    options = typeof data.job.options === 'string'
-                        ? JSON.parse(data.job.options)
-                        : (data.job.options || {});
-                } catch (parseError) {
-                    console.error('Failed to parse job options:', parseError);
-                    options = {};
-                }
+            let options = {};
+            try {
+                options = typeof data.job.options === 'string'
+                    ? JSON.parse(data.job.options)
+                    : (data.job.options || {});
+            } catch (parseError) {
+                console.error('Failed to parse job options:', parseError);
+                options = {};
+            }
 
-                console.log('📋 Job options:', options);
-                console.log('📁 Media paths:', {
-                    image: data.job.imageInputPath,
-                    video: data.job.videoInputPath,
-                    audio: data.job.audioInputPath
-                });
+            const shouldReuseImageInput = !(job.modelId === 'z-image' && (options as Record<string, any>).use_controlnet !== true);
+            const reuseDetail = {
+                modelId: job.modelId,
+                prompt: job.prompt,
+                type: job.type,
+                options,
+                imageInputPath: shouldReuseImageInput ? data.job.imageInputPath : null,
+                videoInputPath: data.job.videoInputPath,
+                audioInputPath: data.job.audioInputPath,
+            };
 
-                // Dispatch custom event with complete job data including media paths
-                // Add a small delay to allow LeftPanel to switch tabs and mount the correct form
-                if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
-                    console.log('⏰ Scheduling reuseJobInput event dispatch in 100ms...');
-                    setTimeout(() => {
-                        try {
-                            const shouldReuseImageInput = !(job.modelId === 'z-image' && options.use_controlnet !== true);
-                            const resolvedImageInputPath = shouldReuseImageInput ? data.job.imageInputPath : null;
-
-                            const reuseDetail = {
-                                modelId: job.modelId,
-                                prompt: job.prompt,
-                                type: job.type,
-                                options: options,
-                                imageInputPath: resolvedImageInputPath,
-                                videoInputPath: data.job.videoInputPath,
-                                audioInputPath: data.job.audioInputPath
-                            };
-
-                            persistImageReuseDraft(reuseDetail);
-
-                            console.log('📤 Dispatching reuseJobInput event:', {
-                                modelId: job.modelId,
-                                type: job.type,
-                                hasOptions: !!options,
-                                imageInputPath: resolvedImageInputPath,
-                                videoInputPath: data.job.videoInputPath,
-                                audioInputPath: data.job.audioInputPath,
-                                shouldReuseImageInput,
-                            });
-                            window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                                detail: reuseDetail
-                            }));
-                            console.log('✅ Event dispatched successfully');
-                        } catch (eventError) {
-                            console.error('Failed to dispatch reuseJobInput event:', eventError);
-                        }
-                    }, 100);
-                }
+            const result = persistCreateReuseDraft(reuseDetail);
+            if (result?.workflow) {
+                announceCreateModeChange(result.workflow);
             }
         } catch (error) {
-            console.error('Failed to fetch job details:', error);
-            // Fallback to basic reuse without options
-            // Add a small delay to allow LeftPanel to switch tabs and mount the correct form
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
-                setTimeout(() => {
-                    try {
-                        const reuseDetail = {
-                            modelId: job.modelId,
-                            prompt: job.prompt,
-                            type: job.type,
-                            options: {}
-                        };
-                        persistImageReuseDraft(reuseDetail);
-                        window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                            detail: reuseDetail
-                        }));
-                    } catch (eventError) {
-                        console.error('Failed to dispatch fallback reuseJobInput event:', eventError);
-                    }
-                }, 100);
+            console.error('Failed to prepare reuse input:', error);
+            const fallback = persistCreateReuseDraft({
+                modelId: job.modelId,
+                prompt: job.prompt,
+                type: job.type,
+                options: {},
+            });
+            if (fallback?.workflow) {
+                announceCreateModeChange(fallback.workflow);
             }
         }
     };
