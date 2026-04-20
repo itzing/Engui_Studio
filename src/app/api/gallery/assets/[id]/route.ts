@@ -1,5 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
+
+function parseGenerationSnapshot(raw: string | null): Record<string, any> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const asset = await prisma.galleryAsset.findUnique({ where: { id } });
+
+    if (!asset) {
+      return NextResponse.json({ success: false, error: 'Gallery asset not found' }, { status: 404 });
+    }
+
+    const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+
+    return NextResponse.json({
+      success: true,
+      asset: {
+        id: asset.id,
+        workspaceId: asset.workspaceId,
+        type: asset.type,
+        originalUrl: asset.originalUrl,
+        previewUrl: asset.previewUrl,
+        thumbnailUrl: asset.thumbnailUrl,
+        favorited: asset.favorited,
+        trashed: asset.trashed,
+        userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
+        autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
+        sourceJobId: asset.sourceJobId,
+        sourceOutputId: asset.sourceOutputId,
+        derivativeStatus: asset.derivativeStatus,
+        enrichmentStatus: asset.enrichmentStatus,
+        prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : null,
+        modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
+        addedToGalleryAt: asset.addedToGalleryAt,
+        updatedAt: asset.updatedAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('Failed to fetch gallery asset:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
+  }
+}
 
 export async function DELETE(
   request: NextRequest,

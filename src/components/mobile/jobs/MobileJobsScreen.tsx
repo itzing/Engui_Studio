@@ -6,7 +6,6 @@ import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useMobilePreviewState } from '@/hooks/mobile/useMobilePreviewState';
 import { useMobileJobsScreen } from '@/hooks/jobs/useMobileJobsScreen';
 
 function JobSection({
@@ -59,12 +58,10 @@ function JobSection({
 
 export default function MobileJobsScreen() {
   const router = useRouter();
-  const { setPreview } = useMobilePreviewState();
-  const { groupedJobs, isLoading, error, refresh, buildPreview } = useMobileJobsScreen();
+  const { groupedJobs, isLoading, error, refresh } = useMobileJobsScreen();
 
   const openJob = (job: ReturnType<typeof useMobileJobsScreen>['jobs'][number]) => {
-    setPreview(buildPreview(job));
-    router.push('/m/preview');
+    router.push(`/m/jobs/${job.id}`);
   };
 
   return (

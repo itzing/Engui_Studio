@@ -8,16 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useMobileGalleryScreen } from '@/hooks/gallery/useMobileGalleryScreen';
-import { useMobilePreviewState } from '@/hooks/mobile/useMobilePreviewState';
 
 export default function MobileGalleryScreen() {
   const router = useRouter();
-  const { setPreview } = useMobilePreviewState();
-  const { assets, isLoading, error, query, setQuery, refresh, buildPreview } = useMobileGalleryScreen();
+  const { assets, isLoading, error, query, setQuery, refresh } = useMobileGalleryScreen();
 
   const openAsset = (asset: ReturnType<typeof useMobileGalleryScreen>['assets'][number]) => {
-    setPreview(buildPreview(asset));
-    router.push('/m/preview');
+    router.push(`/m/gallery/${asset.id}`);
   };
 
   return (
