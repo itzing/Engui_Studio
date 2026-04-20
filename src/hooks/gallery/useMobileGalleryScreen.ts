@@ -42,6 +42,7 @@ type GalleryPageResponse = {
 
 type LoadedGalleryPage = {
   page: number;
+  startIndex: number;
   assets: MobileGalleryAsset[];
 };
 
@@ -50,27 +51,61 @@ const PAGE_SIZE = 24;
 export function useMobileGalleryScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
-  const [pages, setPages] = useState<Record<number, LoadedGalleryPage>>({});
+  const [loadedPages, setLoadedPages] = useState<Record<number, LoadedGalleryPage>>({});
+  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [selectedAbsoluteIndex, setSelectedAbsoluteIndex] = useState<number | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
-  const [hasNextPage, setHasNextPage] = useState(false);
-  const [hasPrevPage, setHasPrevPage] = useState(false);
-  const [lowestPage, setLowestPage] = useState(1);
-  const [highestPage, setHighestPage] = useState(1);
   const [restoreTick, setRestoreTick] = useState(0);
-  const [restoreIndex, setRestoreIndex] = useState<number | null>(null);
+  const [restoreAbsoluteIndex, setRestoreAbsoluteIndex] = useState<number | null>(null);
   const loadingPagesRef = useRef<Set<number>>(new Set());
   const hydratedSelectionRef = useRef(false);
 
   const storageKey = effectiveWorkspaceId ? `engui.gallery.lastViewed.${effectiveWorkspaceId}` : null;
 
-  const sortedPageNumbers = useMemo(() => Object.keys(pages).map(Number).sort((a, b) => a - b), [pages]);
-  const assets = useMemo(() => sortedPageNumbers.flatMap((page) => pages[page]?.assets || []), [pages, sortedPageNumbers]);
+  const loadedAssets = useMemo(() => {
+    const entries = Object.values(loadedPages)
+      .sort((a, b) => a.startIndex - b.startIndex)
+      .flatMap((page) => page.assets.map((asset, index) => ({ asset, absoluteIndex: page.startIndex + index })));
+
+    const seen = new Set<number>();
+    return entries.filter((entry) => {
+      if (seen.has(entry.absoluteIndex)) return false;
+      seen.add(entry.absoluteIndex);
+      return true;
+    });
+  }, [loadedPages]);
+
+  const itemsByAbsoluteIndex = useMemo(() => {
+    const next: Record<number, MobileGalleryAsset> = {};
+    for (const entry of loadedAssets) {
+      next[entry.absoluteIndex] = entry.asset;
+    }
+    return next;
+  }, [loadedAssets]);
+
+  const assetIndexMap = useMemo(() => {
+    const next: Record<string, number> = {};
+    for (const entry of loadedAssets) {
+      next[entry.asset.id] = entry.absoluteIndex;
+    }
+    return next;
+  }, [loadedAssets]);
+
+  const loadedViewerItems = useMemo(
+    () => loadedAssets.map((entry) => ({
+      id: entry.asset.id,
+      url: entry.asset.originalUrl,
+      favorited: entry.asset.favorited,
+      absoluteIndex: entry.absoluteIndex,
+    })),
+    [loadedAssets],
+  );
 
   const fetchPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }) => {
     if (!effectiveWorkspaceId) return null;
@@ -97,30 +132,40 @@ export function useMobileGalleryScreen() {
     return data;
   }, [effectiveWorkspaceId, query]);
 
-  const mergePage = useCallback((pageNumber: number, pageAssets: MobileGalleryAsset[]) => {
-    setPages((prev) => ({
+  const mergePage = useCallback((pageNumber: number, data: GalleryPageResponse) => {
+    if (!data.pagination) return;
+    const startIndex = (pageNumber - 1) * data.pagination.limit;
+    setLoadedPages((prev) => ({
       ...prev,
       [pageNumber]: {
         page: pageNumber,
-        assets: pageAssets,
+        startIndex,
+        assets: data.assets || [],
       },
     }));
+    setTotalCount(data.pagination.totalCount);
   }, []);
 
-  const loadSinglePage = useCallback(async (pageNumber: number, options?: { focusAssetId?: string | null }) => {
-    if (loadingPagesRef.current.has(pageNumber)) return null;
+  const loadPage = useCallback(async (pageNumber: number, options?: { focusAssetId?: string | null }) => {
+    if (pageNumber < 1 || loadingPagesRef.current.has(pageNumber)) return null;
     loadingPagesRef.current.add(pageNumber);
     try {
-      return await fetchPage(pageNumber, options);
+      const data = await fetchPage(pageNumber, options);
+      if (data?.pagination) {
+        mergePage(data.pagination.page || pageNumber, data);
+      }
+      return data;
     } finally {
       loadingPagesRef.current.delete(pageNumber);
     }
-  }, [fetchPage]);
+  }, [fetchPage, mergePage]);
 
-  const hydrateInitialWindow = useCallback(async () => {
+  const hydrateInitialState = useCallback(async () => {
     if (!effectiveWorkspaceId) {
-      setPages({});
+      setLoadedPages({});
+      setTotalCount(0);
       setSelectedAssetId(null);
+      setSelectedAbsoluteIndex(null);
       hydratedSelectionRef.current = true;
       return;
     }
@@ -132,75 +177,50 @@ export function useMobileGalleryScreen() {
         ? window.localStorage.getItem(storageKey)
         : null;
 
-      const focusData = await loadSinglePage(1, { focusAssetId: savedSelection });
-      if (!focusData) return;
+      setLoadedPages({});
+      const focusData = await loadPage(1, { focusAssetId: savedSelection });
+      if (!focusData?.pagination) return;
 
-      const focusPage = focusData.pagination?.page || 1;
-      const requests: Promise<GalleryPageResponse | null>[] = [];
-      const pageWindow = new Set<number>([focusPage]);
-      if (focusData.pagination?.hasPrevPage && focusPage > 1) pageWindow.add(focusPage - 1);
-      if (focusData.pagination?.hasNextPage) pageWindow.add(focusPage + 1);
+      const focusPage = focusData.focus?.found && focusData.focus.page ? focusData.focus.page : focusData.pagination.page;
+      const pagesToLoad = new Set<number>([focusPage]);
+      if (focusPage > 1) pagesToLoad.add(focusPage - 1);
+      if (focusPage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 1);
 
-      for (const pageNumber of Array.from(pageWindow).sort((a, b) => a - b)) {
-        if (pageNumber === focusPage) {
-          requests.push(Promise.resolve(focusData));
-        } else {
-          requests.push(loadSinglePage(pageNumber));
-        }
-      }
-
-      const loaded = (await Promise.all(requests)).filter((entry): entry is GalleryPageResponse => !!entry);
-      const nextPages: Record<number, LoadedGalleryPage> = {};
-      let localHasPrevPage = Boolean(focusData.pagination?.hasPrevPage);
-      let localHasNextPage = Boolean(focusData.pagination?.hasNextPage);
-      let localLowestPage = focusPage;
-      let localHighestPage = focusPage;
-
-      for (const result of loaded) {
-        const pageNumber = result.pagination?.page || focusPage;
-        nextPages[pageNumber] = {
-          page: pageNumber,
-          assets: result.assets || [],
-        };
-        localHasPrevPage = localHasPrevPage || Boolean(result.pagination?.hasPrevPage);
-        localHasNextPage = localHasNextPage || Boolean(result.pagination?.hasNextPage);
-        localLowestPage = Math.min(localLowestPage, pageNumber);
-        localHighestPage = Math.max(localHighestPage, pageNumber);
-      }
-
-      setPages(nextPages);
-      setLowestPage(localLowestPage);
-      setHighestPage(localHighestPage);
-      setHasPrevPage(localHasPrevPage && localLowestPage > 1);
-      setHasNextPage(localHasNextPage);
+      await Promise.all(
+        Array.from(pagesToLoad)
+          .filter((page) => page !== focusData.pagination?.page)
+          .map((page) => loadPage(page)),
+      );
 
       const focusedAssetId = focusData.focus?.found ? focusData.focus.assetId : null;
-      const firstPageAssets = nextPages[localLowestPage]?.assets || [];
-      const firstAssetId = firstPageAssets[0]?.id || null;
-      const nextSelectedAssetId = focusedAssetId || savedSelection || firstAssetId;
-      setSelectedAssetId(nextSelectedAssetId);
-      hydratedSelectionRef.current = true;
+      const focusedAbsoluteIndex = focusData.focus?.found ? focusData.focus.absoluteIndex : null;
+      const fallbackAssetId = (focusData.assets || [])[0]?.id || null;
+      const fallbackAbsoluteIndex = (focusData.assets || []).length > 0 ? (focusPage - 1) * focusData.pagination.limit : null;
 
-      if (focusedAssetId) {
-        const assembledAssets = Object.keys(nextPages).map(Number).sort((a, b) => a - b).flatMap((page) => nextPages[page].assets);
-        const focusedIndex = assembledAssets.findIndex((asset) => asset.id === focusedAssetId);
-        setRestoreIndex(focusedIndex >= 0 ? focusedIndex : null);
+      setSelectedAssetId(focusedAssetId || savedSelection || fallbackAssetId);
+      setSelectedAbsoluteIndex(typeof focusedAbsoluteIndex === 'number' ? focusedAbsoluteIndex : fallbackAbsoluteIndex);
+
+      if (typeof focusedAbsoluteIndex === 'number') {
+        setRestoreAbsoluteIndex(focusedAbsoluteIndex);
         setRestoreTick((value) => value + 1);
       } else {
-        setRestoreIndex(null);
+        setRestoreAbsoluteIndex(null);
       }
+
+      hydratedSelectionRef.current = true;
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
-      setPages({});
+      setLoadedPages({});
+      setTotalCount(0);
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveWorkspaceId, loadSinglePage, query, storageKey]);
+  }, [effectiveWorkspaceId, loadPage, query, storageKey]);
 
   useEffect(() => {
     hydratedSelectionRef.current = false;
-    void hydrateInitialWindow();
-  }, [hydrateInitialWindow]);
+    void hydrateInitialState();
+  }, [hydrateInitialState]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
@@ -209,104 +229,100 @@ export function useMobileGalleryScreen() {
 
   useEffect(() => {
     const handleGalleryAssetChanged = () => {
-      void hydrateInitialWindow();
+      void hydrateInitialState();
     };
 
     window.addEventListener('galleryAssetChanged', handleGalleryAssetChanged);
     return () => window.removeEventListener('galleryAssetChanged', handleGalleryAssetChanged);
-  }, [hydrateInitialWindow]);
+  }, [hydrateInitialState]);
+
+  const ensureRangeLoaded = useCallback(async (startIndex: number, endIndex: number) => {
+    if (totalCount <= 0) return;
+    const safeStart = Math.max(0, startIndex);
+    const safeEnd = Math.min(totalCount - 1, endIndex);
+    if (safeEnd < safeStart) return;
+
+    const firstPage = Math.floor(safeStart / PAGE_SIZE) + 1;
+    const lastPage = Math.floor(safeEnd / PAGE_SIZE) + 1;
+    const missingPages: number[] = [];
+
+    for (let page = firstPage; page <= lastPage; page += 1) {
+      if (!loadedPages[page] && !loadingPagesRef.current.has(page)) {
+        missingPages.push(page);
+      }
+    }
+
+    if (missingPages.length === 0) return;
+
+    setIsLoadingMore(true);
+    try {
+      await Promise.all(missingPages.map((page) => loadPage(page)));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery range');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [loadPage, loadedPages, totalCount]);
 
   const refresh = useCallback(async () => {
-    await hydrateInitialWindow();
-  }, [hydrateInitialWindow]);
-
-  const loadNextPage = useCallback(async () => {
-    if (!hasNextPage || isLoading || isLoadingMore) return;
-    const nextPage = highestPage + 1;
-    if (loadingPagesRef.current.has(nextPage)) return;
-
-    setIsLoadingMore(true);
-    try {
-      const data = await loadSinglePage(nextPage);
-      if (!data) return;
-      const resolvedPage = data.pagination?.page || nextPage;
-      mergePage(resolvedPage, data.assets || []);
-      setHighestPage((prev) => Math.max(prev, resolvedPage));
-      setHasNextPage(Boolean(data.pagination?.hasNextPage));
-    } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load more gallery items');
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [hasNextPage, highestPage, isLoading, isLoadingMore, loadSinglePage, mergePage]);
-
-  const loadPreviousPage = useCallback(async () => {
-    if (!hasPrevPage || isLoading || isLoadingMore) return;
-    const nextPage = lowestPage - 1;
-    if (nextPage < 1 || loadingPagesRef.current.has(nextPage)) return;
-
-    setIsLoadingMore(true);
-    try {
-      const data = await loadSinglePage(nextPage);
-      if (!data) return;
-      const resolvedPage = data.pagination?.page || nextPage;
-      mergePage(resolvedPage, data.assets || []);
-      setLowestPage((prev) => Math.min(prev, resolvedPage));
-      setHasPrevPage(Boolean(data.pagination?.hasPrevPage) && resolvedPage > 1);
-    } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load previous gallery items');
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [hasPrevPage, isLoading, isLoadingMore, loadSinglePage, lowestPage, mergePage]);
+    await hydrateInitialState();
+  }, [hydrateInitialState]);
 
   const selectedAsset = useMemo(
-    () => assets.find((asset) => asset.id === selectedAssetId) || null,
-    [assets, selectedAssetId],
+    () => (selectedAbsoluteIndex !== null ? itemsByAbsoluteIndex[selectedAbsoluteIndex] || null : null),
+    [itemsByAbsoluteIndex, selectedAbsoluteIndex],
   );
 
-  const selectAsset = useCallback((asset: MobileGalleryAsset | null) => {
+  const selectAsset = useCallback((asset: MobileGalleryAsset | null, absoluteIndex?: number | null) => {
     setSelectedAssetId(asset?.id || null);
-  }, []);
+    setSelectedAbsoluteIndex(typeof absoluteIndex === 'number' ? absoluteIndex : asset ? assetIndexMap[asset.id] ?? null : null);
+  }, [assetIndexMap]);
 
   const openViewer = useCallback((assetId?: string | null) => {
     const resolvedAssetId = assetId || selectedAssetId;
     if (!resolvedAssetId) return;
-    const index = assets.findIndex((asset) => asset.id === resolvedAssetId);
+    const index = loadedViewerItems.findIndex((asset) => asset.id === resolvedAssetId);
     if (index < 0) return;
     setSelectedAssetId(resolvedAssetId);
+    setSelectedAbsoluteIndex(loadedViewerItems[index]?.absoluteIndex ?? null);
     setViewerIndex(index);
     setViewerOpen(true);
-  }, [assets, selectedAssetId]);
+  }, [loadedViewerItems, selectedAssetId]);
 
   const closeViewer = useCallback(() => {
     setViewerOpen(false);
-    setRestoreIndex(assets.findIndex((asset) => asset.id === selectedAssetId));
-    setRestoreTick((value) => value + 1);
-  }, [assets, selectedAssetId]);
+    if (selectedAbsoluteIndex !== null) {
+      setRestoreAbsoluteIndex(selectedAbsoluteIndex);
+      setRestoreTick((value) => value + 1);
+    }
+  }, [selectedAbsoluteIndex]);
 
   const updateViewerIndex = useCallback((index: number) => {
-    const asset = assets[index];
+    const asset = loadedViewerItems[index];
     if (!asset) return;
     setViewerIndex(index);
     setSelectedAssetId(asset.id);
-  }, [assets]);
+    setSelectedAbsoluteIndex(asset.absoluteIndex);
+  }, [loadedViewerItems]);
 
-  const handleTilePress = useCallback((asset: MobileGalleryAsset) => {
+  const handleTilePress = useCallback((asset: MobileGalleryAsset, absoluteIndex: number) => {
     if (selectedAssetId === asset.id) {
       openViewer(asset.id);
       return;
     }
     setSelectedAssetId(asset.id);
+    setSelectedAbsoluteIndex(absoluteIndex);
   }, [openViewer, selectedAssetId]);
 
-  const updateAsset = useCallback((assetId: string, updater: (asset: MobileGalleryAsset) => MobileGalleryAsset | null) => {
-    setPages((prev) => {
+  const updateLoadedAsset = useCallback((assetId: string, updater: (asset: MobileGalleryAsset) => MobileGalleryAsset | null) => {
+    setLoadedPages((prev) => {
       const next: Record<number, LoadedGalleryPage> = {};
       for (const [pageKey, pageData] of Object.entries(prev)) {
         next[Number(pageKey)] = {
           ...pageData,
-          assets: pageData.assets.map((asset) => asset.id === assetId ? updater(asset) : asset).filter((asset): asset is MobileGalleryAsset => asset !== null),
+          assets: pageData.assets
+            .map((asset) => (asset.id === assetId ? updater(asset) : asset))
+            .filter((asset): asset is MobileGalleryAsset => asset !== null),
         };
       }
       return next;
@@ -314,11 +330,12 @@ export function useMobileGalleryScreen() {
   }, []);
 
   const toggleFavorite = useCallback(async (assetId: string) => {
-    const asset = assets.find((entry) => entry.id === assetId);
+    const absoluteIndex = assetIndexMap[assetId];
+    const asset = typeof absoluteIndex === 'number' ? itemsByAbsoluteIndex[absoluteIndex] : null;
     if (!asset) return false;
     const nextFavorited = !asset.favorited;
 
-    updateAsset(assetId, (current) => ({ ...current, favorited: nextFavorited }));
+    updateLoadedAsset(assetId, (current) => ({ ...current, favorited: nextFavorited }));
     try {
       const response = await fetch(`/api/gallery/assets/${assetId}/favorite`, {
         method: 'POST',
@@ -328,14 +345,15 @@ export function useMobileGalleryScreen() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to update favorite');
       return nextFavorited;
-    } catch (error) {
-      updateAsset(assetId, (current) => ({ ...current, favorited: asset.favorited }));
-      throw error;
+    } catch (fetchError) {
+      updateLoadedAsset(assetId, (current) => ({ ...current, favorited: asset.favorited }));
+      throw fetchError;
     }
-  }, [assets, updateAsset]);
+  }, [assetIndexMap, itemsByAbsoluteIndex, updateLoadedAsset]);
 
   const toggleTrash = useCallback(async (assetId: string) => {
-    const asset = assets.find((entry) => entry.id === assetId);
+    const absoluteIndex = assetIndexMap[assetId];
+    const asset = typeof absoluteIndex === 'number' ? itemsByAbsoluteIndex[absoluteIndex] : null;
     if (!asset) return;
     const nextTrashed = !asset.trashed;
 
@@ -348,29 +366,31 @@ export function useMobileGalleryScreen() {
     if (!response.ok || !data.success) throw new Error(data.error || 'Failed to update trash state');
 
     if (nextTrashed) {
-      updateAsset(assetId, () => null);
+      updateLoadedAsset(assetId, () => null);
       if (selectedAssetId === assetId) {
-        const remaining = assets.filter((entry) => entry.id !== assetId);
-        setSelectedAssetId(remaining[0]?.id || null);
+        setSelectedAssetId(null);
+        setSelectedAbsoluteIndex(null);
       }
     } else {
-      updateAsset(assetId, (current) => ({ ...current, trashed: false }));
+      updateLoadedAsset(assetId, (current) => ({ ...current, trashed: false }));
     }
-  }, [assets, selectedAssetId, updateAsset]);
+  }, [assetIndexMap, itemsByAbsoluteIndex, selectedAssetId, updateLoadedAsset]);
 
   return {
-    assets,
+    totalCount,
+    pageSize: PAGE_SIZE,
+    itemsByAbsoluteIndex,
+    loadedAssets,
+    loadedViewerItems,
     isLoading,
     isLoadingMore,
     error,
     query,
     setQuery,
     refresh,
-    hasNextPage,
-    hasPrevPage,
-    loadNextPage,
-    loadPreviousPage,
+    ensureRangeLoaded,
     selectedAssetId,
+    selectedAbsoluteIndex,
     selectedAsset,
     selectAsset,
     handleTilePress,
@@ -382,7 +402,7 @@ export function useMobileGalleryScreen() {
     toggleFavorite,
     toggleTrash,
     restoreTick,
-    restoreIndex,
+    restoreAbsoluteIndex,
     workspaceId: effectiveWorkspaceId,
     hydratedSelection: hydratedSelectionRef.current,
   };

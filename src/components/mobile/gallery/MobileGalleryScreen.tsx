@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart, Info, Loader2, Play, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -66,26 +66,31 @@ function TileOverlayActions({
   );
 }
 
+function PlaceholderTile() {
+  return (
+    <div className="relative aspect-square w-full overflow-hidden bg-zinc-950">
+      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-transparent" />
+    </div>
+  );
+}
+
 export default function MobileGalleryScreen() {
   const router = useRouter();
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const prevTopRowRequestRef = useRef<number | null>(null);
-  const prevBottomRowRequestRef = useRef<number | null>(null);
-  const prependCompensationRef = useRef<{ previousAssetCount: number } | null>(null);
-  const suppressTopLoadUntilRef = useRef(0);
+  const restoreHandledTickRef = useRef<number>(0);
   const {
-    assets,
+    totalCount,
+    itemsByAbsoluteIndex,
+    loadedViewerItems,
     isLoading,
     isLoadingMore,
     error,
     query,
     setQuery,
     refresh,
-    hasNextPage,
-    hasPrevPage,
-    loadNextPage,
-    loadPreviousPage,
+    ensureRangeLoaded,
     selectedAssetId,
+    selectedAbsoluteIndex,
     handleTilePress,
     viewerOpen,
     viewerIndex,
@@ -94,15 +99,10 @@ export default function MobileGalleryScreen() {
     toggleFavorite,
     toggleTrash,
     restoreTick,
-    restoreIndex,
+    restoreAbsoluteIndex,
   } = useMobileGalleryScreen();
 
-  const selectedIndex = useMemo(
-    () => (selectedAssetId ? assets.findIndex((asset) => asset.id === selectedAssetId) : -1),
-    [assets, selectedAssetId],
-  );
-
-  const rowCount = Math.ceil(assets.length / 3);
+  const rowCount = Math.ceil(totalCount / 3);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
@@ -113,66 +113,30 @@ export default function MobileGalleryScreen() {
   const virtualRows = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
-    rowVirtualizer.measure();
-  }, [assets.length, rowVirtualizer]);
-
-  useLayoutEffect(() => {
-    const pendingCompensation = prependCompensationRef.current;
-    const scrollElement = parentRef.current;
-    if (!pendingCompensation || !scrollElement) return;
-    if (assets.length <= pendingCompensation.previousAssetCount) return;
-
-    const addedItems = assets.length - pendingCompensation.previousAssetCount;
-    const addedRows = Math.ceil(addedItems / 3);
-    const rowHeight = scrollElement.clientWidth / 3;
-    const delta = addedRows * rowHeight;
-    if (delta > 0) {
-      scrollElement.scrollTop += delta;
-    }
-    prependCompensationRef.current = null;
-  }, [assets.length]);
+    if (virtualRows.length === 0 || totalCount === 0) return;
+    const firstRow = Math.max(0, virtualRows[0]?.index ?? 0);
+    const lastRow = Math.max(firstRow, virtualRows[virtualRows.length - 1]?.index ?? 0);
+    const startIndex = Math.max(0, firstRow * 3 - 18);
+    const endIndex = Math.min(totalCount - 1, ((lastRow + 1) * 3) + 18);
+    void ensureRangeLoaded(startIndex, endIndex);
+  }, [ensureRangeLoaded, totalCount, virtualRows]);
 
   useEffect(() => {
-    const nextIndex = typeof restoreIndex === 'number' && restoreIndex >= 0 ? restoreIndex : selectedIndex;
-    if (nextIndex < 0) return;
-    if (!viewerOpen && restoreTick > 0) {
-      suppressTopLoadUntilRef.current = Date.now() + 1200;
-      rowVirtualizer.scrollToIndex(Math.floor(nextIndex / 3), { align: 'center' });
-    }
-  }, [restoreIndex, restoreTick, rowVirtualizer, selectedIndex, viewerOpen]);
-
-  useEffect(() => {
-    if (virtualRows.length === 0) return;
-    const firstRow = virtualRows[0]?.index ?? 0;
-    const lastRow = virtualRows[virtualRows.length - 1]?.index ?? 0;
-
-    const canAutoLoadTop = Date.now() >= suppressTopLoadUntilRef.current;
-
-    if (hasPrevPage && canAutoLoadTop && firstRow <= 2 && prevTopRowRequestRef.current !== firstRow) {
-      prevTopRowRequestRef.current = firstRow;
-      prependCompensationRef.current = {
-        previousAssetCount: assets.length,
-      };
-      void loadPreviousPage();
-    }
-
-    if (!hasPrevPage) {
-      prevTopRowRequestRef.current = null;
-    }
-
-    if (hasNextPage && rowCount > 0 && lastRow >= rowCount - 3 && prevBottomRowRequestRef.current !== lastRow) {
-      prevBottomRowRequestRef.current = lastRow;
-      void loadNextPage();
-    }
-
-    if (!hasNextPage) {
-      prevBottomRowRequestRef.current = null;
-    }
-  }, [assets.length, hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, virtualRows]);
+    if (restoreTick <= 0 || restoreHandledTickRef.current === restoreTick) return;
+    if (typeof restoreAbsoluteIndex !== 'number' || restoreAbsoluteIndex < 0) return;
+    restoreHandledTickRef.current = restoreTick;
+    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / 3), { align: 'center' });
+    void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 24), restoreAbsoluteIndex + 24);
+  }, [ensureRangeLoaded, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
   };
+
+  const selectedLoadedViewerIndex = useMemo(() => {
+    if (!selectedAssetId) return -1;
+    return loadedViewerItems.findIndex((entry) => entry.id === selectedAssetId);
+  }, [loadedViewerItems, selectedAssetId]);
 
   return (
     <MobileScreen>
@@ -205,33 +169,43 @@ export default function MobileGalleryScreen() {
 
         {error ? <div className="mx-4 mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div> : null}
 
-        {!isLoading && !error && assets.length === 0 ? (
+        {!isLoading && !error && totalCount === 0 ? (
           <div className="mx-4 rounded-lg border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
             No gallery assets yet for the current workspace.
           </div>
         ) : null}
 
-        {!isLoading && assets.length > 0 ? (
+        {!isLoading && totalCount > 0 ? (
           <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
             <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
               {virtualRows.map((virtualRow) => {
                 const rowStart = virtualRow.index * 3;
-                const rowAssets = assets.slice(rowStart, rowStart + 3);
                 return (
                   <div
                     key={virtualRow.key}
                     className="absolute left-0 top-0 grid w-full grid-cols-3"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    {rowAssets.map((asset) => {
-                      const isSelected = selectedAssetId === asset.id;
+                    {Array.from({ length: 3 }).map((_, columnIndex) => {
+                      const absoluteIndex = rowStart + columnIndex;
+                      if (absoluteIndex >= totalCount) {
+                        return <div key={`empty-${absoluteIndex}`} className="aspect-square bg-black" />;
+                      }
+
+                      const asset = itemsByAbsoluteIndex[absoluteIndex];
+                      if (!asset) {
+                        return <PlaceholderTile key={`placeholder-${absoluteIndex}`} />;
+                      }
+
+                      const isSelected = selectedAbsoluteIndex === absoluteIndex || selectedAssetId === asset.id;
                       const mediaUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
+
                       return (
                         <button
                           key={asset.id}
                           type="button"
                           data-gallery-asset-id={asset.id}
-                          onClick={() => handleTilePress(asset)}
+                          onClick={() => handleTilePress(asset, absoluteIndex)}
                           className="relative block aspect-square w-full overflow-hidden bg-black"
                         >
                           {asset.type === 'video' ? (
@@ -261,11 +235,6 @@ export default function MobileGalleryScreen() {
                         </button>
                       );
                     })}
-                    {rowAssets.length < 3
-                      ? Array.from({ length: 3 - rowAssets.length }).map((_, index) => (
-                          <div key={`empty-${virtualRow.index}-${index}`} className="aspect-square bg-black" />
-                        ))
-                      : null}
                   </div>
                 );
               })}
@@ -282,18 +251,21 @@ export default function MobileGalleryScreen() {
 
       <GalleryFullscreenViewer
         open={viewerOpen}
-        items={assets.map((asset) => ({
+        items={loadedViewerItems.map((asset) => ({
           id: asset.id,
-          url: asset.originalUrl,
+          url: asset.url,
           favorited: asset.favorited,
         }))}
-        currentIndex={viewerIndex}
+        currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
         onClose={closeViewer}
         onOpenInfo={(itemId) => {
-          const asset = assets.find((entry) => entry.id === itemId);
+          const asset = loadedViewerItems.find((entry) => entry.id === itemId);
           if (asset) {
-            openAssetInfo(asset);
+            const resolvedAsset = Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === asset.id);
+            if (resolvedAsset) {
+              openAssetInfo(resolvedAsset);
+            }
           }
         }}
         onToggleFavorite={toggleFavorite}
