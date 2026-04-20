@@ -35,14 +35,35 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
 
     Object.keys(parsedOptions).forEach((key) => {
       if (!key.includes('_path') && key !== 'runpodJobId' && key !== 'error') {
+        if (modelId === 'z-image' && key === 'lora') {
+          return;
+        }
         parameterValues[key] = parsedOptions[key];
       }
     });
 
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
 
-    if (modelId === 'z-image' && !primaryImagePath) {
-      parameterValues.use_controlnet = false;
+    if (modelId === 'z-image') {
+      if (typeof parsedOptions.zImageLora === 'string' && parsedOptions.zImageLora.trim() !== '') {
+        parameterValues.lora = parsedOptions.zImageLora;
+      } else if (Array.isArray(parsedOptions.lora) && Array.isArray(parsedOptions.lora[0])) {
+        const [loraName, loraWeight] = parsedOptions.lora[0];
+        if (typeof loraName === 'string' && loraName.trim() !== '') {
+          parameterValues.lora = loraName;
+        }
+        if (typeof loraWeight === 'number' && Number.isFinite(loraWeight)) {
+          parameterValues.loraWeight = loraWeight;
+        }
+      }
+
+      if (typeof parsedOptions.zImageLoraWeight === 'number' && Number.isFinite(parsedOptions.zImageLoraWeight)) {
+        parameterValues.loraWeight = parsedOptions.zImageLoraWeight;
+      }
+
+      if (!primaryImagePath) {
+        parameterValues.use_controlnet = false;
+      }
     }
 
     const secondaryImagePath = parsedOptions.image_path_2;
