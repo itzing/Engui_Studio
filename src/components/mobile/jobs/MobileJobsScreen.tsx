@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
+import { FolderPlus, Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { useMobileJobsScreen, type MobileJobsScreenItem } from '@/hooks/jobs/useMobileJobsScreen';
+import type { MobileJobDetail } from '@/hooks/jobs/useMobileJobDetails';
 
 function timeAgo(timestamp: number) {
   const diff = Date.now() - timestamp;
@@ -134,6 +135,8 @@ export default function MobileJobsScreen() {
     upscaleJob,
   } = useMobileJobsScreen();
 
+  const [viewerJobDetail, setViewerJobDetail] = useState<MobileJobDetail | null>(null);
+
   const rowVirtualizer = useVirtualizer({
     count: totalCount,
     getScrollElement: () => parentRef.current,
@@ -162,6 +165,38 @@ export default function MobileJobsScreen() {
     if (!selectedJobId) return -1;
     return loadedViewerItems.findIndex((entry) => entry.id === selectedJobId);
   }, [loadedViewerItems, selectedJobId]);
+
+  const activeViewerItemId = (selectedLoadedViewerIndex >= 0 ? loadedViewerItems[selectedLoadedViewerIndex]?.id : loadedViewerItems[viewerIndex]?.id) || null;
+  const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
+  const canAddToGallery = !!viewerJobDetail && !!viewerOutput && !viewerOutput.alreadyInGallery;
+  const canUpscale = viewerJobDetail ? (viewerJobDetail.type === 'image' || viewerJobDetail.type === 'video') : false;
+
+  useEffect(() => {
+    if (!viewerOpen || !activeViewerItemId) {
+      setViewerJobDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadViewerJobDetail = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${activeViewerItemId}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!cancelled) {
+          setViewerJobDetail(response.ok && data.success && data.job ? data.job : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setViewerJobDetail(null);
+        }
+      }
+    };
+
+    void loadViewerJobDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeViewerItemId, viewerOpen]);
 
   return (
     <MobileScreen>
@@ -305,6 +340,62 @@ export default function MobileJobsScreen() {
         onOpenInfo={(itemId) => {
           router.push(`/m/jobs/${itemId}`);
         }}
+        renderHeaderActions={(itemId) => (
+          <>
+            {canAddToGallery && viewerJobDetail?.id === itemId ? (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                onClick={async () => {
+                  if (!viewerOutput) return;
+                  const response = await fetch('/api/gallery/assets/from-job-output', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobId: itemId, outputId: viewerOutput.outputId }),
+                  });
+                  const data = await response.json();
+                  if (response.ok && data.success) {
+                    setViewerJobDetail((prev) => prev ? {
+                      ...prev,
+                      outputs: prev.outputs.map((output, index) => index === 0 ? {
+                        ...output,
+                        alreadyInGallery: true,
+                        galleryAssetId: data.asset?.id || output.galleryAssetId,
+                      } : output),
+                    } : prev);
+                  }
+                }}
+                aria-label="Add job output to gallery"
+                title="Add to Gallery"
+              >
+                <FolderPlus className="w-5 h-5" />
+              </Button>
+            ) : null}
+            {canUpscale && viewerJobDetail?.id === itemId ? (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                onClick={async () => {
+                  const response = await fetch('/api/upscale', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobId: itemId, type: viewerJobDetail.type }),
+                  });
+                  const data = await response.json();
+                  if (response.ok && data.success) {
+                    await refresh();
+                  }
+                }}
+                aria-label="Upscale job"
+                title="Upscale"
+              >
+                <Wand2 className="w-5 h-5" />
+              </Button>
+            ) : null}
+          </>
+        )}
       />
     </MobileScreen>
   );

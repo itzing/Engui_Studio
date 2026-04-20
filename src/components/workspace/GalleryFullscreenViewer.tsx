@@ -18,6 +18,7 @@ interface GalleryFullscreenViewerProps {
   onClose: () => void;
   onOpenInfo?: (itemId: string) => void;
   onToggleFavorite?: (itemId: string) => Promise<boolean | void>;
+  renderHeaderActions?: (itemId: string) => React.ReactNode;
 }
 
 type Point = { x: number; y: number };
@@ -68,7 +69,7 @@ function getTouchMidpoint(first: Touch, second: Touch): Point {
   };
 }
 
-export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onOpenInfo, onToggleFavorite }: GalleryFullscreenViewerProps) {
+export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onOpenInfo, onToggleFavorite, renderHeaderActions }: GalleryFullscreenViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -415,18 +416,21 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     >
       {showCloseButton && (
         <>
-          {onOpenInfo && currentItem?.id && (
-            <div className="absolute left-3 z-10" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                onClick={() => onOpenInfo(currentItem.id)}
-                aria-label="Open gallery item info"
-                title="Info"
-              >
-                <Info className="w-5 h-5" />
-              </Button>
+          {(onOpenInfo || renderHeaderActions) && currentItem?.id && (
+            <div className="absolute left-3 z-10 flex items-center gap-2" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
+              {onOpenInfo ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={() => onOpenInfo(currentItem.id)}
+                  aria-label="Open gallery item info"
+                  title="Info"
+                >
+                  <Info className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {renderHeaderActions ? renderHeaderActions(currentItem.id) : null}
             </div>
           )}
           <div className="absolute right-3 z-10" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
