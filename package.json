@@ -32,6 +32,7 @@
     "@remotion/player": "^4.0.379",
     "@remotion/preload": "^4.0.379",
     "@remotion/renderer": "^4.0.379",
+    "@tanstack/react-virtual": "^3.13.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.543.0",

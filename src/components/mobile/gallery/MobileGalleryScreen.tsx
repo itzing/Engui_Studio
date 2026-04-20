@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart, Info, Loader2, Play, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { VirtuosoGrid, type VirtuosoGridHandle } from 'react-virtuoso';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -68,8 +68,10 @@ function TileOverlayActions({
 
 export default function MobileGalleryScreen() {
   const router = useRouter();
-  const gridRef = useRef<VirtuosoGridHandle | null>(null);
+  const parentRef = useRef<HTMLDivElement | null>(null);
   const lastViewerOpenRef = useRef(false);
+  const prevTopRowRequestRef = useRef<number | null>(null);
+  const prevBottomRowRequestRef = useRef<number | null>(null);
   const {
     assets,
     isLoading,
@@ -99,13 +101,27 @@ export default function MobileGalleryScreen() {
     [assets, selectedAssetId],
   );
 
+  const rowCount = Math.ceil(assets.length / 3);
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 128,
+    overscan: 6,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [assets.length, rowVirtualizer]);
+
   useEffect(() => {
     const nextIndex = typeof restoreIndex === 'number' && restoreIndex >= 0 ? restoreIndex : selectedIndex;
     if (nextIndex < 0) return;
     if (!viewerOpen && restoreTick > 0) {
-      gridRef.current?.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'auto' });
+      rowVirtualizer.scrollToIndex(Math.floor(nextIndex / 3), { align: 'center' });
     }
-  }, [restoreIndex, restoreTick, selectedIndex, viewerOpen]);
+  }, [restoreIndex, restoreTick, rowVirtualizer, selectedIndex, viewerOpen]);
 
   useEffect(() => {
     if (viewerOpen) {
@@ -114,10 +130,34 @@ export default function MobileGalleryScreen() {
     }
 
     if (lastViewerOpenRef.current && selectedIndex >= 0) {
-      gridRef.current?.scrollToIndex({ index: selectedIndex, align: 'center', behavior: 'auto' });
+      rowVirtualizer.scrollToIndex(Math.floor(selectedIndex / 3), { align: 'center' });
     }
     lastViewerOpenRef.current = false;
-  }, [selectedIndex, viewerOpen]);
+  }, [rowVirtualizer, selectedIndex, viewerOpen]);
+
+  useEffect(() => {
+    if (virtualRows.length === 0) return;
+    const firstRow = virtualRows[0]?.index ?? 0;
+    const lastRow = virtualRows[virtualRows.length - 1]?.index ?? 0;
+
+    if (hasPrevPage && firstRow <= 2 && prevTopRowRequestRef.current !== firstRow) {
+      prevTopRowRequestRef.current = firstRow;
+      void loadPreviousPage();
+    }
+
+    if (!hasPrevPage) {
+      prevTopRowRequestRef.current = null;
+    }
+
+    if (hasNextPage && rowCount > 0 && lastRow >= rowCount - 3 && prevBottomRowRequestRef.current !== lastRow) {
+      prevBottomRowRequestRef.current = lastRow;
+      void loadNextPage();
+    }
+
+    if (!hasNextPage) {
+      prevBottomRowRequestRef.current = null;
+    }
+  }, [hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, virtualRows]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
@@ -161,66 +201,64 @@ export default function MobileGalleryScreen() {
         ) : null}
 
         {!isLoading && assets.length > 0 ? (
-          <div className="min-h-0 flex-1">
-            <VirtuosoGrid
-              ref={gridRef}
-              style={{ height: '100%' }}
-              data={assets}
-              computeItemKey={(_, asset) => asset.id}
-              listClassName="flex flex-wrap content-start"
-              itemClassName="box-border flex-none w-1/3 p-0"
-              increaseViewportBy={{ top: 500, bottom: 900 }}
-              overscan={{ main: 700, reverse: 400 }}
-              startReached={() => {
-                if (hasPrevPage) {
-                  void loadPreviousPage();
-                }
-              }}
-              endReached={() => {
-                if (hasNextPage) {
-                  void loadNextPage();
-                }
-              }}
-              itemContent={(_, asset) => {
-                const isSelected = selectedAssetId === asset.id;
-                const mediaUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
-
+          <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
+            <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+              {virtualRows.map((virtualRow) => {
+                const rowStart = virtualRow.index * 3;
+                const rowAssets = assets.slice(rowStart, rowStart + 3);
                 return (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    data-gallery-asset-id={asset.id}
-                    onClick={() => handleTilePress(asset)}
-                    className="relative block aspect-square w-full overflow-hidden bg-black"
+                  <div
+                    key={virtualRow.key}
+                    className="absolute left-0 top-0 grid w-full grid-cols-3"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    {asset.type === 'video' ? (
-                      <>
-                        <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white/85 backdrop-blur-sm">
-                            <Play className="ml-0.5 h-4 w-4 fill-current" />
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
-                    )}
+                    {rowAssets.map((asset) => {
+                      const isSelected = selectedAssetId === asset.id;
+                      const mediaUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
+                      return (
+                        <button
+                          key={asset.id}
+                          type="button"
+                          data-gallery-asset-id={asset.id}
+                          onClick={() => handleTilePress(asset)}
+                          className="relative block aspect-square w-full overflow-hidden bg-black"
+                        >
+                          {asset.type === 'video' ? (
+                            <>
+                              <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white/85 backdrop-blur-sm">
+                                  <Play className="ml-0.5 h-4 w-4 fill-current" />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
+                          )}
 
-                    {isSelected ? (
-                      <>
-                        <div className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-primary/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" />
-                        <TileOverlayActions
-                          asset={asset}
-                          onOpenInfo={openAssetInfo}
-                          onToggleFavorite={(entry) => void toggleFavorite(entry.id)}
-                          onToggleTrash={(entry) => void toggleTrash(entry.id)}
-                        />
-                      </>
-                    ) : null}
-                  </button>
+                          {isSelected ? (
+                            <>
+                              <div className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-primary/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" />
+                              <TileOverlayActions
+                                asset={asset}
+                                onOpenInfo={openAssetInfo}
+                                onToggleFavorite={(entry) => void toggleFavorite(entry.id)}
+                                onToggleTrash={(entry) => void toggleTrash(entry.id)}
+                              />
+                            </>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                    {rowAssets.length < 3
+                      ? Array.from({ length: 3 - rowAssets.length }).map((_, index) => (
+                          <div key={`empty-${virtualRow.index}-${index}`} className="aspect-square bg-black" />
+                        ))
+                      : null}
+                  </div>
                 );
-              }}
-            />
+              })}
+            </div>
           </div>
         ) : null}
 
