@@ -32,6 +32,25 @@ function formatExecution(executionMs?: number) {
   return `${minutes}m ${remSeconds}s`;
 }
 
+function formatJobStatus(status: MobileJobsScreenItem['status']) {
+  switch (status) {
+    case 'queueing_up':
+      return 'Queuing up';
+    case 'queued':
+      return 'In queue';
+    case 'processing':
+      return 'Running';
+    case 'finalizing':
+      return 'Finalizing';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    default:
+      return status;
+  }
+}
+
 function PlaceholderRow() {
   return <div className="h-[92px] rounded-xl border border-border/60 bg-muted/10 animate-pulse" />;
 }
@@ -157,7 +176,7 @@ const JobRow = React.memo(function JobRow({
             </div>
           </div>
           <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300' : job.status === 'failed' ? 'bg-red-500/10 text-red-300' : 'bg-blue-500/10 text-blue-300'}`}>
-            {job.status}
+            {formatJobStatus(job.status)}
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
