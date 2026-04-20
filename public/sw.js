@@ -1,11 +1,35 @@
-const CACHE_NAME = 'enguistudio-shell-v1';
+const CACHE_NAME = 'enguistudio-shell-v2';
 const APP_SHELL = [
   '/',
+  '/m/create',
   '/manifest.webmanifest',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/apple-touch-icon.png',
 ];
+
+const shouldCacheResponse = (request, response) => {
+  if (!response || response.status !== 200 || response.type !== 'basic') {
+    return false;
+  }
+
+  const url = new URL(request.url);
+  if (url.pathname.startsWith('/api/')) return false;
+  if (url.pathname.startsWith('/generations/')) return false;
+  if (url.pathname.startsWith('/results/')) return false;
+
+  return true;
+};
+
+const putInCache = async (request, response) => {
+  if (!shouldCacheResponse(request, response)) {
+    return response;
+  }
+
+  const cache = await caches.open(CACHE_NAME);
+  cache.put(request, response.clone()).catch(() => undefined);
+  return response;
+};
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -35,22 +59,20 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/'))
+      fetch(request)
+        .then((response) => putInCache(request, response))
+        .catch(async () => (await caches.match(request)) || caches.match('/m/create') || caches.match('/'))
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
-        return response;
-      });
-    })
+    fetch(request)
+      .then((response) => putInCache(request, response))
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw new Error(`Network request failed for ${url.pathname}`);
+      })
   );
 });

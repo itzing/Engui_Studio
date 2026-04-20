@@ -33,11 +33,12 @@ const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = '
 };
 
 export function useImageCreateState() {
-  const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
+  const { settings, addJob, activeWorkspaceId } = useStudio();
 
   const imageModels = useMemo(() => getModelsByType('image'), []);
   const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
 
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_IMAGE_MODEL);
   const [prompt, setPrompt] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [randomizeSeed, setRandomizeSeed] = useState(false);
@@ -170,11 +171,10 @@ export function useImageCreateState() {
   });
 
   useEffect(() => {
-    const nextModelId = selectedModel || DEFAULT_IMAGE_MODEL;
     if (!selectedModel || !imageModels.some((model) => model.id === selectedModel)) {
-      setSelectedModel(nextModelId);
+      setSelectedModel(DEFAULT_IMAGE_MODEL);
     }
-  }, [DEFAULT_IMAGE_MODEL, imageModels, selectedModel, setSelectedModel]);
+  }, [DEFAULT_IMAGE_MODEL, imageModels, selectedModel]);
 
   useEffect(() => {
     try {

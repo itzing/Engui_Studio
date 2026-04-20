@@ -27,7 +27,8 @@ import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDra
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
-    const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
+    const { settings, addJob, activeWorkspaceId } = useStudio();
+    const [selectedModel, setSelectedModel] = useState<string>('');
     const [prompt, setPrompt] = useState('');
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -133,7 +134,7 @@ export default function ImageGenerationForm() {
         }
     };
 
-    const { hydrateSnapshot } = useImageCreateDraftPersistence({
+    const { switchModel } = useImageCreateDraftPersistence({
         defaultModelId: DEFAULT_IMAGE_MODEL,
         selectedModel,
         setSelectedModel,
@@ -172,7 +173,7 @@ export default function ImageGenerationForm() {
                 setSelectedModel(imageModels[0].id);
             }
         }
-    }, [selectedModel, setSelectedModel, imageModels]);
+    }, [selectedModel, imageModels]);
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
@@ -871,7 +872,7 @@ export default function ImageGenerationForm() {
                                             key={model.id}
                                             type="button"
                                             onClick={() => {
-                                                setSelectedModel(model.id);
+                                                void switchModel(model.id, currentSnapshot);
                                                 setIsModelDropdownOpen(false);
                                             }}
                                             className={`w-full flex items-center justify-between px-3 py-2 transition-colors ${selectedModel === model.id
