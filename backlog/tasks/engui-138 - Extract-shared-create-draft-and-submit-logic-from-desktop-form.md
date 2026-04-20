@@ -1,7 +1,7 @@
 ---
 id: engui-138
 title: Extract shared create draft and submit logic from desktop form
-status: in_progress
+status: done
 priority: high
 labels: [mobile, desktop, shared-logic, forms]
 created_at: 2026-04-20
@@ -19,7 +19,7 @@ Desktop keeps the same UI, while mobile routes can consume shared hooks or servi
 
 ## Acceptance criteria
 
-- [ ] Shared create draft state is extracted from desktop-oriented components
+- [x] Shared create draft state is extracted from desktop-oriented components
 - [x] Shared submit logic is extracted from the current image create flow
 - [x] Scene apply and prompt helper actions are available through reusable hooks or services
 - [x] Desktop UI remains intentionally unchanged
@@ -27,10 +27,12 @@ Desktop keeps the same UI, while mobile routes can consume shared hooks or servi
 
 ## Progress notes
 
-Current extraction passes moved shared image-create services into `src/lib/create/*`:
+Completed extraction now covers both shared services and shared draft persistence orchestration:
 - `imageDraft.ts` for reusable image draft snapshot helpers
 - `imagePromptHelper.ts` for prompt-helper and vision-prompt-helper requests
 - `imageScenes.ts` for active-scene fetch/apply helpers
 - `submitImageGeneration.ts` for shared image submit pipeline with preview-url fallback loading
+- `useImageCreateDraftPersistence.ts` for shared image create draft hydration/persistence across desktop and mobile
+- `useImageCreateState.ts` continues to power the route-based mobile Create screens on top of the same shared draft layer
 
-A dedicated shared mobile image-create state hook now also exists at `src/hooks/create/useImageCreateState.ts`, and it powers the new route-based mobile Create screens. `ImageGenerationForm` already consumes the extracted shared submit/services layer while keeping the existing desktop UI intact. Remaining work for full completion is to move more of the desktop form’s live state orchestration itself onto the shared hook layer so desktop and mobile converge further.
+`ImageGenerationForm` now uses the shared draft persistence hook while preserving the existing desktop UI composition. Regression check: `npm run build` passed and `npm test -- tests/lib/create-drafts.test.ts` passed after the extraction.

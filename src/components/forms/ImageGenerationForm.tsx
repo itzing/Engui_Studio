@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/modelConfig';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import {
     type ImageCreateDraftSnapshot,
     createImageDraftSnapshot,
@@ -24,6 +23,7 @@ import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/
 import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import type { ScenePresetSummary } from '@/lib/scenes/types';
+import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
@@ -45,10 +45,6 @@ export default function ImageGenerationForm() {
     const formRef = useRef<HTMLDivElement>(null);
     const formElementRef = useRef<HTMLFormElement>(null);
     const imagePromptFileInputRef = useRef<HTMLInputElement>(null);
-    const hasRestoredDraftRef = useRef(false);
-    const isApplyingDraftModelRef = useRef(false);
-    const hydratedModelRef = useRef<string | null>(null);
-    const isHydratingDraftRef = useRef(false);
 
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -102,7 +98,7 @@ export default function ImageGenerationForm() {
         return new File([blob], filename, { type: blob.type || fallbackType });
     };
 
-    const buildCurrentSnapshot = (): ImageCreateDraftSnapshot => createImageDraftSnapshot({
+    const currentSnapshot = useMemo(() => createImageDraftSnapshot({
         prompt,
         showAdvanced,
         randomizeSeed,
@@ -110,65 +106,40 @@ export default function ImageGenerationForm() {
         previewUrl,
         previewUrl2,
         selectedSceneId,
-    });
+    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
 
     const applySnapshot = async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
-        isHydratingDraftRef.current = true;
-        try {
-            const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
+        const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
 
-            setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
-            setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
-            setRandomizeSeed(normalizeRandomizeSeed(snapshot?.randomizeSeed));
-            setParameterValues(mergedParameterValues);
+        setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
+        setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
+        setRandomizeSeed(normalizeRandomizeSeed(snapshot?.randomizeSeed));
+        setParameterValues(mergedParameterValues);
 
-            const nextPreviewUrl = typeof snapshot?.previewUrl === 'string' ? snapshot.previewUrl : '';
-            const nextPreviewUrl2 = typeof snapshot?.previewUrl2 === 'string' ? snapshot.previewUrl2 : '';
+        const nextPreviewUrl = typeof snapshot?.previewUrl === 'string' ? snapshot.previewUrl : '';
+        const nextPreviewUrl2 = typeof snapshot?.previewUrl2 === 'string' ? snapshot.previewUrl2 : '';
 
-            setPreviewUrl(nextPreviewUrl);
-            setPreviewUrl2(nextPreviewUrl2);
-            setSelectedSceneId(typeof snapshot?.selectedSceneId === 'string' ? snapshot.selectedSceneId : '');
-            setImageFile(null);
-            setImageFile2(null);
+        setPreviewUrl(nextPreviewUrl);
+        setPreviewUrl2(nextPreviewUrl2);
+        setSelectedSceneId(typeof snapshot?.selectedSceneId === 'string' ? snapshot.selectedSceneId : '');
+        setImageFile(null);
+        setImageFile2(null);
 
-            if (nextPreviewUrl.startsWith('data:')) {
-                setImageFile(await dataUrlToFile(nextPreviewUrl, 'image-input'));
-            }
-            if (nextPreviewUrl2.startsWith('data:')) {
-                setImageFile2(await dataUrlToFile(nextPreviewUrl2, 'image-input-2'));
-            }
-        } finally {
-            isHydratingDraftRef.current = false;
+        if (nextPreviewUrl.startsWith('data:')) {
+            setImageFile(await dataUrlToFile(nextPreviewUrl, 'image-input'));
+        }
+        if (nextPreviewUrl2.startsWith('data:')) {
+            setImageFile2(await dataUrlToFile(nextPreviewUrl2, 'image-input-2'));
         }
     };
 
-    useEffect(() => {
-        const modelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
-        isApplyingDraftModelRef.current = true;
-        setSelectedModel(modelId);
-        hasRestoredDraftRef.current = true;
-    }, [DEFAULT_IMAGE_MODEL, setSelectedModel]);
-
-    useEffect(() => {
-        const restoreDraft = async () => {
-            if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
-            hydratedModelRef.current = selectedModel;
-            try {
-                const draft = getWorkflowDraft<ImageCreateDraftSnapshot>('image', selectedModel);
-                await applySnapshot(selectedModel, draft);
-            } catch (error) {
-                console.warn('Failed to restore image draft', error);
-            }
-        };
-        void restoreDraft();
-    }, [selectedModel]);
-
-    useEffect(() => {
-        if (!hasRestoredDraftRef.current || isHydratingDraftRef.current) return;
-        const modelId = selectedModel || DEFAULT_IMAGE_MODEL;
-        setWorkflowActiveModel('image', modelId);
-        saveWorkflowDraft('image', modelId, buildCurrentSnapshot());
-    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedModel, selectedSceneId, showAdvanced]);
+    const { hydrateSnapshot, skipNextModelHydration } = useImageCreateDraftPersistence({
+        defaultModelId: DEFAULT_IMAGE_MODEL,
+        selectedModel,
+        setSelectedModel,
+        snapshot: currentSnapshot,
+        applySnapshot,
+    });
 
     useEffect(() => {
         try {
@@ -195,7 +166,6 @@ export default function ImageGenerationForm() {
 
     // Initialize selected model if not set or if it's not an image model
     useEffect(() => {
-        if (!hasRestoredDraftRef.current) return;
         const isImageModel = imageModels.some(m => m.id === selectedModel);
         if (!selectedModel || !isImageModel) {
             if (imageModels.length > 0) {
@@ -492,17 +462,6 @@ export default function ImageGenerationForm() {
         return [];
     };
 
-    // Model changes are hydrated via applySnapshot so defaults and restore follow one path.
-    useEffect(() => {
-        if (!selectedModel || isApplyingDraftModelRef.current) {
-            isApplyingDraftModelRef.current = false;
-            return;
-        }
-
-        hydratedModelRef.current = selectedModel;
-        void applySnapshot(selectedModel, null);
-    }, [selectedModel]);
-
     // Fetch LoRAs when model changes or dialog closes
     useEffect(() => {
         if (currentModel && hasLoRAParameter(currentModel)) {
@@ -532,7 +491,7 @@ export default function ImageGenerationForm() {
 
     const applySelectedSceneToPrompt = () => {
         if (!selectedScene) return;
-        const nextSnapshot = applyScenePromptToImageDraft(buildCurrentSnapshot(), selectedScene);
+        const nextSnapshot = applyScenePromptToImageDraft(currentSnapshot, selectedScene);
         setPrompt(nextSnapshot.prompt || '');
         setSelectedSceneId(nextSnapshot.selectedSceneId || '');
     };
@@ -553,7 +512,7 @@ export default function ImageGenerationForm() {
 
     const applyAllFromScene = async () => {
         if (!selectedScene) return;
-        const nextSnapshot = applySceneToImageDraft(buildCurrentSnapshot(), selectedScene);
+        const nextSnapshot = applySceneToImageDraft(currentSnapshot, selectedScene);
         setPrompt(nextSnapshot.prompt || '');
         setSelectedSceneId(nextSnapshot.selectedSceneId || '');
         if (nextSnapshot.previewUrl) {
@@ -581,7 +540,7 @@ export default function ImageGenerationForm() {
 
                 // Switch to correct model if different from current
                 if (modelId && modelId !== selectedModel) {
-                    isApplyingDraftModelRef.current = true;
+                    skipNextModelHydration();
                     setSelectedModel(modelId);
                 }
 
@@ -664,7 +623,7 @@ export default function ImageGenerationForm() {
                     previewUrl2: shouldReuseSecondaryImage && imagePath2 ? imagePath2 : '',
                 };
 
-                await applySnapshot(nextModelId, snapshot);
+                await hydrateSnapshot(nextModelId, snapshot);
 
                 if (shouldReusePrimaryImage && imagePath) {
                     console.log('📥 Loading image from path:', imagePath);
@@ -688,8 +647,6 @@ export default function ImageGenerationForm() {
                     }
                 }
 
-                saveWorkflowDraft('image', nextModelId, snapshot);
-
                 console.log('✅ Applied image snapshot from reuse');
 
                 // Show success feedback
@@ -712,7 +669,7 @@ export default function ImageGenerationForm() {
 
         window.addEventListener('reuseJobInput', handleReuseInput as any);
         return () => window.removeEventListener('reuseJobInput', handleReuseInput as any);
-    }, [setSelectedModel, selectedModel]);
+    }, [DEFAULT_IMAGE_MODEL, hydrateSnapshot, selectedModel, setSelectedModel, skipNextModelHydration]);
 
     // Handler for parameter changes
     const handleParameterChange = (paramName: string, value: any) => {

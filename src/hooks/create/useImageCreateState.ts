@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import {
   createImageDraftSnapshot,
   mergeImageDraftParameterValues,
@@ -15,6 +14,7 @@ import { useStudio } from '@/lib/context/StudioContext';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { getModelById, getModelsByType, isInputVisible, type ModelConfig, type ModelParameter } from '@/lib/models/modelConfig';
 import type { ScenePresetSummary } from '@/lib/scenes/types';
+import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 
 const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
@@ -64,8 +64,6 @@ export function useImageCreateState() {
   const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
   const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
 
-  const hydratedModelRef = useRef<string | null>(null);
-  const isHydratingDraftRef = useRef(false);
   const successTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -115,7 +113,7 @@ export function useImageCreateState() {
     return availableScenes.find((scene) => scene.id === selectedSceneId) || null;
   }, [availableScenes, selectedSceneId]);
 
-  const buildCurrentSnapshot = useCallback((): ImageCreateDraftSnapshot => createImageDraftSnapshot({
+  const currentSnapshot = useMemo((): ImageCreateDraftSnapshot => createImageDraftSnapshot({
     prompt,
     showAdvanced,
     randomizeSeed,
@@ -126,53 +124,44 @@ export function useImageCreateState() {
   }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
 
   const applySnapshot = useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
-    isHydratingDraftRef.current = true;
-    try {
-      const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
-      const normalizedSnapshot = createImageDraftSnapshot({
-        ...snapshot,
-        parameterValues: mergedParameterValues,
-      });
+    const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
+    const normalizedSnapshot = createImageDraftSnapshot({
+      ...snapshot,
+      parameterValues: mergedParameterValues,
+    });
 
-      setPrompt(normalizedSnapshot.prompt || '');
-      setShowAdvanced(normalizedSnapshot.showAdvanced === true);
-      setRandomizeSeed(normalizeRandomizeSeed(normalizedSnapshot.randomizeSeed));
-      setParameterValues(mergedParameterValues);
-      setPreviewUrl(normalizedSnapshot.previewUrl || '');
-      setPreviewUrl2(normalizedSnapshot.previewUrl2 || '');
-      setSelectedSceneId(normalizedSnapshot.selectedSceneId || '');
-      setImageFile(null);
-      setImageFile2(null);
+    setPrompt(normalizedSnapshot.prompt || '');
+    setShowAdvanced(normalizedSnapshot.showAdvanced === true);
+    setRandomizeSeed(normalizeRandomizeSeed(normalizedSnapshot.randomizeSeed));
+    setParameterValues(mergedParameterValues);
+    setPreviewUrl(normalizedSnapshot.previewUrl || '');
+    setPreviewUrl2(normalizedSnapshot.previewUrl2 || '');
+    setSelectedSceneId(normalizedSnapshot.selectedSceneId || '');
+    setImageFile(null);
+    setImageFile2(null);
 
-      if (normalizedSnapshot.previewUrl?.startsWith('data:')) {
-        setImageFile(await dataUrlToFile(normalizedSnapshot.previewUrl, 'image-input'));
-      }
-      if (normalizedSnapshot.previewUrl2?.startsWith('data:')) {
-        setImageFile2(await dataUrlToFile(normalizedSnapshot.previewUrl2, 'image-input-2'));
-      }
-    } finally {
-      isHydratingDraftRef.current = false;
+    if (normalizedSnapshot.previewUrl?.startsWith('data:')) {
+      setImageFile(await dataUrlToFile(normalizedSnapshot.previewUrl, 'image-input'));
+    }
+    if (normalizedSnapshot.previewUrl2?.startsWith('data:')) {
+      setImageFile2(await dataUrlToFile(normalizedSnapshot.previewUrl2, 'image-input-2'));
     }
   }, []);
 
+  const { hydrateSnapshot, skipNextModelHydration } = useImageCreateDraftPersistence({
+    defaultModelId: DEFAULT_IMAGE_MODEL,
+    selectedModel,
+    setSelectedModel,
+    snapshot: currentSnapshot,
+    applySnapshot,
+  });
+
   useEffect(() => {
-    const nextModelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
+    const nextModelId = selectedModel || DEFAULT_IMAGE_MODEL;
     if (!selectedModel || !imageModels.some((model) => model.id === selectedModel)) {
       setSelectedModel(nextModelId);
     }
   }, [DEFAULT_IMAGE_MODEL, imageModels, selectedModel, setSelectedModel]);
-
-  useEffect(() => {
-    if (!selectedModel || hydratedModelRef.current === selectedModel) return;
-    hydratedModelRef.current = selectedModel;
-    void applySnapshot(selectedModel, getWorkflowDraft<ImageCreateDraftSnapshot>('image', selectedModel));
-  }, [applySnapshot, selectedModel]);
-
-  useEffect(() => {
-    if (!selectedModel || isHydratingDraftRef.current) return;
-    setWorkflowActiveModel('image', selectedModel);
-    saveWorkflowDraft('image', selectedModel, buildCurrentSnapshot());
-  }, [buildCurrentSnapshot, selectedModel]);
 
   useEffect(() => {
     try {
@@ -290,22 +279,22 @@ export function useImageCreateState() {
   const applySelectedSceneToPrompt = useCallback((sceneOverride?: ScenePresetSummary | null) => {
     const targetScene = sceneOverride || selectedScene;
     if (!targetScene) return;
-    const nextSnapshot = applyScenePromptToImageDraft(buildCurrentSnapshot(), targetScene);
+    const nextSnapshot = applyScenePromptToImageDraft(currentSnapshot, targetScene);
     setPrompt(nextSnapshot.prompt || '');
     setSelectedSceneId(nextSnapshot.selectedSceneId || '');
-  }, [buildCurrentSnapshot, selectedScene]);
+  }, [currentSnapshot, selectedScene]);
 
   const applyAllFromScene = useCallback(async (sceneOverride?: ScenePresetSummary | null) => {
     const targetScene = sceneOverride || selectedScene;
     if (!targetScene) return;
-    const nextSnapshot = applySceneToImageDraft(buildCurrentSnapshot(), targetScene);
+    const nextSnapshot = applySceneToImageDraft(currentSnapshot, targetScene);
     setPrompt(nextSnapshot.prompt || '');
     setSelectedSceneId(nextSnapshot.selectedSceneId || '');
     if (nextSnapshot.previewUrl) {
       setPreviewUrl(nextSnapshot.previewUrl);
       await applyScenePreviewImage(targetScene);
     }
-  }, [applyScenePreviewImage, buildCurrentSnapshot, selectedScene]);
+  }, [applyScenePreviewImage, currentSnapshot, selectedScene]);
 
   const handleParameterChange = useCallback((paramName: string, value: any) => {
     setParameterValues((prev) => ({
@@ -409,6 +398,7 @@ export function useImageCreateState() {
         const parsedOptions = parseReuseOptions(detail.options);
         const nextModelId = detail.modelId || selectedModel || DEFAULT_IMAGE_MODEL;
         if (detail.modelId && detail.modelId !== selectedModel) {
+          skipNextModelHydration();
           setSelectedModel(detail.modelId);
         }
 
@@ -434,7 +424,7 @@ export function useImageCreateState() {
           previewUrl2: shouldReuseSecondaryImage && secondaryImagePath ? secondaryImagePath : '',
         });
 
-        await applySnapshot(nextModelId, snapshot);
+        await hydrateSnapshot(nextModelId, snapshot);
 
         if (shouldReusePrimaryImage && primaryImagePath) {
           const file = await loadFileFromPath(primaryImagePath);
@@ -450,7 +440,6 @@ export function useImageCreateState() {
           }
         }
 
-        saveWorkflowDraft('image', nextModelId, snapshot);
         setTimedMessage({ type: 'success', text: 'Input reused in mobile create' });
       } finally {
         setIsLoadingMedia(false);
@@ -459,7 +448,7 @@ export function useImageCreateState() {
 
     window.addEventListener('reuseJobInput', handleReuseInput as EventListener);
     return () => window.removeEventListener('reuseJobInput', handleReuseInput as EventListener);
-  }, [DEFAULT_IMAGE_MODEL, applySnapshot, currentModel, selectedModel, setPrimaryImage, setSecondaryImage, setSelectedModel, setTimedMessage]);
+  }, [DEFAULT_IMAGE_MODEL, currentModel, hydrateSnapshot, selectedModel, setPrimaryImage, setSecondaryImage, setSelectedModel, setTimedMessage, skipNextModelHydration]);
 
   const promptSummary = prompt.trim() || 'No prompt yet';
   const basicSummaryItems = useMemo(() => {
