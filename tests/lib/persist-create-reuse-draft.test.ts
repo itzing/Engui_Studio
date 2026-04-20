@@ -57,6 +57,31 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('clears z-image controlnet mode when reuse payload has no image input', async () => {
+    getModelById.mockReturnValue({
+      id: 'z-image',
+      parameters: [
+        { name: 'use_controlnet', default: false },
+        { name: 'width', default: 1024 },
+      ],
+    });
+    isInputVisible.mockImplementation((_model, input, params) => input === 'image' && params?.use_controlnet === true);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    persistCreateReuseDraft({
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'cinematic portrait',
+      options: { use_controlnet: true, width: 1024 },
+    });
+
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'z-image', expect.objectContaining({
+      previewUrl: '',
+      parameterValues: expect.objectContaining({ use_controlnet: false, width: 1024 }),
+      inputs: expect.objectContaining({ primary: null }),
+    }));
+  });
+
   it('writes img2vid payloads into the video workflow draft before navigation', async () => {
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 

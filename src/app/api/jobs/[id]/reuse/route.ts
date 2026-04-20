@@ -76,12 +76,18 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
   delete baseOptions.endpointId;
 
   if (action === 'txt2img') {
+    const txt2imgOptions = { ...baseOptions };
+    if (modelId === 'z-image') {
+      txt2imgOptions.use_controlnet = false;
+      delete txt2imgOptions.image_path;
+    }
+
     return {
       action,
       type: 'image',
       modelId,
       prompt,
-      options: baseOptions,
+      options: txt2imgOptions,
     };
   }
 
@@ -94,7 +100,7 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
       imageInputPath: outputUrl,
       options: {
         ...baseOptions,
-        use_controlnet: true,
+        ...(modelId === 'z-image' ? { use_controlnet: true } : {}),
         image_path: outputUrl,
       },
     };

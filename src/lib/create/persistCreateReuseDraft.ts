@@ -40,6 +40,11 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     });
 
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
+
+    if (modelId === 'z-image' && !primaryImagePath) {
+      parameterValues.use_controlnet = false;
+    }
+
     const secondaryImagePath = parsedOptions.image_path_2;
     const shouldReusePrimaryImage = !!(model && isInputVisible(model, 'image', parameterValues));
     const shouldReuseSecondaryImage = !!(model && isInputVisible(model, 'image2', parameterValues));
