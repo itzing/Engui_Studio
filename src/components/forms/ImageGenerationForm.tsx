@@ -134,7 +134,7 @@ export default function ImageGenerationForm() {
         }
     }, []);
 
-    const { switchModel } = useImageCreateDraftPersistence({
+    const { switchModel, hasRestoredDraftRef } = useImageCreateDraftPersistence({
         defaultModelId: DEFAULT_IMAGE_MODEL,
         selectedModel,
         setSelectedModel,
@@ -165,15 +165,19 @@ export default function ImageGenerationForm() {
         }
     }, [promptHelperInstruction]);
 
-    // Initialize selected model if not set or if it's not an image model
+    // Keep selected model valid after draft hydration, but do not override store-restored reuse targets.
     useEffect(() => {
+        if (!hasRestoredDraftRef.current) {
+            return;
+        }
+
         const isImageModel = imageModels.some(m => m.id === selectedModel);
         if (!selectedModel || !isImageModel) {
             if (imageModels.length > 0) {
                 setSelectedModel(imageModels[0].id);
             }
         }
-    }, [selectedModel, imageModels]);
+    }, [hasRestoredDraftRef, imageModels, selectedModel]);
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
