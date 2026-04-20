@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart, Info, Loader2, Play, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -69,9 +69,9 @@ function TileOverlayActions({
 export default function MobileGalleryScreen() {
   const router = useRouter();
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const lastViewerOpenRef = useRef(false);
   const prevTopRowRequestRef = useRef<number | null>(null);
   const prevBottomRowRequestRef = useRef<number | null>(null);
+  const prependCompensationRef = useRef<{ previousTotalSize: number; previousAssetCount: number } | null>(null);
   const {
     assets,
     isLoading,
@@ -115,6 +115,20 @@ export default function MobileGalleryScreen() {
     rowVirtualizer.measure();
   }, [assets.length, rowVirtualizer]);
 
+  useLayoutEffect(() => {
+    const pendingCompensation = prependCompensationRef.current;
+    const scrollElement = parentRef.current;
+    if (!pendingCompensation || !scrollElement) return;
+    if (assets.length <= pendingCompensation.previousAssetCount) return;
+
+    const nextTotalSize = rowVirtualizer.getTotalSize();
+    const delta = nextTotalSize - pendingCompensation.previousTotalSize;
+    if (delta > 0) {
+      scrollElement.scrollTop += delta;
+    }
+    prependCompensationRef.current = null;
+  }, [assets.length, rowVirtualizer]);
+
   useEffect(() => {
     const nextIndex = typeof restoreIndex === 'number' && restoreIndex >= 0 ? restoreIndex : selectedIndex;
     if (nextIndex < 0) return;
@@ -124,24 +138,16 @@ export default function MobileGalleryScreen() {
   }, [restoreIndex, restoreTick, rowVirtualizer, selectedIndex, viewerOpen]);
 
   useEffect(() => {
-    if (viewerOpen) {
-      lastViewerOpenRef.current = true;
-      return;
-    }
-
-    if (lastViewerOpenRef.current && selectedIndex >= 0) {
-      rowVirtualizer.scrollToIndex(Math.floor(selectedIndex / 3), { align: 'center' });
-    }
-    lastViewerOpenRef.current = false;
-  }, [rowVirtualizer, selectedIndex, viewerOpen]);
-
-  useEffect(() => {
     if (virtualRows.length === 0) return;
     const firstRow = virtualRows[0]?.index ?? 0;
     const lastRow = virtualRows[virtualRows.length - 1]?.index ?? 0;
 
     if (hasPrevPage && firstRow <= 2 && prevTopRowRequestRef.current !== firstRow) {
       prevTopRowRequestRef.current = firstRow;
+      prependCompensationRef.current = {
+        previousTotalSize: rowVirtualizer.getTotalSize(),
+        previousAssetCount: assets.length,
+      };
       void loadPreviousPage();
     }
 
@@ -157,7 +163,7 @@ export default function MobileGalleryScreen() {
     if (!hasNextPage) {
       prevBottomRowRequestRef.current = null;
     }
-  }, [hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, virtualRows]);
+  }, [assets.length, hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, rowVirtualizer, virtualRows]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
