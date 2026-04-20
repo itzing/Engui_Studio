@@ -27,10 +27,10 @@ Desktop keeps the same UI, while mobile routes can consume shared hooks or servi
 
 ## Progress notes
 
-Current extraction pass moved shared image-create services into `src/lib/create/*`:
+Current extraction passes moved shared image-create services into `src/lib/create/*`:
 - `imageDraft.ts` for reusable image draft snapshot helpers
 - `imagePromptHelper.ts` for prompt-helper and vision-prompt-helper requests
 - `imageScenes.ts` for active-scene fetch/apply helpers
-- `submitImageGeneration.ts` for shared image submit pipeline
+- `submitImageGeneration.ts` for shared image submit pipeline with preview-url fallback loading
 
-`ImageGenerationForm` now consumes those services while keeping the existing desktop UI intact. Remaining work for full completion is to move more of the live create-state orchestration itself out of the desktop-oriented component so dedicated mobile screens can consume it directly.
+A dedicated shared mobile image-create state hook now also exists at `src/hooks/create/useImageCreateState.ts`, and it powers the new route-based mobile Create screens. `ImageGenerationForm` already consumes the extracted shared submit/services layer while keeping the existing desktop UI intact. Remaining work for full completion is to move more of the desktop form’s live state orchestration itself onto the shared hook layer so desktop and mobile converge further.

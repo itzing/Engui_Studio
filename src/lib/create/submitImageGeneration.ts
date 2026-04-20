@@ -1,4 +1,5 @@
 import type { StudioSettings } from '@/lib/context/StudioContext';
+import { loadFileFromPath } from '@/lib/fileUtils';
 import { isInputVisible, type ModelConfig } from '@/lib/models/modelConfig';
 import { generateRandomSeed } from './imageDraft';
 
@@ -11,6 +12,8 @@ export type SubmitImageGenerationParams = {
   settings: StudioSettings;
   imageFile: File | null;
   imageFile2: File | null;
+  imagePreviewUrl?: string | null;
+  imagePreviewUrl2?: string | null;
   dimensions?: string | null;
 };
 
@@ -44,6 +47,8 @@ export const submitImageGeneration = async ({
   settings,
   imageFile,
   imageFile2,
+  imagePreviewUrl,
+  imagePreviewUrl2,
   dimensions,
 }: SubmitImageGenerationParams): Promise<SubmitImageGenerationResult> => {
   if (currentModel.inputs.includes('text') && !prompt) {
@@ -51,14 +56,26 @@ export const submitImageGeneration = async ({
   }
 
   const imageVisible = isInputVisible(currentModel, 'image', parameterValues);
+  const image2Visible = isInputVisible(currentModel, 'image2', parameterValues);
   const imageOptional = currentModel.optionalInputs?.includes('image');
-  if (imageVisible && !imageOptional && !imageFile) {
+  const image2Optional = currentModel.optionalInputs?.includes('image2');
+
+  let resolvedImageFile = imageFile;
+  let resolvedImageFile2 = imageFile2;
+
+  if (!resolvedImageFile && imagePreviewUrl) {
+    resolvedImageFile = await loadFileFromPath(imagePreviewUrl);
+  }
+
+  if (!resolvedImageFile2 && imagePreviewUrl2) {
+    resolvedImageFile2 = await loadFileFromPath(imagePreviewUrl2);
+  }
+
+  if (imageVisible && !imageOptional && !resolvedImageFile) {
     return { success: false, error: 'Please upload an image for this model', nextSeed: null };
   }
 
-  const image2Visible = isInputVisible(currentModel, 'image2', parameterValues);
-  const image2Optional = currentModel.optionalInputs?.includes('image2');
-  if (image2Visible && !image2Optional && !imageFile2) {
+  if (image2Visible && !image2Optional && !resolvedImageFile2) {
     return { success: false, error: 'Please upload the second image', nextSeed: null };
   }
 
@@ -76,12 +93,12 @@ export const submitImageGeneration = async ({
       formData.append('workspaceId', activeWorkspaceId);
     }
 
-    if (imageVisible && imageFile) {
-      formData.append('image', imageFile);
+    if (imageVisible && resolvedImageFile) {
+      formData.append('image', resolvedImageFile);
     }
 
-    if (imageFile2) {
-      formData.append('image2', imageFile2);
+    if (resolvedImageFile2) {
+      formData.append('image2', resolvedImageFile2);
     }
 
     currentModel.parameters.forEach(param => {

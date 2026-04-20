@@ -971,6 +971,8 @@ export default function ImageGenerationForm() {
             settings,
             imageFile,
             imageFile2,
+            imagePreviewUrl: previewUrl,
+            imagePreviewUrl2: previewUrl2,
             dimensions: dimInput?.value || null,
         });
 
