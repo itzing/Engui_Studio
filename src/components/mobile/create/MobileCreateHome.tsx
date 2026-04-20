@@ -62,29 +62,30 @@ export default function MobileCreateHome({
 
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2.5">
-                  <span className="text-xs text-muted-foreground">Model</span>
-                  <Button variant="outline" size="sm" asChild className="max-w-[70%] justify-start overflow-hidden text-ellipsis">
-                    <Link href="/m/create/model" className="truncate">
-                      {currentModel?.name || 'Loading model...'}
-                    </Link>
-                  </Button>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" asChild className="min-w-0 max-w-[48%] flex-1 justify-between gap-2 overflow-hidden">
+                  <Link href="/m/create/model">
+                    <span className="text-muted-foreground">Model</span>
+                    <span className="truncate text-foreground">{currentModel?.name || 'Loading model...'}</span>
+                  </Link>
+                </Button>
 
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">Seed</div>
-                    <div className="truncate text-sm font-medium text-foreground">seed: {currentSeed ?? '—'}</div>
-                  </div>
-                  <Button
-                    variant={randomizeSeed ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRandomizeSeed(!randomizeSeed)}
-                  >
-                    {randomizeSeed ? 'Random' : 'Fixed'}
-                  </Button>
-                </div>
+                <Button
+                  variant={randomizeSeed ? 'default' : 'outline'}
+                  size="sm"
+                  className="min-w-[96px]"
+                  onClick={() => setRandomizeSeed(!randomizeSeed)}
+                >
+                  {randomizeSeed ? 'Random' : 'Fixed'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-0 flex-1 justify-start overflow-hidden"
+                >
+                  <span className="truncate">{currentSeed ?? '—'}</span>
+                </Button>
               </div>
             </CardContent>
           </Card>
