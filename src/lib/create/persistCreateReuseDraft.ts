@@ -25,6 +25,49 @@ function parseReuseOptions(options: unknown): Record<string, any> {
   return options && typeof options === 'object' ? options as Record<string, any> : {};
 }
 
+function normalizeZImageLoraPath(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const withoutWeightSuffix = trimmed.match(/^(.*?),(?:-?\d+(?:\.\d+)?)$/)?.[1]?.trim() || trimmed;
+  if (withoutWeightSuffix.startsWith('/')) {
+    return withoutWeightSuffix;
+  }
+
+  return `/runpod-volume/loras/${withoutWeightSuffix.replace(/^\/+/, '')}`;
+}
+
+function normalizeZImageLoraWeight(options: Record<string, any>): number | undefined {
+  if (typeof options.zImageLora === 'string') {
+    const match = options.zImageLora.trim().match(/,(-?\d+(?:\.\d+)?)$/);
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  if (typeof options.zImageLoraWeight === 'number' && Number.isFinite(options.zImageLoraWeight)) {
+    return options.zImageLoraWeight;
+  }
+
+  if (Array.isArray(options.lora) && Array.isArray(options.lora[0])) {
+    const [, loraWeight] = options.lora[0];
+    if (typeof loraWeight === 'number' && Number.isFinite(loraWeight)) {
+      return loraWeight;
+    }
+  }
+
+  return undefined;
+}
+
 export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageModelId: 'flux-krea', videoModelId: 'wan22' }) {
   const parsedOptions = parseReuseOptions(detail.options);
 
@@ -45,20 +88,18 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
 
     if (modelId === 'z-image') {
-      if (typeof parsedOptions.zImageLora === 'string' && parsedOptions.zImageLora.trim() !== '') {
-        parameterValues.lora = parsedOptions.zImageLora;
-      } else if (Array.isArray(parsedOptions.lora) && Array.isArray(parsedOptions.lora[0])) {
-        const [loraName, loraWeight] = parsedOptions.lora[0];
-        if (typeof loraName === 'string' && loraName.trim() !== '') {
-          parameterValues.lora = loraName;
-        }
-        if (typeof loraWeight === 'number' && Number.isFinite(loraWeight)) {
-          parameterValues.loraWeight = loraWeight;
-        }
+      const normalizedLoraPath = normalizeZImageLoraPath(parsedOptions.zImageLora)
+        || (Array.isArray(parsedOptions.lora) && Array.isArray(parsedOptions.lora[0])
+          ? normalizeZImageLoraPath(parsedOptions.lora[0][0])
+          : '');
+      const normalizedLoraWeight = normalizeZImageLoraWeight(parsedOptions);
+
+      if (normalizedLoraPath) {
+        parameterValues.lora = normalizedLoraPath;
       }
 
-      if (typeof parsedOptions.zImageLoraWeight === 'number' && Number.isFinite(parsedOptions.zImageLoraWeight)) {
-        parameterValues.loraWeight = parsedOptions.zImageLoraWeight;
+      if (typeof normalizedLoraWeight === 'number' && Number.isFinite(normalizedLoraWeight)) {
+        parameterValues.loraWeight = normalizedLoraWeight;
       }
 
       if (!primaryImagePath) {

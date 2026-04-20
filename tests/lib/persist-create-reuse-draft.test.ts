@@ -115,6 +115,38 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('normalizes legacy z-image lora strings that have filename and weight glued together', async () => {
+    getModelById.mockReturnValue({
+      id: 'z-image',
+      parameters: [
+        { name: 'lora', default: '' },
+        { name: 'loraWeight', default: 1 },
+        { name: 'use_controlnet', default: false },
+      ],
+    });
+    isInputVisible.mockReturnValue(false);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    persistCreateReuseDraft({
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'cinematic portrait',
+      options: {
+        use_controlnet: false,
+        lora: [['Age_Slider_v1.1_ZIT_RMX.safetensors,-1', 1]],
+        zImageLora: 'Age_Slider_v1.1_ZIT_RMX.safetensors,-1',
+        zImageLoraWeight: 1,
+      },
+    });
+
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'z-image', expect.objectContaining({
+      parameterValues: expect.objectContaining({
+        lora: '/runpod-volume/loras/Age_Slider_v1.1_ZIT_RMX.safetensors',
+        loraWeight: -1,
+      }),
+    }));
+  });
+
   it('writes img2vid payloads into the video workflow draft before navigation', async () => {
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 
