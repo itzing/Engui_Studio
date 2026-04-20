@@ -14,6 +14,15 @@ import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
+import {
+    type ImageCreateDraftSnapshot,
+    createImageDraftSnapshot,
+    mergeImageDraftParameterValues,
+    normalizeRandomizeSeed,
+} from '@/lib/create/imageDraft';
+import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
+import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
+import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import type { ScenePresetSummary } from '@/lib/scenes/types';
 
 export default function ImageGenerationForm() {
@@ -87,27 +96,13 @@ export default function ImageGenerationForm() {
 
     const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
-    const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
-    const normalizeRandomizeSeed = (value: unknown) => value === true || value === 'true' || value === 1 || value === '1';
-
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
         const blob = await response.blob();
         return new File([blob], filename, { type: blob.type || fallbackType });
     };
 
-    const buildDefaultParameterValues = (modelId: string) => {
-        const model = getModelById(modelId);
-        const initialValues: Record<string, any> = {};
-        model?.parameters.forEach(param => {
-            if (param.default !== undefined) {
-                initialValues[param.name] = param.default;
-            }
-        });
-        return initialValues;
-    };
-
-    const buildCurrentSnapshot = () => ({
+    const buildCurrentSnapshot = (): ImageCreateDraftSnapshot => createImageDraftSnapshot({
         prompt,
         showAdvanced,
         randomizeSeed,
@@ -117,22 +112,10 @@ export default function ImageGenerationForm() {
         selectedSceneId,
     });
 
-    const applySnapshot = async (modelId: string, snapshot?: {
-        prompt?: string;
-        showAdvanced?: boolean;
-        randomizeSeed?: boolean | string | number;
-        parameterValues?: Record<string, any>;
-        previewUrl?: string;
-        previewUrl2?: string;
-        selectedSceneId?: string;
-    } | null) => {
+    const applySnapshot = async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
         isHydratingDraftRef.current = true;
         try {
-            const defaults = buildDefaultParameterValues(modelId);
-            const mergedParameterValues = {
-                ...defaults,
-                ...((snapshot?.parameterValues && typeof snapshot.parameterValues === 'object') ? snapshot.parameterValues : {}),
-            };
+            const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
 
             setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
             setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
@@ -171,15 +154,7 @@ export default function ImageGenerationForm() {
             if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
             hydratedModelRef.current = selectedModel;
             try {
-                const draft = getWorkflowDraft<{
-                    prompt?: string;
-                    showAdvanced?: boolean;
-                    randomizeSeed?: boolean | string | number;
-                    parameterValues?: Record<string, any>;
-                    previewUrl?: string;
-                    previewUrl2?: string;
-                    selectedSceneId?: string;
-                }>('image', selectedModel);
+                const draft = getWorkflowDraft<ImageCreateDraftSnapshot>('image', selectedModel);
                 await applySnapshot(selectedModel, draft);
             } catch (error) {
                 console.warn('Failed to restore image draft', error);
@@ -193,7 +168,7 @@ export default function ImageGenerationForm() {
         const modelId = selectedModel || DEFAULT_IMAGE_MODEL;
         setWorkflowActiveModel('image', modelId);
         saveWorkflowDraft('image', modelId, buildCurrentSnapshot());
-    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedModel, showAdvanced]);
+    }, [DEFAULT_IMAGE_MODEL, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedModel, selectedSceneId, showAdvanced]);
 
     useEffect(() => {
         try {
@@ -272,28 +247,14 @@ export default function ImageGenerationForm() {
         setIsPromptHelperLoading(true);
 
         try {
-            const response = await fetch('/api/prompt-helper/improve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt,
-                    negativePrompt: currentNegativePrompt,
-                    instruction,
-                    modelId: currentModel.id,
-                    width: Number.isFinite(currentWidth) ? currentWidth : undefined,
-                    height: Number.isFinite(currentHeight) ? currentHeight : undefined,
-                }),
+            const data = await requestImagePromptImprovement({
+                prompt,
+                negativePrompt: currentNegativePrompt,
+                instruction,
+                modelId: currentModel.id,
+                width: Number.isFinite(currentWidth) ? currentWidth : undefined,
+                height: Number.isFinite(currentHeight) ? currentHeight : undefined,
             });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success || !data.improvedPrompt) {
-                const error = new Error(data.error || 'Prompt Helper request failed') as Error & {
-                    debug?: { content?: string; reasoningContent?: string };
-                };
-                error.debug = data.debug;
-                throw error;
-            }
 
             setPrompt(data.improvedPrompt);
 
@@ -380,23 +341,13 @@ export default function ImageGenerationForm() {
 
         try {
             const imageDataUrl = await readFileAsDataUrl(imagePromptFile);
-
-            const response = await fetch('/api/vision-prompt-helper/extract', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    imageDataUrl,
-                    modelId: currentModel.id,
-                    instruction: 'Return one concise reusable image-generation prompt in English. Preserve fine visible details like hair, face, clothing construction, accessories, pose, body orientation, framing, camera angle, and photographic style cues. Do not guess hidden details.',
-                }),
+            const extractedPrompt = await extractImagePromptFromDataUrl({
+                imageDataUrl,
+                modelId: currentModel.id,
+                instruction: 'Return one concise reusable image-generation prompt in English. Preserve fine visible details like hair, face, clothing construction, accessories, pose, body orientation, framing, camera angle, and photographic style cues. Do not guess hidden details.',
             });
 
-            const data = await response.json();
-            if (!response.ok || !data.success || !data.prompt) {
-                throw new Error(data.error || 'Image to prompt extraction failed');
-            }
-
-            setImagePromptResult(data.prompt);
+            setImagePromptResult(extractedPrompt);
         } catch (error) {
             setImagePromptResult(error instanceof Error ? error.message : 'Image to prompt extraction failed');
         } finally {
@@ -560,20 +511,10 @@ export default function ImageGenerationForm() {
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
 
     const fetchAvailableScenes = async () => {
-        if (!activeWorkspaceId) {
-            setAvailableScenes([]);
-            return;
-        }
-
         setIsLoadingScenes(true);
         try {
-            const response = await fetch(`/api/scenes?workspaceId=${encodeURIComponent(activeWorkspaceId)}&status=active`, { cache: 'no-store' });
-            const data = await response.json();
-            if (response.ok && data.success && Array.isArray(data.scenes)) {
-                setAvailableScenes(data.scenes);
-            } else {
-                setAvailableScenes([]);
-            }
+            const scenes = await fetchActiveScenePresets(activeWorkspaceId);
+            setAvailableScenes(scenes);
         } catch (error) {
             console.error('Failed to fetch scenes:', error);
             setAvailableScenes([]);
@@ -591,7 +532,9 @@ export default function ImageGenerationForm() {
 
     const applySelectedSceneToPrompt = () => {
         if (!selectedScene) return;
-        setPrompt(selectedScene.generatedScenePrompt || '');
+        const nextSnapshot = applyScenePromptToImageDraft(buildCurrentSnapshot(), selectedScene);
+        setPrompt(nextSnapshot.prompt || '');
+        setSelectedSceneId(nextSnapshot.selectedSceneId || '');
     };
 
     const applySelectedScenePreviewImage = async () => {
@@ -610,8 +553,11 @@ export default function ImageGenerationForm() {
 
     const applyAllFromScene = async () => {
         if (!selectedScene) return;
-        applySelectedSceneToPrompt();
-        if (selectedScene.latestPreviewImageUrl) {
+        const nextSnapshot = applySceneToImageDraft(buildCurrentSnapshot(), selectedScene);
+        setPrompt(nextSnapshot.prompt || '');
+        setSelectedSceneId(nextSnapshot.selectedSceneId || '');
+        if (nextSnapshot.previewUrl) {
+            setPreviewUrl(nextSnapshot.previewUrl);
             await applySelectedScenePreviewImage();
         }
     };
@@ -1006,146 +952,42 @@ export default function ImageGenerationForm() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage(null);
-        // Only require prompt if model accepts text input
-        if (currentModel.inputs.includes('text') && !prompt) return;
 
-        // 모델이 이미지 입력을 요구하는 경우 이미지 필수 체크 (conditionalInputs 및 optionalInputs 기반)
-        const imageVisible = isInputVisible(currentModel, 'image', parameterValues);
-        const imageOptional = currentModel.optionalInputs?.includes('image');
-        if (imageVisible && !imageOptional && !imageFile) {
-            setMessage({ type: 'error', text: 'Please upload an image for this model' });
-            return;
-        }
-
-        // 두 번째 이미지 필수 체크
-        const image2Visible = isInputVisible(currentModel, 'image2', parameterValues);
-        const image2Optional = currentModel.optionalInputs?.includes('image2');
-        if (image2Visible && !image2Optional && !imageFile2) {
-            setMessage({ type: 'error', text: 'Please upload the second image' });
+        if (currentModel.inputs.includes('text') && !prompt) {
             return;
         }
 
         setIsGenerating(true);
 
-        const shouldRandomizeSeed = randomizeSeed && currentModel.parameters.some(param => param.name === 'seed');
-        const seedForThisRun = shouldRandomizeSeed ? generateRandomSeed() : null;
+        const form = e.target as HTMLFormElement;
+        const dimInput = form.elements.namedItem('dimensions') as HTMLSelectElement | null;
 
-        if (seedForThisRun !== null) {
+        const result = await submitImageGeneration({
+            currentModel,
+            prompt,
+            parameterValues,
+            randomizeSeed,
+            activeWorkspaceId,
+            settings,
+            imageFile,
+            imageFile2,
+            dimensions: dimInput?.value || null,
+        });
+
+        if (result.success) {
+            addJob(result.job);
+        } else {
+            setMessage({ type: 'error', text: result.error });
+        }
+
+        if (result.nextSeed !== null) {
             setParameterValues(prev => ({
                 ...prev,
-                seed: seedForThisRun
+                seed: result.nextSeed,
             }));
         }
 
-        try {
-            const formData = new FormData();
-            formData.append('userId', 'user-with-settings');
-            formData.append('modelId', currentModel.id);
-            formData.append('prompt', prompt);
-
-            // Add workspace ID
-            if (activeWorkspaceId) {
-                formData.append('workspaceId', activeWorkspaceId);
-            }
-
-            // 모델이 이미지 입력을 받는 경우 File 객체를 직접 추가 (conditionalInputs 기반)
-            if (imageVisible && imageFile) {
-                // Always append as 'image' field - server will handle the key mapping
-                formData.append('image', imageFile);
-                console.log('📤 Appending image file:', imageFile.name, imageFile.size, 'bytes');
-            }
-
-            // Append second image if exists (specifically for qwen-image-edit)
-            if (imageFile2) {
-                formData.append('image2', imageFile2);
-                console.log('📤 Appending second image file:', imageFile2.name, imageFile2.size, 'bytes');
-            }
-
-            // Collect dynamic parameters from state
-            // Use parameterValues state to ensure ALL parameters are included,
-            // including conditional ones that may not be currently visible
-            currentModel.parameters.forEach(param => {
-                let value = parameterValues[param.name] ?? param.default;
-
-                if (param.name === 'seed' && seedForThisRun !== null) {
-                    value = seedForThisRun;
-                }
-
-                if (value !== undefined && value !== null) {
-                    formData.append(param.name, value.toString());
-                }
-            });
-
-            formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
-
-            // Handle Dimensions
-            if (currentModel.capabilities.dimensions?.length) {
-                const form = e.target as HTMLFormElement;
-                const dimInput = form.elements.namedItem('dimensions') as HTMLSelectElement;
-                if (dimInput) formData.append('dimensions', dimInput.value);
-            }
-
-            console.log('Submitting to:', currentModel.api.type, currentModel.api.endpoint);
-
-            // Construct Headers from Settings
-            const headers: Record<string, string> = {};
-            if (settings.apiKeys.openai) headers['X-OpenAI-Key'] = settings.apiKeys.openai;
-            if (settings.apiKeys.google) headers['X-Google-Key'] = settings.apiKeys.google;
-            if (settings.apiKeys.kling) headers['X-Kling-Key'] = settings.apiKeys.kling;
-            if (settings.apiKeys.runpod) headers['X-RunPod-Key'] = settings.apiKeys.runpod;
-
-            // Add RunPod Endpoint ID if applicable
-            if (currentModel.api.type === 'runpod') {
-                const endpointId = settings.runpod.endpoints[currentModel.id] || currentModel.api.endpoint;
-                headers['X-RunPod-Endpoint-Id'] = endpointId;
-            }
-
-            // Use unified API route for all models
-            const response = await fetch('/api/generate', {
-                method: 'POST',
-                headers: headers,
-                body: formData,
-            });
-
-            const data = await response.json();
-
-            if (response && response.ok && data.success) {
-                console.log('Generation started successfully', data);
-                // Success - job added to queue, no need to show message
-
-                // Add job to context
-                addJob({
-                    id: data.jobId,
-                    modelId: currentModel.id,
-                    type: 'image',
-                    status: 'queued',
-                    prompt: prompt,
-                    createdAt: Date.now(),
-                    endpointId: headers['X-RunPod-Endpoint-Id'],
-                    options: {
-                        ...parameterValues,
-                        randomizeSeed,
-                    }
-                });
-            } else {
-                console.error('Generation failed', data);
-                setMessage({ type: 'error', text: data.error || 'Generation failed' });
-            }
-
-        } catch (error) {
-            console.error('Error submitting form:', error);
-            setMessage({ type: 'error', text: 'An unexpected error occurred' });
-        } finally {
-            if (shouldRandomizeSeed) {
-                const nextSeed = generateRandomSeed();
-                setParameterValues(prev => ({
-                    ...prev,
-                    seed: nextSeed
-                }));
-            }
-
-            setIsGenerating(false);
-        }
+        setIsGenerating(false);
     };
 
 
