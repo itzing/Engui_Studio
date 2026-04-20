@@ -8,6 +8,7 @@ import {
   normalizeRandomizeSeed,
   type ImageCreateDraftSnapshot,
 } from '@/lib/create/imageDraft';
+import { setWorkflowActiveModel } from '@/lib/createDrafts';
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
@@ -536,7 +537,10 @@ export function useImageCreateState() {
     message,
     setMessage,
     submit,
-    selectModel: (modelId: string) => setSelectedModel(modelId),
+    selectModel: (modelId: string) => {
+      setWorkflowActiveModel('image', modelId);
+      setSelectedModel(modelId);
+    },
     applySelectedSceneToPrompt,
     applyScenePreviewImage,
     applyAllFromScene,
