@@ -1,11 +1,12 @@
 ---
 id: engui-136
 title: Define route-based mobile PWA architecture with desktop parity guard
-status: open
+status: done
 priority: high
 labels: [mobile, pwa, architecture, routing]
 created_at: 2026-04-20
 updated_at: 2026-04-20
+completed_at: 2026-04-20
 assignee: openclaw
 ---
 
@@ -19,7 +20,11 @@ The project has an approved architectural plan for a separate mobile route tree 
 
 ## Acceptance criteria
 
-- [ ] The mobile route tree under `/m/*` is defined in a dedicated plan doc
-- [ ] Desktop protection rules are explicitly documented
-- [ ] Delivery phases, risks, and rollback strategy are documented
-- [ ] The implementation order is documented clearly enough to break into execution tickets
+- [x] The mobile route tree under `/m/*` is defined in a dedicated plan doc
+- [x] Desktop protection rules are explicitly documented
+- [x] Delivery phases, risks, and rollback strategy are documented
+- [x] The implementation order is documented clearly enough to break into execution tickets
+
+## Completion notes
+
+Completed via `docs/engui-mobile-route-based-pwa-plan.md`, which defines `/m/*` as the isolated mobile route tree, preserves the current desktop layout under `/`, stages rollout by milestone, and delays PWA `start_url` switching until the mobile route tree is validated.
