@@ -43,6 +43,7 @@ export default function MobileCreateHome() {
   return (
     <MobileScreen>
       <MobileHeader
+        className="sticky top-0 z-20"
         title="Create"
         subtitle="Compact mobile create dashboard with focused editors for heavy tasks."
         action={
@@ -55,8 +56,8 @@ export default function MobileCreateHome() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
-        <div className="space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 custom-scrollbar">
+        <div className="space-y-4 pb-4">
           {message ? <StatusMessage type={message.type} text={message.text} /> : null}
 
           <Card>
@@ -207,38 +208,41 @@ export default function MobileCreateHome() {
             </CardContent>
           </Card>
 
-          <div className="space-y-3">
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={isGenerating || isLoadingMedia}
-              onClick={async () => {
-                const success = await submit();
-                if (success) {
-                  router.push('/m/preview');
-                }
-              }}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Starting generation...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate
-                </>
-              )}
-            </Button>
+        </div>
+      </div>
 
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/m/create/prompt">
-                <WandSparkles className="mr-2 h-4 w-4" />
-                Open focused prompt editor
-              </Link>
-            </Button>
-          </div>
+      <div className="sticky bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div className="space-y-3">
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={isGenerating || isLoadingMedia}
+            onClick={async () => {
+              const success = await submit();
+              if (success) {
+                router.push('/m/preview');
+              }
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting generation...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate
+              </>
+            )}
+          </Button>
+
+          <Button variant="outline" className="w-full" asChild>
+            <Link href="/m/create/prompt">
+              <WandSparkles className="mr-2 h-4 w-4" />
+              Open focused prompt editor
+            </Link>
+          </Button>
         </div>
       </div>
     </MobileScreen>
