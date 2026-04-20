@@ -41,11 +41,16 @@ export default function MobileCreateHome({
     clearPrimaryImage,
     clearSecondaryImage,
     basicSummaryItems,
+    randomizeSeed,
+    setRandomizeSeed,
+    parameterValues,
     isGenerating,
     submit,
     message,
     isLoadingMedia,
   } = useImageCreateState();
+
+  const currentSeed = parameterValues.seed ?? currentModel?.parameters.find((param) => param.name === 'seed')?.default;
 
   return (
     <MobileScreen>
@@ -54,6 +59,35 @@ export default function MobileCreateHome({
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 custom-scrollbar">
         <div className="space-y-4 pb-4">
           {message ? <StatusMessage type={message.type} text={message.text} /> : null}
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2.5">
+                  <span className="text-xs text-muted-foreground">Model</span>
+                  <Button variant="outline" size="sm" asChild className="max-w-[70%] justify-start overflow-hidden text-ellipsis">
+                    <Link href="/m/create/model" className="truncate">
+                      {currentModel?.name || 'Loading model...'}
+                    </Link>
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted-foreground">Seed</div>
+                    <div className="truncate text-sm font-medium text-foreground">seed: {currentSeed ?? '—'}</div>
+                  </div>
+                  <Button
+                    variant={randomizeSeed ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRandomizeSeed(!randomizeSeed)}
+                  >
+                    {randomizeSeed ? 'Random' : 'Fixed'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="pb-3">
