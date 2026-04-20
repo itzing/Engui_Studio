@@ -93,4 +93,28 @@ describe('create draft store v2', () => {
 
     expect(collectReferencedMediaIds(state)).toEqual(['m1', 'm2']);
   });
+
+  it('preserves independent active models and drafts per workflow', () => {
+    let state = createDefaultUnifiedCreateDraftState();
+    state = setActiveModeInState(state, 'video');
+    state = setWorkflowActiveModelInState(state, 'image', 'flux-krea');
+    state = setWorkflowActiveModelInState(state, 'video', 'wan22');
+    state = setWorkflowActiveModelInState(state, 'tts', 'elevenlabs-tts');
+    state = setWorkflowActiveModelInState(state, 'music', 'elevenlabs-music');
+    state = saveWorkflowDraftInState(state, 'image', 'flux-krea', { prompt: 'img prompt' });
+    state = saveWorkflowDraftInState(state, 'video', 'wan22', { prompt: 'vid prompt', imagePreviewUrl: '/generations/frame.png' });
+    state = saveWorkflowDraftInState(state, 'tts', 'elevenlabs-tts', { prompt: 'tts prompt', selectedVoice: 'voice-1' });
+    state = saveWorkflowDraftInState(state, 'music', 'elevenlabs-music', { prompt: 'music prompt', duration: 60 });
+    saveUnifiedCreateDraftState(state);
+
+    const restored = loadUnifiedCreateDraftState();
+    expect(restored.activeMode).toBe('video');
+    expect(restored.workflows.image.activeModel).toBe('flux-krea');
+    expect(restored.workflows.video.activeModel).toBe('wan22');
+    expect(restored.workflows.tts.activeModel).toBe('elevenlabs-tts');
+    expect(restored.workflows.music.activeModel).toBe('elevenlabs-music');
+    expect(restored.workflows.video.drafts['wan22']?.draft).toMatchObject({ prompt: 'vid prompt' });
+    expect(restored.workflows.tts.drafts['elevenlabs-tts']?.draft).toMatchObject({ selectedVoice: 'voice-1' });
+    expect(restored.workflows.music.drafts['elevenlabs-music']?.draft).toMatchObject({ duration: 60 });
+  });
 });

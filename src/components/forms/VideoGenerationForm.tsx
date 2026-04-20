@@ -19,7 +19,8 @@ import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflo
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();
-    const { selectedModel, setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
+    const { setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
+    const [videoSelectedModel, setVideoSelectedModel] = useState<string>('wan22');
     const [prompt, setPrompt] = useState('');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -94,14 +95,15 @@ export default function VideoGenerationForm() {
     useEffect(() => {
         const modelId = getWorkflowActiveModel('video') || DEFAULT_VIDEO_MODEL;
         isApplyingDraftModelRef.current = true;
+        setVideoSelectedModel(modelId);
         setSelectedModel(modelId);
         hasRestoredDraftRef.current = true;
     }, [DEFAULT_VIDEO_MODEL, setSelectedModel]);
 
     useEffect(() => {
         const restoreDraft = async () => {
-            if (!hasRestoredDraftRef.current || !selectedModel || hydratedModelRef.current === selectedModel) return;
-            hydratedModelRef.current = selectedModel;
+            if (!hasRestoredDraftRef.current || !videoSelectedModel || hydratedModelRef.current === videoSelectedModel) return;
+            hydratedModelRef.current = videoSelectedModel;
             try {
                 const draft = getWorkflowDraft<{
                     prompt?: string;
@@ -109,7 +111,7 @@ export default function VideoGenerationForm() {
                     parameterValues?: Record<string, any>;
                     imagePreviewUrl?: string;
                     videoPreviewUrl?: string;
-                }>('video', selectedModel);
+                }>('video', videoSelectedModel);
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
                 setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
@@ -140,19 +142,19 @@ export default function VideoGenerationForm() {
             }
         };
         void restoreDraft();
-    }, [selectedModel]);
+    }, [videoSelectedModel]);
 
     useEffect(() => {
         if (!hasRestoredDraftRef.current) return;
-        setWorkflowActiveModel('video', selectedModel || DEFAULT_VIDEO_MODEL);
-        saveWorkflowDraft('video', selectedModel || DEFAULT_VIDEO_MODEL, {
+        setWorkflowActiveModel('video', videoSelectedModel || DEFAULT_VIDEO_MODEL);
+        saveWorkflowDraft('video', videoSelectedModel || DEFAULT_VIDEO_MODEL, {
             prompt,
             showAdvanced,
             parameterValues,
             imagePreviewUrl,
             videoPreviewUrl,
         });
-    }, [DEFAULT_VIDEO_MODEL, imagePreviewUrl, parameterValues, prompt, selectedModel, showAdvanced, videoPreviewUrl]);
+    }, [DEFAULT_VIDEO_MODEL, imagePreviewUrl, parameterValues, prompt, showAdvanced, videoPreviewUrl, videoSelectedModel]);
 
     useEffect(() => {
         try {
@@ -180,15 +182,20 @@ export default function VideoGenerationForm() {
     // Initialize selected model if not set
     useEffect(() => {
         if (!hasRestoredDraftRef.current) return;
-        const isVideoModel = videoModels.some(m => m.id === selectedModel);
-        if (!selectedModel || !isVideoModel) {
+        const isVideoModel = videoModels.some(m => m.id === videoSelectedModel);
+        if (!videoSelectedModel || !isVideoModel) {
             if (videoModels.length > 0) {
-                setSelectedModel(videoModels[0].id);
+                setVideoSelectedModel(videoModels[0].id);
             }
         }
-    }, [selectedModel, setSelectedModel, videoModels]);
+    }, [videoModels, videoSelectedModel]);
 
-    const currentModel = getModelById(selectedModel || '') || videoModels[0];
+    useEffect(() => {
+        if (!videoSelectedModel) return;
+        setSelectedModel(videoSelectedModel);
+    }, [setSelectedModel, videoSelectedModel]);
+
+    const currentModel = getModelById(videoSelectedModel || '') || videoModels[0];
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
@@ -366,8 +373,8 @@ export default function VideoGenerationForm() {
                 setIsLoadingMedia(true);
 
                 // Switch to correct model if different from current
-                if (modelId && modelId !== selectedModel) {
-                    setSelectedModel(modelId);
+                if (modelId && modelId !== videoSelectedModel) {
+                    setVideoSelectedModel(modelId);
                 }
 
                 // Set prompt
@@ -537,7 +544,7 @@ export default function VideoGenerationForm() {
         return () => {
             window.removeEventListener('reuseJobInput', handleReuseInput as any);
         };
-    }, [setSelectedModel, selectedModel]);
+    }, [videoSelectedModel]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -967,10 +974,10 @@ export default function VideoGenerationForm() {
                                             key={model.id}
                                             type="button"
                                             onClick={() => {
-                                                setSelectedModel(model.id);
+                                                setVideoSelectedModel(model.id);
                                                 setIsModelDropdownOpen(false);
                                             }}
-                                            className={`w-full flex items-center justify-between px-3 py-2 transition-colors ${selectedModel === model.id
+                                            className={`w-full flex items-center justify-between px-3 py-2 transition-colors ${videoSelectedModel === model.id
                                                 ? 'bg-primary/15 text-foreground'
                                                 : 'hover:bg-muted/50 text-foreground/80'
                                                 }`}
@@ -978,7 +985,7 @@ export default function VideoGenerationForm() {
                                             <span className="text-sm font-medium">{model.name}</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="px-1.5 py-0.5 bg-muted/50 rounded text-[10px] font-mono text-muted-foreground uppercase">{model.provider}</span>
-                                                {selectedModel === model.id && (
+                                                {videoSelectedModel === model.id && (
                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-primary">
                                                         <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                                                     </svg>
