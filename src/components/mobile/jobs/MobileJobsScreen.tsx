@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FolderPlus, Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -105,6 +105,80 @@ function SelectedJobActions({
     </div>
   );
 }
+
+const JobRow = React.memo(function JobRow({
+  job,
+  absoluteIndex,
+  isSelected,
+  onPress,
+  onDelete,
+  onCancel,
+  onReuse,
+  onUpscale,
+}: {
+  job: MobileJobsScreenItem;
+  absoluteIndex: number;
+  isSelected: boolean;
+  onPress: (job: MobileJobsScreenItem, absoluteIndex: number) => void;
+  onDelete: (job: MobileJobsScreenItem) => void;
+  onCancel: (job: MobileJobsScreenItem) => void;
+  onReuse: (job: MobileJobsScreenItem) => void;
+  onUpscale: (job: MobileJobsScreenItem) => void;
+}) {
+  const model = getModelById(job.modelId);
+  const executionLabel = formatExecution(job.executionMs);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPress(job, absoluteIndex)}
+      className={`relative flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${isSelected ? 'border-primary/40 bg-primary/10 ring-1 ring-inset ring-primary/40' : 'border-border/60 bg-background/40'}`}
+    >
+      <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/20">
+        {job.thumbnailUrl || job.resultUrl ? (
+          job.type === 'video' ? (
+            <video src={job.resultUrl || undefined} className="h-full w-full object-cover" muted playsInline />
+          ) : job.type === 'image' ? (
+            <img src={job.thumbnailUrl || job.resultUrl || ''} alt={job.modelId} className="h-full w-full object-cover" />
+          ) : (
+            <Rows3 className="h-5 w-5 text-muted-foreground" />
+          )
+        ) : job.type === 'image' ? <ImageIcon className="h-5 w-5 text-muted-foreground" /> : <Rows3 className="h-5 w-5 text-muted-foreground" />}
+      </div>
+
+      <div className="min-w-0 flex-1 pr-16">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground">{model?.name || job.modelId}</div>
+            <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+              <span>{model?.provider || job.type}</span>
+              <span>•</span>
+              <span>{timeAgo(job.createdAt)}</span>
+            </div>
+          </div>
+          <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300' : job.status === 'failed' ? 'bg-red-500/10 text-red-300' : 'bg-blue-500/10 text-blue-300'}`}>
+            {job.status}
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="uppercase">{job.type}</span>
+          {executionLabel ? <span>⏱ {executionLabel}</span> : null}
+          {typeof job.cost === 'number' ? <span>${job.cost.toFixed(2)}</span> : null}
+        </div>
+      </div>
+
+      {isSelected ? (
+        <SelectedJobActions
+          job={job}
+          onDelete={onDelete}
+          onCancel={onCancel}
+          onReuse={onReuse}
+          onUpscale={onUpscale}
+        />
+      ) : null}
+    </button>
+  );
+}, (prev, next) => prev.job === next.job && prev.isSelected === next.isSelected && prev.absoluteIndex === next.absoluteIndex);
 
 export default function MobileJobsScreen() {
   const router = useRouter();
@@ -251,69 +325,24 @@ export default function MobileJobsScreen() {
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
                     {job ? (
-                      (() => {
-                        const model = getModelById(job.modelId);
-                        const executionLabel = formatExecution(job.executionMs);
-                        const isSelected = selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id;
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => handleJobPress(job, virtualRow.index)}
-                            className={`relative flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${isSelected ? 'border-primary/40 bg-primary/10 ring-1 ring-inset ring-primary/40' : 'border-border/60 bg-background/40'}`}
-                          >
-                            <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/20">
-                              {job.thumbnailUrl || job.resultUrl ? (
-                                job.type === 'video' ? (
-                                  <video src={job.resultUrl || undefined} className="h-full w-full object-cover" muted playsInline />
-                                ) : job.type === 'image' ? (
-                                  <img src={job.thumbnailUrl || job.resultUrl || ''} alt={job.modelId} className="h-full w-full object-cover" />
-                                ) : (
-                                  <Rows3 className="h-5 w-5 text-muted-foreground" />
-                                )
-                              ) : job.type === 'image' ? <ImageIcon className="h-5 w-5 text-muted-foreground" /> : <Rows3 className="h-5 w-5 text-muted-foreground" />}
-                            </div>
-
-                            <div className="min-w-0 flex-1 pr-16">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-semibold text-foreground">{model?.name || job.modelId}</div>
-                                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                                    <span>{model?.provider || job.type}</span>
-                                    <span>•</span>
-                                    <span>{timeAgo(job.createdAt)}</span>
-                                  </div>
-                                </div>
-                                <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300' : job.status === 'failed' ? 'bg-red-500/10 text-red-300' : 'bg-blue-500/10 text-blue-300'}`}>
-                                  {job.status}
-                                </div>
-                              </div>
-                              <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <span className="uppercase">{job.type}</span>
-                                {executionLabel ? <span>⏱ {executionLabel}</span> : null}
-                                {typeof job.cost === 'number' ? <span>${job.cost.toFixed(2)}</span> : null}
-                              </div>
-                            </div>
-
-                            {isSelected ? (
-                              <SelectedJobActions
-                                job={job}
-                                onDelete={(item) => {
-                                  if (window.confirm('Delete this job?')) {
-                                    void removeJob(item.id);
-                                  }
-                                }}
-                                onCancel={(item) => {
-                                  if (window.confirm('Cancel this job?')) {
-                                    void cancelActiveJob(item.id);
-                                  }
-                                }}
-                                onReuse={(item) => void reuseJob(item.id)}
-                                onUpscale={(item) => void upscaleJob(item)}
-                              />
-                            ) : null}
-                          </button>
-                        );
-                      })()
+                      <JobRow
+                        job={job}
+                        absoluteIndex={virtualRow.index}
+                        isSelected={selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id}
+                        onPress={handleJobPress}
+                        onDelete={(item) => {
+                          if (window.confirm('Delete this job?')) {
+                            void removeJob(item.id);
+                          }
+                        }}
+                        onCancel={(item) => {
+                          if (window.confirm('Cancel this job?')) {
+                            void cancelActiveJob(item.id);
+                          }
+                        }}
+                        onReuse={(item) => void reuseJob(item.id)}
+                        onUpscale={(item) => void upscaleJob(item)}
+                      />
                     ) : (
                       <PlaceholderRow />
                     )}

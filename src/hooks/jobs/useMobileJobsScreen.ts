@@ -130,6 +130,30 @@ export function useMobileJobsScreen() {
     setTotalCount(data.pagination.totalCount);
   }, []);
 
+  const patchJob = useCallback((jobId: string, updater: (job: MobileJobsScreenItem) => MobileJobsScreenItem) => {
+    setLoadedPages((prev) => {
+      let changed = false;
+      const nextPages: Record<number, LoadedJobsPage> = {};
+
+      for (const [pageKey, page] of Object.entries(prev)) {
+        let pageChanged = false;
+        const nextJobs = page.jobs.map((job) => {
+          if (job.id !== jobId) return job;
+          const nextJob = updater(job);
+          if (nextJob !== job) {
+            pageChanged = true;
+            changed = true;
+          }
+          return nextJob;
+        });
+
+        nextPages[Number(pageKey)] = pageChanged ? { ...page, jobs: nextJobs } : page;
+      }
+
+      return changed ? nextPages : prev;
+    });
+  }, []);
+
   const loadPage = useCallback(async (pageNumber: number, options?: { focusJobId?: string | null }) => {
     if (pageNumber < 1 || loadingPagesRef.current.has(pageNumber)) return null;
     loadingPagesRef.current.add(pageNumber);
@@ -189,12 +213,66 @@ export function useMobileJobsScreen() {
   }, [selectedJobId, storageKey]);
 
   useEffect(() => {
-    if (!loadedEntries.some(({ job }) => ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status))) return;
+    const activeJobs = loadedEntries
+      .map(({ job }) => job)
+      .filter((job) => ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status));
+
+    if (activeJobs.length === 0) return;
+
     const intervalId = window.setInterval(() => {
-      void hydrateInitialState();
+      void Promise.all(activeJobs.map(async (job) => {
+        try {
+          const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`, { cache: 'no-store' });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.success) return;
+
+          const nextStatus = data.status === 'COMPLETED'
+            ? 'completed'
+            : data.status === 'FAILED'
+              ? 'failed'
+              : data.status === 'IN_PROGRESS'
+                ? 'processing'
+                : 'queued';
+
+          const rawExec = data.executionTime ?? data.execution_time ?? data?.metrics?.executionTime;
+          const executionMs = typeof rawExec === 'number'
+            ? Math.max(0, Math.round(rawExec))
+            : typeof rawExec === 'string' && rawExec.trim() !== '' && !Number.isNaN(Number(rawExec))
+              ? Math.max(0, Math.round(Number(rawExec)))
+              : undefined;
+
+          patchJob(job.id, (prevJob) => {
+            const nextResultUrl = data.output?.url || data.output?.image_url || data.output?.video_url || data.output?.audioUrl || prevJob.resultUrl;
+            const nextThumbnailUrl = data.output?.thumbnail_url || data.output?.preview_url || prevJob.thumbnailUrl;
+            const nextError = data.error || prevJob.error;
+
+            if (
+              prevJob.status === nextStatus
+              && prevJob.executionMs === executionMs
+              && prevJob.resultUrl === nextResultUrl
+              && prevJob.thumbnailUrl === nextThumbnailUrl
+              && prevJob.error === nextError
+            ) {
+              return prevJob;
+            }
+
+            return {
+              ...prevJob,
+              status: nextStatus,
+              executionMs,
+              resultUrl: nextResultUrl,
+              thumbnailUrl: nextThumbnailUrl,
+              error: nextError,
+            };
+          });
+        } catch {
+          // ignore transient polling failures
+        }
+      }));
     }, 3000);
+
     return () => window.clearInterval(intervalId);
-  }, [hydrateInitialState, loadedEntries]);
+  }, [loadedEntries, patchJob]);
 
   const ensureRangeLoaded = useCallback(async (startIndex: number, endIndex: number) => {
     if (totalCount <= 0) return;
