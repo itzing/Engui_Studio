@@ -82,6 +82,7 @@ export function useImageCreateState() {
   const secondaryImageVisible = !!(currentModel && isInputVisible(currentModel, 'image2', parameterValues));
   const primaryImageRequired = primaryImageVisible && !currentModel?.optionalInputs?.includes('image');
   const secondaryImageRequired = secondaryImageVisible && !currentModel?.optionalInputs?.includes('image2');
+  const hasPrimaryImage = !!(imageFile || primaryInputRef || previewUrl);
 
   const negativePromptParameterName = currentModel?.parameters.find(
     (param) => param.name === 'negativePrompt' || param.name === 'negative_prompt'
@@ -224,6 +225,23 @@ export function useImageCreateState() {
       cancelled = true;
     };
   }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!currentModel?.parameters.some((param) => param.name === 'use_controlnet')) {
+      return;
+    }
+
+    setParameterValues((prev) => {
+      if (prev.use_controlnet === hasPrimaryImage) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        use_controlnet: hasPrimaryImage,
+      };
+    });
+  }, [currentModel, hasPrimaryImage]);
 
   const setTimedMessage = useCallback((nextMessage: FlashMessage) => {
     setMessage(nextMessage);
