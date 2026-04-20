@@ -71,7 +71,8 @@ export default function MobileGalleryScreen() {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const prevTopRowRequestRef = useRef<number | null>(null);
   const prevBottomRowRequestRef = useRef<number | null>(null);
-  const prependCompensationRef = useRef<{ previousTotalSize: number; previousAssetCount: number } | null>(null);
+  const prependCompensationRef = useRef<{ previousAssetCount: number } | null>(null);
+  const suppressTopLoadUntilRef = useRef(0);
   const {
     assets,
     isLoading,
@@ -121,18 +122,21 @@ export default function MobileGalleryScreen() {
     if (!pendingCompensation || !scrollElement) return;
     if (assets.length <= pendingCompensation.previousAssetCount) return;
 
-    const nextTotalSize = rowVirtualizer.getTotalSize();
-    const delta = nextTotalSize - pendingCompensation.previousTotalSize;
+    const addedItems = assets.length - pendingCompensation.previousAssetCount;
+    const addedRows = Math.ceil(addedItems / 3);
+    const rowHeight = scrollElement.clientWidth / 3;
+    const delta = addedRows * rowHeight;
     if (delta > 0) {
       scrollElement.scrollTop += delta;
     }
     prependCompensationRef.current = null;
-  }, [assets.length, rowVirtualizer]);
+  }, [assets.length]);
 
   useEffect(() => {
     const nextIndex = typeof restoreIndex === 'number' && restoreIndex >= 0 ? restoreIndex : selectedIndex;
     if (nextIndex < 0) return;
     if (!viewerOpen && restoreTick > 0) {
+      suppressTopLoadUntilRef.current = Date.now() + 1200;
       rowVirtualizer.scrollToIndex(Math.floor(nextIndex / 3), { align: 'center' });
     }
   }, [restoreIndex, restoreTick, rowVirtualizer, selectedIndex, viewerOpen]);
@@ -142,10 +146,11 @@ export default function MobileGalleryScreen() {
     const firstRow = virtualRows[0]?.index ?? 0;
     const lastRow = virtualRows[virtualRows.length - 1]?.index ?? 0;
 
-    if (hasPrevPage && firstRow <= 2 && prevTopRowRequestRef.current !== firstRow) {
+    const canAutoLoadTop = Date.now() >= suppressTopLoadUntilRef.current;
+
+    if (hasPrevPage && canAutoLoadTop && firstRow <= 2 && prevTopRowRequestRef.current !== firstRow) {
       prevTopRowRequestRef.current = firstRow;
       prependCompensationRef.current = {
-        previousTotalSize: rowVirtualizer.getTotalSize(),
         previousAssetCount: assets.length,
       };
       void loadPreviousPage();
@@ -163,7 +168,7 @@ export default function MobileGalleryScreen() {
     if (!hasNextPage) {
       prevBottomRowRequestRef.current = null;
     }
-  }, [assets.length, hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, rowVirtualizer, virtualRows]);
+  }, [assets.length, hasNextPage, hasPrevPage, loadNextPage, loadPreviousPage, rowCount, virtualRows]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
