@@ -14,11 +14,11 @@ export default function MobileCreatePendingActions() {
       if (!rawValue) return;
 
       const detail = JSON.parse(rawValue);
-      window.localStorage.removeItem(PENDING_REUSE_KEY);
 
       timeoutId = window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('reuseJobInput', { detail }));
-      }, 0);
+        window.localStorage.removeItem(PENDING_REUSE_KEY);
+      }, 150);
     } catch {
       window.localStorage.removeItem(PENDING_REUSE_KEY);
     }

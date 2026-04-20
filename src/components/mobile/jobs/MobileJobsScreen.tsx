@@ -251,8 +251,16 @@ export default function MobileJobsScreen() {
                             {isSelected ? (
                               <SelectedJobActions
                                 job={job}
-                                onDelete={(item) => void removeJob(item.id)}
-                                onCancel={(item) => void cancelActiveJob(item.id)}
+                                onDelete={(item) => {
+                                  if (window.confirm('Delete this job?')) {
+                                    void removeJob(item.id);
+                                  }
+                                }}
+                                onCancel={(item) => {
+                                  if (window.confirm('Cancel this job?')) {
+                                    void cancelActiveJob(item.id);
+                                  }
+                                }}
                                 onReuse={(item) => void reuseJob(item.id)}
                                 onUpscale={(item) => void upscaleJob(item)}
                               />
