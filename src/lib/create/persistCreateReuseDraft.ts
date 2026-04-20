@@ -68,6 +68,29 @@ function normalizeZImageLoraWeight(options: Record<string, any>): number | undef
   return undefined;
 }
 
+function normalizeZImageLoraSlots(options: Record<string, any>): Array<{ path: string; weight: number }> {
+  if (Array.isArray(options.zImageLoraSlots)) {
+    return options.zImageLoraSlots
+      .map((slot: any) => ({
+        path: normalizeZImageLoraPath(slot?.path),
+        weight: typeof slot?.weight === 'number' && Number.isFinite(slot.weight)
+          ? slot.weight
+          : 1.0,
+      }))
+      .filter((slot) => slot.path);
+  }
+
+  const legacyPath = normalizeZImageLoraPath(options.zImageLora)
+    || (Array.isArray(options.lora) && Array.isArray(options.lora[0])
+      ? normalizeZImageLoraPath(options.lora[0][0])
+      : '');
+  const legacyWeight = normalizeZImageLoraWeight(options);
+
+  return legacyPath
+    ? [{ path: legacyPath, weight: typeof legacyWeight === 'number' && Number.isFinite(legacyWeight) ? legacyWeight : 1.0 }]
+    : [];
+}
+
 export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageModelId: 'flux-krea', videoModelId: 'wan22' }) {
   const parsedOptions = parseReuseOptions(detail.options);
 
@@ -88,19 +111,14 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
 
     if (modelId === 'z-image') {
-      const normalizedLoraPath = normalizeZImageLoraPath(parsedOptions.zImageLora)
-        || (Array.isArray(parsedOptions.lora) && Array.isArray(parsedOptions.lora[0])
-          ? normalizeZImageLoraPath(parsedOptions.lora[0][0])
-          : '');
-      const normalizedLoraWeight = normalizeZImageLoraWeight(parsedOptions);
+      const normalizedLoraSlots = normalizeZImageLoraSlots(parsedOptions).slice(0, 4);
 
-      if (normalizedLoraPath) {
-        parameterValues.lora = normalizedLoraPath;
-      }
-
-      if (typeof normalizedLoraWeight === 'number' && Number.isFinite(normalizedLoraWeight)) {
-        parameterValues.loraWeight = normalizedLoraWeight;
-      }
+      normalizedLoraSlots.forEach((slot, index) => {
+        const loraKey = index === 0 ? 'lora' : `lora${index + 1}`;
+        const loraWeightKey = index === 0 ? 'loraWeight' : `loraWeight${index + 1}`;
+        parameterValues[loraKey] = slot.path;
+        parameterValues[loraWeightKey] = slot.weight;
+      });
 
       if (!primaryImagePath) {
         parameterValues.use_controlnet = false;

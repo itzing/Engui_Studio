@@ -540,7 +540,7 @@ export default function ImageGenerationForm() {
     };
 
     const handleNumericParameterInput = (paramName: string, rawValue: string) => {
-        if (paramName === 'loraWeight') {
+        if (/^loraWeight\d*$/.test(paramName)) {
             if (/^-?\d*(\.\d*)?$/.test(rawValue)) {
                 handleParameterChange(paramName, rawValue);
             }
@@ -1303,14 +1303,14 @@ export default function ImageGenerationForm() {
                                 ) : (
                                     <>
                                         <Input
-                                            type={param.name === 'loraWeight' ? 'text' : 'number'}
-                                            inputMode={param.name === 'loraWeight' ? 'text' : undefined}
+                                            type={/^loraWeight\d*$/.test(param.name) ? 'text' : 'number'}
+                                            inputMode={/^loraWeight\d*$/.test(param.name) ? 'text' : undefined}
                                             name={param.name}
                                             value={parameterValues[param.name] ?? param.default}
                                             onChange={(e) => handleNumericParameterInput(param.name, e.target.value)}
-                                            min={param.name === 'loraWeight' ? undefined : param.min}
-                                            max={param.name === 'loraWeight' ? undefined : param.max}
-                                            step={param.name === 'loraWeight' ? undefined : param.step}
+                                            min={/^loraWeight\d*$/.test(param.name) ? undefined : param.min}
+                                            max={/^loraWeight\d*$/.test(param.name) ? undefined : param.max}
+                                            step={/^loraWeight\d*$/.test(param.name) ? undefined : param.step}
                                             className="h-8 text-sm"
                                         />
                                         {param.name === 'seed' && (

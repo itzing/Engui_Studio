@@ -147,6 +147,53 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('restores up to 4 z-image lora slots from persisted slot metadata', async () => {
+    getModelById.mockReturnValue({
+      id: 'z-image',
+      parameters: [
+        { name: 'lora', default: '' },
+        { name: 'loraWeight', default: 1 },
+        { name: 'lora2', default: '' },
+        { name: 'loraWeight2', default: 1 },
+        { name: 'lora3', default: '' },
+        { name: 'loraWeight3', default: 1 },
+        { name: 'lora4', default: '' },
+        { name: 'loraWeight4', default: 1 },
+        { name: 'use_controlnet', default: false },
+      ],
+    });
+    isInputVisible.mockReturnValue(false);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    persistCreateReuseDraft({
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'cinematic portrait',
+      options: {
+        use_controlnet: false,
+        zImageLoraSlots: [
+          { path: '/runpod-volume/loras/one.safetensors', weight: 0.8 },
+          { path: '/runpod-volume/loras/two.safetensors', weight: -1 },
+          { path: '/runpod-volume/loras/three.safetensors', weight: 0.35 },
+          { path: '/runpod-volume/loras/four.safetensors', weight: 1.2 },
+        ],
+      },
+    });
+
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'z-image', expect.objectContaining({
+      parameterValues: expect.objectContaining({
+        lora: '/runpod-volume/loras/one.safetensors',
+        loraWeight: 0.8,
+        lora2: '/runpod-volume/loras/two.safetensors',
+        loraWeight2: -1,
+        lora3: '/runpod-volume/loras/three.safetensors',
+        loraWeight3: 0.35,
+        lora4: '/runpod-volume/loras/four.safetensors',
+        loraWeight4: 1.2,
+      }),
+    }));
+  });
+
   it('writes img2vid payloads into the video workflow draft before navigation', async () => {
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 

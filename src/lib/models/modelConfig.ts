@@ -356,8 +356,14 @@ export const MODELS: ModelConfig[] = [
             { name: 'seed', label: 'Seed', type: 'number', default: 533303727624653, group: 'advanced', description: 'Random seed for generation' },
             { name: 'steps', label: 'Steps', type: 'number', default: 9, min: 1, max: 50, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 0.1, max: 20, step: 0.1, group: 'advanced' },
-            { name: 'lora', label: 'LoRA Model', type: 'lora-selector', default: '', group: 'advanced', description: 'LoRA model for custom styling' },
-            { name: 'loraWeight', label: 'LoRA Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' }
+            { name: 'lora', label: 'LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'Primary LoRA model for custom styling' },
+            { name: 'loraWeight', label: 'LoRA 1 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora2', label: 'LoRA 2', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional second LoRA model' },
+            { name: 'loraWeight2', label: 'LoRA 2 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora3', label: 'LoRA 3', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional third LoRA model' },
+            { name: 'loraWeight3', label: 'LoRA 3 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora4', label: 'LoRA 4', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional fourth LoRA model' },
+            { name: 'loraWeight4', label: 'LoRA 4 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' }
         ]
     },
 

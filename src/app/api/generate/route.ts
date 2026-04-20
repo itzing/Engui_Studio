@@ -302,32 +302,51 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Collect LoRA parameters for z-image (single LoRA with weight)
-        // Format: lora: [["style_lora.safetensors", 0.8]] (filename only, not full path)
+        // Collect LoRA parameters for z-image (up to 4 slots)
+        // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
         if (modelId === 'z-image') {
-            const lora = formData.get('lora') as string;
-            const loraWeight = formData.get('loraWeight') as string;
+            const zImageLoraSlots: Array<{ path: string; weight: number }> = [];
 
-            if (lora && lora.trim() !== '') {
-                const weight = loraWeight ? parseFloat(loraWeight) : 1.0;
-                // Extract just the filename (worker expects filename, not full path)
+            for (let i = 1; i <= 4; i++) {
+                const loraKey = i === 1 ? 'lora' : `lora${i}`;
+                const loraWeightKey = i === 1 ? 'loraWeight' : `loraWeight${i}`;
+                const lora = formData.get(loraKey) as string;
+                const rawWeight = formData.get(loraWeightKey) as string;
+
+                if (!lora || lora.trim() === '') {
+                    delete parameters[loraKey];
+                    delete parameters[loraWeightKey];
+                    continue;
+                }
+
+                const parsedWeight = rawWeight ? parseFloat(rawWeight) : 1.0;
+                const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1.0;
                 const loraFileName = lora.split('/').pop() || lora;
-                // Store as array format for RunPod input: [[filename, weight]]
-                inputData['lora'] = [[loraFileName, weight]];
 
-                // Keep original UI values for reliable reuse in options
-                inputData['zImageLora'] = lora;
-                inputData['zImageLoraWeight'] = weight;
+                zImageLoraSlots.push({ path: lora, weight });
 
-                console.log('Z-Image LoRA attached', {
-                    fileName: loraFileName,
-                    weight,
-                });
+                if (!Array.isArray(inputData['lora'])) {
+                    inputData['lora'] = [];
+                }
+                inputData['lora'].push([loraFileName, weight]);
+
+                delete parameters[loraKey];
+                delete parameters[loraWeightKey];
             }
 
-            // Remove lora and loraWeight from parameters to prevent overwriting inputData.lora
-            delete parameters['lora'];
-            delete parameters['loraWeight'];
+            if (zImageLoraSlots.length > 0) {
+                inputData['zImageLoraSlots'] = zImageLoraSlots;
+                inputData['zImageLora'] = zImageLoraSlots[0].path;
+                inputData['zImageLoraWeight'] = zImageLoraSlots[0].weight;
+
+                console.log('Z-Image LoRAs attached', {
+                    count: zImageLoraSlots.length,
+                    loras: zImageLoraSlots.map((slot) => ({
+                        fileName: slot.path.split('/').pop() || slot.path,
+                        weight: slot.weight,
+                    })),
+                });
+            }
         }
 
         // Add prompt if model accepts text
