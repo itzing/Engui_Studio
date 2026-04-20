@@ -19,7 +19,6 @@ const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ cl
 
 export default function MobileStudioLayout() {
   const [activeTab, setActiveTab] = useState<MobileTab>('create');
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -65,11 +64,7 @@ export default function MobileStudioLayout() {
 
     const applyViewportHeight = () => {
       const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      const layoutViewportHeight = window.innerHeight;
-      const keyboardInset = Math.max(0, layoutViewportHeight - viewportHeight);
-
       document.documentElement.style.setProperty(MOBILE_APP_HEIGHT_VAR, `${Math.round(viewportHeight)}px`);
-      setIsKeyboardOpen(keyboardInset > 120);
     };
 
     const scheduleViewportHeightSync = (delay = 0) => {
@@ -132,10 +127,7 @@ export default function MobileStudioLayout() {
         )}
       </div>
 
-      <nav
-        className={`border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur transition-transform duration-200 supports-[backdrop-filter]:bg-background/85 ${isKeyboardOpen ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}
-        aria-hidden={isKeyboardOpen}
-      >
+      <nav className="border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="grid grid-cols-4 gap-2">
           {tabs.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
