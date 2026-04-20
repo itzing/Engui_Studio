@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
     const onlyProcessing = searchParams.get('onlyProcessing') === 'true';
     const workspaceId = searchParams.get('workspaceId'); // 워크스페이스 필터 추가
     const type = (searchParams.get('type') || '').toLowerCase(); // image | video | audio or csv
+    const focusJobId = searchParams.get('focusJobId')?.trim() || null;
 
     if (jobId) {
       // 특정 작업 조회
@@ -166,25 +167,40 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // 페이지네이션과 함께 작업 조회 (필요한 필드만 선택)
-      const [jobs, totalCount] = await Promise.all([
-        prisma.job.findMany({
+      const totalCount = await prisma.job.count({ where: whereCondition });
+
+      let resolvedPage = page;
+      let focusAbsoluteIndex: number | null = null;
+      if (focusJobId) {
+        const focusedJobs = await prisma.job.findMany({
           where: whereCondition,
           orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-          include: {
-            workspace: {
-              select: {
-                id: true,
-                name: true,
-                color: true
-              }
+          select: { id: true },
+        });
+        const foundIndex = focusedJobs.findIndex((job) => job.id === focusJobId);
+        if (foundIndex >= 0) {
+          focusAbsoluteIndex = foundIndex;
+          resolvedPage = Math.floor(foundIndex / limit) + 1;
+        }
+      }
+
+      const resolvedSkip = (resolvedPage - 1) * limit;
+
+      const jobs = await prisma.job.findMany({
+        where: whereCondition,
+        orderBy: { createdAt: 'desc' },
+        skip: resolvedSkip,
+        take: limit,
+        include: {
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              color: true
             }
           }
-        }),
-        prisma.job.count({ where: whereCondition })
-      ]);
+        }
+      });
 
       const hydratedJobs = await Promise.all(jobs.map(async (job) => {
         if (job.status !== 'completed' || !job.resultUrl || job.thumbnailUrl) {
@@ -216,13 +232,20 @@ export async function GET(request: NextRequest) {
 
       const result = {
         jobs: formattedJobs,
+        focus: focusJobId ? {
+          jobId: focusJobId,
+          found: focusAbsoluteIndex !== null,
+          page: focusAbsoluteIndex !== null ? resolvedPage : null,
+          indexOnPage: focusAbsoluteIndex !== null ? focusAbsoluteIndex % limit : null,
+          absoluteIndex: focusAbsoluteIndex,
+        } : undefined,
         pagination: {
-          page,
+          page: resolvedPage,
           limit,
           totalCount,
           totalPages: Math.ceil(totalCount / limit),
-          hasNextPage: page < Math.ceil(totalCount / limit),
-          hasPrevPage: page > 1,
+          hasNextPage: resolvedPage < Math.ceil(totalCount / limit),
+          hasPrevPage: resolvedPage > 1,
         }
       };
 
