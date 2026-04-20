@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Heart, Info, Loader2, Play, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { AudioLines, Heart, Image as ImageIcon, Info, Loader2, Play, RefreshCw, Search, Trash2, Video } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,6 +86,12 @@ export default function MobileGalleryScreen() {
     error,
     query,
     setQuery,
+    selectedFilters,
+    showTrashed,
+    favoritesOnly,
+    toggleMediaFilter,
+    toggleGalleryFavorites,
+    toggleGalleryTrash,
     refresh,
     ensureRangeLoaded,
     selectedAssetId,
@@ -138,20 +143,60 @@ export default function MobileGalleryScreen() {
     return loadedViewerItems.findIndex((entry) => entry.id === selectedAssetId);
   }, [loadedViewerItems, selectedAssetId]);
 
+  const isAllFilterActive = selectedFilters.length === 3;
+
   return (
     <MobileScreen>
-      <MobileHeader
-        title="Gallery"
-        subtitle="Dense mobile gallery with selection memory and fullscreen viewer."
-        action={
-          <Button variant="outline" size="sm" onClick={() => void refresh()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-        }
-      />
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 space-y-3">
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+            {([
+              { key: 'all', label: 'All' },
+              { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+              { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+              { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+            ] as const).map((item) => {
+              const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+              const Icon = 'icon' in item ? item.icon : null;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => toggleMediaFilter(item.key)}
+                  className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                    ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                    : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                >
+                  {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={toggleGalleryFavorites}
+              className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+              aria-label="Toggle favorites"
+            >
+              <Heart className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={toggleGalleryTrash}
+              className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+              aria-label="Toggle trash"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
+              aria-label="Refresh gallery"
+              onClick={() => void refresh()}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 text-base sm:text-sm" />

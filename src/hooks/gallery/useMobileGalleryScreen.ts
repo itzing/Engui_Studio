@@ -47,6 +47,8 @@ type LoadedGalleryPage = {
 };
 
 const PAGE_SIZE = 24;
+const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
+type MediaFilter = typeof TYPE_FILTERS[number];
 
 export function useMobileGalleryScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
@@ -57,6 +59,9 @@ export function useMobileGalleryScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
+  const [showTrashed, setShowTrashed] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAbsoluteIndex, setSelectedAbsoluteIndex] = useState<number | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -115,6 +120,10 @@ export function useMobileGalleryScreen() {
       limit: String(PAGE_SIZE),
       sort: 'newest',
       page: String(page),
+      includeTrashed: showTrashed ? 'true' : 'false',
+      onlyTrashed: showTrashed ? 'true' : 'false',
+      favoritesOnly: favoritesOnly ? 'true' : 'false',
+      type: selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','),
     });
 
     if (query.trim()) {
@@ -130,7 +139,7 @@ export function useMobileGalleryScreen() {
       throw new Error(data.error || 'Failed to load gallery');
     }
     return data;
-  }, [effectiveWorkspaceId, query]);
+  }, [effectiveWorkspaceId, favoritesOnly, query, selectedFilters, showTrashed]);
 
   const mergePage = useCallback((pageNumber: number, data: GalleryPageResponse) => {
     if (!data.pagination) return;
@@ -221,6 +230,27 @@ export function useMobileGalleryScreen() {
     hydratedSelectionRef.current = false;
     void hydrateInitialState();
   }, [hydrateInitialState]);
+
+  const toggleMediaFilter = useCallback((filter: 'all' | MediaFilter) => {
+    setSelectedFilters((prev) => {
+      if (filter === 'all') {
+        return [...TYPE_FILTERS];
+      }
+      if (prev.includes(filter)) {
+        const next = prev.filter((entry) => entry !== filter);
+        return next.length > 0 ? next : [...TYPE_FILTERS];
+      }
+      return [...prev, filter];
+    });
+  }, []);
+
+  const toggleGalleryFavorites = useCallback(() => {
+    setFavoritesOnly((prev) => !prev);
+  }, []);
+
+  const toggleGalleryTrash = useCallback(() => {
+    setShowTrashed((prev) => !prev);
+  }, []);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
@@ -387,6 +417,12 @@ export function useMobileGalleryScreen() {
     error,
     query,
     setQuery,
+    selectedFilters,
+    showTrashed,
+    favoritesOnly,
+    toggleMediaFilter,
+    toggleGalleryFavorites,
+    toggleGalleryTrash,
     refresh,
     ensureRangeLoaded,
     selectedAssetId,
