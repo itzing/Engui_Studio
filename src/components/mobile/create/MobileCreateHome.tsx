@@ -211,7 +211,7 @@ export default function MobileCreateHome() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="space-y-3">
           <Button
             className="w-full"
