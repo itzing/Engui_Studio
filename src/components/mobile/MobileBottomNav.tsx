@@ -9,7 +9,7 @@ export default function MobileBottomNav() {
   const activeTab = getMobileTabForPathname(pathname);
 
   return (
-    <nav className="border-t border-border bg-background/95 px-2 pt-0 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <nav className="border-t border-border bg-background/95 px-2 pt-0 pb-0 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}>
         {mobileNavItems.map(({ id, label, href, icon: Icon }) => {
           const active = activeTab === id;
