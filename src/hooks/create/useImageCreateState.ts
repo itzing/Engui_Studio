@@ -457,6 +457,9 @@ export function useImageCreateState() {
     && !!settings.promptHelper?.local?.baseUrl?.trim()
     && !!settings.promptHelper?.local?.model?.trim();
 
+  const controlNetEnabled = parameterValues.use_controlnet === true;
+  const supportsControlNet = !!currentModel?.parameters.some((param) => param.name === 'use_controlnet');
+
   return {
     imageModels,
     currentModel,
@@ -468,6 +471,8 @@ export function useImageCreateState() {
     setShowAdvanced,
     randomizeSeed,
     setRandomizeSeed,
+    controlNetEnabled,
+    supportsControlNet,
     parameterValues,
     handleParameterChange,
     handleNumericParameterInput,

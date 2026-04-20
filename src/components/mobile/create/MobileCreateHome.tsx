@@ -43,6 +43,8 @@ export default function MobileCreateHome({
     basicSummaryItems,
     randomizeSeed,
     setRandomizeSeed,
+    controlNetEnabled,
+    supportsControlNet,
     parameterValues,
     isGenerating,
     submit,
@@ -80,6 +82,15 @@ export default function MobileCreateHome({
                     {currentSeed ?? '—'}
                   </span>
                 </Button>
+
+                {supportsControlNet ? (
+                  <div className={`rounded-md border px-3 py-3 ${controlNetEnabled ? 'border-primary/30 bg-primary/10' : 'border-border bg-background/40'}`}>
+                    <div className="text-base font-semibold leading-none text-foreground">ControlNet</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {controlNetEnabled ? 'Enabled from image input' : 'Disabled, no image selected'}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>
