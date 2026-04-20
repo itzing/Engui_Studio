@@ -91,6 +91,7 @@ export default function MobileGalleryScreen() {
     toggleFavorite,
     toggleTrash,
     restoreTick,
+    restoreIndex,
   } = useMobileGalleryScreen();
 
   const selectedIndex = useMemo(
@@ -99,11 +100,12 @@ export default function MobileGalleryScreen() {
   );
 
   useEffect(() => {
-    if (selectedIndex < 0) return;
+    const nextIndex = typeof restoreIndex === 'number' && restoreIndex >= 0 ? restoreIndex : selectedIndex;
+    if (nextIndex < 0) return;
     if (!viewerOpen && restoreTick > 0) {
-      gridRef.current?.scrollToIndex({ index: selectedIndex, align: 'center', behavior: 'auto' });
+      gridRef.current?.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'auto' });
     }
-  }, [restoreTick, selectedIndex, viewerOpen]);
+  }, [restoreIndex, restoreTick, selectedIndex, viewerOpen]);
 
   useEffect(() => {
     if (viewerOpen) {
