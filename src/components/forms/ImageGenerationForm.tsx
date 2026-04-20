@@ -109,7 +109,7 @@ export default function ImageGenerationForm() {
         selectedSceneId,
     }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
 
-    const applySnapshot = async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
+    const applySnapshot = React.useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
         const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
 
         setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
@@ -132,7 +132,7 @@ export default function ImageGenerationForm() {
         if (nextPreviewUrl2.startsWith('data:')) {
             setImageFile2(await dataUrlToFile(nextPreviewUrl2, 'image-input-2'));
         }
-    };
+    }, []);
 
     const { switchModel } = useImageCreateDraftPersistence({
         defaultModelId: DEFAULT_IMAGE_MODEL,
