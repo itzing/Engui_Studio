@@ -6,8 +6,8 @@ import { getMobileTabForPathname } from './mobileNavigation';
 
 const routeEvents: Record<string, string> = {
   mobileOpenCreateTab: '/m/create',
-  mobileOpenPreviewTab: '/m/preview',
-  openPreviewInfo: '/m/preview',
+  mobileOpenPreviewTab: '/m/jobs',
+  openPreviewInfo: '/m/jobs',
   mobileOpenJobsTab: '/m/jobs',
   mobileOpenGalleryTab: '/m/gallery',
 };

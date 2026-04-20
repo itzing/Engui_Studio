@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
+import { persistImageReuseDraft } from '@/lib/create/persistImageReuseDraft';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -58,7 +59,8 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
-      window.dispatchEvent(new CustomEvent('reuseJobInput', { detail: data.payload }));
+      persistImageReuseDraft(data.payload);
+      router.push('/m/create');
     }
   };
 

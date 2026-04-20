@@ -288,9 +288,9 @@ export function useMobileJobsScreen() {
   }, [addJob, hydrateInitialState]);
 
   const clearFinished = useCallback(async () => {
-    await clearFinishedJobs();
+    await clearFinishedJobs(effectiveWorkspaceId);
     await hydrateInitialState();
-  }, [clearFinishedJobs, hydrateInitialState]);
+  }, [clearFinishedJobs, effectiveWorkspaceId, hydrateInitialState]);
 
   return {
     totalCount,

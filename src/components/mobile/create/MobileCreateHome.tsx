@@ -220,7 +220,7 @@ export default function MobileCreateHome() {
             onClick={async () => {
               const success = await submit();
               if (success) {
-                router.push('/m/preview');
+                router.push('/m/jobs');
               }
             }}
           >

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
@@ -105,6 +106,7 @@ function SelectedJobActions({
 }
 
 export default function MobileJobsScreen() {
+  const router = useRouter();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
   const {
@@ -169,7 +171,16 @@ export default function MobileJobsScreen() {
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded border border-border/40" onClick={() => void refresh()} aria-label="Refresh jobs">
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="sm" className="ml-auto h-8 rounded border border-border/40 px-3 text-xs" onClick={() => void clearFinished()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-8 rounded border border-border/40 px-3 text-xs"
+              onClick={() => {
+                if (window.confirm('Delete all completed and failed jobs in this workspace?')) {
+                  void clearFinished();
+                }
+              }}
+            >
               <X className="mr-1.5 h-3.5 w-3.5" />
               Clear finished
             </Button>
@@ -291,6 +302,9 @@ export default function MobileJobsScreen() {
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
         onClose={closeViewer}
+        onOpenInfo={(itemId) => {
+          router.push(`/m/jobs/${itemId}`);
+        }}
       />
     </MobileScreen>
   );

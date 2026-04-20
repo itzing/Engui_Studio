@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { persistImageReuseDraft } from '@/lib/create/persistImageReuseDraft';
 
 export type StudioTool =
     | 'video-generation'
@@ -622,6 +623,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             const shouldReuseImageInput = !(job.modelId === 'z-image' && options.use_controlnet !== true);
                             const resolvedImageInputPath = shouldReuseImageInput ? data.job.imageInputPath : null;
 
+                            const reuseDetail = {
+                                modelId: job.modelId,
+                                prompt: job.prompt,
+                                type: job.type,
+                                options: options,
+                                imageInputPath: resolvedImageInputPath,
+                                videoInputPath: data.job.videoInputPath,
+                                audioInputPath: data.job.audioInputPath
+                            };
+
+                            persistImageReuseDraft(reuseDetail);
+
                             console.log('📤 Dispatching reuseJobInput event:', {
                                 modelId: job.modelId,
                                 type: job.type,
@@ -632,15 +645,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                                 shouldReuseImageInput,
                             });
                             window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                                detail: {
-                                    modelId: job.modelId,
-                                    prompt: job.prompt,
-                                    type: job.type,
-                                    options: options,
-                                    imageInputPath: resolvedImageInputPath,
-                                    videoInputPath: data.job.videoInputPath,
-                                    audioInputPath: data.job.audioInputPath
-                                }
+                                detail: reuseDetail
                             }));
                             console.log('✅ Event dispatched successfully');
                         } catch (eventError) {
@@ -657,13 +662,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 window.dispatchEvent(new CustomEvent('mobileOpenCreateTab'));
                 setTimeout(() => {
                     try {
+                        const reuseDetail = {
+                            modelId: job.modelId,
+                            prompt: job.prompt,
+                            type: job.type,
+                            options: {}
+                        };
+                        persistImageReuseDraft(reuseDetail);
                         window.dispatchEvent(new CustomEvent('reuseJobInput', {
-                            detail: {
-                                modelId: job.modelId,
-                                prompt: job.prompt,
-                                type: job.type,
-                                options: {}
-                            }
+                            detail: reuseDetail
                         }));
                     } catch (eventError) {
                         console.error('Failed to dispatch fallback reuseJobInput event:', eventError);

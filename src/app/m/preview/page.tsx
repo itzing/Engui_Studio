@@ -1,10 +1,5 @@
-import MobileAppShell from '@/components/mobile/MobileAppShell';
-import MobilePreviewScreen from '@/components/mobile/preview/MobilePreviewScreen';
+import { redirect } from 'next/navigation';
 
 export default function MobilePreviewPage() {
-  return (
-    <MobileAppShell>
-      <MobilePreviewScreen />
-    </MobileAppShell>
-  );
+  redirect('/m/jobs');
 }
