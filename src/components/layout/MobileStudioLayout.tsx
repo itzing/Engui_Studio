@@ -56,8 +56,8 @@ export default function MobileStudioLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen min-h-[100dvh] w-full flex-col overflow-hidden bg-background text-foreground">
-      <div className="min-h-0 flex-1 overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top,0px)] text-foreground">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <div className={activeTab === 'create' ? 'flex h-full min-h-0' : 'hidden h-full min-h-0'}>
           <LeftPanel mobile />
         </div>
