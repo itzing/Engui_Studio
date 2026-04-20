@@ -115,17 +115,25 @@ export default function VideoGenerationForm() {
                 setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
                 setImageFile(null);
                 setVideoFile(null);
-                setImagePreviewUrl('');
-                setVideoPreviewUrl('');
+                setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
+                setVideoPreviewUrl(typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '');
                 if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl.startsWith('data:')) {
                     const restoredImageFile = await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input');
                     setImageFile(restoredImageFile);
-                    setImagePreviewUrl(draft.imagePreviewUrl);
+                } else if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl) {
+                    const restoredImageFile = await loadFileFromPath(draft.imagePreviewUrl);
+                    if (restoredImageFile) {
+                        setImageFile(restoredImageFile);
+                    }
                 }
                 if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl.startsWith('data:')) {
                     const restoredVideoFile = await dataUrlToFile(draft.videoPreviewUrl, 'video-input');
                     setVideoFile(restoredVideoFile);
-                    setVideoPreviewUrl(draft.videoPreviewUrl);
+                } else if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl) {
+                    const restoredVideoFile = await loadFileFromPath(draft.videoPreviewUrl);
+                    if (restoredVideoFile) {
+                        setVideoFile(restoredVideoFile);
+                    }
                 }
             } catch (error) {
                 console.warn('Failed to restore video draft', error);

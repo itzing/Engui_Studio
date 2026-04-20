@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Download, Heart, Loader2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { Clapperboard, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useMobileGalleryDetails } from '@/hooks/gallery/useMobileGalleryDetails';
+import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
@@ -92,7 +93,8 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
-      window.dispatchEvent(new CustomEvent('reuseJobInput', { detail: data.payload }));
+      persistCreateReuseDraft(data.payload);
+      router.push('/m/create');
     }
   };
 
@@ -159,6 +161,8 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                 <Button variant="outline" onClick={() => void downloadAsset()}><Download className="mr-2 h-4 w-4" />Download</Button>
                 <Button variant="outline" onClick={() => void toggleFavorite()}><Heart className="mr-2 h-4 w-4" />{asset.favorited ? 'Unfavorite' : 'Favorite'}</Button>
                 {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />Open in Create</Button> : null}
+                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />Reuse prompt only</Button> : null}
+                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />Open in img2vid</Button> : null}
                 <Button variant="destructive" onClick={() => void toggleTrash()}><Trash2 className="mr-2 h-4 w-4" />{asset.trashed ? 'Restore' : 'Move to trash'}</Button>
                 {asset.sourceJobId ? <Button variant="ghost" asChild><Link href={`/m/jobs/${asset.sourceJobId}`}>Open source job</Link></Button> : null}
               </div>

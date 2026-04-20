@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PENDING_REUSE_KEY } from '@/components/mobile/MobileRouteEventBridge';
 import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
 import {
   createImageDraftSnapshot,
@@ -11,7 +10,6 @@ import {
   type ImageCreateDraftSnapshot,
 } from '@/lib/create/imageDraft';
 import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/createMediaStore';
-import { setWorkflowActiveModel } from '@/lib/createDrafts';
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
@@ -32,17 +30,6 @@ const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = '
   const response = await fetch(dataUrl);
   const blob = await response.blob();
   return new File([blob], filename, { type: blob.type || fallbackType });
-};
-
-const parseReuseOptions = (options: unknown) => {
-  if (typeof options === 'string') {
-    try {
-      return JSON.parse(options);
-    } catch {
-      return {};
-    }
-  }
-  return (options && typeof options === 'object') ? options as Record<string, any> : {};
 };
 
 export function useImageCreateState() {
@@ -422,92 +409,6 @@ export function useImageCreateState() {
     }
   }, [currentHeight, currentModel, currentNegativePrompt, currentWidth, negativePromptParameterName, prompt, promptHelperInstruction, isPromptHelperLoading, setTimedMessage]);
 
-  const applyReuseDetail = useCallback(async (detail: any) => {
-    if (detail.type !== 'image') return;
-
-    setIsLoadingMedia(true);
-    try {
-      const parsedOptions = parseReuseOptions(detail.options);
-      const nextModelId = detail.modelId || selectedModel || DEFAULT_IMAGE_MODEL;
-      if (detail.modelId && detail.modelId !== selectedModel) {
-        setWorkflowActiveModel('image', detail.modelId);
-        setSelectedModel(detail.modelId);
-      }
-
-      const allParamValues: Record<string, any> = {};
-      Object.keys(parsedOptions).forEach((key) => {
-        if (!key.includes('_path') && key !== 'runpodJobId' && key !== 'error') {
-          allParamValues[key] = parsedOptions[key];
-        }
-      });
-
-      const nextModel = getModelById(nextModelId) || currentModel;
-      const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
-      const secondaryImagePath = parsedOptions.image_path_2;
-      const shouldReusePrimaryImage = !!(nextModel && isInputVisible(nextModel, 'image', allParamValues));
-      const shouldReuseSecondaryImage = !!(nextModel && isInputVisible(nextModel, 'image2', allParamValues));
-
-      const snapshot = normalizeImageDraftForModel(nextModelId, createImageDraftSnapshot({
-        prompt: detail.prompt || '',
-        showAdvanced: true,
-        randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
-        parameterValues: allParamValues,
-        previewUrl: shouldReusePrimaryImage && primaryImagePath ? primaryImagePath : '',
-        previewUrl2: shouldReuseSecondaryImage && secondaryImagePath ? secondaryImagePath : '',
-      }));
-
-      await hydrateSnapshot(nextModelId, snapshot);
-
-      if (shouldReusePrimaryImage && primaryImagePath) {
-        const file = await loadFileFromPath(primaryImagePath);
-        if (file) {
-          setPrimaryImage(file, primaryImagePath, {
-            kind: 'remote-url',
-            url: primaryImagePath,
-            source: 'job',
-          });
-        }
-      }
-
-      if (shouldReuseSecondaryImage && secondaryImagePath) {
-        const file = await loadFileFromPath(secondaryImagePath);
-        if (file) {
-          setSecondaryImage(file, secondaryImagePath, {
-            kind: 'remote-url',
-            url: secondaryImagePath,
-            source: 'job',
-          });
-        }
-      }
-
-      setTimedMessage({ type: 'success', text: 'Input reused in mobile create' });
-    } finally {
-      setIsLoadingMedia(false);
-    }
-  }, [DEFAULT_IMAGE_MODEL, currentModel, hydrateSnapshot, selectedModel, setPrimaryImage, setSecondaryImage, setSelectedModel, setTimedMessage]);
-
-  useEffect(() => {
-    const handleReuseInput = async (event: Event) => {
-      const customEvent = event as CustomEvent;
-      await applyReuseDetail(customEvent.detail || {});
-    };
-
-    window.addEventListener('reuseJobInput', handleReuseInput as EventListener);
-
-    try {
-      const pendingReuse = window.localStorage.getItem(PENDING_REUSE_KEY);
-      if (pendingReuse) {
-        const detail = JSON.parse(pendingReuse);
-        void applyReuseDetail(detail).finally(() => {
-          window.localStorage.removeItem(PENDING_REUSE_KEY);
-        });
-      }
-    } catch {
-      window.localStorage.removeItem(PENDING_REUSE_KEY);
-    }
-
-    return () => window.removeEventListener('reuseJobInput', handleReuseInput as EventListener);
-  }, [applyReuseDetail]);
 
   const promptSummary = prompt.trim() || 'No prompt yet';
   const basicSummaryItems = useMemo(() => {

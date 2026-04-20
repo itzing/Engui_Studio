@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
-import { persistImageReuseDraft } from '@/lib/create/persistImageReuseDraft';
+import { Clapperboard, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -50,16 +50,16 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     }
   };
 
-  const openInCreate = async () => {
+  const openInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid') => {
     if (!job || !selectedOutput || selectedOutput.type !== 'image') return;
     const response = await fetch(`/api/jobs/${job.id}/reuse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'img2img', outputId: selectedOutput.outputId }),
+      body: JSON.stringify({ action, outputId: selectedOutput.outputId }),
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
-      persistImageReuseDraft(data.payload);
+      persistCreateReuseDraft(data.payload);
       router.push('/m/create');
     }
   };
@@ -149,7 +149,9 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 <Button variant="outline" onClick={() => void addToGallery()} disabled={!selectedOutput || selectedOutput.alreadyInGallery}>
                   <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.alreadyInGallery ? 'Already in Gallery' : 'Add to Gallery'}
                 </Button>
-                {job.type === 'image' ? <Button onClick={() => void openInCreate()}><Sparkles className="mr-2 h-4 w-4" />Open in Create</Button> : null}
+                {job.type === 'image' ? <Button onClick={() => void openInCreate('img2img')}><Sparkles className="mr-2 h-4 w-4" />Open in Create</Button> : null}
+                {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />Reuse prompt only</Button> : null}
+                {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />Open in img2vid</Button> : null}
                 {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
                 {isFinished ? <Button variant="destructive" onClick={() => void deleteJob()}><Trash2 className="mr-2 h-4 w-4" />Delete job</Button> : null}
               </div>

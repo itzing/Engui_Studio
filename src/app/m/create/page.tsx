@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import MobileAppShell from '@/components/mobile/MobileAppShell';
-import MobileCreatePendingActions from '@/components/mobile/MobileCreatePendingActions';
 import MobileCreateHome from '@/components/mobile/create/MobileCreateHome';
 import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -25,7 +24,6 @@ export default function MobileCreatePage() {
 
   return (
     <MobileAppShell>
-      <MobileCreatePendingActions />
       {activeMode === 'image' ? (
         <MobileCreateHome activeMode={activeMode} onModeChange={handleModeChange} />
       ) : (

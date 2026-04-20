@@ -12,8 +12,6 @@ const routeEvents: Record<string, string> = {
   mobileOpenGalleryTab: '/m/gallery',
 };
 
-const PENDING_REUSE_KEY = 'engui.mobile.pending-reuse-input';
-
 export default function MobileRouteEventBridge() {
   const router = useRouter();
   const pathname = usePathname();
@@ -43,28 +41,10 @@ export default function MobileRouteEventBridge() {
       return () => window.removeEventListener(eventName, handler as EventListener);
     });
 
-    const reuseHandler = (event: Event) => {
-      if (pathname !== '/m/create') {
-        const customEvent = event as CustomEvent;
-        try {
-          window.localStorage.setItem(PENDING_REUSE_KEY, JSON.stringify(customEvent.detail ?? null));
-        } catch {
-          // ignore storage errors
-        }
-      }
-
-      navigate('/m/create');
-    };
-
-    window.addEventListener('reuseJobInput', reuseHandler as EventListener);
-
     return () => {
       cleanups.forEach(cleanup => cleanup());
-      window.removeEventListener('reuseJobInput', reuseHandler as EventListener);
     };
-  }, [pathname, router]);
+  }, [router]);
 
   return null;
 }
-
-export { PENDING_REUSE_KEY };

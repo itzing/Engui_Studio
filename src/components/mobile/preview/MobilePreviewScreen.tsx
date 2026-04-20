@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderPlus, Image as ImageIcon, Info, Loader2, Rows3, Sparkles, Zap } from 'lucide-react';
+import { Clapperboard, FolderPlus, Image as ImageIcon, Info, Loader2, Rows3, Sparkles, Type, Zap } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useMobilePreviewState } from '@/hooks/mobile/useMobilePreviewState';
+import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 
 type JobDetail = {
   id: string;
@@ -64,7 +65,7 @@ export default function MobilePreviewScreen() {
   const primaryOutput = useMemo(() => jobDetail?.outputs?.find((output) => output.outputId === 'output-1') || jobDetail?.outputs?.[0] || null, [jobDetail]);
   const alreadyInGallery = !!primaryOutput?.alreadyInGallery;
 
-  const runReuse = async () => {
+  const runReuse = async (action: 'txt2img' | 'img2img' | 'img2vid' = 'img2img') => {
     if (!preview || preview.type !== 'image') return;
     setIsSubmitting(true);
     setStatusMessage(null);
@@ -76,13 +77,14 @@ export default function MobilePreviewScreen() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(preview.kind === 'gallery' ? { action: 'img2img' } : { action: 'img2img', outputId: 'output-1' }),
+        body: JSON.stringify(preview.kind === 'gallery' ? { action } : { action, outputId: 'output-1' }),
       });
       const data = await response.json();
       if (!response.ok || !data.success || !data.payload) {
         throw new Error(data.error || 'Failed to prepare reuse payload');
       }
-      window.dispatchEvent(new CustomEvent('reuseJobInput', { detail: data.payload }));
+      persistCreateReuseDraft(data.payload);
+      router.push('/m/create');
       setStatusMessage({ type: 'success', text: 'Opened in Create' });
     } catch (error) {
       setStatusMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to open in Create' });
@@ -241,10 +243,20 @@ export default function MobilePreviewScreen() {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {preview.type === 'image' ? (
-              <Button disabled={isSubmitting} onClick={() => void runReuse()}>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Open in Create
-              </Button>
+              <>
+                <Button disabled={isSubmitting} onClick={() => void runReuse('img2img')}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Open in Create
+                </Button>
+                <Button variant="outline" disabled={isSubmitting} onClick={() => void runReuse('txt2img')}>
+                  <Type className="mr-2 h-4 w-4" />
+                  Reuse prompt only
+                </Button>
+                <Button variant="outline" disabled={isSubmitting} onClick={() => void runReuse('img2vid')}>
+                  <Clapperboard className="mr-2 h-4 w-4" />
+                  Open in img2vid
+                </Button>
+              </>
             ) : null}
             {(preview.type === 'image' || preview.type === 'video') ? (
               <Button variant="outline" disabled={isSubmitting} onClick={() => void upscale()}>
