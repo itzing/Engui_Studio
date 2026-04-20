@@ -39,7 +39,6 @@ export default function MobileStudioLayout() {
     const openGallery = () => setActiveTab('gallery');
 
     window.addEventListener('mobileOpenCreateTab', openCreate as EventListener);
-    window.addEventListener('reuseJobInput', openCreate as EventListener);
     window.addEventListener('mobileOpenPreviewTab', openPreview as EventListener);
     window.addEventListener('openPreviewInfo', openPreviewInfo as EventListener);
     window.addEventListener('mobileOpenJobsTab', openJobs as EventListener);
@@ -47,7 +46,6 @@ export default function MobileStudioLayout() {
 
     return () => {
       window.removeEventListener('mobileOpenCreateTab', openCreate as EventListener);
-      window.removeEventListener('reuseJobInput', openCreate as EventListener);
       window.removeEventListener('mobileOpenPreviewTab', openPreview as EventListener);
       window.removeEventListener('openPreviewInfo', openPreviewInfo as EventListener);
       window.removeEventListener('mobileOpenJobsTab', openJobs as EventListener);

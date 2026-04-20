@@ -57,44 +57,6 @@ export default function MusicGenerationForm() {
         });
     }, [duration, prompt, selectedModel]);
 
-    // Listen for reuseJobInput event
-    React.useEffect(() => {
-        const handleReuseJobInput = (event: CustomEvent) => {
-            const { modelId, prompt, type, options } = event.detail;
-
-            // Only handle music types
-            if (type !== 'music') return;
-
-            console.log('🔄 Reusing music job input:', { modelId, prompt, options });
-
-            // Set model (if valid music model)
-            if (modelId) {
-                const modelExists = musicModels.find(m => m.id === modelId);
-                if (modelExists) {
-                    setSelectedModel(modelId);
-                }
-            }
-
-            // Set prompt
-            if (prompt) {
-                setPrompt(prompt);
-            }
-
-            // Set parameters from options
-            if (options) {
-                // Handle duration
-                if (options.duration_seconds || options.music_length_ms) {
-                    const durationSec = options.duration_seconds || (options.music_length_ms ? options.music_length_ms / 1000 : 60);
-                    setDuration(Math.round(durationSec));
-                }
-            }
-        };
-
-        window.addEventListener('reuseJobInput' as any, handleReuseJobInput as any);
-        return () => {
-            window.removeEventListener('reuseJobInput' as any, handleReuseJobInput as any);
-        };
-    }, [musicModels]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) {

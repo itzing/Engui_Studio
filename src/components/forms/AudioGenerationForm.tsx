@@ -69,47 +69,6 @@ export default function AudioGenerationForm() {
         }
     }, [settings.elevenlabs?.voiceId]);
 
-    // Listen for reuseJobInput event
-    React.useEffect(() => {
-        const handleReuseJobInput = (event: CustomEvent) => {
-            const { modelId, prompt, type, options } = event.detail;
-
-            // Only handle tts/audio types
-            if (type !== 'tts' && type !== 'audio') return;
-
-            // Check if it's a TTS model (some audio jobs might be music or others)
-            const isTtsModel = ttsModels.some(m => m.id === modelId);
-            if (!isTtsModel && modelId !== 'elevenlabs-tts') return; // Specific check for ElevenLabs TTS
-
-            console.log('🔄 Reusing TTS job input:', { modelId, prompt, options });
-
-            // Set model
-            if (modelId) {
-                const modelExists = ttsModels.find(m => m.id === modelId);
-                if (modelExists) {
-                    setSelectedModel(modelId);
-                }
-            }
-
-            // Set prompt
-            if (prompt) {
-                setPrompt(prompt);
-            }
-
-            // Set specific options
-            if (options) {
-                // Restore Voice ID for ElevenLabs TTS
-                if (options.voiceId) {
-                    setSelectedVoice(options.voiceId);
-                }
-            }
-        };
-
-        window.addEventListener('reuseJobInput' as any, handleReuseJobInput as any);
-        return () => {
-            window.removeEventListener('reuseJobInput' as any, handleReuseJobInput as any);
-        };
-    }, [ttsModels]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) {

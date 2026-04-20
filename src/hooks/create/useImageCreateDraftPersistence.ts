@@ -68,14 +68,9 @@ export function useImageCreateDraftPersistence({
     saveWorkflowDraft('image', modelId, normalizeImageDraftForModel(modelId, snapshot));
   }, [defaultModelId, selectedModel, snapshot]);
 
-  const skipNextModelHydration = useCallback(() => {
-    // Legacy compatibility no-op. Transactional model switching no longer depends on skip flags.
-  }, []);
-
   return {
     hydrateSnapshot,
     switchModel,
-    skipNextModelHydration,
     hasRestoredDraftRef,
   };
 }
