@@ -39,6 +39,7 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
 
 export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
+    const [formRenderKey, setFormRenderKey] = useState(0);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isStorageOpen, setIsStorageOpen] = useState(false);
     const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
@@ -59,10 +60,11 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
 
     React.useEffect(() => {
         const handleCreateModeChanged = (event: Event) => {
-            const customEvent = event as CustomEvent<{ mode?: GenerationMode }>;
+            const customEvent = event as CustomEvent<{ mode?: GenerationMode; token?: number }>;
             const mode = customEvent.detail?.mode || getActiveMode();
             if (mode === 'image' || mode === 'video' || mode === 'tts' || mode === 'music') {
                 setGenerationMode(mode);
+                setFormRenderKey((current) => current + 1);
             }
         };
 
@@ -191,10 +193,10 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
 
                     <>
                         <GenerationTabs activeMode={generationMode} onModeChange={setGenerationMode} mobile={mobile} />
-                        {generationMode === 'image' && <ImageGenerationForm />}
-                        {generationMode === 'video' && <VideoGenerationForm />}
-                        {generationMode === 'tts' && <AudioGenerationForm />}
-                        {generationMode === 'music' && <MusicGenerationForm />}
+                        {generationMode === 'image' && <ImageGenerationForm key={`image-${formRenderKey}`} />}
+                        {generationMode === 'video' && <VideoGenerationForm key={`video-${formRenderKey}`} />}
+                        {generationMode === 'tts' && <AudioGenerationForm key={`tts-${formRenderKey}`} />}
+                        {generationMode === 'music' && <MusicGenerationForm key={`music-${formRenderKey}`} />}
                     </>
                 </div>
             </div>
