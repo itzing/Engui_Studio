@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PENDING_REUSE_KEY } from '@/components/mobile/MobileRouteEventBridge';
+import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
 import {
   createImageDraftSnapshot,
   mergeImageDraftParameterValues,
@@ -9,6 +10,7 @@ import {
   normalizeRandomizeSeed,
   type ImageCreateDraftSnapshot,
 } from '@/lib/create/imageDraft';
+import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/createMediaStore';
 import { setWorkflowActiveModel } from '@/lib/createDrafts';
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
@@ -57,6 +59,8 @@ export function useImageCreateState() {
   const [previewUrl2, setPreviewUrl2] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageFile2, setImageFile2] = useState<File | null>(null);
+  const [primaryInputRef, setPrimaryInputRef] = useState<CreateMediaRef | null>(null);
+  const [secondaryInputRef, setSecondaryInputRef] = useState<CreateMediaRef | null>(null);
   const [availableScenes, setAvailableScenes] = useState<ScenePresetSummary[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState('');
   const [isLoadingScenes, setIsLoadingScenes] = useState(false);
@@ -124,7 +128,11 @@ export function useImageCreateState() {
     previewUrl,
     previewUrl2,
     selectedSceneId,
-  }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
+    inputs: {
+      primary: primaryInputRef,
+      secondary: secondaryInputRef,
+    },
+  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, secondaryInputRef, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
 
   const applySnapshot = useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
     const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -142,11 +150,26 @@ export function useImageCreateState() {
     setSelectedSceneId(normalizedSnapshot.selectedSceneId || '');
     setImageFile(null);
     setImageFile2(null);
+    setPrimaryInputRef(normalizedSnapshot.inputs?.primary || null);
+    setSecondaryInputRef(normalizedSnapshot.inputs?.secondary || null);
 
-    if (normalizedSnapshot.previewUrl?.startsWith('data:')) {
+    if (normalizedSnapshot.inputs?.primary?.kind === 'idb-media') {
+      const file = await resolveCreateMediaRefToFile(normalizedSnapshot.inputs.primary);
+      if (file) {
+        setImageFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+      }
+    } else if (normalizedSnapshot.previewUrl?.startsWith('data:')) {
       setImageFile(await dataUrlToFile(normalizedSnapshot.previewUrl, 'image-input'));
     }
-    if (normalizedSnapshot.previewUrl2?.startsWith('data:')) {
+
+    if (normalizedSnapshot.inputs?.secondary?.kind === 'idb-media') {
+      const file = await resolveCreateMediaRefToFile(normalizedSnapshot.inputs.secondary);
+      if (file) {
+        setImageFile2(file);
+        setPreviewUrl2(URL.createObjectURL(file));
+      }
+    } else if (normalizedSnapshot.previewUrl2?.startsWith('data:')) {
       setImageFile2(await dataUrlToFile(normalizedSnapshot.previewUrl2, 'image-input-2'));
     }
   }, []);
@@ -242,25 +265,29 @@ export function useImageCreateState() {
     image.src = url;
   }, [heightParameter, widthParameter]);
 
-  const setPrimaryImage = useCallback((file: File | null, nextPreviewUrl = '') => {
+  const setPrimaryImage = useCallback((file: File | null, nextPreviewUrl = '', inputRef: CreateMediaRef | null = null) => {
     setImageFile(file);
     setPreviewUrl(nextPreviewUrl);
+    setPrimaryInputRef(inputRef);
     if (nextPreviewUrl) {
       updateDimensionsFromImageUrl(nextPreviewUrl);
     }
   }, [updateDimensionsFromImageUrl]);
 
-  const setSecondaryImage = useCallback((file: File | null, nextPreviewUrl = '') => {
+  const setSecondaryImage = useCallback((file: File | null, nextPreviewUrl = '', inputRef: CreateMediaRef | null = null) => {
     setImageFile2(file);
     setPreviewUrl2(nextPreviewUrl);
+    setSecondaryInputRef(inputRef);
   }, []);
 
-  const selectPrimaryImageFile = useCallback((file: File) => {
-    setPrimaryImage(file, URL.createObjectURL(file));
+  const selectPrimaryImageFile = useCallback(async (file: File) => {
+    const storedRef = await storeCreateFile(file);
+    setPrimaryImage(file, URL.createObjectURL(file), storedRef);
   }, [setPrimaryImage]);
 
-  const selectSecondaryImageFile = useCallback((file: File) => {
-    setSecondaryImage(file, URL.createObjectURL(file));
+  const selectSecondaryImageFile = useCallback(async (file: File) => {
+    const storedRef = await storeCreateFile(file);
+    setSecondaryImage(file, URL.createObjectURL(file), storedRef);
   }, [setSecondaryImage]);
 
   const applyScenePreviewImage = useCallback(async (sceneOverride?: ScenePresetSummary | null) => {
@@ -272,7 +299,12 @@ export function useImageCreateState() {
       setPreviewUrl(targetScene.latestPreviewImageUrl);
       const file = await loadFileFromPath(targetScene.latestPreviewImageUrl);
       if (file) {
-        setPrimaryImage(file, targetScene.latestPreviewImageUrl);
+        setPrimaryImage(file, targetScene.latestPreviewImageUrl, {
+          kind: 'remote-url',
+          url: targetScene.latestPreviewImageUrl,
+          source: 'scene',
+          sourceId: targetScene.id,
+        });
       }
     } finally {
       setIsLoadingMedia(false);
@@ -429,14 +461,22 @@ export function useImageCreateState() {
       if (shouldReusePrimaryImage && primaryImagePath) {
         const file = await loadFileFromPath(primaryImagePath);
         if (file) {
-          setPrimaryImage(file, primaryImagePath);
+          setPrimaryImage(file, primaryImagePath, {
+            kind: 'remote-url',
+            url: primaryImagePath,
+            source: 'job',
+          });
         }
       }
 
       if (shouldReuseSecondaryImage && secondaryImagePath) {
         const file = await loadFileFromPath(secondaryImagePath);
         if (file) {
-          setSecondaryImage(file, secondaryImagePath);
+          setSecondaryImage(file, secondaryImagePath, {
+            kind: 'remote-url',
+            url: secondaryImagePath,
+            source: 'job',
+          });
         }
       }
 
@@ -522,8 +562,8 @@ export function useImageCreateState() {
     imageFile2,
     selectPrimaryImageFile,
     selectSecondaryImageFile,
-    clearPrimaryImage: () => setPrimaryImage(null, ''),
-    clearSecondaryImage: () => setSecondaryImage(null, ''),
+    clearPrimaryImage: () => setPrimaryImage(null, '', null),
+    clearSecondaryImage: () => setSecondaryImage(null, '', null),
     primaryImageVisible,
     secondaryImageVisible,
     primaryImageRequired,

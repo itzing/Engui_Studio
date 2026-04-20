@@ -1,6 +1,6 @@
 'use client';
 
-import type { UnifiedCreateDraftState } from '@/lib/create/createDraftSchema';
+import type { CreateMediaRef, UnifiedCreateDraftState } from '@/lib/create/createDraftSchema';
 
 export const CREATE_MEDIA_DB_NAME = 'engui-create-media';
 export const CREATE_MEDIA_DB_VERSION = 1;
@@ -124,4 +124,45 @@ export async function cleanupOrphanedCreateMedia(state: UnifiedCreateDraftState)
   }
 
   return deleted;
+}
+
+export async function storeCreateFile(file: File): Promise<CreateMediaRef | null> {
+  const mediaId = globalThis.crypto?.randomUUID?.() || `media-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const now = Date.now();
+  const ok = await putCreateMedia({
+    mediaId,
+    blob: file,
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  if (!ok) return null;
+
+  return {
+    kind: 'idb-media',
+    mediaId,
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+  };
+}
+
+export async function resolveCreateMediaRefToFile(ref?: CreateMediaRef | null): Promise<File | null> {
+  if (!ref) return null;
+
+  if (ref.kind === 'idb-media') {
+    const entry = await getCreateMedia(ref.mediaId);
+    if (!entry) return null;
+    return new File([entry.blob], entry.fileName || 'media', {
+      type: entry.mimeType || entry.blob.type || 'application/octet-stream',
+      lastModified: entry.lastModified,
+    });
+  }
+
+  return null;
 }

@@ -1,3 +1,4 @@
+import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
 import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
 export type ImageCreateDraftSnapshot = {
@@ -8,6 +9,10 @@ export type ImageCreateDraftSnapshot = {
   previewUrl?: string;
   previewUrl2?: string;
   selectedSceneId?: string;
+  inputs?: {
+    primary?: CreateMediaRef | null;
+    secondary?: CreateMediaRef | null;
+  };
 };
 
 export const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
@@ -45,6 +50,10 @@ export const createImageDraftSnapshot = (snapshot: ImageCreateDraftSnapshot): Im
   previewUrl: snapshot.previewUrl || '',
   previewUrl2: snapshot.previewUrl2 || '',
   selectedSceneId: snapshot.selectedSceneId || '',
+  inputs: {
+    primary: snapshot.inputs?.primary || null,
+    secondary: snapshot.inputs?.secondary || null,
+  },
 });
 
 export const normalizeImageDraftForModel = (
@@ -69,5 +78,9 @@ export const normalizeImageDraftForModel = (
     previewUrl: primaryImageVisible ? (snapshot?.previewUrl || '') : '',
     previewUrl2: secondaryImageVisible ? (snapshot?.previewUrl2 || '') : '',
     selectedSceneId: snapshot?.selectedSceneId || '',
+    inputs: {
+      primary: primaryImageVisible ? (snapshot?.inputs?.primary || null) : null,
+      secondary: secondaryImageVisible ? (snapshot?.inputs?.secondary || null) : null,
+    },
   });
 };
