@@ -5,6 +5,7 @@ import { PENDING_REUSE_KEY } from '@/components/mobile/MobileRouteEventBridge';
 import {
   createImageDraftSnapshot,
   mergeImageDraftParameterValues,
+  normalizeImageDraftForModel,
   normalizeRandomizeSeed,
   type ImageCreateDraftSnapshot,
 } from '@/lib/create/imageDraft';
@@ -150,33 +151,13 @@ export function useImageCreateState() {
     }
   }, []);
 
-  const { hydrateSnapshot, skipNextModelHydration } = useImageCreateDraftPersistence({
+  const { hydrateSnapshot, switchModel } = useImageCreateDraftPersistence({
     defaultModelId: DEFAULT_IMAGE_MODEL,
     selectedModel,
     setSelectedModel,
     snapshot: currentSnapshot,
     applySnapshot,
   });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const syncSelectedModel = () => {
-      const modelId = getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
-      if (!modelId) return;
-      setSelectedModel(modelId);
-    };
-
-    window.addEventListener('pageshow', syncSelectedModel);
-    window.addEventListener('focus', syncSelectedModel);
-    document.addEventListener('visibilitychange', syncSelectedModel);
-
-    return () => {
-      window.removeEventListener('pageshow', syncSelectedModel);
-      window.removeEventListener('focus', syncSelectedModel);
-      document.removeEventListener('visibilitychange', syncSelectedModel);
-    };
-  }, [DEFAULT_IMAGE_MODEL, setSelectedModel]);
 
   useEffect(() => {
     const nextModelId = selectedModel || DEFAULT_IMAGE_MODEL;
@@ -417,7 +398,7 @@ export function useImageCreateState() {
       const parsedOptions = parseReuseOptions(detail.options);
       const nextModelId = detail.modelId || selectedModel || DEFAULT_IMAGE_MODEL;
       if (detail.modelId && detail.modelId !== selectedModel) {
-        skipNextModelHydration();
+        setWorkflowActiveModel('image', detail.modelId);
         setSelectedModel(detail.modelId);
       }
 
@@ -434,14 +415,14 @@ export function useImageCreateState() {
       const shouldReusePrimaryImage = !!(nextModel && isInputVisible(nextModel, 'image', allParamValues));
       const shouldReuseSecondaryImage = !!(nextModel && isInputVisible(nextModel, 'image2', allParamValues));
 
-      const snapshot = createImageDraftSnapshot({
+      const snapshot = normalizeImageDraftForModel(nextModelId, createImageDraftSnapshot({
         prompt: detail.prompt || '',
         showAdvanced: true,
         randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
         parameterValues: allParamValues,
         previewUrl: shouldReusePrimaryImage && primaryImagePath ? primaryImagePath : '',
         previewUrl2: shouldReuseSecondaryImage && secondaryImagePath ? secondaryImagePath : '',
-      });
+      }));
 
       await hydrateSnapshot(nextModelId, snapshot);
 
@@ -463,7 +444,7 @@ export function useImageCreateState() {
     } finally {
       setIsLoadingMedia(false);
     }
-  }, [DEFAULT_IMAGE_MODEL, currentModel, hydrateSnapshot, selectedModel, setPrimaryImage, setSecondaryImage, setSelectedModel, setTimedMessage, skipNextModelHydration]);
+  }, [DEFAULT_IMAGE_MODEL, currentModel, hydrateSnapshot, selectedModel, setPrimaryImage, setSecondaryImage, setSelectedModel, setTimedMessage]);
 
   useEffect(() => {
     const handleReuseInput = async (event: Event) => {
@@ -557,9 +538,8 @@ export function useImageCreateState() {
     message,
     setMessage,
     submit,
-    selectModel: (modelId: string) => {
-      setWorkflowActiveModel('image', modelId);
-      setSelectedModel(modelId);
+    selectModel: async (modelId: string) => {
+      await switchModel(modelId, currentSnapshot);
     },
     applySelectedSceneToPrompt,
     applyScenePreviewImage,

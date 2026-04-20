@@ -6,7 +6,6 @@ import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Card, CardContent } from '@/components/ui/card';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
-import { PENDING_MOBILE_IMAGE_MODEL_KEY } from '@/hooks/create/useImageCreateDraftPersistence';
 
 export default function MobileModelScreen() {
   const router = useRouter();
@@ -24,15 +23,8 @@ export default function MobileModelScreen() {
                 key={model.id}
                 type="button"
                 className="block w-full text-left"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    try {
-                      window.localStorage.setItem(PENDING_MOBILE_IMAGE_MODEL_KEY, model.id);
-                    } catch {
-                      // ignore storage errors
-                    }
-                  }
-                  selectModel(model.id);
+                onClick={async () => {
+                  await selectModel(model.id);
                   router.push('/m/create');
                 }}
               >

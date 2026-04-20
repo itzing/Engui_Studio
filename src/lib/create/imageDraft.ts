@@ -1,4 +1,4 @@
-import { getModelById } from '@/lib/models/modelConfig';
+import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
 export type ImageCreateDraftSnapshot = {
   prompt?: string;
@@ -46,3 +46,28 @@ export const createImageDraftSnapshot = (snapshot: ImageCreateDraftSnapshot): Im
   previewUrl2: snapshot.previewUrl2 || '',
   selectedSceneId: snapshot.selectedSceneId || '',
 });
+
+export const normalizeImageDraftForModel = (
+  modelId: string,
+  snapshot?: ImageCreateDraftSnapshot | null,
+): ImageCreateDraftSnapshot => {
+  const model = getModelById(modelId);
+  const allowedParameterNames = new Set((model?.parameters || []).map((param) => param.name));
+  const filteredParameterValues = Object.fromEntries(
+    Object.entries((snapshot?.parameterValues && typeof snapshot.parameterValues === 'object') ? snapshot.parameterValues : {})
+      .filter(([key]) => allowedParameterNames.has(key)),
+  );
+  const parameterValues = mergeImageDraftParameterValues(modelId, filteredParameterValues);
+  const primaryImageVisible = !!(model && isInputVisible(model, 'image', parameterValues));
+  const secondaryImageVisible = !!(model && isInputVisible(model, 'image2', parameterValues));
+
+  return createImageDraftSnapshot({
+    prompt: snapshot?.prompt || '',
+    showAdvanced: snapshot?.showAdvanced === true,
+    randomizeSeed: snapshot?.randomizeSeed,
+    parameterValues,
+    previewUrl: primaryImageVisible ? (snapshot?.previewUrl || '') : '',
+    previewUrl2: secondaryImageVisible ? (snapshot?.previewUrl2 || '') : '',
+    selectedSceneId: snapshot?.selectedSceneId || '',
+  });
+};
