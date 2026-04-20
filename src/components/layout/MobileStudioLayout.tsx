@@ -20,6 +20,7 @@ const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ cl
 export default function MobileStudioLayout() {
   const [activeTab, setActiveTab] = useState<MobileTab>('create');
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [hasEditableFocus, setHasEditableFocus] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -63,6 +64,12 @@ export default function MobileStudioLayout() {
 
     let syncTimeout: ReturnType<typeof window.setTimeout> | null = null;
 
+    const isEditableElement = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+
     const applyViewportHeight = () => {
       const viewportHeight = window.visualViewport?.height || window.innerHeight;
       const layoutViewportHeight = window.innerHeight;
@@ -82,7 +89,17 @@ export default function MobileStudioLayout() {
       }, delay);
     };
 
-    const handleFocusOut = () => {
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isEditableElement(event.target)) {
+        setHasEditableFocus(true);
+      }
+      scheduleViewportHeightSync(50);
+    };
+
+    const handleFocusOut = (event: FocusEvent) => {
+      if (isEditableElement(event.target)) {
+        setHasEditableFocus(false);
+      }
       scheduleViewportHeightSync(80);
       scheduleViewportHeightSync(250);
       scheduleViewportHeightSync(500);
@@ -94,6 +111,7 @@ export default function MobileStudioLayout() {
 
     window.addEventListener('resize', applyViewportHeight);
     window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('focusin', handleFocusIn);
     window.addEventListener('focusout', handleFocusOut);
     window.visualViewport?.addEventListener('resize', applyViewportHeight);
     window.visualViewport?.addEventListener('scroll', applyViewportHeight);
@@ -104,6 +122,7 @@ export default function MobileStudioLayout() {
       }
       window.removeEventListener('resize', applyViewportHeight);
       window.removeEventListener('orientationchange', handleOrientationChange);
+      window.removeEventListener('focusin', handleFocusIn);
       window.removeEventListener('focusout', handleFocusOut);
       window.visualViewport?.removeEventListener('resize', applyViewportHeight);
       window.visualViewport?.removeEventListener('scroll', applyViewportHeight);
@@ -133,8 +152,8 @@ export default function MobileStudioLayout() {
       </div>
 
       <nav
-        className={`border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur transition-transform duration-200 supports-[backdrop-filter]:bg-background/85 ${isKeyboardOpen ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}
-        aria-hidden={isKeyboardOpen}
+        className={`border-t border-border bg-background/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] backdrop-blur transition-transform duration-200 supports-[backdrop-filter]:bg-background/85 ${(isKeyboardOpen || hasEditableFocus) ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}
+        aria-hidden={isKeyboardOpen || hasEditableFocus}
       >
         <div className="grid grid-cols-4 gap-2">
           {tabs.map(({ id, label, icon: Icon }) => {
