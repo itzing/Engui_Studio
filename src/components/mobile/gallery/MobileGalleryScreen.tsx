@@ -79,7 +79,9 @@ export default function MobileGalleryScreen() {
     setQuery,
     refresh,
     hasNextPage,
+    hasPrevPage,
     loadNextPage,
+    loadPreviousPage,
     selectedAssetId,
     handleTilePress,
     viewerOpen,
@@ -167,6 +169,11 @@ export default function MobileGalleryScreen() {
               itemClassName="box-border flex-none w-1/3 p-0"
               increaseViewportBy={{ top: 500, bottom: 900 }}
               overscan={{ main: 700, reverse: 400 }}
+              startReached={() => {
+                if (hasPrevPage) {
+                  void loadPreviousPage();
+                }
+              }}
               endReached={() => {
                 if (hasNextPage) {
                   void loadNextPage();

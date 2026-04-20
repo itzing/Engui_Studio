@@ -54,7 +54,9 @@ export function useMobileGalleryScreen() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [hasNextPage, setHasNextPage] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [hasPrevPage, setHasPrevPage] = useState(false);
+  const [lowestPage, setLowestPage] = useState(1);
+  const [highestPage, setHighestPage] = useState(1);
   const [restoreTick, setRestoreTick] = useState(0);
   const loadingPageRef = useRef<number | null>(null);
   const hydratedSelectionRef = useRef(false);
@@ -103,9 +105,12 @@ export function useMobileGalleryScreen() {
       const data = await fetchPage(1, { focusAssetId: savedSelection });
       if (!data) return;
 
+      const resolvedPage = data.pagination?.page || 1;
       setAssets(data.assets || []);
-      setCurrentPage(data.pagination?.page || 1);
+      setLowestPage(resolvedPage);
+      setHighestPage(resolvedPage);
       setHasNextPage(Boolean(data.pagination?.hasNextPage));
+      setHasPrevPage(Boolean(data.pagination?.hasPrevPage));
 
       const focusedAssetId = data.focus?.found ? data.focus.assetId : null;
       const firstAssetId = data.assets?.[0]?.id || null;
@@ -146,9 +151,18 @@ export function useMobileGalleryScreen() {
     await hydrateInitialPage();
   }, [hydrateInitialPage]);
 
+  const mergePageAssets = useCallback((incoming: MobileGalleryAsset[], direction: 'append' | 'prepend') => {
+    setAssets((prev) => {
+      const knownIds = new Set(prev.map((asset) => asset.id));
+      const deduped = incoming.filter((asset) => !knownIds.has(asset.id));
+      if (deduped.length === 0) return prev;
+      return direction === 'prepend' ? [...deduped, ...prev] : [...prev, ...deduped];
+    });
+  }, []);
+
   const loadNextPage = useCallback(async () => {
     if (!hasNextPage || isLoading || isLoadingMore) return;
-    const nextPage = currentPage + 1;
+    const nextPage = highestPage + 1;
     if (loadingPageRef.current === nextPage) return;
 
     loadingPageRef.current = nextPage;
@@ -156,12 +170,8 @@ export function useMobileGalleryScreen() {
     try {
       const data = await fetchPage(nextPage);
       if (!data) return;
-      setAssets((prev) => {
-        const knownIds = new Set(prev.map((asset) => asset.id));
-        const appended = (data.assets || []).filter((asset) => !knownIds.has(asset.id));
-        return [...prev, ...appended];
-      });
-      setCurrentPage(data.pagination?.page || nextPage);
+      mergePageAssets(data.assets || [], 'append');
+      setHighestPage(data.pagination?.page || nextPage);
       setHasNextPage(Boolean(data.pagination?.hasNextPage));
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Failed to load more gallery items');
@@ -169,7 +179,28 @@ export function useMobileGalleryScreen() {
       setIsLoadingMore(false);
       loadingPageRef.current = null;
     }
-  }, [currentPage, fetchPage, hasNextPage, isLoading, isLoadingMore]);
+  }, [fetchPage, hasNextPage, highestPage, isLoading, isLoadingMore, mergePageAssets]);
+
+  const loadPreviousPage = useCallback(async () => {
+    if (!hasPrevPage || isLoading || isLoadingMore) return;
+    const nextPage = lowestPage - 1;
+    if (nextPage < 1 || loadingPageRef.current === nextPage) return;
+
+    loadingPageRef.current = nextPage;
+    setIsLoadingMore(true);
+    try {
+      const data = await fetchPage(nextPage);
+      if (!data) return;
+      mergePageAssets(data.assets || [], 'prepend');
+      setLowestPage(data.pagination?.page || nextPage);
+      setHasPrevPage(Boolean(data.pagination?.hasPrevPage));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load previous gallery items');
+    } finally {
+      setIsLoadingMore(false);
+      loadingPageRef.current = null;
+    }
+  }, [fetchPage, hasPrevPage, isLoading, isLoadingMore, lowestPage, mergePageAssets]);
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === selectedAssetId) || null,
@@ -279,7 +310,9 @@ export function useMobileGalleryScreen() {
     setQuery,
     refresh,
     hasNextPage,
+    hasPrevPage,
     loadNextPage,
+    loadPreviousPage,
     selectedAssetId,
     selectedAsset,
     selectAsset,

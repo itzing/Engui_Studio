@@ -416,7 +416,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       {showCloseButton && (
         <>
           {onOpenInfo && currentItem?.id && (
-            <div className="absolute top-3 left-3 z-10">
+            <div className="absolute left-3 z-10" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
               <Button
                 size="icon"
                 variant="secondary"
@@ -429,7 +429,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
               </Button>
             </div>
           )}
-          <div className="absolute top-3 right-3 z-10">
+          <div className="absolute right-3 z-10" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
             <Button
               size="icon"
               variant="secondary"
