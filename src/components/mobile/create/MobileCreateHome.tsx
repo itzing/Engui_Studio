@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ImagePlus, Loader2, Settings2, Sparkles, WandSparkles } from 'lucide-react';
-import MobileHeader from '@/components/mobile/MobileHeader';
+import { ImagePlus, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
+import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
+import type { CreateMode } from '@/lib/createDrafts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useImageCreateState } from '@/hooks/create/useImageCreateState';
@@ -17,7 +18,13 @@ function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string
   );
 }
 
-export default function MobileCreateHome() {
+export default function MobileCreateHome({
+  activeMode,
+  onModeChange,
+}: {
+  activeMode: CreateMode;
+  onModeChange: (mode: CreateMode) => void;
+}) {
   const router = useRouter();
   const {
     currentModel,
@@ -42,19 +49,7 @@ export default function MobileCreateHome() {
 
   return (
     <MobileScreen>
-      <MobileHeader
-        className="sticky top-0 z-20"
-        title="Create"
-        subtitle="Compact mobile create dashboard with focused editors for heavy tasks."
-        action={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/m/create/advanced">
-              <Settings2 className="mr-2 h-4 w-4" />
-              Advanced
-            </Link>
-          </Button>
-        }
-      />
+      <MobileCreateModeBar activeMode={activeMode} onModeChange={onModeChange} />
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 custom-scrollbar">
         <div className="space-y-4 pb-4">
