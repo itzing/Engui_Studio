@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'EnguiStudio',
     short_name: 'EnguiStudio',
     description: 'Create images, video, audio, and AI-powered content in EnguiStudio.',
-    start_url: '/',
+    start_url: '/m/create',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
