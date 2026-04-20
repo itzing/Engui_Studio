@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Download, Heart, Loader2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
@@ -16,9 +16,9 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
 
-  useState(() => {
-    if (asset) setTagsInput(asset.userTags.join(', '));
-  });
+  useEffect(() => {
+    setTagsInput(asset?.userTags.join(', ') || '');
+  }, [asset?.id, asset?.userTags]);
 
   const mediaUrl = useMemo(() => asset?.previewUrl || asset?.originalUrl || '', [asset]);
 
@@ -149,7 +149,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                   </div>
                   <div className="space-y-2">
                     <div className="text-muted-foreground">Tags</div>
-                    <Input value={tagsInput || asset.userTags.join(', ')} onChange={(event) => setTagsInput(event.target.value)} placeholder="portrait, favorites, client-a" />
+                    <Input value={tagsInput} onChange={(event) => setTagsInput(event.target.value)} placeholder="portrait, favorites, client-a" className="text-base sm:text-sm" />
                     <Button variant="outline" onClick={() => void saveTags()}>Save tags</Button>
                   </div>
                 </CardContent>

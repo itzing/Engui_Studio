@@ -40,7 +40,7 @@ export default function MobilePromptScreen() {
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="Describe the image you want to generate..."
-              className="min-h-[42vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-h-[42vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-base text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"
             />
           </div>
 
@@ -50,7 +50,7 @@ export default function MobilePromptScreen() {
               value={promptHelperInstruction}
               onChange={(event) => setPromptHelperInstruction(event.target.value)}
               placeholder="Optional reusable helper instruction, for example: make the prompt cinematic but keep the subject details unchanged."
-              className="min-h-[18vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-h-[18vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-base text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"
             />
           </div>
 

@@ -59,7 +59,7 @@ export default function MobileAdvancedScreen() {
                     <select
                       value={value ?? ''}
                       onChange={(event) => handleParameterChange(param.name, event.target.value)}
-                      className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white"
+                      className="flex h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-base text-white sm:text-sm"
                     >
                       {param.options?.map((option) => (
                         <option key={option} value={option}>{option}</option>
@@ -72,12 +72,14 @@ export default function MobileAdvancedScreen() {
                       min={param.min}
                       max={param.max}
                       step={param.step}
+                      className="text-base sm:text-sm"
                       onChange={(event) => handleNumericParameterInput(param.name, event.target.value)}
                     />
                   ) : (
                     <Input
                       type="text"
                       value={value ?? ''}
+                      className="text-base sm:text-sm"
                       onChange={(event) => handleParameterChange(param.name, event.target.value)}
                       placeholder={param.type === 'lora-selector' ? 'LoRA path or name' : undefined}
                     />

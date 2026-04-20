@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Download, FolderPlus, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
+import { Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -47,6 +46,19 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
         ...prev,
         outputs: prev.outputs.map((output, index) => index === 0 ? { ...output, alreadyInGallery: true, galleryAssetId: data.asset?.id || output.galleryAssetId } : output),
       }) : prev);
+    }
+  };
+
+  const openInCreate = async () => {
+    if (!job || !selectedOutput || selectedOutput.type !== 'image') return;
+    const response = await fetch(`/api/jobs/${job.id}/reuse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'img2img', outputId: selectedOutput.outputId }),
+    });
+    const data = await response.json();
+    if (response.ok && data.success && data.payload) {
+      window.dispatchEvent(new CustomEvent('reuseJobInput', { detail: data.payload }));
     }
   };
 
@@ -135,7 +147,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 <Button variant="outline" onClick={() => void addToGallery()} disabled={!selectedOutput || selectedOutput.alreadyInGallery}>
                   <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.alreadyInGallery ? 'Already in Gallery' : 'Add to Gallery'}
                 </Button>
-                {job.type === 'image' ? <Button asChild><Link href="/m/create">Open in Create</Link></Button> : null}
+                {job.type === 'image' ? <Button onClick={() => void openInCreate()}><Sparkles className="mr-2 h-4 w-4" />Open in Create</Button> : null}
                 {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
                 {isFinished ? <Button variant="destructive" onClick={() => void deleteJob()}><Trash2 className="mr-2 h-4 w-4" />Delete job</Button> : null}
               </div>
