@@ -80,7 +80,6 @@ export const submitImageGeneration = async ({
   }
 
   const shouldRandomizeSeed = randomizeSeed && currentModel.parameters.some(param => param.name === 'seed');
-  const seedForThisRun = shouldRandomizeSeed ? generateRandomSeed() : null;
   const nextSeed = shouldRandomizeSeed ? generateRandomSeed() : null;
 
   try {
@@ -102,11 +101,7 @@ export const submitImageGeneration = async ({
     }
 
     currentModel.parameters.forEach(param => {
-      let value = parameterValues[param.name] ?? param.default;
-
-      if (param.name === 'seed' && seedForThisRun !== null) {
-        value = seedForThisRun;
-      }
+      const value = parameterValues[param.name] ?? param.default;
 
       if (value !== undefined && value !== null) {
         formData.append(param.name, value.toString());
@@ -158,7 +153,6 @@ export const submitImageGeneration = async ({
         endpointId: headers['X-RunPod-Endpoint-Id'],
         options: {
           ...parameterValues,
-          ...(seedForThisRun !== null ? { seed: seedForThisRun } : {}),
           randomizeSeed,
         },
       },
