@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -7,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useImageCreateState } from '@/hooks/create/useImageCreateState';
 
 export default function MobileModelScreen() {
+  const router = useRouter();
   const { imageModels, selectedModel, selectModel } = useImageCreateState();
 
   return (
@@ -17,7 +19,15 @@ export default function MobileModelScreen() {
           {imageModels.map((model) => {
             const active = model.id === selectedModel;
             return (
-              <button key={model.id} type="button" className="block w-full text-left" onClick={() => selectModel(model.id)}>
+              <button
+                key={model.id}
+                type="button"
+                className="block w-full text-left"
+                onClick={() => {
+                  selectModel(model.id);
+                  router.push('/m/create');
+                }}
+              >
                 <Card className={active ? 'border-primary/50 bg-primary/10' : ''}>
                   <CardContent className="flex items-center justify-between gap-3 p-4">
                     <div>
