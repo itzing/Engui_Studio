@@ -48,7 +48,7 @@ type LoadedJobsPage = {
 const PAGE_SIZE = 10;
 
 export function useMobileJobsScreen() {
-  const { activeWorkspaceId, workspaces, deleteJob, clearFinishedJobs, addJob } = useStudio();
+  const { activeWorkspaceId, workspaces, deleteJob, cancelJob, clearFinishedJobs, addJob, reuseJobInput } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [loadedPages, setLoadedPages] = useState<Record<number, LoadedJobsPage>>({});
   const [totalCount, setTotalCount] = useState(0);
@@ -263,6 +263,15 @@ export function useMobileJobsScreen() {
     await hydrateInitialState();
   }, [deleteJob, hydrateInitialState]);
 
+  const cancelActiveJob = useCallback(async (jobId: string) => {
+    await cancelJob(jobId);
+    await hydrateInitialState();
+  }, [cancelJob, hydrateInitialState]);
+
+  const reuseJob = useCallback(async (jobId: string) => {
+    await reuseJobInput(jobId);
+  }, [reuseJobInput]);
+
   const upscaleJob = useCallback(async (job: MobileJobsScreenItem) => {
     if (!(job.type === 'image' || job.type === 'video')) return;
     const response = await fetch('/api/upscale', {
@@ -305,6 +314,8 @@ export function useMobileJobsScreen() {
     restoreAbsoluteIndex,
     clearFinished,
     removeJob,
+    cancelActiveJob,
+    reuseJob,
     upscaleJob,
     workspaceId: effectiveWorkspaceId,
     jobIndexMap,

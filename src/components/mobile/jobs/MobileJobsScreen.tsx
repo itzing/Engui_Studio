@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X } from 'lucide-react';
+import { Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -37,14 +37,31 @@ function PlaceholderRow() {
 function SelectedJobActions({
   job,
   onDelete,
+  onCancel,
+  onReuse,
   onUpscale,
 }: {
   job: MobileJobsScreenItem;
   onDelete: (job: MobileJobsScreenItem) => void;
+  onCancel: (job: MobileJobsScreenItem) => void;
+  onReuse: (job: MobileJobsScreenItem) => void;
   onUpscale: (job: MobileJobsScreenItem) => void;
 }) {
   return (
     <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+      {job.status === 'completed' ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onReuse(job);
+          }}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
+          aria-label="Reuse job inputs"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
+      ) : null}
       {(job.type === 'image' || job.type === 'video') && job.status === 'completed' ? (
         <button
           type="button"
@@ -58,17 +75,31 @@ function SelectedJobActions({
           <Wand2 className="h-4 w-4" />
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete(job);
-        }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
-        aria-label="Delete job"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing' ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCancel(job);
+          }}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
+          aria-label="Cancel job"
+        >
+          <Ban className="h-4 w-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(job);
+          }}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
+          aria-label="Delete job"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -96,6 +127,8 @@ export default function MobileJobsScreen() {
     restoreAbsoluteIndex,
     clearFinished,
     removeJob,
+    cancelActiveJob,
+    reuseJob,
     upscaleJob,
   } = useMobileJobsScreen();
 
@@ -215,7 +248,15 @@ export default function MobileJobsScreen() {
                               </div>
                             </div>
 
-                            {isSelected ? <SelectedJobActions job={job} onDelete={(item) => void removeJob(item.id)} onUpscale={(item) => void upscaleJob(item)} /> : null}
+                            {isSelected ? (
+                              <SelectedJobActions
+                                job={job}
+                                onDelete={(item) => void removeJob(item.id)}
+                                onCancel={(item) => void cancelActiveJob(item.id)}
+                                onReuse={(item) => void reuseJob(item.id)}
+                                onUpscale={(item) => void upscaleJob(item)}
+                              />
+                            ) : null}
                           </button>
                         );
                       })()
