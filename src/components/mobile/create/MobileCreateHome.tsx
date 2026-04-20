@@ -62,29 +62,23 @@ export default function MobileCreateHome({
 
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" asChild className="min-w-0 max-w-[48%] flex-1 justify-between gap-2 overflow-hidden">
-                  <Link href="/m/create/model">
-                    <span className="text-muted-foreground">Model</span>
-                    <span className="truncate text-foreground">{currentModel?.name || 'Loading model...'}</span>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" asChild className="min-w-0 h-auto justify-start overflow-hidden px-3 py-3">
+                  <Link href="/m/create/model" className="block truncate text-left text-base font-semibold">
+                    {currentModel?.name || 'Loading model...'}
                   </Link>
                 </Button>
 
                 <Button
                   variant={randomizeSeed ? 'default' : 'outline'}
                   size="sm"
-                  className="min-w-[96px]"
+                  className="h-auto flex-col items-start px-3 py-3 text-left"
                   onClick={() => setRandomizeSeed(!randomizeSeed)}
                 >
-                  {randomizeSeed ? 'Random' : 'Fixed'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-w-0 flex-1 justify-start overflow-hidden"
-                >
-                  <span className="truncate">{currentSeed ?? '—'}</span>
+                  <span className="text-base font-semibold leading-none">{randomizeSeed ? 'Random' : 'Fixed'}</span>
+                  <span className={`mt-1 text-xs leading-none ${randomizeSeed ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                    {currentSeed ?? '—'}
+                  </span>
                 </Button>
               </div>
             </CardContent>
