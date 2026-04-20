@@ -159,6 +159,28 @@ export function useImageCreateState() {
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncSelectedModel = (event?: Event) => {
+      const modelId = (event as CustomEvent<{ modelId?: string } | undefined>)?.detail?.modelId || getWorkflowActiveModel('image') || DEFAULT_IMAGE_MODEL;
+      if (!modelId) return;
+      setSelectedModel(modelId);
+    };
+
+    window.addEventListener('mobileImageModelSelected', syncSelectedModel as EventListener);
+    window.addEventListener('pageshow', syncSelectedModel as EventListener);
+    window.addEventListener('focus', syncSelectedModel as EventListener);
+    document.addEventListener('visibilitychange', syncSelectedModel as EventListener);
+
+    return () => {
+      window.removeEventListener('mobileImageModelSelected', syncSelectedModel as EventListener);
+      window.removeEventListener('pageshow', syncSelectedModel as EventListener);
+      window.removeEventListener('focus', syncSelectedModel as EventListener);
+      document.removeEventListener('visibilitychange', syncSelectedModel as EventListener);
+    };
+  }, [DEFAULT_IMAGE_MODEL, setSelectedModel]);
+
+  useEffect(() => {
     const nextModelId = selectedModel || DEFAULT_IMAGE_MODEL;
     if (!selectedModel || !imageModels.some((model) => model.id === selectedModel)) {
       setSelectedModel(nextModelId);

@@ -25,6 +25,11 @@ export default function MobileModelScreen() {
                 className="block w-full text-left"
                 onClick={() => {
                   selectModel(model.id);
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('mobileImageModelSelected', {
+                      detail: { modelId: model.id },
+                    }));
+                  }
                   router.push('/m/create');
                 }}
               >
