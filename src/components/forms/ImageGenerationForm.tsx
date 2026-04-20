@@ -1419,7 +1419,7 @@ export default function ImageGenerationForm() {
                         )}
                         <div className="relative">
                             <textarea
-                                className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : promptMatchesSelectedScene ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : promptMatchesSelectedScene ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
@@ -1705,7 +1705,7 @@ export default function ImageGenerationForm() {
                         <Label htmlFor="prompt-helper-instruction">Instruction</Label>
                         <textarea
                             id="prompt-helper-instruction"
-                            className="w-full min-h-[140px] p-3 rounded-lg border border-border bg-secondary/50 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                            className="w-full min-h-[140px] p-3 rounded-lg border border-border bg-secondary/50 text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50"
                             placeholder="Describe how to improve or generate the prompt"
                             value={promptHelperInstruction}
                             onChange={(e) => setPromptHelperInstruction(e.target.value)}
@@ -1855,7 +1855,7 @@ export default function ImageGenerationForm() {
                                 </Button>
                             </div>
                             <textarea
-                                className="min-h-[340px] w-full rounded-lg border border-border bg-secondary/30 p-3 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-80"
+                                className="min-h-[340px] w-full rounded-lg border border-border bg-secondary/30 p-3 text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-80"
                                 placeholder="The extracted prompt will appear here"
                                 value={imagePromptResult}
                                 readOnly
