@@ -58,12 +58,15 @@ export default function MobileCreateHome({
   const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
   const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
   const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
-  const resolutionLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
+  const formatLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
     ? currentWidth === currentHeight
       ? 'Square'
       : currentWidth > currentHeight
         ? 'Landscape'
         : 'Portrait'
+    : 'Resolution';
+  const resolutionLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
+    ? `${currentWidth}w × ${currentHeight}h`
     : '—';
 
   useEffect(() => {
@@ -113,7 +116,7 @@ export default function MobileCreateHome({
                     handleParameterChange(heightParameter.name, currentWidth);
                   }}
                 >
-                  <div className="text-base font-semibold leading-none text-foreground">Resolution</div>
+                  <div className="text-base font-semibold leading-none text-foreground">{formatLabel}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{resolutionLabel}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground/80">Tap to switch</div>
                 </button>
