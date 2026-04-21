@@ -3,9 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 
-// 간단한 메모리 캐시 (프로덕션에서는 Redis 사용 권장)
-const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 5000; // 5초 캐시
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function maybePopulateJobThumbnail(job: any) {
   const thumbnailUrl = await maybeGenerateJobThumbnail({
@@ -30,8 +29,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      id, // RunPod ID or custom ID
-      userId = 'user-with-settings', // Default user if not provided (must match GET default)
+      id,
+      userId = 'user-with-settings',
       workspaceId,
       type,
       status = 'queued',
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
 
     const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
 
-    // 필수 필드 검증
     if (!type) {
       return NextResponse.json(
         { error: 'Missing required fields: type' },
@@ -57,7 +55,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Job 생성 또는 업데이트 (upsert)
     const upsertedJob = await prisma.job.upsert({
       where: { id: id || 'new-job-' + Date.now() },
       update: {
@@ -70,7 +67,7 @@ export async function POST(request: NextRequest) {
         executionMs: typeof executionMs === 'number' ? executionMs : null
       },
       create: {
-        id: id || undefined, // Use provided ID if available
+        id: id || undefined,
         userId,
         workspaceId: resolvedWorkspaceId,
         type,
@@ -91,10 +88,6 @@ export async function POST(request: NextRequest) {
 
     const job = await maybePopulateJobThumbnail(upsertedJob);
 
-    // 캐시 완전 무효화 (모든 캐시 제거)
-    cache.clear();
-    console.log('🗑️ All cache cleared after job creation/update');
-
     return NextResponse.json({ success: true, job }, { status: 201 });
   } catch (error) {
     console.error('Error creating job:', error);
@@ -110,16 +103,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const jobId = searchParams.get('jobId');
     const userId = searchParams.get('userId') || 'user-with-settings';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const skip = (page - 1) * limit;
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
     const onlyProcessing = searchParams.get('onlyProcessing') === 'true';
-    const workspaceId = searchParams.get('workspaceId'); // 워크스페이스 필터 추가
-    const type = (searchParams.get('type') || '').toLowerCase(); // image | video | audio or csv
+    const workspaceId = searchParams.get('workspaceId');
+    const type = (searchParams.get('type') || '').toLowerCase();
     const focusJobId = searchParams.get('focusJobId')?.trim() || null;
 
     if (jobId) {
-      // 특정 작업 조회
       const job = await prisma.job.findUnique({
         where: { id: jobId },
       });
@@ -129,131 +120,104 @@ export async function GET(request: NextRequest) {
       }
 
       return NextResponse.json({ success: true, job });
-    } else {
-      // 캐시 키 생성 (워크스페이스 필터 포함)
-      const cacheKey = `jobs-${userId}-${page}-${limit}-${onlyProcessing}-${workspaceId || 'all'}-${type || 'all'}`;
-      const cached = cache.get(cacheKey);
+    }
 
-      // 캐시가 유효한지 확인
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        return NextResponse.json({ success: true, ...cached.data });
+    const whereCondition: any = { userId };
+    if (onlyProcessing) {
+      whereCondition.status = 'processing';
+    }
+
+    if (workspaceId) {
+      if (workspaceId === 'unassigned') {
+        whereCondition.workspaceId = null;
+      } else {
+        whereCondition.workspaceId = workspaceId;
       }
+    }
 
-      // 쿼리 조건 구성
-      const whereCondition: any = { userId };
-      if (onlyProcessing) {
-        whereCondition.status = 'processing';
+    if (type) {
+      const types = Array.from(new Set(type.split(',').map((entry) => entry.trim()).filter(Boolean)));
+      if (types.length === 1 && types[0] === 'audio') {
+        whereCondition.type = { in: ['audio', 'tts', 'music'] };
+      } else if (types.length > 0) {
+        const expandedTypes = types.flatMap((entry) => entry === 'audio' ? ['audio', 'tts', 'music'] : entry);
+        whereCondition.type = { in: Array.from(new Set(expandedTypes.filter((entry) => entry === 'image' || entry === 'video' || entry === 'audio' || entry === 'tts' || entry === 'music'))) };
       }
+    }
 
-      // 워크스페이스 필터링
-      if (workspaceId) {
-        if (workspaceId === 'unassigned') {
-          // 워크스페이스에 할당되지 않은 작업들
-          whereCondition.workspaceId = null;
-        } else {
-          // 특정 워크스페이스의 작업들
-          whereCondition.workspaceId = workspaceId;
-        }
-      }
-
-      // 타입 필터링
-      if (type) {
-        const types = Array.from(new Set(type.split(',').map((entry) => entry.trim()).filter(Boolean)));
-        if (types.length === 1 && types[0] === 'audio') {
-          whereCondition.type = { in: ['audio', 'tts', 'music'] };
-        } else if (types.length > 0) {
-          const expandedTypes = types.flatMap((entry) => entry === 'audio' ? ['audio', 'tts', 'music'] : entry);
-          whereCondition.type = { in: Array.from(new Set(expandedTypes.filter((entry) => entry === 'image' || entry === 'video' || entry === 'audio' || entry === 'tts' || entry === 'music'))) };
-        }
-      }
-
-      const totalCount = await prisma.job.count({ where: whereCondition });
-
-      let resolvedPage = page;
-      let focusAbsoluteIndex: number | null = null;
-      if (focusJobId) {
-        const focusedJobs = await prisma.job.findMany({
-          where: whereCondition,
-          orderBy: { createdAt: 'desc' },
-          select: { id: true },
-        });
-        const foundIndex = focusedJobs.findIndex((job) => job.id === focusJobId);
-        if (foundIndex >= 0) {
-          focusAbsoluteIndex = foundIndex;
-          resolvedPage = Math.floor(foundIndex / limit) + 1;
-        }
-      }
-
-      const resolvedSkip = (resolvedPage - 1) * limit;
-
-      const jobs = await prisma.job.findMany({
-        where: whereCondition,
-        orderBy: { createdAt: 'desc' },
-        skip: resolvedSkip,
-        take: limit,
-        include: {
-          workspace: {
-            select: {
-              id: true,
-              name: true,
-              color: true
-            }
+    const jobs = await prisma.job.findMany({
+      where: whereCondition,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            color: true
           }
         }
-      });
+      }
+    });
 
-      const hydratedJobs = await Promise.all(jobs.map(async (job) => {
-        if (job.status !== 'completed' || !job.resultUrl || job.thumbnailUrl) {
-          return job;
-        }
+    const hydratedJobs = await Promise.all(jobs.map(async (job) => {
+      if (job.status !== 'completed' || !job.resultUrl || job.thumbnailUrl) {
+        return job;
+      }
 
-        return maybePopulateJobThumbnail(job);
-      }));
+      return maybePopulateJobThumbnail(job);
+    }));
 
-      // Format jobs for frontend
-      const formattedJobs = hydratedJobs.map(job => ({
-        id: job.id,
-        modelId: job.modelId,
-        type: job.type,
-        status: job.status,
-        prompt: job.prompt || '',
-        createdAt: job.createdAt.getTime(),
-        executionMs: (job as any).executionMs ?? undefined,
-        options: job.options,
-        secureState: (job as any).secureState ?? null,
-        resultUrl: job.resultUrl,
-        error: job.error,
-        endpointId: job.endpointId,
-        thumbnailUrl: job.thumbnailUrl,
-        workspaceId: job.workspaceId,
-        workspace: job.workspace,
-        cost: job.cost
-      }));
+    let formattedJobs = hydratedJobs.map(job => ({
+      id: job.id,
+      modelId: job.modelId,
+      type: job.type,
+      status: job.status,
+      prompt: job.prompt || '',
+      createdAt: job.createdAt.getTime(),
+      executionMs: (job as any).executionMs ?? undefined,
+      options: job.options,
+      secureState: (job as any).secureState ?? null,
+      resultUrl: job.resultUrl,
+      error: job.error,
+      endpointId: job.endpointId,
+      thumbnailUrl: job.thumbnailUrl,
+      workspaceId: job.workspaceId,
+      workspace: job.workspace,
+      cost: job.cost
+    }));
 
-      const result = {
-        jobs: formattedJobs,
-        focus: focusJobId ? {
-          jobId: focusJobId,
-          found: focusAbsoluteIndex !== null,
-          page: focusAbsoluteIndex !== null ? resolvedPage : null,
-          indexOnPage: focusAbsoluteIndex !== null ? focusAbsoluteIndex % limit : null,
-          absoluteIndex: focusAbsoluteIndex,
-        } : undefined,
-        pagination: {
-          page: resolvedPage,
-          limit,
-          totalCount,
-          totalPages: Math.ceil(totalCount / limit),
-          hasNextPage: resolvedPage < Math.ceil(totalCount / limit),
-          hasPrevPage: resolvedPage > 1,
-        }
-      };
+    const totalCount = formattedJobs.length;
+    const focusAbsoluteIndex = focusJobId ? formattedJobs.findIndex((job) => job.id === focusJobId) : -1;
+    const resolvedPage = focusAbsoluteIndex >= 0 ? Math.floor(focusAbsoluteIndex / limit) + 1 : page;
+    const resolvedSkip = (resolvedPage - 1) * limit;
+    formattedJobs = formattedJobs.slice(resolvedSkip, resolvedSkip + limit);
+    const hasNextPage = totalCount > resolvedPage * limit;
 
-      // 캐시에 저장
-      cache.set(cacheKey, { data: result, timestamp: Date.now() });
-
-      return NextResponse.json({ success: true, ...result });
-    }
+    return NextResponse.json({
+      success: true,
+      jobs: formattedJobs,
+      focus: focusJobId ? {
+        jobId: focusJobId,
+        found: focusAbsoluteIndex >= 0,
+        page: focusAbsoluteIndex >= 0 ? resolvedPage : null,
+        indexOnPage: focusAbsoluteIndex >= 0 ? focusAbsoluteIndex % limit : null,
+        absoluteIndex: focusAbsoluteIndex >= 0 ? focusAbsoluteIndex : null,
+      } : undefined,
+      pagination: {
+        page: resolvedPage,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNextPage,
+        hasPrevPage: resolvedPage > 1,
+      }
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    });
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return NextResponse.json(

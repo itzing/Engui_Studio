@@ -62,6 +62,7 @@ export function useMobileJobsScreen() {
   const [restoreTick, setRestoreTick] = useState(0);
   const [restoreAbsoluteIndex, setRestoreAbsoluteIndex] = useState<number | null>(null);
   const loadingPagesRef = useRef<Set<number>>(new Set());
+  const hydratedSelectionRef = useRef(false);
 
   const storageKey = effectiveWorkspaceId ? `engui.jobs.lastViewed.${effectiveWorkspaceId}` : null;
 
@@ -167,10 +168,22 @@ export function useMobileJobsScreen() {
   }, [fetchPage, mergePage]);
 
   const hydrateInitialState = useCallback(async () => {
+    if (!effectiveWorkspaceId) {
+      setLoadedPages({});
+      setTotalCount(0);
+      setSelectedJobId(null);
+      setSelectedAbsoluteIndex(null);
+      hydratedSelectionRef.current = true;
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const savedSelection = storageKey && typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
+      const savedSelection = storageKey && typeof window !== 'undefined'
+        ? window.localStorage.getItem(storageKey)
+        : null;
+
       setLoadedPages({});
       const focusData = await loadPage(1, { focusJobId: savedSelection });
       if (!focusData?.pagination) return;
@@ -178,10 +191,13 @@ export function useMobileJobsScreen() {
       const focusPage = focusData.focus?.found && focusData.focus.page ? focusData.focus.page : focusData.pagination.page;
       const pagesToLoad = new Set<number>([focusPage]);
       if (focusPage > 1) pagesToLoad.add(focusPage - 1);
-      if (focusPage > 2) pagesToLoad.add(focusPage - 2);
       if (focusPage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 1);
-      if ((focusPage + 1) * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 2);
-      await Promise.all(Array.from(pagesToLoad).filter((page) => page !== focusData.pagination?.page).map((page) => loadPage(page)));
+
+      await Promise.all(
+        Array.from(pagesToLoad)
+          .filter((page) => page !== focusData.pagination?.page)
+          .map((page) => loadPage(page)),
+      );
 
       const focusedJobId = focusData.focus?.found ? focusData.focus.jobId : null;
       const focusedAbsoluteIndex = focusData.focus?.found ? focusData.focus.absoluteIndex : null;
@@ -190,12 +206,15 @@ export function useMobileJobsScreen() {
 
       setSelectedJobId(focusedJobId || savedSelection || fallbackJobId);
       setSelectedAbsoluteIndex(typeof focusedAbsoluteIndex === 'number' ? focusedAbsoluteIndex : fallbackAbsoluteIndex);
+
       if (typeof focusedAbsoluteIndex === 'number') {
         setRestoreAbsoluteIndex(focusedAbsoluteIndex);
         setRestoreTick((value) => value + 1);
       } else {
         setRestoreAbsoluteIndex(null);
       }
+
+      hydratedSelectionRef.current = true;
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Failed to load jobs');
       setLoadedPages({});
@@ -203,9 +222,10 @@ export function useMobileJobsScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [loadPage, storageKey]);
+  }, [effectiveWorkspaceId, loadPage, storageKey]);
 
   useEffect(() => {
+    hydratedSelectionRef.current = false;
     void hydrateInitialState();
   }, [hydrateInitialState]);
 
