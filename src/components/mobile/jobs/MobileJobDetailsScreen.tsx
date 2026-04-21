@@ -1,16 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Clapperboard, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 
 export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
   const selectedOutput = job?.outputs?.[0] || null;
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
@@ -82,6 +84,16 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     }
   };
 
+  const copyError = async () => {
+    if (!job?.error) return;
+    try {
+      await navigator.clipboard.writeText(job.error);
+      showToast('Error copied', 'success');
+    } catch {
+      showToast('Failed to copy error', 'error');
+    }
+  };
+
   return (
     <MobileScreen>
       <MobileHeader
@@ -138,7 +150,23 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div className="text-muted-foreground">Prompt</div>
                     <div className="whitespace-pre-wrap">{job.prompt || 'No prompt saved.'}</div>
                   </div>
-                  {job.error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{job.error}</div> : null}
+                  {job.error ? (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="font-medium">Error</div>
+                        <button
+                          type="button"
+                          onClick={() => void copyError()}
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/30 text-red-200 hover:bg-red-500/10"
+                          aria-label="Copy error"
+                          title="Copy error"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="whitespace-pre-wrap break-words">{job.error}</div>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
 

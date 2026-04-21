@@ -348,7 +348,13 @@ export default function MobileJobsScreen() {
                         job={job}
                         absoluteIndex={virtualRow.index}
                         isSelected={selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id}
-                        onPress={handleJobPress}
+                        onPress={(item, absoluteIndex) => {
+                          if (selectedJobId === item.id && item.status === 'failed') {
+                            router.push(`/m/jobs/${item.id}`);
+                            return;
+                          }
+                          handleJobPress(item, absoluteIndex);
+                        }}
                         onDelete={(item) => {
                           if (window.confirm('Delete this job?')) {
                             void removeJob(item.id);
