@@ -18,6 +18,7 @@ import { loadFileFromPath } from '@/lib/fileUtils';
 import { getModelById, getModelsByType, isInputVisible, type ModelConfig, type ModelParameter } from '@/lib/models/modelConfig';
 import type { ScenePresetSummary } from '@/lib/scenes/types';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
+import type { LoRAFile } from '@/components/lora/LoRASelector';
 
 const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
@@ -55,6 +56,8 @@ export function useImageCreateState() {
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [message, setMessage] = useState<FlashMessage>(null);
+  const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
+  const [isLoadingLoras, setIsLoadingLoras] = useState(false);
   const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
   const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
   const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
@@ -104,6 +107,10 @@ export function useImageCreateState() {
     if (!currentModel) return [];
     return currentModel.parameters.filter((param) => param.group !== 'hidden' && isParameterVisible(param));
   }, [currentModel, isParameterVisible]);
+
+  const hasLoRAParameter = useMemo(() => {
+    return !!currentModel?.parameters.some((param) => param.type === 'lora-selector');
+  }, [currentModel]);
 
   const selectedScene = useMemo(() => {
     return availableScenes.find((scene) => scene.id === selectedSceneId) || null;
@@ -227,6 +234,40 @@ export function useImageCreateState() {
   }, [activeWorkspaceId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchAvailableLoras = async () => {
+      if (!activeWorkspaceId || !hasLoRAParameter) {
+        setAvailableLoras([]);
+        return;
+      }
+
+      setIsLoadingLoras(true);
+      try {
+        const response = await fetch(`/api/lora?workspaceId=${activeWorkspaceId}`);
+        const data = await response.json();
+
+        if (!cancelled) {
+          setAvailableLoras(data.success && Array.isArray(data.loras) ? data.loras : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableLoras([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingLoras(false);
+        }
+      }
+    };
+
+    void fetchAvailableLoras();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, hasLoRAParameter]);
+
+  useEffect(() => {
     if (!currentModel?.parameters.some((param) => param.name === 'use_controlnet')) {
       return;
     }
@@ -344,7 +385,7 @@ export function useImageCreateState() {
   }, []);
 
   const handleNumericParameterInput = useCallback((paramName: string, rawValue: string) => {
-    if (paramName === 'loraWeight') {
+    if (/^loraWeight\d*$/.test(paramName)) {
       if (/^-?\d*(\.\d*)?$/.test(rawValue)) {
         handleParameterChange(paramName, rawValue);
       }
@@ -479,6 +520,8 @@ export function useImageCreateState() {
     editableParameters,
     basicParameters,
     basicSummaryItems,
+    availableLoras,
+    isLoadingLoras,
     isParameterVisible,
     previewUrl,
     previewUrl2,
