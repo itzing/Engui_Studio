@@ -74,7 +74,7 @@ export default function MobileCreateHome({
       <MobileCreateModeBar activeMode={activeMode} onModeChange={onModeChange} />
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 custom-scrollbar">
-        <div className="space-y-4 pb-1">
+        <div className="space-y-4 pb-0.5">
           {message?.type === 'error' ? <StatusMessage type={message.type} text={message.text} /> : null}
 
           <Card>
@@ -227,7 +227,7 @@ export default function MobileCreateHome({
         </div>
       </div>
 
-      <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="space-y-3">
           <Button
             className="w-full"
