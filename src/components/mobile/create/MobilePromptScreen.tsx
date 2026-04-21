@@ -1,6 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, WandSparkles } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobilePromptScreen() {
+  const router = useRouter();
   const {
     prompt,
     setPrompt,
@@ -18,21 +20,32 @@ export default function MobilePromptScreen() {
     isPromptHelperLoading,
     runSavedPromptHelperInstruction,
   } = useMobileCreate();
+  const initialPromptRef = useRef(prompt);
+  const initialPromptHelperInstructionRef = useRef(promptHelperInstruction);
+
+  useEffect(() => {
+    initialPromptRef.current = prompt;
+    initialPromptHelperInstructionRef.current = promptHelperInstruction;
+  }, []);
+
+  const handleCancel = () => {
+    setPrompt(initialPromptRef.current);
+    setPromptHelperInstruction(initialPromptHelperInstructionRef.current);
+    router.push('/m/create');
+  };
+
+  const handleSave = () => {
+    router.push('/m/create');
+  };
 
   return (
     <MobileScreen>
       <MobileHeader
         title="Prompt"
         subtitle="Fullscreen editing for the keyboard-heavy part of create."
-        backHref="/m/create"
-        action={
-          <Button size="sm" asChild>
-            <Link href="/m/create">Done</Link>
-          </Button>
-        }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 custom-scrollbar">
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</label>
@@ -78,11 +91,14 @@ export default function MobilePromptScreen() {
                 </>
               )}
             </Button>
-
-            <Button asChild>
-              <Link href="/m/create">Save and return</Link>
-            </Button>
           </div>
+        </div>
+      </div>
+
+      <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="outline" size="lg" onClick={handleCancel}>Cancel</Button>
+          <Button size="lg" onClick={handleSave}>Save</Button>
         </div>
       </div>
     </MobileScreen>

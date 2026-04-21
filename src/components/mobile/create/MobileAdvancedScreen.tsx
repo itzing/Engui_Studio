@@ -30,6 +30,8 @@ export default function MobileAdvancedScreen() {
   } = useMobileCreate();
   const [showLoraSelector, setShowLoraSelector] = useState(false);
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
+  const initialEndpointDraftsRef = useRef<Record<string, string>>({});
+  const initialParameterValuesRef = useRef<Record<string, any>>({});
   const latestEndpointDraftsRef = useRef<Record<string, string>>({});
   const latestSettingsRef = useRef(settings);
 
@@ -38,7 +40,9 @@ export default function MobileAdvancedScreen() {
   }, []);
 
   useEffect(() => {
-    setEndpointDrafts(settings.runpod?.endpoints || {});
+    const nextEndpoints = settings.runpod?.endpoints || {};
+    setEndpointDrafts(nextEndpoints);
+    initialEndpointDraftsRef.current = nextEndpoints;
   }, [settings.runpod?.endpoints]);
 
   useEffect(() => {
@@ -48,6 +52,12 @@ export default function MobileAdvancedScreen() {
   useEffect(() => {
     latestSettingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    initialParameterValuesRef.current = Object.fromEntries(
+      editableParameters.map((param) => [param.name, parameterValues[param.name]])
+    );
+  }, []);
 
   const loraParams = editableParameters.filter((param) => param.type === 'lora-selector');
   const loraWeightByName = useMemo(() => {
@@ -128,21 +138,33 @@ export default function MobileAdvancedScreen() {
     return persistEndpointDrafts(latestEndpointDraftsRef.current, showSavedToast);
   };
 
-  useEffect(() => {
-    return () => {
-      persistEndpointDrafts(latestEndpointDraftsRef.current, false);
-    };
-  }, []);
+  const handleCancel = () => {
+    editableParameters.forEach((param) => {
+      const initialValue = initialParameterValuesRef.current[param.name];
+      handleParameterChange(param.name, initialValue ?? param.default ?? '');
+    });
 
-  const handleBack = () => {
+    updateSettings({
+      runpod: {
+        ...latestSettingsRef.current.runpod,
+        endpoints: {
+          ...initialEndpointDraftsRef.current,
+        },
+      },
+    });
+
+    router.push('/m/create');
+  };
+
+  const handleSave = () => {
     saveEndpointDrafts(false);
     router.push('/m/create');
   };
 
   return (
     <MobileScreen>
-      <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." backHref="/m/create" onBack={handleBack} />
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
+      <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." />
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 custom-scrollbar">
         <div className="space-y-4">
           {loraParams.length > 0 ? (
             <Card>
@@ -370,6 +392,13 @@ export default function MobileAdvancedScreen() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="outline" size="lg" onClick={handleCancel}>Cancel</Button>
+          <Button size="lg" onClick={handleSave}>Save</Button>
         </div>
       </div>
     </MobileScreen>
