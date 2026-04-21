@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Plus, SlidersHorizontal } from 'lucide-react';
+import { Plus, SlidersHorizontal } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Input } from '@/components/ui/input';
@@ -354,13 +354,7 @@ export default function MobileAdvancedScreen() {
 
           <Card>
             <CardContent className="space-y-3 pt-6">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-lg font-semibold text-foreground">Endpoint IDs</div>
-                <Button variant="outline" size="sm" onClick={saveEndpointDrafts}>
-                  <Check className="mr-2 h-4 w-4" />
-                  Save
-                </Button>
-              </div>
+              <div className="text-lg font-semibold text-foreground">Endpoint IDs</div>
               <div className="space-y-2">
                 {runpodModels.map((model) => (
                   <div key={model.id} className={`rounded-lg border px-3 py-2 ${model.id === currentModel?.id ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40'}`}>
