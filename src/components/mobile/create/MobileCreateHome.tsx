@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { ImagePlus, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -7,6 +8,7 @@ import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar'
 import type { CreateMode } from '@/lib/createDrafts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/toast';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string }) {
@@ -24,6 +26,7 @@ export default function MobileCreateHome({
   activeMode: CreateMode;
   onModeChange: (mode: CreateMode) => void;
 }) {
+  const { showToast } = useToast();
   const {
     currentModel,
     promptSummary,
@@ -45,6 +48,7 @@ export default function MobileCreateHome({
     isGenerating,
     submit,
     message,
+    setMessage,
     isLoadingMedia,
   } = useMobileCreate();
 
@@ -57,13 +61,20 @@ export default function MobileCreateHome({
     ? `${currentWidth} × ${currentHeight}`
     : '—';
 
+  useEffect(() => {
+    if (message?.type === 'success') {
+      showToast(message.text, 'success', 2200);
+      setMessage(null);
+    }
+  }, [message, setMessage, showToast]);
+
   return (
     <MobileScreen>
       <MobileCreateModeBar activeMode={activeMode} onModeChange={onModeChange} />
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 custom-scrollbar">
         <div className="space-y-4 pb-4">
-          {message ? <StatusMessage type={message.type} text={message.text} /> : null}
+          {message?.type === 'error' ? <StatusMessage type={message.type} text={message.text} /> : null}
 
           <Card>
             <CardContent className="pt-6">
