@@ -29,8 +29,8 @@ export default function MobileAdvancedScreen() {
   const [showLoraSelector, setShowLoraSelector] = useState(false);
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
 
-  const imageRunpodModels = useMemo(() => {
-    return MODELS.filter((model) => model.type === 'image' && model.api.type === 'runpod');
+  const runpodModels = useMemo(() => {
+    return MODELS.filter((model) => model.api.type === 'runpod');
   }, []);
 
   useEffect(() => {
@@ -157,31 +157,6 @@ export default function MobileAdvancedScreen() {
               </CardContent>
             </Card>
           ) : null}
-
-          <Card>
-            <CardContent className="space-y-3 pt-6">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-lg font-semibold text-foreground">Endpoint IDs</div>
-                <Button variant="outline" size="sm" onClick={saveEndpointDrafts}>
-                  <Check className="mr-2 h-4 w-4" />
-                  Save
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {imageRunpodModels.map((model) => (
-                  <div key={model.id} className={`rounded-lg border px-3 py-2 ${model.id === currentModel?.id ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40'}`}>
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">{model.id}</div>
-                    <Input
-                      value={endpointDrafts[model.id] ?? settings.runpod.endpoints[model.id] ?? model.api.endpoint ?? ''}
-                      className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-                      onChange={(event) => setEndpointDrafts((prev) => ({ ...prev, [model.id]: event.target.value }))}
-                      placeholder={model.api.endpoint}
-                    />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
 
           {widthParam && heightParam ? (
             <Card>
@@ -336,6 +311,31 @@ export default function MobileAdvancedScreen() {
               </Card>
             );
           })}
+
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold text-foreground">Endpoint IDs</div>
+                <Button variant="outline" size="sm" onClick={saveEndpointDrafts}>
+                  <Check className="mr-2 h-4 w-4" />
+                  Save
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {runpodModels.map((model) => (
+                  <div key={model.id} className={`rounded-lg border px-3 py-2 ${model.id === currentModel?.id ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40'}`}>
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">{model.id}</div>
+                    <Input
+                      value={endpointDrafts[model.id] ?? settings.runpod.endpoints[model.id] ?? model.api.endpoint ?? ''}
+                      className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                      onChange={(event) => setEndpointDrafts((prev) => ({ ...prev, [model.id]: event.target.value }))}
+                      placeholder={model.api.endpoint}
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </MobileScreen>
