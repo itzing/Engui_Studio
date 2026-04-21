@@ -40,6 +40,7 @@ export default function MobileAdvancedScreen() {
 
   const visibleParameters = editableParameters.filter((param) => {
     if (param.name === 'negativePrompt' || param.name === 'negative_prompt') return false;
+    if (param.name === 'use_controlnet') return false;
     if (param.type === 'lora-selector') return false;
     if (/^loraWeight\d*$/.test(param.name)) return false;
     return true;
