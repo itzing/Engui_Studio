@@ -59,7 +59,7 @@ export default function MobileCreateHome({
   const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
   const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
   const resolutionLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
-    ? `${currentWidth} × ${currentHeight}`
+    ? `${currentWidth}w × ${currentHeight}h`
     : '—';
 
   useEffect(() => {
