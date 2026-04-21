@@ -29,7 +29,6 @@ export default function MobileCreateHome({
   const {
     currentModel,
     promptSummary,
-    selectedScene,
     previewUrl,
     previewUrl2,
     primaryImageVisible,
@@ -53,6 +52,13 @@ export default function MobileCreateHome({
   } = useMobileCreate();
 
   const currentSeed = parameterValues.seed ?? currentModel?.parameters.find((param) => param.name === 'seed')?.default;
+  const widthParameter = currentModel?.parameters.find((param) => param.name === 'width');
+  const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
+  const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
+  const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+  const resolutionLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
+    ? `${currentWidth} × ${currentHeight}`
+    : '—';
 
   return (
     <MobileScreen>
@@ -83,6 +89,11 @@ export default function MobileCreateHome({
                   </span>
                 </Button>
 
+                <div className="rounded-md border border-border bg-background/40 px-3 py-3">
+                  <div className="text-base font-semibold leading-none text-foreground">Resolution</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{resolutionLabel}</div>
+                </div>
+
                 {supportsControlNet ? (
                   <div className={`rounded-md border px-3 py-3 ${controlNetEnabled ? 'border-primary/30 bg-primary/10' : 'border-border bg-background/40'}`}>
                     <div className="text-base font-semibold leading-none text-foreground">ControlNet</div>
@@ -104,21 +115,6 @@ export default function MobileCreateHome({
               <p className="line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{promptSummary}</p>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/m/create/prompt">Edit prompt</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Scene</CardDescription>
-              <CardTitle className="text-lg">{selectedScene?.name || 'No scene selected'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-0">
-              <p className="line-clamp-3 text-sm text-muted-foreground">
-                {selectedScene?.generatedScenePrompt || 'Pick a saved scene to apply its prompt and preview image.'}
-              </p>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/m/create/scenes">Browse scenes</Link>
               </Button>
             </CardContent>
           </Card>
