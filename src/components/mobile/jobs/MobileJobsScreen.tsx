@@ -238,31 +238,21 @@ export default function MobileJobsScreen() {
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
-  const isRestorePending = typeof restoreAbsoluteIndex === 'number'
-    && restoreAbsoluteIndex >= 0
-    && restoreTick > restoreHandledTickRef.current
-    && !itemsByAbsoluteIndex[restoreAbsoluteIndex];
 
   useEffect(() => {
-    if (virtualRows.length === 0 || totalCount === 0 || isRestorePending) return;
-    const startIndex = Math.max(0, (virtualRows[0]?.index ?? 0) - 5);
-    const endIndex = Math.min(totalCount - 1, (virtualRows[virtualRows.length - 1]?.index ?? 0) + 5);
+    if (virtualRows.length === 0 || totalCount === 0) return;
+    const startIndex = Math.max(0, (virtualRows[0]?.index ?? 0) - 18);
+    const endIndex = Math.min(totalCount - 1, (virtualRows[virtualRows.length - 1]?.index ?? 0) + 18);
     void ensureRangeLoaded(startIndex, endIndex);
-  }, [ensureRangeLoaded, isRestorePending, totalCount, virtualRows]);
+  }, [ensureRangeLoaded, totalCount, virtualRows]);
 
   useEffect(() => {
     if (restoreTick <= 0 || restoreHandledTickRef.current === restoreTick) return;
     if (typeof restoreAbsoluteIndex !== 'number' || restoreAbsoluteIndex < 0) return;
-
-    if (!itemsByAbsoluteIndex[restoreAbsoluteIndex]) {
-      void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 10), restoreAbsoluteIndex + 10);
-      return;
-    }
-
     restoreHandledTickRef.current = restoreTick;
     rowVirtualizer.scrollToIndex(restoreAbsoluteIndex, { align: 'center' });
-    void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 10), restoreAbsoluteIndex + 10);
-  }, [ensureRangeLoaded, itemsByAbsoluteIndex, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
+    void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 24), restoreAbsoluteIndex + 24);
+  }, [ensureRangeLoaded, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
 
   const selectedLoadedViewerIndex = useMemo(() => {
     if (!selectedJobId) return -1;
@@ -344,62 +334,55 @@ export default function MobileJobsScreen() {
 
         {!isLoading && totalCount > 0 ? (
           <div ref={parentRef} className="min-h-0 flex-1 overflow-auto px-4 py-4">
-            {isRestorePending ? (
-              <div className="flex min-h-[40vh] items-center justify-center rounded-lg border border-border/60 bg-background/30 text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Restoring selected job...
-              </div>
-            ) : (
-              <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
-                {virtualRows.map((virtualRow) => {
-                  const job = itemsByAbsoluteIndex[virtualRow.index];
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      className="absolute left-0 top-0 w-full"
-                      style={{ transform: `translateY(${virtualRow.start}px)` }}
-                    >
-                      {job ? (
-                        <JobRow
-                          job={job}
-                          absoluteIndex={virtualRow.index}
-                          isSelected={selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id}
-                          onPress={(item, absoluteIndex) => {
-                            if (item.status === 'failed') {
-                              router.push(`/m/jobs/${item.id}`);
-                              return;
-                            }
-                            if (['queueing_up', 'queued', 'processing', 'finalizing'].includes(item.status) && selectedJobId === item.id) {
-                              router.push(`/m/jobs/${item.id}`);
-                              return;
-                            }
-                            handleJobPress(item, absoluteIndex);
-                          }}
-                          onDelete={(item) => {
-                            if (window.confirm('Delete this job?')) {
-                              void removeJob(item.id);
-                            }
-                          }}
-                          onCancel={(item) => {
-                            if (window.confirm('Cancel this job?')) {
-                              void cancelActiveJob(item.id);
-                            }
-                          }}
-                          onReuse={(item) => void reuseJob(item.id)}
-                          onUpscale={(item) => void upscaleJob(item)}
-                        />
-                      ) : (
-                        <PlaceholderRow />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+              {virtualRows.map((virtualRow) => {
+                const job = itemsByAbsoluteIndex[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.key}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    {job ? (
+                      <JobRow
+                        job={job}
+                        absoluteIndex={virtualRow.index}
+                        isSelected={selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id}
+                        onPress={(item, absoluteIndex) => {
+                          if (item.status === 'failed') {
+                            router.push(`/m/jobs/${item.id}`);
+                            return;
+                          }
+                          if (['queueing_up', 'queued', 'processing', 'finalizing'].includes(item.status) && selectedJobId === item.id) {
+                            router.push(`/m/jobs/${item.id}`);
+                            return;
+                          }
+                          handleJobPress(item, absoluteIndex);
+                        }}
+                        onDelete={(item) => {
+                          if (window.confirm('Delete this job?')) {
+                            void removeJob(item.id);
+                          }
+                        }}
+                        onCancel={(item) => {
+                          if (window.confirm('Cancel this job?')) {
+                            void cancelActiveJob(item.id);
+                          }
+                        }}
+                        onReuse={(item) => void reuseJob(item.id)}
+                        onUpscale={(item) => void upscaleJob(item)}
+                      />
+                    ) : (
+                      <PlaceholderRow />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 
-        {isLoadingMore && !isRestorePending ? (
+        {isLoadingMore ? (
           <div className="pointer-events-none px-4 py-2 text-center text-xs text-muted-foreground">
             Loading more jobs...
           </div>
