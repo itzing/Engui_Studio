@@ -13,13 +13,10 @@ import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider
 
 export default function MobileAdvancedScreen() {
   const {
-    currentModel,
     editableParameters,
     parameterValues,
     handleParameterChange,
     handleNumericParameterInput,
-    randomizeSeed,
-    setRandomizeSeed,
     availableLoras,
     isLoadingLoras,
   } = useMobileCreate();
@@ -38,9 +35,17 @@ export default function MobileAdvancedScreen() {
     return map;
   }, [editableParameters]);
 
+  const widthParam = editableParameters.find((param) => param.name === 'width');
+  const heightParam = editableParameters.find((param) => param.name === 'height');
+  const stepsParam = editableParameters.find((param) => param.name === 'steps');
+  const cfgParam = editableParameters.find((param) => param.name === 'cfg' || param.name === 'cfg_scale');
+
   const visibleParameters = editableParameters.filter((param) => {
     if (param.name === 'negativePrompt' || param.name === 'negative_prompt') return false;
     if (param.name === 'use_controlnet') return false;
+    if (param.name === 'seed') return false;
+    if (param.name === 'width' || param.name === 'height') return false;
+    if (param.name === 'steps' || param.name === 'cfg' || param.name === 'cfg_scale') return false;
     if (param.type === 'lora-selector') return false;
     if (/^loraWeight\d*$/.test(param.name)) return false;
     return true;
@@ -73,11 +78,7 @@ export default function MobileAdvancedScreen() {
         <div className="space-y-4">
           {loraParams.length > 0 ? (
             <Card>
-              <CardHeader className="pb-3">
-                <CardDescription>LoRA</CardDescription>
-                <CardTitle className="text-lg">Style adapters</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-3 pt-6">
                 {selectedLoraSlots.map((slot) => (
                   <div key={slot.param.name} className="rounded-lg border border-border/60 bg-background/40 p-3">
                     <div className="mb-3 flex items-start justify-between gap-3">
@@ -129,6 +130,72 @@ export default function MobileAdvancedScreen() {
             </Card>
           ) : null}
 
+          {widthParam && heightParam ? (
+            <Card>
+              <CardContent className="space-y-3 pt-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-foreground">{widthParam.label}</div>
+                    <Input
+                      type="number"
+                      value={parameterValues[widthParam.name] ?? widthParam.default ?? ''}
+                      min={widthParam.min}
+                      max={widthParam.max}
+                      step={widthParam.step}
+                      className="text-base sm:text-sm"
+                      onChange={(event) => handleNumericParameterInput(widthParam.name, event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-foreground">{heightParam.label}</div>
+                    <Input
+                      type="number"
+                      value={parameterValues[heightParam.name] ?? heightParam.default ?? ''}
+                      min={heightParam.min}
+                      max={heightParam.max}
+                      step={heightParam.step}
+                      className="text-base sm:text-sm"
+                      onChange={(event) => handleNumericParameterInput(heightParam.name, event.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {stepsParam && cfgParam ? (
+            <Card>
+              <CardContent className="space-y-3 pt-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-foreground">{stepsParam.label}</div>
+                    <Input
+                      type="number"
+                      value={parameterValues[stepsParam.name] ?? stepsParam.default ?? ''}
+                      min={stepsParam.min}
+                      max={stepsParam.max}
+                      step={stepsParam.step}
+                      className="text-base sm:text-sm"
+                      onChange={(event) => handleNumericParameterInput(stepsParam.name, event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-foreground">{cfgParam.label}</div>
+                    <Input
+                      type="number"
+                      value={parameterValues[cfgParam.name] ?? cfgParam.default ?? ''}
+                      min={cfgParam.min}
+                      max={cfgParam.max}
+                      step={cfgParam.step}
+                      className="text-base sm:text-sm"
+                      onChange={(event) => handleNumericParameterInput(cfgParam.name, event.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Dialog open={showLoraSelector} onOpenChange={setShowLoraSelector}>
             <DialogContent className="max-h-[80dvh] w-[calc(100vw-2rem)] max-w-lg overflow-hidden p-0">
               <DialogHeader className="border-b px-4 py-4">
@@ -175,11 +242,8 @@ export default function MobileAdvancedScreen() {
             const value = parameterValues[param.name] ?? param.default;
             return (
               <Card key={param.name}>
-                <CardHeader className="pb-3">
-                  <CardDescription>{param.group || 'advanced'}</CardDescription>
-                  <CardTitle className="text-lg">{param.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
+                <CardContent className="space-y-3 pt-6">
+                  <div className="text-lg font-semibold text-foreground">{param.label}</div>
                   {param.description ? <p className="text-xs text-muted-foreground">{param.description}</p> : null}
 
                   {param.type === 'boolean' ? (
