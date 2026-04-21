@@ -349,7 +349,7 @@ export default function MobileJobsScreen() {
                         absoluteIndex={virtualRow.index}
                         isSelected={selectedAbsoluteIndex === virtualRow.index || selectedJobId === job.id}
                         onPress={(item, absoluteIndex) => {
-                          if (selectedJobId === item.id && item.status === 'failed') {
+                          if (['queueing_up', 'queued', 'processing', 'finalizing', 'failed'].includes(item.status)) {
                             router.push(`/m/jobs/${item.id}`);
                             return;
                           }

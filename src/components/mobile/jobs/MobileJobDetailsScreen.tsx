@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
@@ -10,6 +11,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 
+function parseJobOptions(rawOptions: unknown): Record<string, any> {
+  if (!rawOptions) return {};
+  if (typeof rawOptions === 'string') {
+    try {
+      const parsed = JSON.parse(rawOptions);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof rawOptions === 'object' ? rawOptions as Record<string, any> : {};
+}
+
+function compactLoraName(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const normalized = value.trim().split('/').pop() || value.trim();
+  return normalized.replace(/\.safetensors$/i, '');
+}
+
 export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -17,6 +37,54 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const selectedOutput = job?.outputs?.[0] || null;
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
+  const loraSummary = useMemo(() => {
+    if (!job) return '';
+    const options = parseJobOptions((job as any).options);
+
+    const zImageSlots = Array.isArray(options.zImageLoraSlots)
+      ? options.zImageLoraSlots
+          .map((slot: any) => {
+            const name = compactLoraName(slot?.path);
+            if (!name) return null;
+            const weight = typeof slot?.weight === 'number' && Number.isFinite(slot.weight) ? slot.weight : 1;
+            return `${name} (${weight})`;
+          })
+          .filter(Boolean)
+      : [];
+
+    if (zImageSlots.length > 0) {
+      return zImageSlots.join(' • ');
+    }
+
+    const simpleSlots = [1, 2, 3, 4]
+      .map((index) => {
+        const pathKey = index === 1 ? 'lora' : `lora${index}`;
+        const weightKey = index === 1 ? 'loraWeight' : `loraWeight${index}`;
+        const name = compactLoraName(options[pathKey]);
+        if (!name) return null;
+        const weight = typeof options[weightKey] === 'number' && Number.isFinite(options[weightKey]) ? options[weightKey] : 1;
+        return `${name} (${weight})`;
+      })
+      .filter(Boolean);
+
+    if (simpleSlots.length > 0) {
+      return simpleSlots.join(' • ');
+    }
+
+    const arraySlots = Array.isArray(options.lora)
+      ? options.lora
+          .map((entry: any) => {
+            if (!Array.isArray(entry)) return null;
+            const name = compactLoraName(entry[0]);
+            if (!name) return null;
+            const weight = typeof entry[1] === 'number' && Number.isFinite(entry[1]) ? entry[1] : 1;
+            return `${name} (${weight})`;
+          })
+          .filter(Boolean)
+      : [];
+
+    return arraySlots.join(' • ');
+  }, [job]);
 
   const downloadOutput = async () => {
     if (!selectedOutput?.url) return;
@@ -150,6 +218,12 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div className="text-muted-foreground">Prompt</div>
                     <div className="whitespace-pre-wrap">{job.prompt || 'No prompt saved.'}</div>
                   </div>
+                  {loraSummary ? (
+                    <div>
+                      <div className="text-muted-foreground">LoRA</div>
+                      <div className="truncate">{loraSummary}</div>
+                    </div>
+                  ) : null}
                   {job.error ? (
                     <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                       <div className="mb-2 flex items-start justify-between gap-3">
