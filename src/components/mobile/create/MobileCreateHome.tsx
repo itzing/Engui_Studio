@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ImagePlus, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
@@ -25,7 +24,6 @@ export default function MobileCreateHome({
   activeMode: CreateMode;
   onModeChange: (mode: CreateMode) => void;
 }) {
-  const router = useRouter();
   const {
     currentModel,
     promptSummary,
@@ -213,10 +211,7 @@ export default function MobileCreateHome({
             size="lg"
             disabled={isGenerating || isLoadingMedia}
             onClick={async () => {
-              const success = await submit();
-              if (success) {
-                router.push('/m/jobs');
-              }
+              await submit();
             }}
           >
             {isGenerating ? (
