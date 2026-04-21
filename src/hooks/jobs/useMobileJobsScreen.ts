@@ -45,7 +45,7 @@ type LoadedJobsPage = {
   jobs: MobileJobsScreenItem[];
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 24;
 
 export function useMobileJobsScreen() {
   const { activeWorkspaceId, workspaces, deleteJob, cancelJob, clearFinishedJobs, addJob, reuseJobInput } = useStudio();
@@ -178,7 +178,9 @@ export function useMobileJobsScreen() {
       const focusPage = focusData.focus?.found && focusData.focus.page ? focusData.focus.page : focusData.pagination.page;
       const pagesToLoad = new Set<number>([focusPage]);
       if (focusPage > 1) pagesToLoad.add(focusPage - 1);
+      if (focusPage > 2) pagesToLoad.add(focusPage - 2);
       if (focusPage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 1);
+      if ((focusPage + 1) * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 2);
       await Promise.all(Array.from(pagesToLoad).filter((page) => page !== focusData.pagination?.page).map((page) => loadPage(page)));
 
       const focusedJobId = focusData.focus?.found ? focusData.focus.jobId : null;
