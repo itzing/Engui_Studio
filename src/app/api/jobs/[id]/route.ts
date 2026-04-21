@@ -156,6 +156,7 @@ export async function GET(
                 options: job.options,
                 resultUrl: job.resultUrl,
                 thumbnailUrl: job.thumbnailUrl,
+                error: (job as any).error ?? null,
                 outputs,
                 secureState: (job as any).secureState,
                 imageInputPath: (job as any).imageInputPath,

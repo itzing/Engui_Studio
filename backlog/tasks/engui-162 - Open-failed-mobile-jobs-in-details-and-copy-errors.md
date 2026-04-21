@@ -21,4 +21,5 @@ Make failed jobs on mobile open the job details screen on tap and allow copying 
 ## Completion notes
 - updated mobile jobs tap flow so a second tap on the selected failed job opens the dedicated mobile job details route
 - added a copy button for the error block in `MobileJobDetailsScreen` using clipboard plus toast feedback
+- fixed `/api/jobs/[id]` to return `job.error` so failed mobile details actually receive the error text
 - validated with `npm run build`
