@@ -97,19 +97,6 @@ export default function MobileCreateHome({
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Current model</CardDescription>
-              <CardTitle className="text-lg">{currentModel?.name || 'Loading model...'}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between gap-3 pt-0">
-              <div className="text-xs text-muted-foreground">{currentModel?.provider || 'Image generation model'}</div>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/m/create/model">Change</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
               <CardDescription>Prompt</CardDescription>
               <CardTitle className="text-lg">Prompt editor</CardTitle>
             </CardHeader>
