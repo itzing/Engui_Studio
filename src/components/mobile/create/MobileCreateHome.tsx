@@ -39,7 +39,6 @@ export default function MobileCreateHome({
     selectSecondaryImageFile,
     clearPrimaryImage,
     clearSecondaryImage,
-    basicSummaryItems,
     randomizeSeed,
     setRandomizeSeed,
     controlNetEnabled,
@@ -204,28 +203,6 @@ export default function MobileCreateHome({
               )}
             </div>
           )}
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Key parameters</CardDescription>
-              <CardTitle className="text-lg">Quick summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 pt-0">
-              {basicSummaryItems.length > 0 ? (
-                basicSummaryItems.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">{item.label}</span>
-                    <span className="text-right font-medium text-foreground">{item.value}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                  No key parameters configured for this model yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
         </div>
       </div>
 
