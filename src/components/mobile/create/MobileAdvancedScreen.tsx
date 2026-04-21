@@ -1,18 +1,24 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Plus, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, Plus, SlidersHorizontal } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Slider } from '@/components/ui/slider';
+import { useToast } from '@/components/ui/toast';
+import { useStudio } from '@/lib/context/StudioContext';
+import { MODELS } from '@/lib/models/modelConfig';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobileAdvancedScreen() {
+  const { settings, updateSettings } = useStudio();
+  const { showToast } = useToast();
   const {
+    currentModel,
     editableParameters,
     parameterValues,
     handleParameterChange,
@@ -21,6 +27,15 @@ export default function MobileAdvancedScreen() {
     isLoadingLoras,
   } = useMobileCreate();
   const [showLoraSelector, setShowLoraSelector] = useState(false);
+  const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
+
+  const imageRunpodModels = useMemo(() => {
+    return MODELS.filter((model) => model.type === 'image' && model.api.type === 'runpod');
+  }, []);
+
+  useEffect(() => {
+    setEndpointDrafts(settings.runpod?.endpoints || {});
+  }, [settings.runpod?.endpoints]);
 
   const loraParams = editableParameters.filter((param) => param.type === 'lora-selector');
   const loraWeightByName = useMemo(() => {
@@ -70,6 +85,19 @@ export default function MobileAdvancedScreen() {
     .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
 
   const nextEmptyLoraParam = loraParams.find((param) => !String(parameterValues[param.name] ?? '').trim());
+
+  const saveEndpointDrafts = () => {
+    updateSettings({
+      runpod: {
+        ...settings.runpod,
+        endpoints: {
+          ...settings.runpod.endpoints,
+          ...endpointDrafts,
+        },
+      },
+    });
+    showToast('Endpoint IDs saved', 'success', 1800);
+  };
 
   return (
     <MobileScreen>
@@ -129,6 +157,31 @@ export default function MobileAdvancedScreen() {
               </CardContent>
             </Card>
           ) : null}
+
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold text-foreground">Endpoint IDs</div>
+                <Button variant="outline" size="sm" onClick={saveEndpointDrafts}>
+                  <Check className="mr-2 h-4 w-4" />
+                  Save
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {imageRunpodModels.map((model) => (
+                  <div key={model.id} className={`rounded-lg border px-3 py-2 ${model.id === currentModel?.id ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40'}`}>
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">{model.id}</div>
+                    <Input
+                      value={endpointDrafts[model.id] ?? settings.runpod.endpoints[model.id] ?? model.api.endpoint ?? ''}
+                      className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                      onChange={(event) => setEndpointDrafts((prev) => ({ ...prev, [model.id]: event.target.value }))}
+                      placeholder={model.api.endpoint}
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
           {widthParam && heightParam ? (
             <Card>
