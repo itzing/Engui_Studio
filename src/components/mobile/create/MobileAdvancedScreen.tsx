@@ -70,21 +70,6 @@ export default function MobileAdvancedScreen() {
       <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." backHref="/m/create" />
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Current model</CardDescription>
-              <CardTitle className="text-lg">{currentModel?.name || 'Loading model...'}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/40 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Randomize seed</span>
-                <Button variant={randomizeSeed ? 'default' : 'outline'} size="sm" onClick={() => setRandomizeSeed(!randomizeSeed)}>
-                  {randomizeSeed ? 'On' : 'Off'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
           {loraParams.length > 0 ? (
             <Card>
               <CardHeader className="pb-3">
