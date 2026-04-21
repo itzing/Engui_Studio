@@ -42,6 +42,7 @@ export default function MobileCreateHome({
     clearSecondaryImage,
     randomizeSeed,
     setRandomizeSeed,
+    handleParameterChange,
     controlNetEnabled,
     supportsControlNet,
     parameterValues,
@@ -97,10 +98,21 @@ export default function MobileCreateHome({
                   </span>
                 </Button>
 
-                <div className="rounded-md border border-border bg-background/40 px-3 py-3">
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-background/40 px-3 py-3 text-left transition-colors hover:bg-accent/40"
+                  onClick={() => {
+                    if (!widthParameter || !heightParameter || !Number.isFinite(currentWidth) || !Number.isFinite(currentHeight)) {
+                      return;
+                    }
+                    handleParameterChange(widthParameter.name, currentHeight);
+                    handleParameterChange(heightParameter.name, currentWidth);
+                  }}
+                >
                   <div className="text-base font-semibold leading-none text-foreground">Resolution</div>
                   <div className="mt-1 text-xs text-muted-foreground">{resolutionLabel}</div>
-                </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground/80">Tap to switch</div>
+                </button>
 
                 {supportsControlNet ? (
                   <div className={`rounded-md border px-3 py-3 ${controlNetEnabled ? 'border-primary/30 bg-primary/10' : 'border-border bg-background/40'}`}>
