@@ -160,9 +160,9 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Button variant="outline" onClick={() => void downloadAsset()}><Download className="mr-2 h-4 w-4" />Download</Button>
                 <Button variant="outline" onClick={() => void toggleFavorite()}><Heart className="mr-2 h-4 w-4" />{asset.favorited ? 'Unfavorite' : 'Favorite'}</Button>
-                {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />Open in Create</Button> : null}
-                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />Reuse prompt only</Button> : null}
-                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />Open in img2vid</Button> : null}
+                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
+                {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
+                {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
                 <Button variant="destructive" onClick={() => void toggleTrash()}><Trash2 className="mr-2 h-4 w-4" />{asset.trashed ? 'Restore' : 'Move to trash'}</Button>
                 {asset.sourceJobId ? <Button variant="ghost" asChild><Link href={`/m/jobs/${asset.sourceJobId}`}>Open source job</Link></Button> : null}
               </div>

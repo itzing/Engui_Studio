@@ -77,9 +77,11 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
 
   if (action === 'txt2img') {
     const txt2imgOptions = { ...baseOptions };
+    delete txt2imgOptions.image_path;
+    delete txt2imgOptions.image_path_2;
+
     if (modelId === 'z-image') {
       txt2imgOptions.use_controlnet = false;
-      delete txt2imgOptions.image_path;
     }
 
     return {

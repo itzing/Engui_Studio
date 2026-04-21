@@ -244,17 +244,17 @@ export default function MobilePreviewScreen() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {preview.type === 'image' ? (
               <>
-                <Button disabled={isSubmitting} onClick={() => void runReuse('img2img')}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Open in Create
-                </Button>
                 <Button variant="outline" disabled={isSubmitting} onClick={() => void runReuse('txt2img')}>
                   <Type className="mr-2 h-4 w-4" />
-                  Reuse prompt only
+                  To txt2img
+                </Button>
+                <Button disabled={isSubmitting} onClick={() => void runReuse('img2img')}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  To img2img
                 </Button>
                 <Button variant="outline" disabled={isSubmitting} onClick={() => void runReuse('img2vid')}>
                   <Clapperboard className="mr-2 h-4 w-4" />
-                  Open in img2vid
+                  To img2vid
                 </Button>
               </>
             ) : null}
