@@ -120,7 +120,7 @@ export default function MobileAdvancedScreen() {
                   </div>
                 ))}
 
-                {loraParams.length < 4 && nextEmptyLoraParam ? (
+                {selectedLoraSlots.length < 4 && nextEmptyLoraParam ? (
                   <Button variant="outline" className="w-full" onClick={() => setShowLoraSelector(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add LoRA
