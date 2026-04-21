@@ -7,12 +7,14 @@ export default function MobileHeader({
   title,
   subtitle,
   backHref,
+  onBack,
   action,
   className,
 }: {
   title: string;
   subtitle?: string;
   backHref?: string;
+  onBack?: () => void;
   action?: ReactNode;
   className?: string;
 }) {
@@ -21,10 +23,17 @@ export default function MobileHeader({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {backHref && (
-            <Link href={backHref} className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </Link>
+            onBack ? (
+              <button type="button" onClick={onBack} className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </button>
+            ) : (
+              <Link href={backHref} className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Link>
+            )
           )}
           <h1 className="text-base font-semibold text-foreground">{title}</h1>
           {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}

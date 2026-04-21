@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Plus, SlidersHorizontal } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -15,6 +16,7 @@ import { MODELS } from '@/lib/models/modelConfig';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
 export default function MobileAdvancedScreen() {
+  const router = useRouter();
   const { settings, updateSettings } = useStudio();
   const { showToast } = useToast();
   const {
@@ -28,6 +30,8 @@ export default function MobileAdvancedScreen() {
   } = useMobileCreate();
   const [showLoraSelector, setShowLoraSelector] = useState(false);
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
+  const latestEndpointDraftsRef = useRef<Record<string, string>>({});
+  const latestSettingsRef = useRef(settings);
 
   const runpodModels = useMemo(() => {
     return MODELS.filter((model) => model.api.type === 'runpod');
@@ -36,6 +40,14 @@ export default function MobileAdvancedScreen() {
   useEffect(() => {
     setEndpointDrafts(settings.runpod?.endpoints || {});
   }, [settings.runpod?.endpoints]);
+
+  useEffect(() => {
+    latestEndpointDraftsRef.current = endpointDrafts;
+  }, [endpointDrafts]);
+
+  useEffect(() => {
+    latestSettingsRef.current = settings;
+  }, [settings]);
 
   const loraParams = editableParameters.filter((param) => param.type === 'lora-selector');
   const loraWeightByName = useMemo(() => {
@@ -86,22 +98,50 @@ export default function MobileAdvancedScreen() {
 
   const nextEmptyLoraParam = loraParams.find((param) => !String(parameterValues[param.name] ?? '').trim());
 
-  const saveEndpointDrafts = () => {
+  const persistEndpointDrafts = (drafts: Record<string, string>, showSavedToast = false) => {
+    const currentSettings = latestSettingsRef.current;
+    const currentEndpoints = currentSettings.runpod?.endpoints || {};
+    const hasChanges = runpodModels.some((model) => (drafts[model.id] ?? '') !== (currentEndpoints[model.id] ?? ''));
+
+    if (!hasChanges) {
+      return false;
+    }
+
     updateSettings({
       runpod: {
-        ...settings.runpod,
+        ...currentSettings.runpod,
         endpoints: {
-          ...settings.runpod.endpoints,
-          ...endpointDrafts,
+          ...currentEndpoints,
+          ...drafts,
         },
       },
     });
-    showToast('Endpoint IDs saved', 'success', 1800);
+
+    if (showSavedToast) {
+      showToast('Endpoint IDs saved', 'success', 1800);
+    }
+
+    return true;
+  };
+
+  const saveEndpointDrafts = (showSavedToast = true) => {
+    return persistEndpointDrafts(latestEndpointDraftsRef.current, showSavedToast);
+  };
+
+  useEffect(() => {
+    return () => {
+      persistEndpointDrafts(latestEndpointDraftsRef.current, false);
+    };
+  }, []);
+
+  const handleBack = () => {
+    saveEndpointDrafts(false);
+    router.push('/m/create');
   };
 
   return (
     <MobileScreen>
-      <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." backHref="/m/create" />
+      <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." backHref="/m/create" onBack={handleBack} />
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
         <div className="space-y-4">
           {loraParams.length > 0 ? (
