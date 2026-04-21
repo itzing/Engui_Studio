@@ -30,10 +30,12 @@ export default function MobileAdvancedScreen() {
   } = useMobileCreate();
   const [showLoraSelector, setShowLoraSelector] = useState(false);
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
+  const [weightToast, setWeightToast] = useState<string | null>(null);
   const initialEndpointDraftsRef = useRef<Record<string, string>>({});
   const initialParameterValuesRef = useRef<Record<string, any>>({});
   const latestEndpointDraftsRef = useRef<Record<string, string>>({});
   const latestSettingsRef = useRef(settings);
+  const weightToastTimerRef = useRef<number | null>(null);
 
   const runpodModels = useMemo(() => {
     return MODELS.filter((model) => model.api.type === 'runpod');
@@ -57,6 +59,14 @@ export default function MobileAdvancedScreen() {
     initialParameterValuesRef.current = Object.fromEntries(
       editableParameters.map((param) => [param.name, parameterValues[param.name]])
     );
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (weightToastTimerRef.current !== null) {
+        window.clearTimeout(weightToastTimerRef.current);
+      }
+    };
   }, []);
 
   const loraParams = editableParameters.filter((param) => param.type === 'lora-selector');
@@ -161,8 +171,24 @@ export default function MobileAdvancedScreen() {
     router.push('/m/create');
   };
 
+  const showWeightToast = (value: number) => {
+    setWeightToast(`Weight set to ${value}`);
+    if (weightToastTimerRef.current !== null) {
+      window.clearTimeout(weightToastTimerRef.current);
+    }
+    weightToastTimerRef.current = window.setTimeout(() => {
+      setWeightToast(null);
+      weightToastTimerRef.current = null;
+    }, 1400);
+  };
+
   return (
     <MobileScreen>
+      {weightToast ? (
+        <div className="pointer-events-none fixed right-4 top-4 z-50 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-sm text-foreground shadow-lg backdrop-blur">
+          {weightToast}
+        </div>
+      ) : null}
       <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." />
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 custom-scrollbar">
         <div className="space-y-4">
@@ -200,10 +226,20 @@ export default function MobileAdvancedScreen() {
                           step={0.05}
                           onValueChange={(value) => handleParameterChange(slot.weightParamName, value[0] ?? 1)}
                         />
-                        <div className="flex justify-between text-[11px] text-muted-foreground">
-                          <span>-3</span>
-                          <span>0</span>
-                          <span>3</span>
+                        <div className="grid grid-cols-7 gap-1">
+                          {[-3, -2, -1, 0, 1, 2, 3].map((mark) => (
+                            <button
+                              key={mark}
+                              type="button"
+                              className={`rounded-md border px-1 py-1 text-[11px] transition-colors ${Math.abs(slot.weight - mark) < 0.001 ? 'border-primary/40 bg-primary/10 text-foreground' : 'border-border/60 bg-background/40 text-muted-foreground hover:bg-accent/40'}`}
+                              onClick={() => {
+                                handleParameterChange(slot.weightParamName, mark);
+                                showWeightToast(mark);
+                              }}
+                            >
+                              {mark}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     ) : null}
