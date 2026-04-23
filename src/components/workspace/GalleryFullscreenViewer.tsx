@@ -414,7 +414,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
   const canMarkUpscale = currentItem?.type === 'image'
     && !!imageNaturalSize
-    && Math.max(imageNaturalSize.width, imageNaturalSize.height) < 2048;
+    && Math.max(imageNaturalSize.width, imageNaturalSize.height) > 2000;
 
   return (
     <div
