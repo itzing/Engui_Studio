@@ -139,6 +139,7 @@ model GalleryAsset {
   id                   String    @id @default(uuid())
   workspaceId          String
   type                 String
+  bucket               String    @default("common")
   originKind           String    @default("job_output")
   sourceJobId          String?
   sourceOutputId       String?
@@ -158,9 +159,11 @@ model GalleryAsset {
 
   workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([workspaceId, contentHash])
   @@index([workspaceId, addedToGalleryAt(sort: Desc)])
   @@index([workspaceId, trashed, addedToGalleryAt(sort: Desc)])
+  @@index([workspaceId, bucket, addedToGalleryAt(sort: Desc)])
+  @@index([workspaceId, bucket, trashed, addedToGalleryAt(sort: Desc)])
+  @@index([workspaceId, contentHash])
   @@index([sourceJobId])
   @@map("gallery_assets")
 }
