@@ -262,7 +262,7 @@ export default function MobileJobsScreen() {
   const activeViewerItemId = (selectedLoadedViewerIndex >= 0 ? loadedViewerItems[selectedLoadedViewerIndex]?.id : loadedViewerItems[viewerIndex]?.id) || null;
   const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
   const canAddToGallery = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('common');
-  const canSaveDraft = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('draft');
+  const canSaveDraft = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('draft') && !viewerOutput.savedBuckets.includes('upscale');
   const canMarkUpscale = !!viewerJobDetail && !!viewerOutput && viewerJobDetail.type === 'image' && !viewerOutput.savedBuckets.includes('upscale');
   const canUpscale = viewerJobDetail ? (viewerJobDetail.type === 'image' || viewerJobDetail.type === 'video') : false;
 

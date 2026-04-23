@@ -2341,7 +2341,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     if (!asset || asset.type !== 'image') return null;
                     return (
                         <>
-                            {asset.bucket !== 'draft' ? (
+                            {asset.bucket !== 'draft' && asset.bucket !== 'upscale' ? (
                                 <Button
                                     size="icon"
                                     variant="secondary"

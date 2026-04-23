@@ -352,7 +352,7 @@ export default function MobileGalleryScreen() {
           if (!asset || asset.type !== 'image') return null;
           return (
             <>
-              {asset.bucket !== 'draft' ? (
+              {asset.bucket !== 'draft' && asset.bucket !== 'upscale' ? (
                 <Button
                   size="icon"
                   variant="secondary"
