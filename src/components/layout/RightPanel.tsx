@@ -22,6 +22,8 @@ import {
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
 import { VirtuosoGrid, VirtuosoGridHandle } from 'react-virtuoso';
 
+type GallerySemanticFilter = 'all' | 'common' | 'draft' | 'upscale';
+
 type GalleryAsset = {
     id: string;
     workspaceId: string;
@@ -35,6 +37,7 @@ type GalleryAsset = {
     autoTags?: string[];
     sourceJobId?: string | null;
     sourceOutputId?: string | null;
+    bucket?: 'common' | 'draft' | 'upscale';
     derivativeStatus?: string;
     enrichmentStatus?: string;
     prompt?: string | null;
@@ -90,6 +93,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isLoadingMoreViewerItems, setIsLoadingMoreViewerItems] = useState(false);
     const [panelMode, setPanelMode] = useState<'jobs' | 'gallery'>('jobs');
     const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
+    const [semanticFilter, setSemanticFilter] = useState<GallerySemanticFilter>('common');
     const [isMounted, setIsMounted] = useState(false);
     const [loadedJobs, setLoadedJobs] = useState<Job[]>([]);
     const [galleryPages, setGalleryPages] = useState<Record<number, GalleryPageData>>({});
@@ -274,6 +278,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             if (savedSort === 'newest' || savedSort === 'oldest' || savedSort === 'favorites') {
                 setGallerySort(savedSort);
             }
+
+            const savedSemanticFilter = window.localStorage.getItem('engui.mobile.library.semanticFilter');
+            if (savedSemanticFilter === 'all' || savedSemanticFilter === 'common' || savedSemanticFilter === 'draft' || savedSemanticFilter === 'upscale') {
+                setSemanticFilter(savedSemanticFilter);
+            }
+        } else {
+            const savedSemanticFilter = window.localStorage.getItem('engui.rightPanel.gallery.semanticFilter');
+            if (savedSemanticFilter === 'all' || savedSemanticFilter === 'common' || savedSemanticFilter === 'draft' || savedSemanticFilter === 'upscale') {
+                setSemanticFilter(savedSemanticFilter);
+            }
         }
     }, [mobile, mobileMode]);
 
@@ -300,11 +314,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             window.localStorage.setItem('engui.mobile.library.filter', selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','));
             window.localStorage.setItem('engui.mobile.library.search', gallerySearchQuery);
             window.localStorage.setItem('engui.mobile.library.sort', gallerySort);
+            window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
+        } else {
+            window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
         }
         window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
             detail: panelMode,
         }));
-    }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters]);
+    }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters, semanticFilter]);
 
     useEffect(() => {
         const container = galleryScrollerEl || galleryScrollContainerRef.current;
@@ -427,6 +444,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             onlyTrashed: showTrashed ? 'true' : 'false',
             type: getApiType(selectedFilters) || 'all',
             favoritesOnly: favoritesOnly ? 'true' : 'false',
+            bucket: semanticFilter,
             q: debouncedGallerySearchQuery,
             sort: gallerySort,
         });
@@ -451,7 +469,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             totalCount: Number(data.pagination?.totalCount || 0),
             focus: data.focus,
         };
-    }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, gallerySort, selectedFilters, showTrashed]);
+    }, [activeWorkspaceId, debouncedGallerySearchQuery, favoritesOnly, gallerySort, selectedFilters, semanticFilter, showTrashed]);
 
     const applyGalleryImageRetention = useCallback((pages: Record<number, GalleryPageData>, anchorPage: number) => {
         let changed = false;
@@ -1169,6 +1187,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const isAllFilterActive = selectedFilters.length === TYPE_FILTERS.length;
     const gallerySummaryParts = [
         `${filteredGalleryAssets.length} assets`,
+        semanticFilter !== 'all' ? semanticFilter : null,
         !isAllFilterActive ? selectedFilters.join(', ') : null,
         favoritesOnly ? 'favorites' : null,
         showTrashed ? 'trash' : 'active',
@@ -1728,29 +1747,55 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                         ))}
                     </div>}
                     <div className={mobile ? 'flex flex-col items-stretch gap-1.5' : 'flex items-center justify-between gap-2'}>
-                        <div className={`${mobile ? 'grid grid-cols-6 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
-                            {([
-                                { key: 'all', label: 'All' },
-                                { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
-                                { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
-                                { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
-                            ] as const).map((item) => {
-                                const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
-                                const Icon = 'icon' in item ? item.icon : null;
-                                return (
-                                    <button
-                                        key={item.key}
-                                        type="button"
-                                        onClick={() => toggleMediaFilter(item.key)}
-                                        className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
-                                            ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
-                                            : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-                                    >
-                                        {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
-                                        {!Icon ? item.label : null}
-                                    </button>
-                                );
-                            })}
+                        <div className="flex flex-col gap-1 w-full">
+                            {panelMode === 'gallery' && (
+                                <div className={`${mobile ? 'grid grid-cols-4 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
+                                    {([
+                                        { key: 'all', label: 'All' },
+                                        { key: 'common', label: 'Common' },
+                                        { key: 'draft', label: 'Drafts' },
+                                        { key: 'upscale', label: 'Upscale' },
+                                    ] as const).map((item) => {
+                                        const active = semanticFilter === item.key;
+                                        return (
+                                            <button
+                                                key={item.key}
+                                                type="button"
+                                                onClick={() => setSemanticFilter(item.key)}
+                                                className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
+                                                    ? 'text-foreground border-border bg-background shadow-sm font-medium'
+                                                    : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                                            >
+                                                {item.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <div className={`${mobile ? 'grid grid-cols-6 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
+                                {([
+                                    { key: 'all', label: 'All' },
+                                    { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                                    { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                                    { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+                                ] as const).map((item) => {
+                                    const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+                                    const Icon = 'icon' in item ? item.icon : null;
+                                    return (
+                                        <button
+                                            key={item.key}
+                                            type="button"
+                                            onClick={() => toggleMediaFilter(item.key)}
+                                            className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
+                                                ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                                                : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                                        >
+                                            {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+                                            {!Icon ? item.label : null}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                         <div className={`${mobile ? 'flex items-center gap-2 pt-0.5' : 'flex items-center gap-1'}`}>
                             {panelMode === 'gallery' && (

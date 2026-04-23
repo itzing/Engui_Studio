@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const types = Array.from(new Set((type || '').split(',').map(entry => entry.trim()).filter(Boolean)));
     const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
+    const bucket = (searchParams.get('bucket') || 'common').trim().toLowerCase();
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
       workspaceId,
       ...(onlyTrashed ? { trashed: true } : includeTrashed ? {} : { trashed: false }),
       ...(types.length > 0 && !types.includes('all') ? { type: { in: types } } : {}),
+      ...(bucket && bucket !== 'all' ? { bucket } : {}),
       ...(favoritesOnly ? { favorited: true } : {}),
     };
 
@@ -61,6 +63,7 @@ export async function GET(request: NextRequest) {
       autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
       sourceJobId: asset.sourceJobId,
       sourceOutputId: asset.sourceOutputId,
+      bucket: asset.bucket,
       derivativeStatus: asset.derivativeStatus,
       enrichmentStatus: asset.enrichmentStatus,
       prompt: (() => {
