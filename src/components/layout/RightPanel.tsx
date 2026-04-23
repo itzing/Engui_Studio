@@ -8,6 +8,7 @@ import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { JobCardImageThumbnail } from '@/components/layout/JobCardImageThumbnail';
 import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart, PenSquare, Sparkles } from 'lucide-react';
+import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1284,6 +1285,32 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         await updateGalleryFavorite(asset);
     };
 
+    const applyGalleryBucketLocal = useCallback((assetId: string, bucket: GalleryViewerBucket) => {
+        updateGalleryPages(item => item.id === assetId ? { ...item, bucket } : item);
+        setGalleryViewerItems(prev => prev.map(item => item.id === assetId ? { ...item, bucket } : item));
+        setSelectedGalleryAsset(prev => prev && prev.id === assetId ? { ...prev, bucket } : prev);
+    }, [updateGalleryPages]);
+
+    const updateGalleryBucket = useCallback(async (asset: GalleryAsset, bucket: GalleryViewerBucket) => {
+        if (asset.bucket === bucket) return true;
+        const response = await fetch(`/api/gallery/assets/${asset.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bucket }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Failed to update asset bucket');
+        }
+        applyGalleryBucketLocal(asset.id, bucket);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
+                detail: { workspaceId: asset.workspaceId, assetId: asset.id, reason: 'updated' }
+            }));
+        }
+        return true;
+    }, [applyGalleryBucketLocal]);
+
     const handleGalleryTagClick = (tag: string) => {
         if (mobile && typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('mobileOpenGalleryTab'));
@@ -2292,6 +2319,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     id: asset.id,
                     url: asset.originalUrl,
                     favorited: asset.favorited,
+                    type: asset.type,
+                    bucket: asset.bucket,
                 }))}
                 currentIndex={galleryViewerIndex}
                 onIndexChange={handleGalleryViewerIndexChange}
@@ -2306,6 +2335,38 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     const asset = galleryViewerItems.find((entry) => entry.id === itemId) || filteredGalleryAssets.find((entry) => entry.id === itemId);
                     if (!asset) return false;
                     return await updateGalleryFavorite(asset);
+                }}
+                renderFooterActions={(item, meta) => {
+                    const asset = galleryViewerItems.find((entry) => entry.id === item.id) || filteredGalleryAssets.find((entry) => entry.id === item.id);
+                    if (!asset || asset.type !== 'image') return null;
+                    return (
+                        <>
+                            {asset.bucket !== 'draft' ? (
+                                <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                                    onClick={() => void updateGalleryBucket(asset, 'draft')}
+                                    aria-label="Mark as draft"
+                                    title="Move to drafts"
+                                >
+                                    <PenSquare className="w-5 h-5" />
+                                </Button>
+                            ) : null}
+                            {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
+                                <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                                    onClick={() => void updateGalleryBucket(asset, 'upscale')}
+                                    aria-label="Mark as upscale"
+                                    title="Move to upscale"
+                                >
+                                    <Sparkles className="w-5 h-5" />
+                                </Button>
+                            ) : null}
+                        </>
+                    );
                 }}
             />
         </div>

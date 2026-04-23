@@ -400,6 +400,29 @@ export function useMobileGalleryScreen() {
     }
   }, [assetIndexMap, itemsByAbsoluteIndex, updateLoadedAsset]);
 
+  const updateBucket = useCallback(async (assetId: string, bucket: GallerySemanticFilter) => {
+    if (bucket !== 'common' && bucket !== 'draft' && bucket !== 'upscale') return false;
+    const absoluteIndex = assetIndexMap[assetId];
+    const asset = typeof absoluteIndex === 'number' ? itemsByAbsoluteIndex[absoluteIndex] : null;
+    if (!asset || asset.bucket === bucket) return false;
+
+    const response = await fetch(`/api/gallery/assets/${assetId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bucket }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Failed to update bucket');
+
+    updateLoadedAsset(assetId, (current) => ({ ...current, bucket }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
+        detail: { workspaceId: asset.workspaceId, assetId, reason: 'updated' }
+      }));
+    }
+    return true;
+  }, [assetIndexMap, itemsByAbsoluteIndex, updateLoadedAsset]);
+
   const toggleTrash = useCallback(async (assetId: string) => {
     const absoluteIndex = assetIndexMap[assetId];
     const asset = typeof absoluteIndex === 'number' ? itemsByAbsoluteIndex[absoluteIndex] : null;
@@ -457,6 +480,7 @@ export function useMobileGalleryScreen() {
     closeViewer,
     updateViewerIndex,
     toggleFavorite,
+    updateBucket,
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,

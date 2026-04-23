@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AudioLines, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, Sparkles, Trash2, Video } from 'lucide-react';
+import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -104,6 +105,7 @@ export default function MobileGalleryScreen() {
     closeViewer,
     updateViewerIndex,
     toggleFavorite,
+    updateBucket,
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
@@ -329,6 +331,8 @@ export default function MobileGalleryScreen() {
           id: asset.id,
           url: asset.url,
           favorited: asset.favorited,
+          type: Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === asset.id)?.type,
+          bucket: Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === asset.id)?.bucket,
         }))}
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
@@ -343,6 +347,38 @@ export default function MobileGalleryScreen() {
           }
         }}
         onToggleFavorite={toggleFavorite}
+        renderFooterActions={(item, meta) => {
+          const asset = Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === item.id);
+          if (!asset || asset.type !== 'image') return null;
+          return (
+            <>
+              {asset.bucket !== 'draft' ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={() => void updateBucket(asset.id, 'draft' as GalleryViewerBucket)}
+                  aria-label="Mark as draft"
+                  title="Move to drafts"
+                >
+                  <PenSquare className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={() => void updateBucket(asset.id, 'upscale' as GalleryViewerBucket)}
+                  aria-label="Mark as upscale"
+                  title="Move to upscale"
+                >
+                  <Sparkles className="w-5 h-5" />
+                </Button>
+              ) : null}
+            </>
+          );
+        }}
       />
     </MobileScreen>
   );

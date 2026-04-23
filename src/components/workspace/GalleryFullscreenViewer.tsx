@@ -2,12 +2,16 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Heart, HeartOff, Info, X } from 'lucide-react';
+
+export type GalleryViewerBucket = 'common' | 'draft' | 'upscale';
 import { Button } from '@/components/ui/button';
 
 export type GalleryFullscreenViewerItem = {
   id: string;
   url: string;
   favorited?: boolean;
+  type?: 'image' | 'video' | 'audio';
+  bucket?: GalleryViewerBucket;
 };
 
 interface GalleryFullscreenViewerProps {
@@ -19,6 +23,7 @@ interface GalleryFullscreenViewerProps {
   onOpenInfo?: (itemId: string) => void;
   onToggleFavorite?: (itemId: string) => Promise<boolean | void>;
   renderHeaderActions?: (itemId: string) => React.ReactNode;
+  renderFooterActions?: (item: GalleryFullscreenViewerItem, meta: { canMarkUpscale: boolean }) => React.ReactNode;
 }
 
 type Point = { x: number; y: number };
@@ -69,7 +74,7 @@ function getTouchMidpoint(first: Touch, second: Touch): Point {
   };
 }
 
-export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onOpenInfo, onToggleFavorite, renderHeaderActions }: GalleryFullscreenViewerProps) {
+export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChange, onClose, onOpenInfo, onToggleFavorite, renderHeaderActions, renderFooterActions }: GalleryFullscreenViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -86,6 +91,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const [zoomScale, setZoomScale] = useState(1);
   const [panOffset, setPanOffset] = useState<PanOffset>({ x: 0, y: 0 });
   const [gestureMode, setGestureMode] = useState<GestureMode>(null);
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
   const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
@@ -216,10 +222,12 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   useEffect(() => {
     if (!open) {
       resetZoomState();
+      setImageNaturalSize(null);
       return;
     }
 
     resetZoomState();
+    setImageNaturalSize(null);
   }, [currentItem?.id, open, resetZoomState]);
 
   useEffect(() => {
@@ -404,6 +412,10 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     return null;
   }
 
+  const canMarkUpscale = currentItem?.type === 'image'
+    && !!imageNaturalSize
+    && Math.max(imageNaturalSize.width, imageNaturalSize.height) < 2048;
+
   return (
     <div
       ref={containerRef}
@@ -446,6 +458,12 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
           </div>
         </>
       )}
+
+      {showCloseButton && renderFooterActions ? (
+        <div className="absolute right-3 z-10 flex items-center gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
+          {renderFooterActions(currentItem, { canMarkUpscale })}
+        </div>
+      ) : null}
 
       <div
         ref={viewerSurfaceRef}
@@ -508,7 +526,13 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
           alt="Gallery fullscreen preview"
           className="max-w-full max-h-full object-contain select-none will-change-transform"
           draggable={false}
-          onLoad={() => applyZoomState(zoomScaleRef.current, panOffsetRef.current)}
+          onLoad={(event) => {
+            setImageNaturalSize({
+              width: event.currentTarget.naturalWidth,
+              height: event.currentTarget.naturalHeight,
+            });
+            applyZoomState(zoomScaleRef.current, panOffsetRef.current);
+          }}
           style={{
             transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
             transformOrigin: 'center center',
