@@ -92,6 +92,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const [panOffset, setPanOffset] = useState<PanOffset>({ x: 0, y: 0 });
   const [gestureMode, setGestureMode] = useState<GestureMode>(null);
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const [currentImageLoaded, setCurrentImageLoaded] = useState(false);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
   const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
@@ -207,7 +208,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       containerRef.current?.focus();
     }
 
-    if (open) {
+    if (open && currentImageLoaded) {
       [previousItem?.url, nextItem?.url]
         .filter((url): url is string => typeof url === 'string' && url.length > 0)
         .forEach((url) => {
@@ -216,19 +217,26 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
         });
     }
 
+    if (!open) {
+      setCurrentImageLoaded(false);
+    }
+
     previousOpenRef.current = open;
-  }, [nextItem?.url, open, previousItem?.url]);
+  }, [currentImageLoaded, nextItem?.url, open, previousItem?.url]);
 
   useEffect(() => {
     if (!open) {
       resetZoomState();
       setImageNaturalSize(null);
+      setCurrentImageLoaded(false);
       return;
     }
 
     resetZoomState();
     setImageNaturalSize(null);
+    setCurrentImageLoaded(false);
   }, [currentItem?.id, open, resetZoomState]);
+
 
   useEffect(() => {
     return () => {
@@ -531,6 +539,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
               width: event.currentTarget.naturalWidth,
               height: event.currentTarget.naturalHeight,
             });
+            setCurrentImageLoaded(true);
             applyZoomState(zoomScaleRef.current, panOffsetRef.current);
           }}
           style={{
