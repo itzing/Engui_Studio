@@ -93,7 +93,7 @@ function TileStatusBadges({ favorited, bucket }: { favorited: boolean; bucket?: 
 
 function PlaceholderTile() {
   return (
-    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-zinc-950">
+    <div className="relative aspect-square w-full overflow-hidden bg-zinc-950">
       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-transparent" />
     </div>
   );
@@ -166,14 +166,14 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !viewerOpen) {
         event.preventDefault();
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, open]);
+  }, [onClose, open, viewerOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -188,8 +188,8 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     return () => observer.disconnect();
   }, [open]);
 
-  const gap = 16;
-  const tileSize = Math.max(120, Math.floor((gridWidth - gap * (columns - 1)) / columns));
+  const gap = 0;
+  const tileSize = Math.max(120, Math.floor(gridWidth / columns));
   const rowCount = Math.ceil(totalCount / columns);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -391,7 +391,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                             type="button"
                             data-gallery-asset-id={asset.id}
                             onClick={() => handleTilePress(asset, absoluteIndex)}
-                            className="relative block aspect-square w-full overflow-hidden rounded-lg bg-black"
+                            className="relative block aspect-square w-full overflow-hidden bg-black"
                           >
                             {asset.type === 'video' ? (
                               <>
