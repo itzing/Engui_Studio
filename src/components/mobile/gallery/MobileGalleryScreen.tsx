@@ -66,6 +66,37 @@ function TileOverlayActions({
   );
 }
 
+function TileStatusBadges({
+  favorited,
+  bucket,
+}: {
+  favorited: boolean;
+  bucket?: 'common' | 'draft' | 'upscale';
+}) {
+  const hasBucketBadge = bucket === 'draft' || bucket === 'upscale';
+  if (!favorited && !hasBucketBadge) return null;
+
+  return (
+    <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 flex flex-col gap-1">
+      {favorited ? (
+        <div className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border border-white/10 bg-black/55 text-rose-400">
+          <Heart className="h-[11px] w-[11px] fill-current" />
+        </div>
+      ) : null}
+      {bucket === 'draft' ? (
+        <div className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border border-white/10 bg-black/55 text-amber-400">
+          <PenSquare className="h-[11px] w-[11px]" />
+        </div>
+      ) : null}
+      {bucket === 'upscale' ? (
+        <div className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border border-white/10 bg-black/55 text-violet-400">
+          <Sparkles className="h-[11px] w-[11px]" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PlaceholderTile() {
   return (
     <div className="relative aspect-square w-full overflow-hidden bg-zinc-950">
@@ -296,6 +327,8 @@ export default function MobileGalleryScreen() {
                           ) : (
                             <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
                           )}
+
+                          <TileStatusBadges favorited={asset.favorited} bucket={asset.bucket} />
 
                           {isSelected ? (
                             <>

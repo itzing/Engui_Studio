@@ -77,6 +77,34 @@ const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
 type MediaFilter = typeof TYPE_FILTERS[number];
 const galleryFilter = (asset: GalleryAsset, filters: MediaFilter[]) => filters.includes(asset.type);
 
+function GalleryTileStatusBadges({ favorited, bucket, mobile = false }: { favorited: boolean; bucket?: 'common' | 'draft' | 'upscale'; mobile?: boolean }) {
+    const hasBucketBadge = bucket === 'draft' || bucket === 'upscale';
+    if (!favorited && !hasBucketBadge) return null;
+
+    const sizeClass = mobile ? 'h-[18px] w-[18px]' : 'h-5 w-5';
+    const iconClass = mobile ? 'h-[11px] w-[11px]' : 'h-3 w-3';
+
+    return (
+        <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 flex flex-col gap-1">
+            {favorited ? (
+                <div className={`inline-flex ${sizeClass} items-center justify-center rounded-md border border-white/10 bg-black/55 text-rose-400`}>
+                    <Heart className={`${iconClass} fill-current`} />
+                </div>
+            ) : null}
+            {bucket === 'draft' ? (
+                <div className={`inline-flex ${sizeClass} items-center justify-center rounded-md border border-white/10 bg-black/55 text-amber-400`}>
+                    <PenSquare className={iconClass} />
+                </div>
+            ) : null}
+            {bucket === 'upscale' ? (
+                <div className={`inline-flex ${sizeClass} items-center justify-center rounded-md border border-white/10 bg-black/55 text-violet-400`}>
+                    <Sparkles className={iconClass} />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 export default function RightPanel({ mobile = false, mobileMode }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery' }) {
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -1622,6 +1650,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                         <div className="w-full h-full bg-muted/20" />
                     )}
                 </div>
+                <GalleryTileStatusBadges favorited={asset.favorited} bucket={asset.bucket} mobile={mobile} />
                 <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     <button
                         type="button"
