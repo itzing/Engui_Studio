@@ -32,6 +32,8 @@ type NormalizedJobOutput = {
     thumbnailUrl: string | null;
     alreadyInGallery: boolean;
     galleryAssetId: string | null;
+    savedBuckets: Array<'common' | 'draft' | 'upscale'>;
+    galleryAssetIdsByBucket: Partial<Record<'common' | 'draft' | 'upscale', string[]>>;
 };
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {
@@ -96,6 +98,8 @@ function buildNormalizedOutputs(job: any): NormalizedJobOutput[] {
             thumbnailUrl: normalizeUrlCandidate(job.thumbnailUrl),
             alreadyInGallery: false,
             galleryAssetId: null,
+            savedBuckets: [],
+            galleryAssetIdsByBucket: {},
         });
     });
 
@@ -132,14 +136,38 @@ export async function GET(
                 select: {
                     id: true,
                     sourceOutputId: true,
+                    bucket: true,
+                    addedToGalleryAt: true,
+                },
+                orderBy: {
+                    addedToGalleryAt: 'desc',
                 },
             });
 
-            const byOutputId = new Map(galleryAssets.map(asset => [asset.sourceOutputId, asset.id]));
+            const byOutputId = new Map<string, typeof galleryAssets>();
+            for (const asset of galleryAssets) {
+                if (!asset.sourceOutputId) continue;
+                const current = byOutputId.get(asset.sourceOutputId) || [];
+                current.push(asset);
+                byOutputId.set(asset.sourceOutputId, current);
+            }
+
             for (const output of outputs) {
-                const galleryAssetId = byOutputId.get(output.outputId) || null;
-                output.alreadyInGallery = !!galleryAssetId;
+                const matchedAssets = byOutputId.get(output.outputId) || [];
+                const galleryAssetId = matchedAssets[0]?.id || null;
+                const savedBuckets = Array.from(new Set(matchedAssets
+                    .map(asset => asset.bucket)
+                    .filter((bucket): bucket is 'common' | 'draft' | 'upscale' => bucket === 'common' || bucket === 'draft' || bucket === 'upscale')));
+                const galleryAssetIdsByBucket = matchedAssets.reduce<Partial<Record<'common' | 'draft' | 'upscale', string[]>>>((acc, asset) => {
+                    if (asset.bucket !== 'common' && asset.bucket !== 'draft' && asset.bucket !== 'upscale') return acc;
+                    acc[asset.bucket] = [...(acc[asset.bucket] || []), asset.id];
+                    return acc;
+                }, {});
+
+                output.alreadyInGallery = matchedAssets.length > 0;
                 output.galleryAssetId = galleryAssetId;
+                output.savedBuckets = savedBuckets;
+                output.galleryAssetIdsByBucket = galleryAssetIdsByBucket;
             }
         }
 

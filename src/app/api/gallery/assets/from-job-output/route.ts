@@ -103,10 +103,16 @@ function getExtensionFromUrl(url: string, type: string): string {
   return '.png';
 }
 
+function normalizeBucket(value: unknown): 'common' | 'draft' | null {
+  if (value === 'common' || value === 'draft') return value;
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { jobId, outputId } = body;
+    const bucket = normalizeBucket(body.bucket) || 'common';
 
     if (!jobId || !outputId) {
       return NextResponse.json({ success: false, error: 'jobId and outputId are required' }, { status: 400 });
@@ -127,16 +133,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Output not found' }, { status: 404 });
     }
 
-    const fileBytes = await readBytesForUrl(selectedOutput.url);
-    const contentHash = crypto.createHash('sha256').update(fileBytes).digest('hex');
-
-    const existing = await prisma.galleryAsset.findUnique({
+    const existing = await prisma.galleryAsset.findFirst({
       where: {
-        workspaceId_contentHash: {
-          workspaceId: job.workspaceId,
-          contentHash,
-        },
+        workspaceId: job.workspaceId,
+        sourceJobId: job.id,
+        sourceOutputId: selectedOutput.outputId,
+        bucket,
+        trashed: false,
       },
+      orderBy: { addedToGalleryAt: 'desc' },
     });
 
     if (existing) {
@@ -144,8 +149,12 @@ export async function POST(request: NextRequest) {
         success: true,
         alreadyInGallery: true,
         asset: existing,
+        bucket,
       });
     }
+
+    const fileBytes = await readBytesForUrl(selectedOutput.url);
+    const contentHash = crypto.createHash('sha256').update(fileBytes).digest('hex');
 
     const ext = getExtensionFromUrl(selectedOutput.url, selectedOutput.type);
     const fileName = `${contentHash}${ext}`;
@@ -161,6 +170,7 @@ export async function POST(request: NextRequest) {
       data: {
         workspaceId: job.workspaceId,
         type: selectedOutput.type,
+        bucket,
         originKind: 'job_output',
         sourceJobId: job.id,
         sourceOutputId: selectedOutput.outputId,
@@ -186,6 +196,7 @@ export async function POST(request: NextRequest) {
       success: true,
       alreadyInGallery: false,
       asset,
+      bucket,
       autoTags: [],
     });
   } catch (error: any) {
