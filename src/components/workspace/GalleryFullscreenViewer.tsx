@@ -449,7 +449,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
 
       <div
         ref={viewerSurfaceRef}
-        className="absolute inset-0 flex items-center justify-center overflow-hidden px-2 pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] pt-[calc(env(safe-area-inset-top,0px)+5.5rem)] sm:p-4 touch-none"
+        className="absolute inset-0 flex items-center justify-center overflow-hidden pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] pt-[calc(env(safe-area-inset-top,0px)+5.5rem)] sm:p-4 touch-none"
         onClick={handleViewerClick}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
