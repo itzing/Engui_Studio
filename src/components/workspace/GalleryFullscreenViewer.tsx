@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Heart, HeartOff, Info, X } from 'lucide-react';
+import { ArrowRight, Heart, HeartOff, Info, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
 
 export type GalleryViewerBucket = 'common' | 'draft' | 'upscale';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export type GalleryFullscreenViewerItem = {
   id: string;
@@ -54,6 +55,7 @@ type PinchGesture = {
 };
 
 type GestureState = SwipeGesture | PanGesture | PinchGesture | null;
+type SlideshowMode = 'stop' | 'loop' | 'random';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -84,6 +86,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const singleTapTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const lastTapRef = useRef<{ time: number; itemId: string | null }>({ time: 0, itemId: null });
   const overlayTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const slideshowTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const zoomScaleRef = useRef(1);
   const panOffsetRef = useRef<PanOffset>({ x: 0, y: 0 });
   const [showCloseButton, setShowCloseButton] = useState(true);
@@ -93,9 +96,16 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const [gestureMode, setGestureMode] = useState<GestureMode>(null);
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [currentImageLoaded, setCurrentImageLoaded] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [slideshowMode, setSlideshowMode] = useState<SlideshowMode>('stop');
+  const [slideshowIntervalSeconds, setSlideshowIntervalSeconds] = useState(4);
+  const [intervalDraft, setIntervalDraft] = useState('4');
+  const [isIntervalPopoverOpen, setIsIntervalPopoverOpen] = useState(false);
+  const [isSlideshowPlaying, setIsSlideshowPlaying] = useState(false);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
   const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
+  const slideshowEnabled = isDesktop && items.length > 1;
 
   const clampPanOffset = useCallback((nextOffset: PanOffset, scale: number): PanOffset => {
     if (scale <= MIN_ZOOM) {
@@ -151,18 +161,30 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     onIndexChange(currentIndex + 1);
   }, [currentIndex, items.length, onIndexChange, resetZoomState]);
 
-  const runSingleTapAction = useCallback(() => {
-    setShowCloseButton((value) => !value);
-  }, []);
-
-  const triggerFavoriteOverlay = useCallback((mode: 'added' | 'removed') => {
+  const scheduleOverlayAutohide = useCallback(() => {
     if (overlayTimeoutRef.current) {
       clearTimeout(overlayTimeoutRef.current);
     }
-    setFavoriteOverlay(mode);
     overlayTimeoutRef.current = window.setTimeout(() => {
-      setFavoriteOverlay(null);
+      setShowCloseButton(false);
+      setIsIntervalPopoverOpen(false);
       overlayTimeoutRef.current = null;
+    }, 3000);
+  }, []);
+
+  const runSingleTapAction = useCallback(() => {
+    if (isSlideshowPlaying) {
+      setShowCloseButton(true);
+      scheduleOverlayAutohide();
+      return;
+    }
+    setShowCloseButton((value) => !value);
+  }, [isSlideshowPlaying, scheduleOverlayAutohide]);
+
+  const triggerFavoriteOverlay = useCallback((mode: 'added' | 'removed') => {
+    setFavoriteOverlay(mode);
+    window.setTimeout(() => {
+      setFavoriteOverlay(null);
     }, 650);
   }, []);
 
@@ -199,6 +221,24 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       singleTapTimeoutRef.current = null;
     }, 280);
   }, [currentItem?.id, handleFavoriteToggle, runSingleTapAction]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    setIsDesktop(window.innerWidth >= 640);
+
+    const storedInterval = window.localStorage.getItem('engui.galleryViewer.slideshowIntervalSeconds');
+    const parsedInterval = Number.parseInt(storedInterval || '', 10);
+    if (Number.isFinite(parsedInterval) && parsedInterval >= 1 && parsedInterval <= 60) {
+      setSlideshowIntervalSeconds(parsedInterval);
+      setIntervalDraft(String(parsedInterval));
+    }
+
+    const storedMode = window.localStorage.getItem('engui.galleryViewer.slideshowMode');
+    if (storedMode === 'stop' || storedMode === 'loop' || storedMode === 'random') {
+      setSlideshowMode(storedMode);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -245,6 +285,9 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       }
       if (overlayTimeoutRef.current) {
         clearTimeout(overlayTimeoutRef.current);
+      }
+      if (slideshowTimeoutRef.current) {
+        clearTimeout(slideshowTimeoutRef.current);
       }
     };
   }, []);
@@ -397,9 +440,106 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     setGestureMode(null);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('engui.galleryViewer.slideshowIntervalSeconds', String(slideshowIntervalSeconds));
+  }, [slideshowIntervalSeconds]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('engui.galleryViewer.slideshowMode', slideshowMode);
+  }, [slideshowMode]);
+
+  useEffect(() => {
+    if (!open) {
+      setIsSlideshowPlaying(false);
+      setIsIntervalPopoverOpen(false);
+      return;
+    }
+
+    if (!slideshowEnabled) {
+      setIsSlideshowPlaying(false);
+    }
+  }, [open, slideshowEnabled]);
+
+  const getNextSlideshowIndex = useCallback(() => {
+    if (items.length <= 1) return currentIndex;
+
+    if (slideshowMode === 'random') {
+      const candidates = items.map((_, index) => index).filter((index) => index !== currentIndex);
+      if (candidates.length === 0) return currentIndex;
+      return candidates[Math.floor(Math.random() * candidates.length)] ?? currentIndex;
+    }
+
+    if (currentIndex >= items.length - 1) {
+      if (slideshowMode === 'loop') return 0;
+      return -1;
+    }
+
+    return currentIndex + 1;
+  }, [currentIndex, items, slideshowMode]);
+
+  useEffect(() => {
+    if (slideshowTimeoutRef.current) {
+      clearTimeout(slideshowTimeoutRef.current);
+      slideshowTimeoutRef.current = null;
+    }
+
+    if (!open || !isSlideshowPlaying || !currentImageLoaded || !slideshowEnabled) return;
+
+    slideshowTimeoutRef.current = window.setTimeout(() => {
+      const nextIndex = getNextSlideshowIndex();
+      if (nextIndex < 0 || nextIndex === currentIndex) {
+        setIsSlideshowPlaying(false);
+        setShowCloseButton(true);
+        return;
+      }
+      onIndexChange(nextIndex);
+    }, slideshowIntervalSeconds * 1000);
+
+    return () => {
+      if (slideshowTimeoutRef.current) {
+        clearTimeout(slideshowTimeoutRef.current);
+        slideshowTimeoutRef.current = null;
+      }
+    };
+  }, [currentImageLoaded, currentIndex, getNextSlideshowIndex, isSlideshowPlaying, onIndexChange, open, slideshowEnabled, slideshowIntervalSeconds]);
+
+  const cycleSlideshowMode = useCallback(() => {
+    setSlideshowMode((value) => value === 'stop' ? 'loop' : value === 'loop' ? 'random' : 'stop');
+  }, []);
+
+  const startSlideshow = useCallback(() => {
+    if (!slideshowEnabled) return;
+    setIsSlideshowPlaying(true);
+    setShowCloseButton(false);
+    setIsIntervalPopoverOpen(false);
+  }, [slideshowEnabled]);
+
+  const stopSlideshow = useCallback(() => {
+    setIsSlideshowPlaying(false);
+    setShowCloseButton(true);
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+      overlayTimeoutRef.current = null;
+    }
+  }, []);
+
+  const commitIntervalDraft = useCallback(() => {
+    const parsed = Number.parseInt(intervalDraft.trim(), 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 60) {
+      setSlideshowIntervalSeconds(parsed);
+      setIntervalDraft(String(parsed));
+    } else {
+      setIntervalDraft(String(slideshowIntervalSeconds));
+    }
+    setIsIntervalPopoverOpen(false);
+  }, [intervalDraft, slideshowIntervalSeconds]);
+
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      stopSlideshow();
       onClose();
       return;
     }
@@ -414,7 +554,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       event.preventDefault();
       goNext();
     }
-  }, [goNext, goPrevious, onClose]);
+  }, [goNext, goPrevious, onClose, stopSlideshow]);
 
   if (!open || !currentItem) {
     return null;
@@ -423,6 +563,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const canMarkUpscale = currentItem?.type === 'image'
     && !!imageNaturalSize
     && Math.max(imageNaturalSize.width, imageNaturalSize.height) > 2000;
+  const SlideshowModeIcon = slideshowMode === 'stop' ? ArrowRight : slideshowMode === 'loop' ? Repeat : Shuffle;
 
   return (
     <div
@@ -458,7 +599,10 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
               size="icon"
               variant="secondary"
               className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-              onClick={onClose}
+              onClick={() => {
+                stopSlideshow();
+                onClose();
+              }}
               aria-label="Close viewer"
             >
               <X className="w-5 h-5" />
@@ -466,6 +610,66 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
           </div>
         </>
       )}
+
+      {showCloseButton && slideshowEnabled ? (
+        <div className="absolute left-3 z-10 flex flex-col items-start gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
+          <div className="relative flex flex-col items-center gap-2">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-9 w-9 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+              onClick={cycleSlideshowMode}
+              aria-label={`Slideshow mode: ${slideshowMode}`}
+              title={slideshowMode === 'stop' ? 'Stop at end' : slideshowMode === 'loop' ? 'Loop' : 'Random'}
+            >
+              <SlideshowModeIcon className="w-4 h-4" />
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-white/85 hover:text-white rounded px-2 py-1 bg-black/55 border border-white/10"
+              onClick={() => {
+                setIntervalDraft(String(slideshowIntervalSeconds));
+                setIsIntervalPopoverOpen((value) => !value);
+              }}
+            >
+              {slideshowIntervalSeconds}s
+            </button>
+            {isIntervalPopoverOpen ? (
+              <div className="absolute bottom-full left-0 mb-2 w-28 rounded-lg border border-white/10 bg-black/85 p-2 shadow-xl">
+                <Input
+                  value={intervalDraft}
+                  onChange={(event) => setIntervalDraft(event.target.value)}
+                  onBlur={commitIntervalDraft}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitIntervalDraft();
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setIntervalDraft(String(slideshowIntervalSeconds));
+                      setIsIntervalPopoverOpen(false);
+                    }
+                  }}
+                  inputMode="numeric"
+                  className="h-8 border-white/10 bg-white/5 text-sm text-white"
+                  autoFocus
+                />
+              </div>
+            ) : null}
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+              onClick={isSlideshowPlaying ? stopSlideshow : startSlideshow}
+              aria-label={isSlideshowPlaying ? 'Stop slideshow' : 'Start slideshow'}
+              title={isSlideshowPlaying ? 'Stop slideshow' : 'Start slideshow'}
+            >
+              {isSlideshowPlaying ? <Square className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {showCloseButton && renderFooterActions ? (
         <div className="absolute right-3 z-10 flex items-center gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
