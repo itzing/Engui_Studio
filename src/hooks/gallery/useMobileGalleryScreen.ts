@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
 
+export type GallerySemanticFilter = 'all' | 'common' | 'draft' | 'upscale';
+
 export type MobileGalleryAsset = {
   id: string;
   workspaceId: string;
@@ -16,6 +18,7 @@ export type MobileGalleryAsset = {
   autoTags?: string[];
   sourceJobId?: string | null;
   sourceOutputId?: string | null;
+  bucket?: 'common' | 'draft' | 'upscale';
   prompt?: string | null;
   addedToGalleryAt: string;
 };
@@ -60,6 +63,7 @@ export function useMobileGalleryScreen() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
+  const [semanticFilter, setSemanticFilter] = useState<GallerySemanticFilter>('common');
   const [showTrashed, setShowTrashed] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -123,6 +127,7 @@ export function useMobileGalleryScreen() {
       includeTrashed: showTrashed ? 'true' : 'false',
       onlyTrashed: showTrashed ? 'true' : 'false',
       favoritesOnly: favoritesOnly ? 'true' : 'false',
+      bucket: semanticFilter,
       type: selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','),
     });
 
@@ -139,7 +144,7 @@ export function useMobileGalleryScreen() {
       throw new Error(data.error || 'Failed to load gallery');
     }
     return data;
-  }, [effectiveWorkspaceId, favoritesOnly, query, selectedFilters, showTrashed]);
+  }, [effectiveWorkspaceId, favoritesOnly, query, selectedFilters, semanticFilter, showTrashed]);
 
   const mergePage = useCallback((pageNumber: number, data: GalleryPageResponse) => {
     if (!data.pagination) return;
@@ -251,6 +256,20 @@ export function useMobileGalleryScreen() {
   const toggleGalleryTrash = useCallback(() => {
     setShowTrashed((prev) => !prev);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !effectiveWorkspaceId) return;
+    const key = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
+    const saved = window.localStorage.getItem(key);
+    if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
+      setSemanticFilter(saved);
+    }
+  }, [effectiveWorkspaceId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !effectiveWorkspaceId) return;
+    window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
+  }, [effectiveWorkspaceId, semanticFilter]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
@@ -418,6 +437,8 @@ export function useMobileGalleryScreen() {
     query,
     setQuery,
     selectedFilters,
+    semanticFilter,
+    setSemanticFilter,
     showTrashed,
     favoritesOnly,
     toggleMediaFilter,

@@ -87,6 +87,8 @@ export default function MobileGalleryScreen() {
     query,
     setQuery,
     selectedFilters,
+    semanticFilter,
+    setSemanticFilter,
     showTrashed,
     favoritesOnly,
     toggleMediaFilter,
@@ -149,29 +151,52 @@ export default function MobileGalleryScreen() {
     <MobileScreen>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="px-4 py-3 space-y-3">
-          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-            {([
-              { key: 'all', label: 'All' },
-              { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
-              { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
-              { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
-            ] as const).map((item) => {
-              const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
-              const Icon = 'icon' in item ? item.icon : null;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => toggleMediaFilter(item.key)}
-                  className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
-                    ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
-                    : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-                >
-                  {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
-                </button>
-              );
-            })}
-            <button
+          <div className="space-y-2">
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              {([
+                { key: 'all', label: 'All' },
+                { key: 'common', label: 'Common' },
+                { key: 'draft', label: 'Drafts' },
+                { key: 'upscale', label: 'Upscale' },
+              ] as const).map((item) => {
+                const active = semanticFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setSemanticFilter(item.key)}
+                    className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                      ? 'text-foreground border-border bg-background shadow-sm font-medium'
+                      : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              {([
+                { key: 'all', label: 'All' },
+                { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+              ] as const).map((item) => {
+                const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+                const Icon = 'icon' in item ? item.icon : null;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => toggleMediaFilter(item.key)}
+                    className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                      ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                      : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  >
+                    {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                  </button>
+                );
+              })}
+              <button
               type="button"
               onClick={toggleGalleryFavorites}
               className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
@@ -187,15 +212,16 @@ export default function MobileGalleryScreen() {
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
-              aria-label="Refresh gallery"
-              onClick={() => void refresh()}
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
+                aria-label="Refresh gallery"
+                onClick={() => void refresh()}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

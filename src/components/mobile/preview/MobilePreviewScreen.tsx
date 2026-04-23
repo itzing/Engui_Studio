@@ -11,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useMobilePreviewState } from '@/hooks/mobile/useMobilePreviewState';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 
+type GalleryBucket = 'common' | 'draft';
+
 type JobDetail = {
   id: string;
   outputs?: Array<{
@@ -19,6 +21,8 @@ type JobDetail = {
     url: string;
     alreadyInGallery: boolean;
     galleryAssetId: string | null;
+    savedBuckets: Array<'common' | 'draft' | 'upscale'>;
+    galleryAssetIdsByBucket: Partial<Record<'common' | 'draft' | 'upscale', string[]>>;
   }>;
 };
 
@@ -63,7 +67,7 @@ export default function MobilePreviewScreen() {
   }, [preview]);
 
   const primaryOutput = useMemo(() => jobDetail?.outputs?.find((output) => output.outputId === 'output-1') || jobDetail?.outputs?.[0] || null, [jobDetail]);
-  const alreadyInGallery = !!primaryOutput?.alreadyInGallery;
+  const alreadyInGallery = !!primaryOutput?.savedBuckets?.includes('common');
 
   const runReuse = async (action: 'txt2img' | 'img2img' | 'img2vid' = 'img2img') => {
     if (!preview || preview.type !== 'image') return;
@@ -93,7 +97,7 @@ export default function MobilePreviewScreen() {
     }
   };
 
-  const addToGallery = async () => {
+  const saveToBucket = async (bucket: GalleryBucket) => {
     if (!preview || preview.kind !== 'job') return;
     setIsSubmitting(true);
     setStatusMessage(null);
@@ -101,19 +105,28 @@ export default function MobilePreviewScreen() {
       const response = await fetch('/api/gallery/assets/from-job-output', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: preview.id, outputId: 'output-1' }),
+        body: JSON.stringify({ jobId: preview.id, outputId: 'output-1', bucket }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to add to gallery');
+        throw new Error(data.error || `Failed to save to ${bucket}`);
       }
-      setStatusMessage({ type: 'success', text: data.alreadyInGallery ? 'Already in Gallery' : 'Added to Gallery' });
+      setStatusMessage({ type: 'success', text: bucket === 'draft' ? (data.alreadyInGallery ? 'Draft already saved' : 'Draft saved') : (data.alreadyInGallery ? 'Already in Gallery' : 'Added to Gallery') });
       setJobDetail((prev) => prev ? {
         ...prev,
-        outputs: prev.outputs?.map((output, index) => index === 0 ? { ...output, alreadyInGallery: true, galleryAssetId: data.asset?.id || output.galleryAssetId } : output),
+        outputs: prev.outputs?.map((output, index) => index === 0 ? {
+          ...output,
+          alreadyInGallery: true,
+          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+          savedBuckets: output.savedBuckets.includes(bucket) ? output.savedBuckets : [...output.savedBuckets, bucket],
+          galleryAssetIdsByBucket: data.asset?.id ? {
+            ...output.galleryAssetIdsByBucket,
+            [bucket]: [...(output.galleryAssetIdsByBucket[bucket] || []), data.asset.id],
+          } : output.galleryAssetIdsByBucket,
+        } : output),
       } : prev);
     } catch (error) {
-      setStatusMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to add to Gallery' });
+      setStatusMessage({ type: 'error', text: error instanceof Error ? error.message : `Failed to save to ${bucket}` });
     } finally {
       setIsSubmitting(false);
     }
@@ -265,10 +278,16 @@ export default function MobilePreviewScreen() {
               </Button>
             ) : null}
             {preview.kind === 'job' && preview.type === 'image' ? (
-              <Button variant="outline" disabled={isSubmitting || alreadyInGallery} onClick={() => void addToGallery()}>
-                <FolderPlus className="mr-2 h-4 w-4" />
-                {alreadyInGallery ? 'Already in Gallery' : 'Add to Gallery'}
-              </Button>
+              <>
+                <Button variant="outline" disabled={isSubmitting || !!primaryOutput?.savedBuckets?.includes('draft')} onClick={() => void saveToBucket('draft')}>
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  {primaryOutput?.savedBuckets?.includes('draft') ? 'Draft Saved' : 'Save Draft'}
+                </Button>
+                <Button variant="outline" disabled={isSubmitting || alreadyInGallery} onClick={() => void saveToBucket('common')}>
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  {alreadyInGallery ? 'In Gallery' : 'Add to Gallery'}
+                </Button>
+              </>
             ) : null}
             <Button variant="ghost" onClick={() => router.push(preview.kind === 'gallery' ? '/m/gallery' : '/m/jobs')}>
               {preview.kind === 'gallery' ? <ImageIcon className="mr-2 h-4 w-4" /> : <Rows3 className="mr-2 h-4 w-4" />}

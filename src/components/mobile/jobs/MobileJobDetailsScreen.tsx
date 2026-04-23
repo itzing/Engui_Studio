@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
+
+type GalleryBucket = 'common' | 'draft';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -104,18 +106,27 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     }
   };
 
-  const addToGallery = async () => {
-    if (!job || !selectedOutput || selectedOutput.alreadyInGallery) return;
+  const saveToBucket = async (bucket: GalleryBucket) => {
+    if (!job || !selectedOutput || selectedOutput.savedBuckets.includes(bucket)) return;
     const response = await fetch('/api/gallery/assets/from-job-output', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: job.id, outputId: selectedOutput.outputId }),
+      body: JSON.stringify({ jobId: job.id, outputId: selectedOutput.outputId, bucket }),
     });
     const data = await response.json();
     if (response.ok && data.success) {
       setJob((prev) => prev ? ({
         ...prev,
-        outputs: prev.outputs.map((output, index) => index === 0 ? { ...output, alreadyInGallery: true, galleryAssetId: data.asset?.id || output.galleryAssetId } : output),
+        outputs: prev.outputs.map((output, index) => index === 0 ? {
+          ...output,
+          alreadyInGallery: true,
+          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+          savedBuckets: output.savedBuckets.includes(bucket) ? output.savedBuckets : [...output.savedBuckets, bucket],
+          galleryAssetIdsByBucket: data.asset?.id ? {
+            ...output.galleryAssetIdsByBucket,
+            [bucket]: [...(output.galleryAssetIdsByBucket[bucket] || []), data.asset.id],
+          } : output.galleryAssetIdsByBucket,
+        } : output),
       }) : prev);
     }
   };
@@ -218,6 +229,17 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div className="text-muted-foreground">Prompt</div>
                     <div className="whitespace-pre-wrap">{job.prompt || 'No prompt saved.'}</div>
                   </div>
+                  {selectedOutput ? (
+                    <div>
+                      <div className="text-muted-foreground">Saved state</div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {selectedOutput.savedBuckets.includes('common') ? <span className="rounded border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs text-green-300">In Gallery</span> : null}
+                        {selectedOutput.savedBuckets.includes('draft') ? <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">Draft Saved</span> : null}
+                        {selectedOutput.savedBuckets.includes('upscale') ? <span className="rounded border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs text-violet-300">Upscale</span> : null}
+                        {selectedOutput.savedBuckets.length === 0 ? <span className="text-sm">Not saved yet</span> : null}
+                      </div>
+                    </div>
+                  ) : null}
                   {loraSummary ? (
                     <div>
                       <div className="text-muted-foreground">LoRA</div>
@@ -248,8 +270,11 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 <Button variant="outline" onClick={() => void downloadOutput()} disabled={!selectedOutput?.url}>
                   <Download className="mr-2 h-4 w-4" />Download
                 </Button>
-                <Button variant="outline" onClick={() => void addToGallery()} disabled={!selectedOutput || selectedOutput.alreadyInGallery}>
-                  <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.alreadyInGallery ? 'Already in Gallery' : 'Add to Gallery'}
+                <Button variant="outline" onClick={() => void saveToBucket('draft')} disabled={!selectedOutput || selectedOutput.savedBuckets.includes('draft')}>
+                  <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.savedBuckets.includes('draft') ? 'Draft Saved' : 'Save Draft'}
+                </Button>
+                <Button variant="outline" onClick={() => void saveToBucket('common')} disabled={!selectedOutput || selectedOutput.savedBuckets.includes('common')}>
+                  <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.savedBuckets.includes('common') ? 'In Gallery' : 'Add to Gallery'}
                 </Button>
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {job.type === 'image' ? <Button onClick={() => void openInCreate('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}

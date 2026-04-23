@@ -10,6 +10,8 @@ export type MobileJobDetailOutput = {
   thumbnailUrl: string | null;
   alreadyInGallery: boolean;
   galleryAssetId: string | null;
+  savedBuckets: Array<'common' | 'draft' | 'upscale'>;
+  galleryAssetIdsByBucket: Partial<Record<'common' | 'draft' | 'upscale', string[]>>;
 };
 
 export type MobileJobDetail = {
