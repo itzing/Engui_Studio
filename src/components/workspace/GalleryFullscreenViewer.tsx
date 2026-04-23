@@ -559,6 +559,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       stopSlideshow();
       onClose();
       return;

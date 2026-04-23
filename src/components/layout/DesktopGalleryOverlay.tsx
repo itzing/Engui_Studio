@@ -189,12 +189,12 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   }, [open]);
 
   const gap = 0;
-  const tileSize = Math.max(120, Math.floor(gridWidth / columns));
+  const rowHeight = Math.max(120, Math.floor(gridWidth / columns));
   const rowCount = Math.ceil(totalCount / columns);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => tileSize + gap,
+    estimateSize: () => rowHeight,
     overscan: 6,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -361,7 +361,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
           ) : totalCount === 0 ? (
             <div className="m-6 rounded-lg border border-dashed border-white/10 px-4 py-8 text-sm text-white/50">No gallery assets yet for the current workspace.</div>
           ) : (
-            <div ref={parentRef} className="min-h-0 flex-1 overflow-auto p-4">
+            <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
               <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
                 {virtualRows.map((virtualRow) => {
                   const rowStart = virtualRow.index * columns;
@@ -369,7 +369,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                     <div
                       key={virtualRow.key}
                       className="absolute left-0 top-0 grid w-full"
-                      style={{ transform: `translateY(${virtualRow.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: `${gap}px` }}
+                      style={{ transform: `translateY(${virtualRow.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: `${gap}px`, width: '100%' }}
                     >
                       {Array.from({ length: columns }).map((_, columnIndex) => {
                         const absoluteIndex = rowStart + columnIndex;
