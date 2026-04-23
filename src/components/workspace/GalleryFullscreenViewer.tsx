@@ -102,6 +102,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
   const [intervalDraft, setIntervalDraft] = useState('4');
   const [isIntervalPopoverOpen, setIsIntervalPopoverOpen] = useState(false);
   const [isSlideshowPlaying, setIsSlideshowPlaying] = useState(false);
+  const [slideshowCountdownSeconds, setSlideshowCountdownSeconds] = useState<number | null>(null);
   const currentItem = useMemo(() => items[currentIndex] || null, [items, currentIndex]);
   const previousItem = useMemo(() => items[currentIndex - 1] || null, [items, currentIndex]);
   const nextItem = useMemo(() => items[currentIndex + 1] || null, [items, currentIndex]);
@@ -454,11 +455,16 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     if (!open) {
       setIsSlideshowPlaying(false);
       setIsIntervalPopoverOpen(false);
+      setSlideshowCountdownSeconds(null);
       return;
     }
 
     if (!slideshowEnabled) {
       setIsSlideshowPlaying(false);
+    }
+
+    if (!isSlideshowPlaying) {
+      setSlideshowCountdownSeconds(null);
     }
   }, [open, slideshowEnabled]);
 
@@ -485,9 +491,22 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       slideshowTimeoutRef.current = null;
     }
 
-    if (!open || !isSlideshowPlaying || !currentImageLoaded || !slideshowEnabled) return;
+    if (!open || !isSlideshowPlaying || !currentImageLoaded || !slideshowEnabled) {
+      setSlideshowCountdownSeconds(null);
+      return;
+    }
+
+    setSlideshowCountdownSeconds(slideshowIntervalSeconds);
+    const countdownInterval = window.setInterval(() => {
+      setSlideshowCountdownSeconds((value) => {
+        if (value === null) return null;
+        return value <= 1 ? 0 : value - 1;
+      });
+    }, 1000);
 
     slideshowTimeoutRef.current = window.setTimeout(() => {
+      window.clearInterval(countdownInterval);
+      setSlideshowCountdownSeconds(null);
       const nextIndex = getNextSlideshowIndex();
       if (nextIndex < 0 || nextIndex === currentIndex) {
         setIsSlideshowPlaying(false);
@@ -498,6 +517,7 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
     }, slideshowIntervalSeconds * 1000);
 
     return () => {
+      window.clearInterval(countdownInterval);
       if (slideshowTimeoutRef.current) {
         clearTimeout(slideshowTimeoutRef.current);
         slideshowTimeoutRef.current = null;
@@ -610,6 +630,16 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
           </div>
         </>
       )}
+
+      {slideshowEnabled ? (
+        <div className="absolute left-3 z-10 pointer-events-none" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.2rem)' }}>
+          <div className="rounded px-2 py-1 text-[11px] leading-none text-white/75 bg-black/45 border border-white/10">
+            {isSlideshowPlaying
+              ? (currentImageLoaded ? `loaded, next in ${slideshowCountdownSeconds ?? slideshowIntervalSeconds}s` : 'loading...')
+              : (currentImageLoaded ? 'loaded' : 'loading...')}
+          </div>
+        </div>
+      ) : null}
 
       {showCloseButton && slideshowEnabled ? (
         <div className="absolute left-3 z-10 flex flex-col items-start gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
