@@ -189,7 +189,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   }, [open]);
 
   const gap = 0;
-  const rowHeight = Math.max(120, Math.floor(gridWidth / columns));
+  const rowHeight = Math.max(120, gridWidth / columns);
   const rowCount = Math.ceil(totalCount / columns);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -368,8 +368,8 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                   return (
                     <div
                       key={virtualRow.key}
-                      className="absolute left-0 top-0 grid w-full"
-                      style={{ transform: `translateY(${virtualRow.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: `${gap}px`, width: '100%' }}
+                      className="absolute left-0 top-0 grid w-full overflow-hidden bg-black"
+                      style={{ transform: `translateY(${virtualRow.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: `${gap}px`, width: '100%', height: `${rowHeight}px` }}
                     >
                       {Array.from({ length: columns }).map((_, columnIndex) => {
                         const absoluteIndex = rowStart + columnIndex;
@@ -395,7 +395,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                           >
                             {asset.type === 'video' ? (
                               <>
-                                <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
+                                <img src={mediaUrl} alt={asset.prompt || asset.id} className="block h-full w-full object-cover" />
                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
                                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white/85 backdrop-blur-sm">
                                     <Play className="ml-0.5 h-4 w-4 fill-current" />
@@ -403,7 +403,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                                 </div>
                               </>
                             ) : (
-                              <img src={mediaUrl} alt={asset.prompt || asset.id} className="h-full w-full object-cover" />
+                              <img src={mediaUrl} alt={asset.prompt || asset.id} className="block h-full w-full object-cover" />
                             )}
 
                             <TileStatusBadges favorited={asset.favorited} bucket={asset.bucket} />
