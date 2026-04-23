@@ -18,6 +18,8 @@ interface JobDetailsDialogProps {
     totalCount?: number;
 }
 
+type GalleryBucket = 'common' | 'draft';
+
 type JobOutput = {
     outputId: string;
     type: 'image' | 'video' | 'audio';
@@ -26,6 +28,8 @@ type JobOutput = {
     thumbnailUrl: string | null;
     alreadyInGallery: boolean;
     galleryAssetId: string | null;
+    savedBuckets: Array<'common' | 'draft' | 'upscale'>;
+    galleryAssetIdsByBucket: Partial<Record<'common' | 'draft' | 'upscale', string[]>>;
 };
 
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
@@ -49,7 +53,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
     const [jobOutputs, setJobOutputs] = useState<JobOutput[]>([]);
     const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
-    const [isSavingToGallery, setIsSavingToGallery] = useState(false);
+    const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -105,6 +109,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
             thumbnailUrl: null,
             alreadyInGallery: false,
             galleryAssetId: null,
+            savedBuckets: [],
+            galleryAssetIdsByBucket: {},
         };
     }, [job]);
 
@@ -168,10 +174,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         onOpenChange(false);
     };
 
-    const handleAddToGallery = async () => {
-        if (!job || !selectedOutput || selectedOutput.alreadyInGallery || isSavingToGallery) return;
+    const handleSaveToGalleryBucket = async (bucket: GalleryBucket) => {
+        if (!job || !selectedOutput || savingBucket || selectedOutput.savedBuckets.includes(bucket)) return;
 
-        setIsSavingToGallery(true);
+        setSavingBucket(bucket);
         try {
             const response = await fetch('/api/gallery/assets/from-job-output', {
                 method: 'POST',
@@ -181,20 +187,32 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                 body: JSON.stringify({
                     jobId: job.id,
                     outputId: selectedOutput.outputId,
+                    bucket,
                 }),
             });
 
             const data = await response.json();
             if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to add output to gallery');
+                throw new Error(data.error || `Failed to save output to ${bucket}`);
             }
 
             setJobOutputs((prev) => prev.map((output, index) => {
                 if (index !== selectedOutputIndex) return output;
+                const nextSavedBuckets = output.savedBuckets.includes(bucket)
+                    ? output.savedBuckets
+                    : [...output.savedBuckets, bucket];
+                const nextIds = data.asset?.id
+                    ? {
+                        ...output.galleryAssetIdsByBucket,
+                        [bucket]: [...(output.galleryAssetIdsByBucket[bucket] || []), data.asset.id],
+                      }
+                    : output.galleryAssetIdsByBucket;
                 return {
                     ...output,
-                    alreadyInGallery: true,
-                    galleryAssetId: data.asset?.id || output.galleryAssetId,
+                    alreadyInGallery: nextSavedBuckets.length > 0,
+                    galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+                    savedBuckets: nextSavedBuckets,
+                    galleryAssetIdsByBucket: nextIds,
                 };
             }));
 
@@ -208,12 +226,17 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                 }));
             }
 
-            showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
+            showToast(
+                bucket === 'draft'
+                    ? (data.alreadyInGallery ? 'Output is already saved as draft' : 'Output saved as draft')
+                    : (data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery'),
+                'success'
+            );
         } catch (error) {
-            console.error('Failed to save output to gallery:', error);
-            showToast(error instanceof Error ? error.message : 'Failed to add output to Gallery', 'error');
+            console.error('Failed to save output to gallery bucket:', error);
+            showToast(error instanceof Error ? error.message : `Failed to save output to ${bucket}`, 'error');
         } finally {
-            setIsSavingToGallery(false);
+            setSavingBucket(null);
         }
     };
 
@@ -390,9 +413,14 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <span className="text-xs text-muted-foreground">Selected Output</span>
                                     <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
                                         <span>{selectedOutput?.outputId || '—'}</span>
-                                        {selectedOutput?.alreadyInGallery && (
+                                        {selectedOutput?.savedBuckets.includes('common') && (
                                             <span className="text-[11px] px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20">
-                                                Already in Gallery
+                                                In Gallery
+                                            </span>
+                                        )}
+                                        {selectedOutput?.savedBuckets.includes('draft') && (
+                                            <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                Saved as Draft
                                             </span>
                                         )}
                                     </div>
@@ -454,11 +482,19 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             </Button>
                             <Button
                                 className="flex-1"
-                                variant="default"
-                                onClick={handleAddToGallery}
-                                disabled={!selectedOutput || selectedOutput.alreadyInGallery || isSavingToGallery}
+                                variant="outline"
+                                onClick={() => void handleSaveToGalleryBucket('draft')}
+                                disabled={!selectedOutput || selectedOutput.savedBuckets.includes('draft') || !!savingBucket}
                             >
-                                {selectedOutput?.alreadyInGallery ? 'In Gallery' : isSavingToGallery ? 'Saving...' : 'Add to Gallery'}
+                                {selectedOutput?.savedBuckets.includes('draft') ? 'Draft Saved' : savingBucket === 'draft' ? 'Saving...' : 'Save Draft'}
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                variant="default"
+                                onClick={() => void handleSaveToGalleryBucket('common')}
+                                disabled={!selectedOutput || selectedOutput.savedBuckets.includes('common') || !!savingBucket}
+                            >
+                                {selectedOutput?.savedBuckets.includes('common') ? 'In Gallery' : savingBucket === 'common' ? 'Saving...' : 'Add to Gallery'}
                             </Button>
                             {isFinished && (
                                 <Button

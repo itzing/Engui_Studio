@@ -35,6 +35,7 @@ type HoverPreview = {
 type RightPanelMode = 'jobs' | 'gallery';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+type GalleryBucket = 'common' | 'draft';
 
 export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const { activeArtifactId, activeTool, jobs, activeWorkspaceId, addJob } = useStudio();
@@ -47,8 +48,8 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const [selectedGalleryItemId, setSelectedGalleryItemId] = useState<string | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('jobs');
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
-  const [isPreviewAlreadyInGallery, setIsPreviewAlreadyInGallery] = useState(false);
-  const [isSavingToGallery, setIsSavingToGallery] = useState(false);
+  const [previewSavedBuckets, setPreviewSavedBuckets] = useState<Array<'common' | 'draft' | 'upscale'>>([]);
+  const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
 
@@ -311,11 +312,11 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   }, [completedImageJobs, hoverPreview, mobile, rightPanelMode, selectedGalleryItem, selectedImageJob]);
 
   const isGalleryPreview = !mobile && previewJob?.modelId === 'gallery';
-  const shouldShowAddToGallery = !!previewJob && !isGalleryPreview && !isPreviewAlreadyInGallery;
+  const shouldShowGallerySaveActions = !!previewJob && !isGalleryPreview;
 
   useEffect(() => {
     if (!previewJob || isGalleryPreview) {
-      setIsPreviewAlreadyInGallery(false);
+      setPreviewSavedBuckets([]);
       return;
     }
 
@@ -327,11 +328,11 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         const data = await response.json();
         if (!cancelled && response.ok && data.success) {
           const firstOutput = Array.isArray(data.job?.outputs) ? data.job.outputs.find((output: any) => output.outputId === 'output-1') || data.job.outputs[0] : null;
-          setIsPreviewAlreadyInGallery(!!firstOutput?.alreadyInGallery);
+          setPreviewSavedBuckets(Array.isArray(firstOutput?.savedBuckets) ? firstOutput.savedBuckets : []);
         }
       } catch {
         if (!cancelled) {
-          setIsPreviewAlreadyInGallery(false);
+          setPreviewSavedBuckets([]);
         }
       }
     };
@@ -353,10 +354,10 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
     }));
   };
 
-  const handleAddToGallery = async () => {
-    if (!previewJob || isGalleryPreview || isSavingToGallery) return;
+  const handleSaveToGalleryBucket = async (bucket: GalleryBucket) => {
+    if (!previewJob || isGalleryPreview || savingBucket || previewSavedBuckets.includes(bucket)) return;
 
-    setIsSavingToGallery(true);
+    setSavingBucket(bucket);
     try {
       const response = await fetch('/api/gallery/assets/from-job-output', {
         method: 'POST',
@@ -366,25 +367,31 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         body: JSON.stringify({
           jobId: previewJob.id,
           outputId: 'output-1',
+          bucket,
         }),
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to add output to Gallery');
+        throw new Error(data.error || `Failed to save output to ${bucket}`);
       }
 
       if (data.asset?.id) {
         dispatchGalleryAssetChanged(data.asset.id, data.alreadyInGallery ? 'existing' : 'created');
       }
-      setIsPreviewAlreadyInGallery(true);
+      setPreviewSavedBuckets((prev) => prev.includes(bucket) ? prev : [...prev, bucket]);
 
-      showToast(data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery', 'success');
+      showToast(
+        bucket === 'draft'
+          ? (data.alreadyInGallery ? 'Output is already saved as draft' : 'Output saved as draft')
+          : (data.alreadyInGallery ? 'Output is already in Gallery' : 'Output added to Gallery'),
+        'success'
+      );
     } catch (error) {
-      console.error('Failed to add center image to gallery:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to add output to Gallery', 'error');
+      console.error('Failed to save center image to gallery bucket:', error);
+      showToast(error instanceof Error ? error.message : `Failed to save output to ${bucket}`, 'error');
     } finally {
-      setIsSavingToGallery(false);
+      setSavingBucket(null);
     }
   };
 
@@ -565,23 +572,29 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
                 <Info className={`w-4 h-4 ${mobile ? '' : 'mr-1.5'}`} />
                 {!mobile && 'Info'}
               </Button>
-              {shouldShowAddToGallery && (
-                <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleAddToGallery()} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
-                  <FolderPlus className="w-4 h-4 md:mr-1.5" />
-                  {!mobile && (isSavingToGallery ? 'Adding...' : 'Add to gallery')}
-                </Button>
+              {shouldShowGallerySaveActions && (
+                <>
+                  <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleSaveToGalleryBucket('draft')} disabled={!!savingBucket || isUpscaling || !!reuseAction || previewSavedBuckets.includes('draft')}>
+                    <FolderPlus className="w-4 h-4 md:mr-1.5" />
+                    {!mobile && (previewSavedBuckets.includes('draft') ? 'Draft saved' : savingBucket === 'draft' ? 'Saving...' : 'Save draft')}
+                  </Button>
+                  <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleSaveToGalleryBucket('common')} disabled={!!savingBucket || isUpscaling || !!reuseAction || previewSavedBuckets.includes('common')}>
+                    <FolderPlus className="w-4 h-4 md:mr-1.5" />
+                    {!mobile && (previewSavedBuckets.includes('common') ? 'In gallery' : savingBucket === 'common' ? 'Adding...' : 'Add to gallery')}
+                  </Button>
+                </>
               )}
-              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || isSavingToGallery}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs' : ''}`} onClick={() => void handleUpscale()} disabled={isUpscaling || !!reuseAction || !!savingBucket}>
                 <ArrowUpCircle className="w-4 h-4 md:mr-1.5" />
                 {!mobile && (isUpscaling ? 'Upscaling...' : 'Upscale')}
               </Button>
-              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('txt2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('txt2img')} disabled={!!savingBucket || isUpscaling || !!reuseAction}>
                 {mobile ? 't2i' : (reuseAction === 'txt2img' ? 'Opening...' : 'To txt2img')}
               </Button>
-              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('img2img')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('img2img')} disabled={!!savingBucket || isUpscaling || !!reuseAction}>
                 {mobile ? 'i2i' : (reuseAction === 'img2img' ? 'Opening...' : 'To img2img')}
               </Button>
-              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('img2vid')} disabled={isSavingToGallery || isUpscaling || !!reuseAction}>
+              <Button size="sm" variant="secondary" className={`bg-black/70 hover:bg-black/80 text-white border border-white/10 shrink-0 ${mobile ? 'h-9 px-3 text-xs font-medium' : ''}`} onClick={() => void handleReuse('img2vid')} disabled={!!savingBucket || isUpscaling || !!reuseAction}>
                 {mobile ? 'i2v' : (reuseAction === 'img2vid' ? 'Opening...' : 'To img2vid')}
               </Button>
               </div>
