@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { AudioLines, Heart, Image as ImageIcon, Info, Loader2, Play, RefreshCw, Search, Trash2, Video } from 'lucide-react';
+import { AudioLines, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, Sparkles, Trash2, Video } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -155,21 +155,24 @@ export default function MobileGalleryScreen() {
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
               {([
                 { key: 'all', label: 'All' },
-                { key: 'common', label: 'Common' },
-                { key: 'draft', label: 'Drafts' },
-                { key: 'upscale', label: 'Upscale' },
+                { key: 'common', icon: ImageIcon, title: 'Common' },
+                { key: 'draft', icon: PenSquare, title: 'Drafts' },
+                { key: 'upscale', icon: Sparkles, title: 'Upscale' },
               ] as const).map((item) => {
                 const active = semanticFilter === item.key;
+                const Icon = 'icon' in item ? item.icon : null;
                 return (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => setSemanticFilter(item.key)}
+                    title={'title' in item ? item.title : item.label}
+                    aria-label={'title' in item ? item.title : item.label}
                     className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
                       ? 'text-foreground border-border bg-background shadow-sm font-medium'
                       : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                   >
-                    {item.label}
+                    {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
                   </button>
                 );
               })}

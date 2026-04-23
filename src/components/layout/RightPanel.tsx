@@ -7,7 +7,7 @@ import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { JobCardImageThumbnail } from '@/components/layout/JobCardImageThumbnail';
-import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart } from 'lucide-react';
+import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart, PenSquare, Sparkles } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1752,21 +1752,24 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 <div className={`${mobile ? 'grid grid-cols-4 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
                                     {([
                                         { key: 'all', label: 'All' },
-                                        { key: 'common', label: 'Common' },
-                                        { key: 'draft', label: 'Drafts' },
-                                        { key: 'upscale', label: 'Upscale' },
+                                        { key: 'common', icon: ImageIcon, title: 'Common' },
+                                        { key: 'draft', icon: PenSquare, title: 'Drafts' },
+                                        { key: 'upscale', icon: Sparkles, title: 'Upscale' },
                                     ] as const).map((item) => {
                                         const active = semanticFilter === item.key;
+                                        const Icon = 'icon' in item ? item.icon : null;
                                         return (
                                             <button
                                                 key={item.key}
                                                 type="button"
                                                 onClick={() => setSemanticFilter(item.key)}
-                                                className={`h-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
+                                                title={'title' in item ? item.title : item.label}
+                                                aria-label={'title' in item ? item.title : item.label}
+                                                className={`h-7 min-w-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
                                                     ? 'text-foreground border-border bg-background shadow-sm font-medium'
                                                     : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                             >
-                                                {item.label}
+                                                {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
                                             </button>
                                         );
                                     })}
