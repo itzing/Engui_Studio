@@ -283,7 +283,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         const panelModeKey = mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode';
         const savedPanelMode = window.localStorage.getItem(panelModeKey);
-        if (!mobileMode && (savedPanelMode === 'jobs' || savedPanelMode === 'gallery')) {
+        if (!mobileMode && savedPanelMode === 'jobs') {
             setPanelMode(savedPanelMode);
         }
 
@@ -1789,18 +1789,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 {/* Filters & Actions */}
                 <div className="space-y-2">
                     {!mobile && <div className="flex items-center gap-1 bg-muted/30 rounded-md p-0.5 w-fit">
-                        {(['jobs', 'gallery'] as const).map((mode) => (
-                            <button
-                                key={mode}
-                                onClick={() => setPanelMode(mode)}
-                                className={`px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize ${panelMode === mode
-                                    ? 'bg-background shadow-sm text-foreground font-medium'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                    }`}
-                            >
-                                {mode}
-                            </button>
-                        ))}
+                        <button
+                            onClick={() => setPanelMode('jobs')}
+                            className="px-2 py-0.5 text-[10px] rounded-sm transition-all capitalize bg-background shadow-sm text-foreground font-medium"
+                        >
+                            jobs
+                        </button>
                     </div>}
                     <div className={mobile ? 'flex flex-col items-stretch gap-1.5' : 'flex items-center justify-between gap-2'}>
                         <div className="flex flex-col gap-1 w-full">

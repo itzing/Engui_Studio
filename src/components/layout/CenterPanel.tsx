@@ -5,7 +5,8 @@ import { useStudio, Job } from '@/lib/context/StudioContext';
 import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ArrowUpCircle, FolderPlus, Info } from 'lucide-react';
+import { ArrowUpCircle, FolderPlus, Images, Info } from 'lucide-react';
+import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 
 type CenterMode = 'image' | 'video';
 type ImageViewMode = 'native' | 'fit';
@@ -52,6 +53,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
+  const [desktopGalleryOpen, setDesktopGalleryOpen] = useState(false);
 
   useEffect(() => {
     if (activeTool === 'speech-sequencer') {
@@ -219,7 +221,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       const navigationItems = mobile ? completedImageJobs : (rightPanelMode === 'gallery' ? galleryItems : completedImageJobs);
       if (navigationItems.length === 0) return;
 
-      const selectedId = mobile ? selectedImageJobId : (rightPanelMode === 'gallery' ? selectedGalleryItemId : selectedImageJobId);
+      const selectedId = selectedImageJobId;
       const baseId = (hoverPreview && hoverPreview.id) ? hoverPreview.id : (selectedId || navigationItems[0].id);
       const currentIndex = navigationItems.findIndex(item => item.id === baseId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -294,22 +296,8 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       return hoverPreview;
     }
 
-    if (rightPanelMode === 'gallery' && selectedGalleryItem?.url) {
-      return {
-        id: selectedGalleryItem.id,
-        type: 'image',
-        url: selectedGalleryItem.url,
-        prompt: selectedGalleryItem.prompt,
-        modelId: selectedGalleryItem.modelId,
-        workspaceId: selectedGalleryItem.workspaceId,
-        sourceJobId: selectedGalleryItem.sourceJobId,
-        status: 'completed',
-        createdAt: selectedGalleryItem.createdAt,
-      };
-    }
-
     return selectedImageJob;
-  }, [completedImageJobs, hoverPreview, mobile, rightPanelMode, selectedGalleryItem, selectedImageJob]);
+  }, [completedImageJobs, hoverPreview, mobile, selectedImageJob]);
 
   const isGalleryPreview = !mobile && previewJob?.modelId === 'gallery';
   const shouldShowGallerySaveActions = !!previewJob && !isGalleryPreview;
@@ -515,6 +503,16 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
           )}
         </div>
         <div className={`flex items-center gap-2 ${mobile ? 'justify-between' : ''}`}>
+          {!mobile && (
+            <Button
+              variant={desktopGalleryOpen ? 'default' : 'outline'}
+              className="h-9 px-6 text-sm font-medium"
+              onClick={() => setDesktopGalleryOpen(true)}
+            >
+              <Images className="w-4 h-4 mr-2" />
+              Gallery
+            </Button>
+          )}
           <div className="inline-flex rounded-md border border-border overflow-hidden">
             <button
               onClick={() => setImageViewMode('native')}
@@ -615,11 +613,14 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
             </div>
             <h3 className="text-xl font-medium mb-2 text-foreground">No successful image yet</h3>
             <p className="max-w-md mx-auto text-sm text-muted-foreground/80">
-              Generate an image to show it here. Hover jobs or gallery items on the right panel to preview them.
+              Generate an image to show it here. Hover jobs on the right panel to preview them.
             </p>
           </div>
         )}
       </div>
+      {!mobile && (
+        <DesktopGalleryOverlay open={desktopGalleryOpen} onClose={() => setDesktopGalleryOpen(false)} />
+      )}
     </div>
   );
 }
