@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderPlus, Image as ImageIcon, Loader2, RefreshCw, Rows3, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
+import { FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -261,7 +261,9 @@ export default function MobileJobsScreen() {
 
   const activeViewerItemId = (selectedLoadedViewerIndex >= 0 ? loadedViewerItems[selectedLoadedViewerIndex]?.id : loadedViewerItems[viewerIndex]?.id) || null;
   const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
-  const canAddToGallery = !!viewerJobDetail && !!viewerOutput && !viewerOutput.alreadyInGallery;
+  const canAddToGallery = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('common');
+  const canSaveDraft = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('draft');
+  const canMarkUpscale = !!viewerJobDetail && !!viewerOutput && viewerJobDetail.type === 'image' && !viewerOutput.savedBuckets.includes('upscale');
   const canUpscale = viewerJobDetail ? (viewerJobDetail.type === 'image' || viewerJobDetail.type === 'video') : false;
 
   useEffect(() => {
@@ -391,69 +393,144 @@ export default function MobileJobsScreen() {
 
       <GalleryFullscreenViewer
         open={viewerOpen}
-        items={loadedViewerItems.map((item) => ({ id: item.id, url: item.url, favorited: false }))}
+        items={loadedViewerItems.map((item) => ({ id: item.id, url: item.url, favorited: false, type: 'image' }))}
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
         onClose={closeViewer}
         onOpenInfo={(itemId) => {
           router.push(`/m/jobs/${itemId}`);
         }}
-        renderHeaderActions={(itemId) => (
-          <>
-            {canAddToGallery && viewerJobDetail?.id === itemId ? (
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                onClick={async () => {
-                  if (!viewerOutput) return;
-                  const response = await fetch('/api/gallery/assets/from-job-output', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jobId: itemId, outputId: viewerOutput.outputId }),
-                  });
-                  const data = await response.json();
-                  if (response.ok && data.success) {
-                    setViewerJobDetail((prev) => prev ? {
-                      ...prev,
-                      outputs: prev.outputs.map((output, index) => index === 0 ? {
-                        ...output,
-                        alreadyInGallery: true,
-                        galleryAssetId: data.asset?.id || output.galleryAssetId,
-                      } : output),
-                    } : prev);
-                  }
-                }}
-                aria-label="Add job output to gallery"
-                title="Add to Gallery"
-              >
-                <FolderPlus className="w-5 h-5" />
-              </Button>
-            ) : null}
-            {canUpscale && viewerJobDetail?.id === itemId ? (
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                onClick={async () => {
-                  const response = await fetch('/api/upscale', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jobId: itemId, type: viewerJobDetail.type }),
-                  });
-                  const data = await response.json();
-                  if (response.ok && data.success) {
-                    await refresh();
-                  }
-                }}
-                aria-label="Upscale job"
-                title="Upscale"
-              >
-                <Wand2 className="w-5 h-5" />
-              </Button>
-            ) : null}
-          </>
-        )}
+        renderFooterActions={(item, meta) => {
+          if (viewerJobDetail?.id !== item.id || !viewerOutput) return null;
+          return (
+            <>
+              {canSaveDraft ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={async () => {
+                    const response = await fetch('/api/gallery/assets/from-job-output', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ jobId: item.id, outputId: viewerOutput.outputId, bucket: 'draft' }),
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                      setViewerJobDetail((prev) => prev ? {
+                        ...prev,
+                        outputs: prev.outputs.map((output, index) => index === 0 ? {
+                          ...output,
+                          alreadyInGallery: true,
+                          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+                          savedBuckets: output.savedBuckets.includes('draft') ? output.savedBuckets : [...output.savedBuckets, 'draft'],
+                          galleryAssetIdsByBucket: data.asset?.id ? {
+                            ...output.galleryAssetIdsByBucket,
+                            draft: [...(output.galleryAssetIdsByBucket.draft || []), data.asset.id],
+                          } : output.galleryAssetIdsByBucket,
+                        } : output),
+                      } : prev);
+                    }
+                  }}
+                  aria-label="Save output as draft"
+                  title="Save Draft"
+                >
+                  <PenSquare className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {canAddToGallery ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={async () => {
+                    const response = await fetch('/api/gallery/assets/from-job-output', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ jobId: item.id, outputId: viewerOutput.outputId, bucket: 'common' }),
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                      setViewerJobDetail((prev) => prev ? {
+                        ...prev,
+                        outputs: prev.outputs.map((output, index) => index === 0 ? {
+                          ...output,
+                          alreadyInGallery: true,
+                          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+                          savedBuckets: output.savedBuckets.includes('common') ? output.savedBuckets : [...output.savedBuckets, 'common'],
+                          galleryAssetIdsByBucket: data.asset?.id ? {
+                            ...output.galleryAssetIdsByBucket,
+                            common: [...(output.galleryAssetIdsByBucket.common || []), data.asset.id],
+                          } : output.galleryAssetIdsByBucket,
+                        } : output),
+                      } : prev);
+                    }
+                  }}
+                  aria-label="Add job output to gallery"
+                  title="Add to Gallery"
+                >
+                  <FolderPlus className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {canMarkUpscale && meta.canMarkUpscale ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={async () => {
+                    const response = await fetch('/api/gallery/assets/from-job-output', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ jobId: item.id, outputId: viewerOutput.outputId, bucket: 'upscale' }),
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                      setViewerJobDetail((prev) => prev ? {
+                        ...prev,
+                        outputs: prev.outputs.map((output, index) => index === 0 ? {
+                          ...output,
+                          alreadyInGallery: true,
+                          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
+                          savedBuckets: output.savedBuckets.includes('upscale') ? output.savedBuckets : [...output.savedBuckets, 'upscale'],
+                          galleryAssetIdsByBucket: data.asset?.id ? {
+                            ...output.galleryAssetIdsByBucket,
+                            upscale: [...(output.galleryAssetIdsByBucket.upscale || []), data.asset.id],
+                          } : output.galleryAssetIdsByBucket,
+                        } : output),
+                      } : prev);
+                    }
+                  }}
+                  aria-label="Mark output as upscale"
+                  title="Mark as Upscale"
+                >
+                  <Sparkles className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {canUpscale ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={async () => {
+                    const response = await fetch('/api/upscale', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ jobId: item.id, type: viewerJobDetail.type }),
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                      await refresh();
+                    }
+                  }}
+                  aria-label="Upscale job"
+                  title="Upscale"
+                >
+                  <Wand2 className="w-5 h-5" />
+                </Button>
+              ) : null}
+            </>
+          );
+        }}
       />
     </MobileScreen>
   );

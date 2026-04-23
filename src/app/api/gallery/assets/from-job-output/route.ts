@@ -103,8 +103,8 @@ function getExtensionFromUrl(url: string, type: string): string {
   return '.png';
 }
 
-function normalizeBucket(value: unknown): 'common' | 'draft' | null {
-  if (value === 'common' || value === 'draft') return value;
+function normalizeBucket(value: unknown): 'common' | 'draft' | 'upscale' | null {
+  if (value === 'common' || value === 'draft' || value === 'upscale') return value;
   return null;
 }
 
