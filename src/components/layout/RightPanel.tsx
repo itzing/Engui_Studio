@@ -1752,9 +1752,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 <div className={`${mobile ? 'grid grid-cols-4 gap-1 w-full' : 'flex items-center gap-1 flex-wrap'}`}>
                                     {([
                                         { key: 'all', label: 'All' },
-                                        { key: 'common', icon: ImageIcon, title: 'Common' },
-                                        { key: 'draft', icon: PenSquare, title: 'Drafts' },
-                                        { key: 'upscale', icon: Sparkles, title: 'Upscale' },
+                                        { key: 'common', icon: ImageIcon, title: 'Common', activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                                        { key: 'draft', icon: PenSquare, title: 'Drafts', activeClass: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+                                        { key: 'upscale', icon: Sparkles, title: 'Upscale', activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
                                     ] as const).map((item) => {
                                         const active = semanticFilter === item.key;
                                         const Icon = 'icon' in item ? item.icon : null;
@@ -1766,7 +1766,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                                 title={'title' in item ? item.title : item.label}
                                                 aria-label={'title' in item ? item.title : item.label}
                                                 className={`h-7 min-w-7 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active
-                                                    ? 'text-foreground border-border bg-background shadow-sm font-medium'
+                                                    ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
                                                     : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                             >
                                                 {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
