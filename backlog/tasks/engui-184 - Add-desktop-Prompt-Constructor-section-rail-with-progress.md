@@ -1,7 +1,7 @@
 ---
 id: ENGUI-184
 title: Add desktop Prompt Constructor section rail with progress
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 09:11'
 labels:
@@ -19,8 +19,8 @@ Add a narrow vertical navigation rail on the left side of the desktop Prompt Con
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The desktop Prompt Constructor shows a narrow left rail with section items instead of a wide utility sidebar
-- [ ] #2 Each section item shows icon, label, and filled-slots progress such as 2/3
-- [ ] #3 Clicking a rail item jumps to and activates the corresponding section in the editor
-- [ ] #4 The rail visually distinguishes active, incomplete, complete, and warning states
+- [x] #1 The desktop Prompt Constructor shows a narrow left rail with section items instead of a wide utility sidebar
+- [x] #2 Each section item shows icon, label, and filled-slots progress such as 2/3
+- [x] #3 Clicking a rail item jumps to and activates the corresponding section in the editor
+- [x] #4 The rail visually distinguishes active, incomplete, complete, and warning states
 <!-- AC:END -->

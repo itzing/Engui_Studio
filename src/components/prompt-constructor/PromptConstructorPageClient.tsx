@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowPathIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, ExclamationTriangleIcon, GlobeAltIcon, MagnifyingGlassIcon, PhotoIcon, PlusIcon, SparklesIcon, SwatchIcon, UserIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -128,6 +128,15 @@ const slotPresetChips: Record<string, string[]> = {
   mood: ['intimate nostalgic mood', 'quiet melancholic mood', 'confident elegant mood', 'dreamy romantic mood'],
 };
 
+const sectionIcons: Record<string, typeof UserIcon> = {
+  character: UserIcon,
+  action: SparklesIcon,
+  composition: PhotoIcon,
+  environment: GlobeAltIcon,
+  style: SwatchIcon,
+  constraints: ExclamationTriangleIcon,
+};
+
 export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
   const { activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
@@ -143,6 +152,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     setDraft((current) => current.workspaceId ? current : makeLocalDraft(activeWorkspaceId));
@@ -259,6 +269,27 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     }
     return issues;
   }, [draft.enabledConstraintIds, draft.state, draft.title, draft.templateId]);
+
+  const sectionStats = useMemo(() => {
+    if (!template) return [];
+    return template.sections.map((section) => {
+      const total = section.slotIds.length;
+      const filled = section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
+      const hasWarning = warnings.some((warning) => warning.slotId && section.slotIds.includes(warning.slotId));
+      return { ...section, total, filled, hasWarning };
+    });
+  }, [draft.state, warnings]);
+
+  const activeSectionId = useMemo(() => {
+    const slot = template?.slots.find((entry) => entry.id === activeSlotId);
+    return slot?.sectionId || template?.sections[0]?.id || 'character';
+  }, [activeSlotId]);
+
+  const jumpToSection = (sectionId: string) => {
+    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const firstSlotId = template?.sections.find((section) => section.id === sectionId)?.slotIds[0];
+    if (firstSlotId) setActiveSlotId(firstSlotId);
+  };
 
   const reloadDocuments = async (preferredId?: string) => {
     if (!activeWorkspaceId) return;
@@ -457,7 +488,40 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
             </CardContent>
           </Card>
 
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(380px,0.85fr)]">
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[96px_minmax(0,1.35fr)_minmax(380px,0.85fr)]">
+            <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+                <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-white/40">Sections</div>
+                {sectionStats.map((section) => {
+                  const Icon = sectionIcons[section.id] || SparklesIcon;
+                  const isActive = section.id === activeSectionId;
+                  const isComplete = section.total > 0 && section.filled === section.total;
+
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => jumpToSection(section.id)}
+                      className={`rounded-xl border px-2 py-3 text-left transition-colors ${isActive ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-100' : section.hasWarning ? 'border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15' : isComplete ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15' : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10'}`}
+                    >
+                      <div className="flex items-center justify-center">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="mt-2 text-center text-[11px] font-medium leading-tight">{section.label}</div>
+                      <div className="mt-1 text-center text-[10px] uppercase tracking-[0.12em] opacity-75">{section.filled}/{section.total}</div>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewOpen(true)}
+                  className="mt-auto rounded-xl border border-white/10 bg-white/5 px-2 py-3 text-center text-[11px] text-white/70 transition-colors hover:bg-white/10"
+                >
+                  Preview
+                </button>
+              </CardContent>
+            </Card>
+
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
               <CardHeader className="border-b border-white/10 pb-4">
                 <CardTitle className="text-lg">Slots Editor</CardTitle>
@@ -466,8 +530,19 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
               <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
                 <div className="space-y-5">
                   {template.sections.map((section) => (
-                    <div key={section.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
-                      <div className="mb-3 text-sm font-medium text-white">{section.label}</div>
+                    <div
+                      key={section.id}
+                      ref={(node) => {
+                        sectionRefs.current[section.id] = node;
+                      }}
+                      className={`rounded-lg border bg-black/10 p-3 ${section.id === activeSectionId ? 'border-cyan-400/35' : 'border-white/10'}`}
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium text-white">{section.label}</div>
+                        <div className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                          {section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length}/{section.slotIds.length}
+                        </div>
+                      </div>
                       <div className="space-y-3">
                         {section.slotIds.map((slotId) => {
                           const slot = template.slots.find((entry) => entry.id === slotId);
