@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Sparkles, Upload, WandSparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
-import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
@@ -20,9 +19,7 @@ import {
     normalizeRandomizeSeed,
 } from '@/lib/create/imageDraft';
 import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
-import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
-import type { ScenePresetSummary } from '@/lib/scenes/types';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 
 export default function ImageGenerationForm() {
@@ -84,9 +81,6 @@ export default function ImageGenerationForm() {
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
-    const [availableScenes, setAvailableScenes] = useState<ScenePresetSummary[]>([]);
-    const [selectedSceneId, setSelectedSceneId] = useState('');
-    const [isLoadingScenes, setIsLoadingScenes] = useState(false);
 
     const imageModels = getModelsByType('image');
     const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
@@ -106,8 +100,7 @@ export default function ImageGenerationForm() {
         parameterValues,
         previewUrl,
         previewUrl2,
-        selectedSceneId,
-    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
+    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, showAdvanced]);
 
     const applySnapshot = React.useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
         const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -122,7 +115,6 @@ export default function ImageGenerationForm() {
 
         setPreviewUrl(nextPreviewUrl);
         setPreviewUrl2(nextPreviewUrl2);
-        setSelectedSceneId(typeof snapshot?.selectedSceneId === 'string' ? snapshot.selectedSceneId : '');
         setImageFile(null);
         setImageFile2(null);
 
@@ -474,61 +466,6 @@ export default function ImageGenerationForm() {
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
 
-    const fetchAvailableScenes = async () => {
-        setIsLoadingScenes(true);
-        try {
-            const scenes = await fetchActiveScenePresets(activeWorkspaceId);
-            setAvailableScenes(scenes);
-        } catch (error) {
-            console.error('Failed to fetch scenes:', error);
-            setAvailableScenes([]);
-        } finally {
-            setIsLoadingScenes(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchAvailableScenes();
-    }, [activeWorkspaceId]);
-
-    const selectedScene = availableScenes.find((scene) => scene.id === selectedSceneId) || null;
-    const promptMatchesSelectedScene = !!selectedScene && prompt.trim() === (selectedScene.generatedScenePrompt || '').trim();
-
-    const applySelectedSceneToPrompt = () => {
-        if (!selectedScene) return;
-        const nextSnapshot = applyScenePromptToImageDraft(currentSnapshot, selectedScene);
-        setPrompt(nextSnapshot.prompt || '');
-        setSelectedSceneId(nextSnapshot.selectedSceneId || '');
-    };
-
-    const applySelectedScenePreviewImage = async () => {
-        if (!selectedScene?.latestPreviewImageUrl) return;
-        try {
-            setIsLoadingMedia(true);
-            setPreviewUrl(selectedScene.latestPreviewImageUrl);
-            const file = await loadFileFromPath(selectedScene.latestPreviewImageUrl);
-            setImageFile(file);
-        } catch (error) {
-            console.error('Failed to load scene preview image:', error);
-        } finally {
-            setIsLoadingMedia(false);
-        }
-    };
-
-    const applyAllFromScene = async () => {
-        if (!selectedScene) return;
-        const nextSnapshot = applySceneToImageDraft(currentSnapshot, selectedScene);
-        setPrompt(nextSnapshot.prompt || '');
-        setSelectedSceneId(nextSnapshot.selectedSceneId || '');
-        if (nextSnapshot.previewUrl) {
-            setPreviewUrl(nextSnapshot.previewUrl);
-            await applySelectedScenePreviewImage();
-        }
-    };
-
-    const openSceneManager = () => {
-        window.dispatchEvent(new CustomEvent('openSceneManager'));
-    };
 
 
     // Handler for parameter changes
@@ -1012,75 +949,9 @@ export default function ImageGenerationForm() {
                 {/* Prompt - only show if model accepts text input */}
                 {currentModel.inputs.includes('text') && (
                     <div className="space-y-3">
-                        <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-3">
-                            <div className="flex items-center justify-between gap-3">
-                                <Label className="text-xs">Scene preset</Label>
-                                <div className="flex items-center gap-2">
-                                    <Button type="button" variant="ghost" size="sm" onClick={() => void fetchAvailableScenes()} disabled={!activeWorkspaceId || isLoadingScenes} className="h-7 px-2 text-xs">
-                                        Refresh
-                                    </Button>
-                                    <Button type="button" variant="ghost" size="sm" onClick={openSceneManager} className="h-7 px-2 text-xs">
-                                        Open Scene Manager
-                                    </Button>
-                                    {isLoadingScenes && <span className="text-xs text-muted-foreground">Loading scenes...</span>}
-                                </div>
-                            </div>
-                            <select
-                                className="w-full p-2 rounded-md border border-border bg-background text-sm"
-                                value={selectedSceneId}
-                                onChange={(e) => setSelectedSceneId(e.target.value)}
-                                disabled={!activeWorkspaceId || isLoadingScenes}
-                            >
-                                <option value="">No scene preset</option>
-                                {availableScenes.map(scene => (
-                                    <option key={scene.id} value={scene.id} className="bg-zinc-950 text-zinc-100">
-                                        {scene.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {selectedScene && (
-                                <div className="space-y-2 rounded-md border border-border bg-background/70 p-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="text-sm font-medium text-foreground">{selectedScene.name}</div>
-                                        {promptMatchesSelectedScene && (
-                                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
-                                                Prompt synced
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">{selectedScene.summary}</div>
-                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                        <span>{selectedScene.characterCount === 1 ? 'single' : selectedScene.characterCount === 2 ? 'duo' : 'trio'}</span>
-                                        {selectedScene.posePresetName && <span>pose: {selectedScene.posePresetName}</span>}
-                                        {selectedScene.vibePresetName && <span>vibe: {selectedScene.vibePresetName}</span>}
-                                    </div>
-                                    {currentModel?.id === 'z-image' && (
-                                        <div className="rounded-md border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
-                                            Scene apply keeps the current Z-Image model dropdown choice and its parameter selections intact.
-                                        </div>
-                                    )}
-                                    <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-3'}`}>
-                                        <Button type="button" variant="outline" onClick={() => void applyAllFromScene()} className="w-full">
-                                            Apply all from scene
-                                        </Button>
-                                        <Button type="button" variant="outline" onClick={applySelectedSceneToPrompt} className="w-full">
-                                            {promptMatchesSelectedScene ? 'Re-apply scene prompt' : 'Apply scene prompt'}
-                                        </Button>
-                                        <Button type="button" variant="outline" onClick={() => void applySelectedScenePreviewImage()} disabled={!selectedScene.latestPreviewImageUrl || isLoadingMedia} className="w-full">
-                                            Use latest preview
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        {!selectedSceneId && (
-                            <div className="rounded-md border border-dashed border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-                                Pick a saved scene to reuse its assembled prompt and latest prototype preview in Create.
-                            </div>
-                        )}
                         <div className="relative">
                             <textarea
-                                className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : promptMatchesSelectedScene ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}

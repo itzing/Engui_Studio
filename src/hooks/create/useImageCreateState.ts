@@ -11,12 +11,9 @@ import {
 } from '@/lib/create/imageDraft';
 import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/createMediaStore';
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
-import { applyScenePromptToImageDraft, applySceneToImageDraft, fetchActiveScenePresets } from '@/lib/create/imageScenes';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useStudio } from '@/lib/context/StudioContext';
-import { loadFileFromPath } from '@/lib/fileUtils';
 import { getModelById, getModelsByType, isInputVisible, type ModelConfig, type ModelParameter } from '@/lib/models/modelConfig';
-import type { ScenePresetSummary } from '@/lib/scenes/types';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
 
@@ -50,9 +47,6 @@ export function useImageCreateState() {
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [primaryInputRef, setPrimaryInputRef] = useState<CreateMediaRef | null>(null);
   const [secondaryInputRef, setSecondaryInputRef] = useState<CreateMediaRef | null>(null);
-  const [availableScenes, setAvailableScenes] = useState<ScenePresetSummary[]>([]);
-  const [selectedSceneId, setSelectedSceneId] = useState('');
-  const [isLoadingScenes, setIsLoadingScenes] = useState(false);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [message, setMessage] = useState<FlashMessage>(null);
@@ -112,9 +106,6 @@ export function useImageCreateState() {
     return !!currentModel?.parameters.some((param) => param.type === 'lora-selector');
   }, [currentModel]);
 
-  const selectedScene = useMemo(() => {
-    return availableScenes.find((scene) => scene.id === selectedSceneId) || null;
-  }, [availableScenes, selectedSceneId]);
 
   const currentSnapshot = useMemo((): ImageCreateDraftSnapshot => createImageDraftSnapshot({
     prompt,
@@ -123,12 +114,11 @@ export function useImageCreateState() {
     parameterValues,
     previewUrl,
     previewUrl2,
-    selectedSceneId,
     inputs: {
       primary: primaryInputRef,
       secondary: secondaryInputRef,
     },
-  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, secondaryInputRef, prompt, randomizeSeed, selectedSceneId, showAdvanced]);
+  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, secondaryInputRef, prompt, randomizeSeed, showAdvanced]);
 
   const applySnapshot = useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
     const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -143,7 +133,6 @@ export function useImageCreateState() {
     setParameterValues(mergedParameterValues);
     setPreviewUrl(normalizedSnapshot.previewUrl || '');
     setPreviewUrl2(normalizedSnapshot.previewUrl2 || '');
-    setSelectedSceneId(normalizedSnapshot.selectedSceneId || '');
     setImageFile(null);
     setImageFile2(null);
     setPrimaryInputRef(normalizedSnapshot.inputs?.primary || null);
@@ -207,31 +196,6 @@ export function useImageCreateState() {
     }
   }, [promptHelperInstruction]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadScenes = async () => {
-      setIsLoadingScenes(true);
-      try {
-        const scenes = await fetchActiveScenePresets(activeWorkspaceId);
-        if (!cancelled) {
-          setAvailableScenes(scenes);
-        }
-      } catch {
-        if (!cancelled) {
-          setAvailableScenes([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingScenes(false);
-        }
-      }
-    };
-
-    void loadScenes();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeWorkspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -336,46 +300,6 @@ export function useImageCreateState() {
     setSecondaryImage(file, URL.createObjectURL(file), storedRef);
   }, [setSecondaryImage]);
 
-  const applyScenePreviewImage = useCallback(async (sceneOverride?: ScenePresetSummary | null) => {
-    const targetScene = sceneOverride || selectedScene;
-    if (!targetScene?.latestPreviewImageUrl) return;
-    setIsLoadingMedia(true);
-    try {
-      setSelectedSceneId(targetScene.id);
-      setPreviewUrl(targetScene.latestPreviewImageUrl);
-      const file = await loadFileFromPath(targetScene.latestPreviewImageUrl);
-      if (file) {
-        setPrimaryImage(file, targetScene.latestPreviewImageUrl, {
-          kind: 'remote-url',
-          url: targetScene.latestPreviewImageUrl,
-          source: 'scene',
-          sourceId: targetScene.id,
-        });
-      }
-    } finally {
-      setIsLoadingMedia(false);
-    }
-  }, [selectedScene, setPrimaryImage]);
-
-  const applySelectedSceneToPrompt = useCallback((sceneOverride?: ScenePresetSummary | null) => {
-    const targetScene = sceneOverride || selectedScene;
-    if (!targetScene) return;
-    const nextSnapshot = applyScenePromptToImageDraft(currentSnapshot, targetScene);
-    setPrompt(nextSnapshot.prompt || '');
-    setSelectedSceneId(nextSnapshot.selectedSceneId || '');
-  }, [currentSnapshot, selectedScene]);
-
-  const applyAllFromScene = useCallback(async (sceneOverride?: ScenePresetSummary | null) => {
-    const targetScene = sceneOverride || selectedScene;
-    if (!targetScene) return;
-    const nextSnapshot = applySceneToImageDraft(currentSnapshot, targetScene);
-    setPrompt(nextSnapshot.prompt || '');
-    setSelectedSceneId(nextSnapshot.selectedSceneId || '');
-    if (nextSnapshot.previewUrl) {
-      setPreviewUrl(nextSnapshot.previewUrl);
-      await applyScenePreviewImage(targetScene);
-    }
-  }, [applyScenePreviewImage, currentSnapshot, selectedScene]);
 
   const handleParameterChange = useCallback((paramName: string, value: any) => {
     setParameterValues((prev) => ({
@@ -538,11 +462,6 @@ export function useImageCreateState() {
     secondaryImageVisible,
     primaryImageRequired,
     secondaryImageRequired,
-    availableScenes,
-    selectedScene,
-    selectedSceneId,
-    setSelectedSceneId,
-    isLoadingScenes,
     isLoadingMedia,
     isGenerating,
     message,
@@ -551,10 +470,6 @@ export function useImageCreateState() {
     selectModel: async (modelId: string) => {
       await switchModel(modelId, currentSnapshot);
     },
-    applySelectedSceneToPrompt,
-    applyScenePreviewImage,
-    applyAllFromScene,
-    promptMatchesSelectedScene: !!selectedScene && prompt.trim() === (selectedScene.generatedScenePrompt || '').trim(),
     promptHelperInstruction,
     setPromptHelperInstruction,
     isPromptHelperConfigured,
