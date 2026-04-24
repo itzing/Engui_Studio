@@ -783,23 +783,70 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       </div>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-4xl border-white/10 bg-[#0b1020] text-white">
-          <DialogHeader>
-            <DialogTitle>Prompt Preview</DialogTitle>
-            <DialogDescription className="text-white/60">
-              Temporary preview surface for Prompt Constructor v2. Full desktop preview modal sizing lands in the next ticket.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-4">
-              <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90">{renderedPrompt || 'Prompt preview will appear here.'}</pre>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-white/55">{warnings.length + saveWarnings.length} warning(s)</div>
-              <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
-                Copy Prompt
-              </Button>
+        <DialogContent className="h-[90vh] w-[min(92vw,960px)] max-w-none border-white/10 bg-[#0b1020] p-0 text-white">
+          <div className="flex h-full flex-col overflow-hidden">
+            <DialogHeader className="border-b border-white/10 px-6 py-5 text-left">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <DialogTitle>Prompt Preview</DialogTitle>
+                  <DialogDescription className="mt-1 text-white/60">
+                    Final rendered prompt in a dedicated inspection surface, with scrolling, copy, and visible warnings.
+                  </DialogDescription>
+                </div>
+                <div className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                  {draft.title || 'Untitled Prompt'}
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="flex min-h-0 flex-col border-b border-white/10 lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">Rendered Prompt</div>
+                    <div className="mt-1 text-sm text-white/55">Scrollable output, ready to copy.</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                    <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
+                    Copy Prompt
+                  </Button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                  <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-white/90">{renderedPrompt || 'Prompt preview will appear here.'}</pre>
+                </div>
+              </div>
+
+              <div className="flex min-h-0 flex-col bg-white/5">
+                <div className="border-b border-white/10 px-5 py-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-white/45">Preview Meta</div>
+                  <div className="mt-2 space-y-2 text-sm text-white/70">
+                    <div>Template: {draft.templateId}</div>
+                    <div>Warnings: {warnings.length + saveWarnings.length}</div>
+                    <div>Status: {isDirty ? 'Unsaved changes' : 'Saved'}</div>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-white/45">Warnings</div>
+                  {warnings.length === 0 && saveWarnings.length === 0 ? (
+                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+                      No validation warnings.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {warnings.map((warning) => (
+                        <div key={warning.id} className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+                          {warning.message}
+                        </div>
+                      ))}
+                      {saveWarnings.map((warning, index) => (
+                        <div key={`preview-save-warning-${index}`} className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+                          {warning}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
