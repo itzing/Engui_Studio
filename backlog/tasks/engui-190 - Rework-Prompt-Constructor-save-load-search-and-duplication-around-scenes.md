@@ -1,7 +1,7 @@
 ---
 id: ENGUI-190
 title: Rework Prompt Constructor save/load/search and duplication around scenes
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:45'
 labels:
@@ -19,9 +19,9 @@ Rework the current Prompt Constructor persistence and list UX so users are worki
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Prompt Constructor list and toolbar flows are presented as saved scenes rather than generic prompt documents
-- [ ] #2 Users can search and open saved scenes by title, scene type, tags, character count, and recency
-- [ ] #3 Scene duplication works as a first-class flow and produces a separate editable saved scene
-- [ ] #4 The UI does not need to download every full scene payload just to render the saved-scene list
-- [ ] #5 The scene-oriented save/load flows remain compatible with the existing template-aware persistence architecture
+- [x] #1 Prompt Constructor list and toolbar flows are presented as saved scenes rather than generic prompt documents
+- [x] #2 Users can search and open saved scenes by title, scene type, tags, character count, and recency
+- [x] #3 Scene duplication works as a first-class flow and produces a separate editable saved scene
+- [x] #4 The UI does not need to download every full scene payload just to render the saved-scene list
+- [x] #5 The scene-oriented save/load flows remain compatible with the existing template-aware persistence architecture
 <!-- AC:END -->

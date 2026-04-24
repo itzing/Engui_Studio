@@ -215,4 +215,18 @@ export type PromptDocument<TState = PromptState> = {
   updatedAt: string;
 };
 
-export type PromptDocumentSummary = PromptDocument;
+export type PromptDocumentSummary = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  templateId: PromptTemplateId;
+  templateVersion: number;
+  status: PromptDocumentStatus;
+  createdAt: string;
+  updatedAt: string;
+  renderedPrompt?: string;
+  sceneType?: string;
+  tags?: string[];
+  characterCount?: number;
+  relationCount?: number;
+};

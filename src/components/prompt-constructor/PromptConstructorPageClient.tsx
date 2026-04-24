@@ -14,7 +14,7 @@ import { promptConstructorConstraints } from '@/lib/prompt-constructor/constrain
 import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
-import type { CharacterRelation, CharacterSlot, PromptDocument, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
+import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSummary, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
 
 const defaultTemplateId = 'scene_template_v2';
 const defaultTemplate = getPromptTemplate(defaultTemplateId);
@@ -259,7 +259,7 @@ const sectionIcons: Record<string, typeof UserIcon> = {
 export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
   const { activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
-  const [documents, setDocuments] = useState<PromptDocument[]>([]);
+  const [documents, setDocuments] = useState<PromptDocumentSummary[]>([]);
   const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
   const template = useMemo(() => getPromptTemplate(draft.templateId), [draft.templateId]);
   const [isSaving, setIsSaving] = useState(false);
@@ -286,11 +286,16 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     const load = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=${encodeURIComponent(defaultTemplateId)}`, { cache: 'no-store' });
+        const params = new URLSearchParams({
+          workspaceId: activeWorkspaceId,
+          templateId: defaultTemplateId,
+        });
+        if (documentQuery.trim()) params.set('query', documentQuery.trim());
+        const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
         if (cancelled) return;
-        const items = Array.isArray(data.documents) ? data.documents as PromptDocument[] : [];
+        const items = Array.isArray(data.documents) ? data.documents as PromptDocumentSummary[] : [];
         setDocuments(items);
         if (items.length > 0 && draft.id === 'local-draft') {
           setDraft(items[0]);
@@ -308,7 +313,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, documentQuery, draft.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -369,13 +374,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  const filteredDocuments = useMemo(() => {
-    const query = documentQuery.trim().toLowerCase();
-    return documents.filter((document) => {
-      if (!query) return true;
-      return `${document.title} ${document.templateId}`.toLowerCase().includes(query);
-    });
-  }, [documentQuery, documents]);
+  const filteredDocuments = useMemo(() => documents, [documents]);
 
   const renderedPrompt = useMemo(() => {
     if (!template) return '';
@@ -475,14 +474,20 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=${encodeURIComponent(defaultTemplateId)}`, { cache: 'no-store' });
+      const params = new URLSearchParams({
+        workspaceId: activeWorkspaceId,
+        templateId: defaultTemplateId,
+      });
+      if (documentQuery.trim()) params.set('query', documentQuery.trim());
+      const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
-      const items = Array.isArray(data.documents) ? data.documents as PromptDocument[] : [];
+      const items = Array.isArray(data.documents) ? data.documents as PromptDocumentSummary[] : [];
       setDocuments(items);
       if (preferredId) {
-        const match = items.find((item) => item.id === preferredId);
-        if (match) setDraft(match);
+        const detailResponse = await fetch(`/api/prompt-documents/${preferredId}`, { cache: 'no-store' });
+        const detailData = await detailResponse.json();
+        if (detailResponse.ok && detailData.document) setDraft(detailData.document as PromptDocument);
       }
     } catch (error) {
       console.warn('Failed to reload prompt documents:', error);
@@ -491,13 +496,20 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     }
   };
 
-  const selectDocument = (next: PromptDocument) => {
+  const selectDocument = async (next: PromptDocumentSummary) => {
     if (isDirty && draft.id !== next.id) {
-      const confirmed = window.confirm('You have unsaved changes in the current prompt document. Switch documents anyway?');
+      const confirmed = window.confirm('You have unsaved changes in the current scene. Switch scenes anyway?');
       if (!confirmed) return;
     }
-    setDraft(next);
-    setSaveWarnings([]);
+    try {
+      const response = await fetch(`/api/prompt-documents/${next.id}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Failed to load scene');
+      setDraft(data.document as PromptDocument);
+      setSaveWarnings([]);
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to load scene', 'error');
+    }
   };
 
   const handleSave = async () => {
@@ -526,15 +538,12 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       if (!response.ok) throw new Error(data?.error || 'Failed to save prompt document');
 
       const next = data.document as PromptDocument;
-      setDocuments((current) => {
-        const rest = current.filter((item) => item.id !== next.id);
-        return [next, ...rest];
-      });
       setDraft(next);
       setSaveWarnings(Array.isArray(data.warnings) ? data.warnings.map((warning: { message?: string }) => warning?.message || '').filter(Boolean) : []);
-      showToast('Prompt document saved', 'success');
+      await reloadDocuments(next.id);
+      showToast('Scene saved', 'success');
     } catch (error: any) {
-      showToast(error?.message || 'Failed to save prompt document', 'error');
+      showToast(error?.message || 'Failed to save scene', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -542,7 +551,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
   const handleCreateNew = () => {
     if (isDirty) {
-      const confirmed = window.confirm('Discard current unsaved changes and create a new prompt document?');
+      const confirmed = window.confirm('Discard current unsaved changes and create a new scene?');
       if (!confirmed) return;
     }
     setDraft(makeLocalDraft(activeWorkspaceId));
@@ -727,7 +736,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                 <option value="" className="bg-slate-900">Current draft</option>
                 {filteredDocuments.map((document) => (
                   <option key={document.id} value={document.id} className="bg-slate-900">
-                    {document.title}
+                    {document.title}{document.sceneType ? ` · ${document.sceneType}` : ''}{typeof document.characterCount === 'number' ? ` · ${document.characterCount} chars` : ''}
                   </option>
                 ))}
               </select>

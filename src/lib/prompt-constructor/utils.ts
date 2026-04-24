@@ -8,6 +8,7 @@ import type {
   ConstraintSnippet,
   PromptDocument,
   PromptDocumentStatus,
+  PromptDocumentSummary,
   PromptState,
   PromptTemplateId,
   SceneSnapshot,
@@ -322,4 +323,28 @@ export function buildSceneSnapshot(document: Pick<PromptDocument<SceneTemplateSt
     state: normalizePromptState(document.state, 'scene_template_v2') as SceneTemplateState,
     enabledConstraintIds: document.enabledConstraintIds,
   });
+}
+
+export function toPromptDocumentSummary(record: PersistedPromptDocumentRecord): PromptDocumentSummary {
+  const templateId = normalizePromptTemplateId(record.templateId);
+  const summary: PromptDocumentSummary = {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    title: record.title,
+    templateId,
+    templateVersion: normalizePromptTemplateVersion(record.templateVersion),
+    status: normalizePromptDocumentStatus(record.status),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+
+  if (templateId === 'scene_template_v2') {
+    const state = normalizePromptState(record.stateJson, templateId) as SceneTemplateState;
+    summary.sceneType = state.sceneSummary.sceneType;
+    summary.tags = state.sceneSummary.tags;
+    summary.characterCount = state.characterSlots.filter((slot) => slot.enabled).length;
+    summary.relationCount = state.characterRelations.length;
+  }
+
+  return summary;
 }

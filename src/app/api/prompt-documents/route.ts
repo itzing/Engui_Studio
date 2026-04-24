@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { buildPromptValidation, normalizeConstraintIds, normalizePromptDocumentTitle, normalizePromptState, normalizePromptTemplateId, normalizePromptTemplateVersion, serializeConstraintIds, serializePromptState, toPromptDocument } from '@/lib/prompt-constructor/utils';
+import { buildPromptValidation, normalizeConstraintIds, normalizePromptDocumentTitle, normalizePromptState, normalizePromptTemplateId, normalizePromptTemplateVersion, serializeConstraintIds, serializePromptState, toPromptDocument, toPromptDocumentSummary } from '@/lib/prompt-constructor/utils';
 import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +26,21 @@ export async function GET(request: NextRequest) {
       orderBy: [{ updatedAt: 'desc' }],
     });
 
-    return NextResponse.json({ success: true, documents: documents.map(toPromptDocument) }, {
+    const summaries = documents.map(toPromptDocumentSummary);
+    const query = typeof searchParams.get('query') === 'string' ? searchParams.get('query')!.trim().toLowerCase() : '';
+    const characterCount = typeof searchParams.get('characterCount') === 'string' ? Number(searchParams.get('characterCount')) : null;
+
+    const filteredSummaries = summaries.filter((summary) => {
+      if (query) {
+        const haystack = [summary.title, summary.sceneType || '', ...(summary.tags || [])].join(' ').toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (typeof characterCount === 'number' && Number.isFinite(characterCount) && characterCount > 0) {
+        if ((summary.characterCount || 0) !== characterCount) return false;
+      }
+      return true;
+    });
+    return NextResponse.json({ success: true, documents: filteredSummaries }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         Pragma: 'no-cache',
