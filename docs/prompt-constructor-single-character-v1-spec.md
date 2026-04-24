@@ -1,5 +1,7 @@
 # Prompt Constructor, Single Character v1 Spec
 
+> Note: This document records the original single-character v1 direction. The current product direction is captured in `docs/prompt-constructor-scene-template-v2-spec.md`, which repurposes Prompt Constructor around reusable scene templates, dynamic character slots, and serialized scene snapshots.
+
 ## Goal
 
 Add a desktop-first **Prompt Constructor** for **z-image turbo** that renders a final prompt from structured slot values using one deterministic template.

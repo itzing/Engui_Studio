@@ -1,7 +1,7 @@
 ---
 id: ENGUI-188
 title: Run desktop Prompt Constructor v2 QA and preset source cleanup
-status: Inbox
+status: blocked
 assignee: []
 created_date: '2026-04-24 09:11'
 labels:
@@ -14,7 +14,7 @@ priority: medium
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Run QA and polish for the desktop Prompt Constructor v2 redesign after the new shell, section rail, preview flow, and active-slot helper surface land. Validate section navigation, section progress counts, active-slot suggestion behavior, preview modal behavior, save/load flows, and regressions around existing Prompt Constructor persistence. As part of the polish pass, clean up the current quick-preset source so it is no longer a fragile inline page constant and is ready to live in a dedicated preset/provider layer.
+This narrower QA and preset-cleanup pass is now superseded by the broader scene-template redesign captured in `docs/prompt-constructor-scene-template-v2-spec.md` and ENGUI-189 through ENGUI-196. Keep this ticket blocked unless the redesign is explicitly paused and the old desktop-only QA slice is revived.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
