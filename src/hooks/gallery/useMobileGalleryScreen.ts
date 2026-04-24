@@ -86,8 +86,10 @@ export function useMobileGalleryScreen() {
       return;
     }
 
-    const key = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
-    const saved = window.localStorage.getItem(key);
+    const scopedKey = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
+    const saved = window.localStorage.getItem(scopedKey)
+      || window.localStorage.getItem('engui.mobile.library.semanticFilter')
+      || window.localStorage.getItem('engui.rightPanel.gallery.semanticFilter');
     if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
       setSemanticFilter(saved);
     }
@@ -280,6 +282,8 @@ export function useMobileGalleryScreen() {
   useEffect(() => {
     if (typeof window === 'undefined' || !effectiveWorkspaceId || !prefsHydrated) return;
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
+    window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
+    window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
   }, [effectiveWorkspaceId, prefsHydrated, semanticFilter]);
 
   useEffect(() => {
