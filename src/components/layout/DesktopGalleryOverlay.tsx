@@ -139,7 +139,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
-  } = useMobileGalleryScreen();
+  } = useMobileGalleryScreen('desktop');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

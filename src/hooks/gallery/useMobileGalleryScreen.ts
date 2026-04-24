@@ -53,7 +53,7 @@ const PAGE_SIZE = 24;
 const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
 type MediaFilter = typeof TYPE_FILTERS[number];
 
-export function useMobileGalleryScreen() {
+export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile') {
   const { activeWorkspaceId, workspaces } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [loadedPages, setLoadedPages] = useState<Record<number, LoadedGalleryPage>>({});
@@ -87,9 +87,14 @@ export function useMobileGalleryScreen() {
     }
 
     const scopedKey = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
-    const saved = window.localStorage.getItem(scopedKey)
-      || window.localStorage.getItem('engui.mobile.library.semanticFilter')
-      || window.localStorage.getItem('engui.rightPanel.gallery.semanticFilter');
+    const mobileLegacyKey = 'engui.mobile.library.semanticFilter';
+    const desktopKey = 'engui.rightPanel.gallery.semanticFilter';
+    const candidates = surface === 'desktop'
+      ? [desktopKey, scopedKey, mobileLegacyKey]
+      : [scopedKey, mobileLegacyKey, desktopKey];
+    const saved = candidates
+      .map((key) => window.localStorage.getItem(key))
+      .find((value) => value === 'all' || value === 'common' || value === 'draft' || value === 'upscale');
     if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
       setSemanticFilter(saved);
     }
@@ -281,10 +286,13 @@ export function useMobileGalleryScreen() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !effectiveWorkspaceId || !prefsHydrated) return;
+    if (surface === 'desktop') {
+      window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
+      return;
+    }
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
     window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
-    window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
-  }, [effectiveWorkspaceId, prefsHydrated, semanticFilter]);
+  }, [effectiveWorkspaceId, prefsHydrated, semanticFilter, surface]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;

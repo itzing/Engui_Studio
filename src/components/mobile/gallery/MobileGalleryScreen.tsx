@@ -140,7 +140,7 @@ export default function MobileGalleryScreen() {
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
-  } = useMobileGalleryScreen();
+  } = useMobileGalleryScreen('mobile');
 
   const rowCount = Math.ceil(totalCount / 3);
   const rowVirtualizer = useVirtualizer({

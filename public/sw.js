@@ -1,4 +1,4 @@
-const CACHE_NAME = 'enguistudio-shell-v2';
+const CACHE_NAME = 'enguistudio-shell-v3';
 const APP_SHELL = [
   '/',
   '/m/create',

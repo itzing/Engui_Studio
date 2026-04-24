@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const SW_VERSION = '2026-04-20-1';
+const SW_VERSION = '2026-04-24-2';
 const SW_RELOAD_KEY = `engui:pwa:reloaded:${SW_VERSION}`;
 
 export function PWARegistration() {
