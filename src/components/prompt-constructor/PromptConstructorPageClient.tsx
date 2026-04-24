@@ -379,17 +379,21 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     window.requestAnimationFrame(() => titleInputRef.current?.focus());
   };
 
-  const applyLibraryBlock = (block: PromptBlock, mode: 'replace' | 'append') => {
+  const applyTextToActiveSlot = (content: string, mode: 'replace' | 'append') => {
     setDraft((current) => {
       const existing = getSlotValue(current.state, activeSlotId);
       const nextValue = mode === 'replace'
-        ? block.content
-        : [existing.trim(), block.content.trim()].filter(Boolean).join(', ');
+        ? content
+        : [existing.trim(), content.trim()].filter(Boolean).join(', ');
       return {
         ...current,
         state: setSlotValue(current.state, activeSlotId, nextValue),
       };
     });
+  };
+
+  const applyLibraryBlock = (block: PromptBlock, mode: 'replace' | 'append') => {
+    applyTextToActiveSlot(block.content, mode);
   };
 
   const handleCopy = async () => {
@@ -571,7 +575,6 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                 const slot = template.slots.find((entry) => entry.id === slotId);
                                 if (!slot) return null;
                                 const isActive = activeSlotId === slot.id;
-                                const presetChips = slotPresetChips[slot.id] || [];
                                 return (
                                   <label key={slot.id} className="block rounded-lg border border-white/10 bg-white/5 p-3">
                                     <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
@@ -592,28 +595,6 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                       placeholder={slot.placeholder || slot.label}
                                       className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
                                     />
-                                    {presetChips.length > 0 ? (
-                                      <div className="mt-2 flex flex-wrap gap-2">
-                                        {presetChips.map((chip) => (
-                                          <button
-                                            key={chip}
-                                            type="button"
-                                            onMouseDown={(event) => event.preventDefault()}
-                                            onClick={() => {
-                                              setActiveSlotId(slot.id);
-                                              setFocusedSectionId(section.id);
-                                              setDraft((current) => ({
-                                                ...current,
-                                                state: setSlotValue(current.state, slot.id, chip),
-                                              }));
-                                            }}
-                                            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${isActive ? 'border-cyan-400/25 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20' : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10'}`}
-                                          >
-                                            {chip}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    ) : null}
                                   </label>
                                 );
                               })}
@@ -643,86 +624,106 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
               <CardHeader className="border-b border-white/10 pb-4">
-                <CardTitle className="text-lg">Editor Sidecar</CardTitle>
-                <div className="text-sm text-white/55">Document utilities, active-slot helpers, and constraints without a permanent prompt output panel.</div>
+                <CardTitle className="text-lg">Active Slot Helper</CardTitle>
+                <div className="text-sm text-white/55">Everything on this side follows the currently active slot so you can insert ideas without leaving the editing context.</div>
               </CardHeader>
-              <CardContent className="min-h-0 flex-1 overflow-hidden p-4">
-                <Tabs defaultValue="library" className="flex h-full flex-col">
-                  <TabsList className="w-full justify-start bg-white/5">
-                    <TabsTrigger value="library">Library</TabsTrigger>
-                    <TabsTrigger value="constraints">Constraints</TabsTrigger>
-                    <TabsTrigger value="documents">Documents</TabsTrigger>
-                  </TabsList>
+              <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                    <div className="mb-2 text-xs uppercase tracking-[0.16em] text-cyan-200/70">Active Slot</div>
+                    <div className="text-sm font-medium text-cyan-100">{template.slots.find((slot) => slot.id === activeSlotId)?.label || activeSlotId}</div>
+                    <div className="mt-1 text-xs text-cyan-200/70">Section: {template.slots.find((slot) => slot.id === activeSlotId)?.sectionId || activeSectionId}</div>
+                  </div>
 
-                  <TabsContent value="library" className="min-h-0 flex-1 overflow-y-auto pr-1">
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
-                        <div className="mb-2 text-xs uppercase tracking-[0.16em] text-cyan-200/70">Active Slot</div>
-                        <div className="text-sm text-cyan-200">{template.slots.find((slot) => slot.id === activeSlotId)?.label || activeSlotId}</div>
+                  <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                    <div className="mb-3 text-xs uppercase tracking-[0.18em] text-white/45">Quick Presets</div>
+                    {(slotPresetChips[activeSlotId] || []).length === 0 ? (
+                      <div className="text-sm text-white/60">No quick presets for this slot yet.</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {(slotPresetChips[activeSlotId] || []).map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => applyTextToActiveSlot(chip, 'replace')}
+                            className="rounded-full border border-cyan-400/25 bg-cyan-400/12 px-3 py-1.5 text-xs text-cyan-100 transition-colors hover:bg-cyan-400/20"
+                          >
+                            {chip}
+                          </button>
+                        ))}
                       </div>
+                    )}
+                  </div>
 
-                      <Input
-                        value={libraryQuery}
-                        onChange={(event) => setLibraryQuery(event.target.value)}
-                        placeholder="Search library blocks"
-                        className="border-white/15 bg-white/5 text-white"
-                      />
-
-                      {isLibraryLoading ? (
-                        <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
-                      ) : libraryBlocks.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
-                          No library blocks matched this slot yet.
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {libraryBlocks.map((block) => (
-                            <div key={block.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium text-white">{block.label}</div>
-                                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{block.source} · {block.category}</div>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <Button type="button" variant="outline" size="sm" onClick={() => applyLibraryBlock(block, 'append')} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                                    Append
-                                  </Button>
-                                  <Button type="button" size="sm" onClick={() => applyLibraryBlock(block, 'replace')}>
-                                    Replace
-                                  </Button>
-                                </div>
-                              </div>
-                              <div className="mt-3 text-sm leading-6 text-white/80">{block.content}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/45">Library Suggestions</div>
+                      <div className="text-xs text-white/45">Insert into current slot</div>
                     </div>
-                  </TabsContent>
 
-                  <TabsContent value="constraints" className="min-h-0 flex-1 overflow-y-auto pr-1">
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-white/10 bg-black/10 p-3">
-                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-white/45">Warnings</div>
-                        {warnings.length === 0 && saveWarnings.length === 0 ? (
-                          <div className="text-sm text-emerald-300">No validation warnings.</div>
-                        ) : (
-                          <ul className="space-y-1 text-sm text-amber-300">
-                            {warnings.map((warning) => (
-                              <li key={warning.id}>• {warning.message}</li>
-                            ))}
-                            {saveWarnings.map((warning, index) => (
-                              <li key={`save-warning-${index}`}>• {warning}</li>
-                            ))}
-                          </ul>
-                        )}
+                    <Input
+                      value={libraryQuery}
+                      onChange={(event) => setLibraryQuery(event.target.value)}
+                      placeholder="Search library blocks"
+                      className="mb-3 border-white/15 bg-white/5 text-white"
+                    />
+
+                    {isLibraryLoading ? (
+                      <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
+                    ) : libraryBlocks.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                        No library blocks matched this slot yet.
                       </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {libraryBlocks.map((block) => (
+                          <div key={block.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-white">{block.label}</div>
+                                <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{block.source} · {block.category}</div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => applyLibraryBlock(block, 'append')} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                  Append
+                                </Button>
+                                <Button type="button" size="sm" onClick={() => applyLibraryBlock(block, 'replace')}>
+                                  Replace
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="mt-3 text-sm leading-6 text-white/80">{block.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-white/45">Warnings</div>
+                    {warnings.length === 0 && saveWarnings.length === 0 ? (
+                      <div className="text-sm text-emerald-300">No validation warnings.</div>
+                    ) : (
+                      <ul className="space-y-1 text-sm text-amber-300">
+                        {warnings.map((warning) => (
+                          <li key={warning.id}>• {warning.message}</li>
+                        ))}
+                        {saveWarnings.map((warning, index) => (
+                          <li key={`save-warning-${index}`}>• {warning}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                    <div className="mb-3 text-xs uppercase tracking-[0.18em] text-white/45">Constraints</div>
+                    <div className="space-y-3">
                       {promptConstructorConstraints
                         .filter((constraint) => constraint.applicableTemplateIds.includes(draft.templateId))
                         .map((constraint) => {
                           const checked = draft.enabledConstraintIds.includes(constraint.id);
                           return (
-                            <label key={constraint.id} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                            <label key={constraint.id} className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -742,40 +743,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                           );
                         })}
                     </div>
-                  </TabsContent>
-
-                  <TabsContent value="documents" className="min-h-0 flex-1 overflow-y-auto pr-1">
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white/65">
-                        Current document management moved into the top toolbar so the main layout can stay focused on editing.
-                      </div>
-                      {isLoading ? (
-                        <div className="text-sm text-white/60">Loading...</div>
-                      ) : filteredDocuments.length === 0 ? (
-                        <div className="text-sm text-white/60">No saved prompt documents yet.</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {filteredDocuments.map((document) => (
-                            <button
-                              key={document.id}
-                              type="button"
-                              onClick={() => selectDocument(document)}
-                              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${document.id === draft.id ? 'border-cyan-400 bg-cyan-500/20 text-cyan-100' : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10'}`}
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">{document.title}</div>
-                                <div className="mt-1 text-xs text-white/45">Updated {formatDate(document.updatedAt)}</div>
-                              </div>
-                              <div className="ml-3 shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
-                                v{document.templateVersion}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
