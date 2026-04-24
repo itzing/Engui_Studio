@@ -326,10 +326,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [mobile, mobileMode]);
 
     useEffect(() => {
-        const previousMode = previousPanelModeRef.current;
         previousPanelModeRef.current = panelMode;
-        if (previousMode !== 'gallery' && panelMode === 'gallery') {
-            centerGallerySelectionOnEntryRef.current = true;
+        if (panelMode === 'gallery') {
+            centerGallerySelectionOnEntryRef.current = false;
             galleryEntryRestoreRequestRef.current = null;
         }
     }, [panelMode]);
@@ -1013,11 +1012,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (typeof window === 'undefined' || !activeWorkspaceId || !galleryRestoreHydratedRef.current) return;
-        const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
-        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current || null;
-        if (assetId) {
-            window.localStorage.setItem(storageKey, assetId);
-        }
+        window.localStorage.removeItem(`engui.gallery.lastViewed.${activeWorkspaceId}`);
     }, [activeWorkspaceId, gallerySelectedAssetId]);
 
     useEffect(() => {
@@ -1081,29 +1076,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [scrollGalleryAssetIntoView]);
 
     useEffect(() => {
-        if (panelMode !== 'gallery' || !centerGallerySelectionOnEntryRef.current) return;
-        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current;
-        if (!assetId) {
-            centerGallerySelectionOnEntryRef.current = false;
-            galleryEntryRestoreRequestRef.current = null;
-            return;
-        }
-
-        const centered = scrollGalleryAssetIntoView(assetId, 'center');
-        if (centered) {
-            centerGallerySelectionOnEntryRef.current = false;
-            galleryEntryRestoreRequestRef.current = null;
-            return;
-        }
-
-        if (galleryEntryRestoreRequestRef.current === assetId || galleryRestoreInProgressRef.current) {
-            return;
-        }
-
-        galleryEntryRestoreRequestRef.current = assetId;
-        galleryRestoreInProgressRef.current = true;
-        void fetchGalleryAssets(1, { focusAssetId: assetId });
-    }, [fetchGalleryAssets, gallerySelectedAssetId, panelMode, scrollGalleryAssetIntoView]);
+        if (panelMode !== 'gallery') return;
+        centerGallerySelectionOnEntryRef.current = false;
+        galleryEntryRestoreRequestRef.current = null;
+    }, [panelMode]);
 
     const loadPreviousGalleryPages = useCallback(() => {
         if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;

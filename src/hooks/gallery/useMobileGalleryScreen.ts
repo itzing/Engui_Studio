@@ -267,8 +267,8 @@ export function useMobileGalleryScreen() {
   }, [effectiveWorkspaceId, semanticFilter]);
 
   useEffect(() => {
-    if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
-    window.localStorage.setItem(storageKey, selectedAssetId);
+    if (!storageKey || typeof window === 'undefined') return;
+    window.localStorage.removeItem(storageKey);
   }, [selectedAssetId, storageKey]);
 
   useEffect(() => {
