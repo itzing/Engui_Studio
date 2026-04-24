@@ -339,10 +339,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             galleryEntryRestoreRequestRef.current = null;
             if (!mobile && activeWorkspaceId && galleryPrefsHydrated) {
                 desktopGalleryDebugLoggedRef.current = true;
-                void fetchGalleryAssets(1, { debugSource: 'desktop-initial-open' });
             }
         }
-    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated, mobile, panelMode]);
+    }, [activeWorkspaceId, galleryPrefsHydrated, mobile, panelMode]);
 
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined' || !galleryPrefsHydrated) return;
@@ -681,6 +680,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             setIsLoadingPreviousGallery(false);
         }
     }, [activeWorkspaceId, applyGalleryImageRetention, fetchGalleryAssetsPage]);
+
+    useEffect(() => {
+        if (!desktopGalleryDebugLoggedRef.current) return;
+        desktopGalleryDebugLoggedRef.current = false;
+        void fetchGalleryAssets(1, { debugSource: 'desktop-initial-open' });
+    }, [fetchGalleryAssets]);
 
     useEffect(() => {
         setSelectedJob(null);
