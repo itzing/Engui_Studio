@@ -598,7 +598,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const fetchGalleryAssets = useCallback(async (
         page: number,
-        options?: { append?: boolean; prepend?: boolean; focusAssetId?: string | null; preserveScroll?: boolean }
+        options?: { append?: boolean; prepend?: boolean; focusAssetId?: string | null; preserveScroll?: boolean; debugSource?: 'desktop-initial-open' | 'desktop-refresh' | null }
     ) => {
         if (!activeWorkspaceId) return null;
 
@@ -618,7 +618,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         const previousScrollTop = prepend && options?.preserveScroll && container ? container.scrollTop : null;
 
         try {
-            const result = await fetchGalleryAssetsPage(page, { focusAssetId: options?.focusAssetId });
+            const result = await fetchGalleryAssetsPage(page, { focusAssetId: options?.focusAssetId, debugSource: options?.debugSource ?? null });
             if (!result) return null;
 
             const resolvedPage = result.page;
@@ -725,9 +725,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             lastViewedGalleryAssetIdRef.current = savedAssetId;
             setGallerySelectedAssetId(savedAssetId);
         }
-        void fetchGalleryAssets(1);
         galleryRestoreHydratedRef.current = true;
-    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated]);
+        if (mobile || panelMode === 'gallery') {
+            void fetchGalleryAssets(1, { debugSource: !mobile && panelMode === 'gallery' ? 'desktop-initial-open' : undefined });
+        }
+    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated, mobile, panelMode]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
