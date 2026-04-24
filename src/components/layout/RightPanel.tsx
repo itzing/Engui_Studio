@@ -132,6 +132,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [debouncedGallerySearchQuery, setDebouncedGallerySearchQuery] = useState('');
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [galleryPrefsHydrated, setGalleryPrefsHydrated] = useState(false);
+    const desktopGalleryDebugLoggedRef = useRef(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [galleryAnchorPage, setGalleryAnchorPage] = useState(1);
@@ -336,8 +337,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (previousMode !== 'gallery' && panelMode === 'gallery') {
             centerGallerySelectionOnEntryRef.current = true;
             galleryEntryRestoreRequestRef.current = null;
+            if (!mobile && activeWorkspaceId && galleryPrefsHydrated) {
+                desktopGalleryDebugLoggedRef.current = true;
+                void fetchGalleryAssets(1, { debugSource: 'desktop-initial-open' });
+            }
         }
-    }, [panelMode]);
+    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated, mobile, panelMode]);
 
     useEffect(() => {
         if (!isMounted || typeof window === 'undefined' || !galleryPrefsHydrated) return;
@@ -715,7 +720,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             lastViewedGalleryAssetIdRef.current = savedAssetId;
             setGallerySelectedAssetId(savedAssetId);
         }
-        void fetchGalleryAssets(1, { debugSource: 'desktop-initial-open' });
+        void fetchGalleryAssets(1);
         galleryRestoreHydratedRef.current = true;
     }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated]);
 
