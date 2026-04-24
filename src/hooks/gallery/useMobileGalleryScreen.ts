@@ -77,6 +77,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const hydratedSelectionRef = useRef(false);
 
   const storageKey = effectiveWorkspaceId ? `engui.gallery.lastViewed.${effectiveWorkspaceId}` : null;
+  const desktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.${effectiveWorkspaceId}` : null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,18 +89,19 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
 
     const scopedKey = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
     const mobileLegacyKey = 'engui.mobile.library.semanticFilter';
-    const desktopKey = 'engui.rightPanel.gallery.semanticFilter';
+    const desktopPanelKey = 'engui.rightPanel.gallery.semanticFilter';
     const candidates = surface === 'desktop'
-      ? [desktopKey, scopedKey, mobileLegacyKey]
-      : [scopedKey, mobileLegacyKey, desktopKey];
+      ? [desktopOverlayKey, scopedKey, mobileLegacyKey, desktopPanelKey]
+      : [scopedKey, mobileLegacyKey, desktopOverlayKey, desktopPanelKey];
     const saved = candidates
+      .filter((key): key is string => Boolean(key))
       .map((key) => window.localStorage.getItem(key))
       .find((value) => value === 'all' || value === 'common' || value === 'draft' || value === 'upscale');
     if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
       setSemanticFilter(saved);
     }
     setPrefsHydrated(true);
-  }, [effectiveWorkspaceId]);
+  }, [desktopOverlayKey, effectiveWorkspaceId, surface]);
 
   const loadedAssets = useMemo(() => {
     const entries = Object.values(loadedPages)
@@ -287,12 +289,14 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   useEffect(() => {
     if (typeof window === 'undefined' || !effectiveWorkspaceId || !prefsHydrated) return;
     if (surface === 'desktop') {
-      window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
+      if (desktopOverlayKey) {
+        window.localStorage.setItem(desktopOverlayKey, semanticFilter);
+      }
       return;
     }
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
     window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
-  }, [effectiveWorkspaceId, prefsHydrated, semanticFilter, surface]);
+  }, [desktopOverlayKey, effectiveWorkspaceId, prefsHydrated, semanticFilter, surface]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
