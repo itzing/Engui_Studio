@@ -128,6 +128,7 @@ model Workspace {
   galleryAssets GalleryAsset[]
   posePresets PosePreset[]
   scenePresets ScenePreset[]
+  promptDocuments PromptDocument[]
   loras       LoRA[]
   
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
@@ -377,4 +378,24 @@ model SceneCharacterBinding {
   @@index([scenePresetId, slot])
   @@index([characterPresetId])
   @@map("scene_character_bindings")
+}
+
+model PromptDocument {
+  id                   String    @id @default(uuid())
+  workspaceId          String
+  title                String
+  templateId           String
+  templateVersion      Int
+  stateJson            String
+  enabledConstraintIds String    @default("[]")
+  status               String    @default("active")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@index([workspaceId, templateId, status, updatedAt(sort: Desc)])
+  @@index([updatedAt(sort: Desc)])
+  @@map("prompt_documents")
 }

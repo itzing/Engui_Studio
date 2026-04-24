@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon, HandRaisedIcon, RectangleGroupIcon } from '@heroicons/react/24/outline';
+import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon, HandRaisedIcon, RectangleGroupIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
 import AudioGenerationForm from '../forms/AudioGenerationForm';
@@ -14,6 +14,7 @@ import CharacterManagerPanel from '../characters/CharacterManagerPanel';
 import VibeManagerPanel from '../vibes/VibeManagerPanel';
 import PoseManagerPanel from '../poses/PoseManagerPanel';
 import SceneManagerPanel from '../scenes/SceneManagerPanel';
+import PromptConstructorPageClient from '../prompt-constructor/PromptConstructorPageClient';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { getActiveMode, setActiveMode } from '@/lib/createDrafts';
 import { CREATE_MODE_EVENT } from '@/lib/create/createModeEvents';
@@ -46,6 +47,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
     const [isVibeManagerOpen, setIsVibeManagerOpen] = useState(false);
     const [isPoseManagerOpen, setIsPoseManagerOpen] = useState(false);
     const [isSceneManagerOpen, setIsSceneManagerOpen] = useState(false);
+    const [isPromptConstructorOpen, setIsPromptConstructorOpen] = useState(false);
 
     useEffect(() => {
         const savedMode = getActiveMode();
@@ -186,6 +188,17 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                                 >
                                     <RectangleGroupIcon className="w-4 h-4" />
                                     Scenes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPromptConstructorOpen(true)}
+                                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 ${isPromptConstructorOpen
+                                        ? 'bg-muted text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                        }`}
+                                >
+                                    <PencilSquareIcon className="w-4 h-4" />
+                                    Prompts
                                 </button>
                             </>
                         )}
@@ -328,6 +341,41 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                     </DialogHeader>
                     <div className="flex-1 overflow-y-auto p-5">
                         <SceneManagerPanel onRequestClose={() => setIsSceneManagerOpen(false)} />
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isPromptConstructorOpen} onOpenChange={(open) => {
+                if (open) {
+                    setIsPromptConstructorOpen(true);
+                }
+            }}>
+                <DialogContent
+                    className="w-[96vw] max-w-[1800px] h-[94vh] p-0 gap-0 overflow-hidden flex flex-col [&>button]:hidden"
+                    onEscapeKeyDown={(event) => event.preventDefault()}
+                    onPointerDownOutside={(event) => event.preventDefault()}
+                    onInteractOutside={(event) => event.preventDefault()}
+                >
+                    <DialogHeader className="border-b border-border px-5 py-4 pr-14 space-y-1 text-left">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <DialogTitle className="text-base">Prompt Constructor</DialogTitle>
+                                <DialogDescription className="text-xs">
+                                    Build reusable single-character prompt documents from structured slots, constraints, and library blocks.
+                                </DialogDescription>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsPromptConstructorOpen(false)}
+                                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                                <XMarkIcon className="h-4 w-4" />
+                                Close
+                            </button>
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-hidden p-5">
+                        <PromptConstructorPageClient embedded />
                     </div>
                 </DialogContent>
             </Dialog>

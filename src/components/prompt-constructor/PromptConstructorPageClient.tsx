@@ -1,0 +1,689 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowPathIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/toast';
+import { useStudio } from '@/lib/context/StudioContext';
+import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
+import { promptConstructorConstraints } from '@/lib/prompt-constructor/constraints';
+import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
+import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
+import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
+import type { PromptDocument, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
+
+const template = getPromptTemplate('single_character_scene_v1');
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function cloneDocument(document: PromptDocument): PromptDocument {
+  return {
+    ...document,
+    id: 'local-draft',
+    title: document.title.trim() ? `${document.title.trim()} Copy` : 'Untitled Prompt Copy',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function makeLocalDraft(workspaceId: string | null): PromptDocument {
+  const initialState = template?.createInitialState() ?? {
+    character: { appearance: '', outfit: '', expression: '', pose: '' },
+    action: { mainAction: '' },
+    composition: { shotType: '', cameraAngle: '', framing: '' },
+    environment: { location: '', timeOfDay: '', lighting: '', background: '' },
+    style: { style: '', detailLevel: '', palette: '', mood: '' },
+  };
+
+  return {
+    id: 'local-draft',
+    workspaceId: workspaceId ?? '',
+    title: 'Untitled Prompt',
+    templateId: 'single_character_scene_v1',
+    templateVersion: 1,
+    state: initialState,
+    enabledConstraintIds: promptConstructorConstraints
+      .filter((constraint) => constraint.applicableTemplateIds.includes('single_character_scene_v1'))
+      .map((constraint) => constraint.id),
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function setSlotValue(state: SingleCharacterPromptState, slotId: string, value: string): SingleCharacterPromptState {
+  switch (slotId) {
+    case 'appearance': return { ...state, character: { ...state.character, appearance: value } };
+    case 'outfit': return { ...state, character: { ...state.character, outfit: value } };
+    case 'expression': return { ...state, character: { ...state.character, expression: value } };
+    case 'pose': return { ...state, character: { ...state.character, pose: value } };
+    case 'mainAction': return { ...state, action: { ...state.action, mainAction: value } };
+    case 'shotType': return { ...state, composition: { ...state.composition, shotType: value } };
+    case 'cameraAngle': return { ...state, composition: { ...state.composition, cameraAngle: value } };
+    case 'framing': return { ...state, composition: { ...state.composition, framing: value } };
+    case 'location': return { ...state, environment: { ...state.environment, location: value } };
+    case 'timeOfDay': return { ...state, environment: { ...state.environment, timeOfDay: value } };
+    case 'lighting': return { ...state, environment: { ...state.environment, lighting: value } };
+    case 'background': return { ...state, environment: { ...state.environment, background: value } };
+    case 'style': return { ...state, style: { ...state.style, style: value } };
+    case 'detailLevel': return { ...state, style: { ...state.style, detailLevel: value } };
+    case 'palette': return { ...state, style: { ...state.style, palette: value } };
+    case 'mood': return { ...state, style: { ...state.style, mood: value } };
+    default: return state;
+  }
+}
+
+function getSlotValue(state: SingleCharacterPromptState, slotId: string): string {
+  switch (slotId) {
+    case 'appearance': return state.character.appearance;
+    case 'outfit': return state.character.outfit;
+    case 'expression': return state.character.expression;
+    case 'pose': return state.character.pose;
+    case 'mainAction': return state.action.mainAction;
+    case 'shotType': return state.composition.shotType;
+    case 'cameraAngle': return state.composition.cameraAngle;
+    case 'framing': return state.composition.framing;
+    case 'location': return state.environment.location;
+    case 'timeOfDay': return state.environment.timeOfDay;
+    case 'lighting': return state.environment.lighting;
+    case 'background': return state.environment.background;
+    case 'style': return state.style.style;
+    case 'detailLevel': return state.style.detailLevel;
+    case 'palette': return state.style.palette;
+    case 'mood': return state.style.mood;
+    default: return '';
+  }
+}
+
+const slotPresetChips: Record<string, string[]> = {
+  appearance: ['young woman', 'adult man', 'elegant heroine', 'soft facial features'],
+  outfit: ['light summer dress', 'tailored black suit', 'casual streetwear', 'flowing white blouse'],
+  expression: ['soft smile', 'calm neutral expression', 'confident look', 'wistful gaze'],
+  pose: ['standing naturally', 'sitting with one leg bent', 'turning slightly toward camera', 'hands loosely folded'],
+  mainAction: ['adjusting her hair', 'looking out the window', 'holding a cup gently', 'walking slowly forward'],
+  shotType: ['close-up', 'medium shot', 'full body shot', 'portrait framing'],
+  cameraAngle: ['eye level', 'slightly low angle', 'slightly high angle', 'three-quarter view'],
+  framing: ['balanced framing', 'centered subject', 'tight portrait crop', 'subject slightly off-center'],
+  location: ['summer kitchen', 'city street', 'quiet bedroom', 'train station platform'],
+  timeOfDay: ['morning', 'late afternoon', 'golden hour', 'night'],
+  lighting: ['soft window light', 'warm sunset light', 'cinematic moody light', 'diffused natural light'],
+  background: ['simple domestic background', 'blurred city lights', 'minimal studio backdrop', 'detailed interior background'],
+  style: ['cinematic realism', 'high-end fashion editorial', 'stylized anime realism', 'painterly illustration'],
+  detailLevel: ['high detail', 'very high detail', 'clean detail', 'refined texture detail'],
+  palette: ['warm muted palette', 'cool desaturated palette', 'pastel palette', 'rich cinematic palette'],
+  mood: ['intimate nostalgic mood', 'quiet melancholic mood', 'confident elegant mood', 'dreamy romantic mood'],
+};
+
+export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
+  const { activeWorkspaceId } = useStudio();
+  const { showToast } = useToast();
+  const [documents, setDocuments] = useState<PromptDocument[]>([]);
+  const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeSlotId, setActiveSlotId] = useState<string>('appearance');
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryBlocks, setLibraryBlocks] = useState<PromptBlock[]>([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [documentQuery, setDocumentQuery] = useState('');
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDraft((current) => current.workspaceId ? current : makeLocalDraft(activeWorkspaceId));
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=single_character_scene_v1`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
+        if (cancelled) return;
+        const items = Array.isArray(data.documents) ? data.documents as PromptDocument[] : [];
+        setDocuments(items);
+        if (items.length > 0 && draft.id === 'local-draft') {
+          setDraft(items[0]);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          console.warn('Prompt documents not available yet:', error);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setIsLibraryLoading(true);
+      try {
+        const blocks = await loadPromptBlocks({
+          slotId: activeSlotId,
+          query: libraryQuery,
+          workspaceId: activeWorkspaceId,
+        });
+        if (!cancelled) {
+          setLibraryBlocks(blocks);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load prompt blocks:', error);
+          setLibraryBlocks([]);
+        }
+      } finally {
+        if (!cancelled) setIsLibraryLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSlotId, activeWorkspaceId, libraryQuery]);
+
+  const draftFingerprint = useMemo(() => JSON.stringify({
+    title: draft.title,
+    state: draft.state,
+    enabledConstraintIds: [...draft.enabledConstraintIds].sort(),
+  }), [draft.enabledConstraintIds, draft.state, draft.title]);
+
+  const persistedFingerprint = useMemo(() => {
+    const persisted = documents.find((item) => item.id === draft.id);
+    if (!persisted) return null;
+    return JSON.stringify({
+      title: persisted.title,
+      state: persisted.state,
+      enabledConstraintIds: [...persisted.enabledConstraintIds].sort(),
+    });
+  }, [documents, draft.id]);
+
+  const isDirty = draft.id === 'local-draft' || persistedFingerprint !== draftFingerprint;
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  const filteredDocuments = useMemo(() => {
+    const query = documentQuery.trim().toLowerCase();
+    return documents.filter((document) => {
+      if (!query) return true;
+      return `${document.title} ${document.templateId}`.toLowerCase().includes(query);
+    });
+  }, [documentQuery, documents]);
+
+  const renderedPrompt = useMemo(() => {
+    if (!template) return '';
+    return template.render(draft.state, resolveConstraintSnippets(draft.enabledConstraintIds, draft.templateId));
+  }, [draft.enabledConstraintIds, draft.state, draft.templateId]);
+
+  const warnings = useMemo(() => {
+    if (!template) return [];
+    const issues = template.validate(draft.state, resolveConstraintSnippets(draft.enabledConstraintIds, draft.templateId));
+    if (!draft.title.trim()) {
+      issues.unshift({ id: 'missing-title', level: 'warning', message: 'Document title is empty.' });
+    }
+    return issues;
+  }, [draft.enabledConstraintIds, draft.state, draft.title, draft.templateId]);
+
+  const reloadDocuments = async (preferredId?: string) => {
+    if (!activeWorkspaceId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=single_character_scene_v1`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
+      const items = Array.isArray(data.documents) ? data.documents as PromptDocument[] : [];
+      setDocuments(items);
+      if (preferredId) {
+        const match = items.find((item) => item.id === preferredId);
+        if (match) setDraft(match);
+      }
+    } catch (error) {
+      console.warn('Failed to reload prompt documents:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const selectDocument = (next: PromptDocument) => {
+    if (isDirty && draft.id !== next.id) {
+      const confirmed = window.confirm('You have unsaved changes in the current prompt document. Switch documents anyway?');
+      if (!confirmed) return;
+    }
+    setDraft(next);
+    setSaveWarnings([]);
+  };
+
+  const handleSave = async () => {
+    if (!activeWorkspaceId) {
+      showToast('No active workspace available', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        workspaceId: activeWorkspaceId,
+        title: draft.title,
+        templateId: draft.templateId,
+        templateVersion: draft.templateVersion,
+        state: draft.state,
+        enabledConstraintIds: draft.enabledConstraintIds,
+      };
+
+      const response = await fetch(draft.id === 'local-draft' ? '/api/prompt-documents' : `/api/prompt-documents/${draft.id}`, {
+        method: draft.id === 'local-draft' ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Failed to save prompt document');
+
+      const next = data.document as PromptDocument;
+      setDocuments((current) => {
+        const rest = current.filter((item) => item.id !== next.id);
+        return [next, ...rest];
+      });
+      setDraft(next);
+      setSaveWarnings(Array.isArray(data.warnings) ? data.warnings.map((warning: { message?: string }) => warning?.message || '').filter(Boolean) : []);
+      showToast('Prompt document saved', 'success');
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to save prompt document', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCreateNew = () => {
+    if (isDirty) {
+      const confirmed = window.confirm('Discard current unsaved changes and create a new prompt document?');
+      if (!confirmed) return;
+    }
+    setDraft(makeLocalDraft(activeWorkspaceId));
+    setSaveWarnings([]);
+    window.requestAnimationFrame(() => titleInputRef.current?.focus());
+  };
+
+  const handleDuplicate = () => {
+    setDraft(cloneDocument(draft));
+    setSaveWarnings([]);
+    window.requestAnimationFrame(() => titleInputRef.current?.focus());
+  };
+
+  const applyLibraryBlock = (block: PromptBlock, mode: 'replace' | 'append') => {
+    setDraft((current) => {
+      const existing = getSlotValue(current.state, activeSlotId);
+      const nextValue = mode === 'replace'
+        ? block.content
+        : [existing.trim(), block.content.trim()].filter(Boolean).join(', ');
+      return {
+        ...current,
+        state: setSlotValue(current.state, activeSlotId, nextValue),
+      };
+    });
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(renderedPrompt);
+      showToast('Prompt copied', 'success');
+    } catch {
+      showToast('Failed to copy prompt', 'error');
+    }
+  };
+
+  if (!template) {
+    return <div className="p-6 text-white">Prompt template is unavailable.</div>;
+  }
+
+  return (
+    <>
+      <div className={`flex ${embedded ? 'h-full min-h-0' : 'h-screen min-h-screen'} bg-[#0b1020] text-white`}>
+        <div className="flex w-full flex-col gap-4 p-4">
+          <Card className="border-white/10 bg-white/5">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-white">Prompt Constructor v2</div>
+                  <div className="mt-1 text-sm text-white/60">Desktop shell focused on slot editing, document actions, and on-demand prompt preview.</div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-white/55">
+                  <span className={`inline-flex items-center rounded-full px-2 py-1 ${isDirty ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
+                    {isDirty ? 'Unsaved changes' : 'Saved'}
+                  </span>
+                  <span>{draft.id === 'local-draft' ? 'New document' : `Updated ${formatDate(draft.updatedAt)}`}</span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-[minmax(260px,320px)_minmax(260px,1fr)_auto]">
+                <div className="space-y-2">
+                  <div className="text-xs uppercase tracking-[0.16em] text-white/45">Document</div>
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                    <Input
+                      value={documentQuery}
+                      onChange={(event) => setDocumentQuery(event.target.value)}
+                      placeholder="Search documents"
+                      className="h-10 border-white/15 bg-white/5 pl-9 text-white"
+                    />
+                  </div>
+                  <select
+                    value={draft.id === 'local-draft' ? '' : draft.id}
+                    onChange={(event) => {
+                      const nextId = event.target.value;
+                      const next = documents.find((document) => document.id === nextId);
+                      if (next) selectDocument(next);
+                    }}
+                    className="h-10 w-full rounded-md border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                  >
+                    <option value="" className="bg-slate-900">Current draft</option>
+                    {filteredDocuments.map((document) => (
+                      <option key={document.id} value={document.id} className="bg-slate-900">
+                        {document.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs uppercase tracking-[0.16em] text-white/45">Title</div>
+                  <Input
+                    ref={titleInputRef}
+                    value={draft.title}
+                    onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="Prompt document title"
+                    className="h-10 border-white/15 bg-white/5 text-white"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-end gap-2 xl:justify-end">
+                  <Button variant="outline" size="sm" onClick={() => void reloadDocuments(draft.id !== 'local-draft' ? draft.id : undefined)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                    <ArrowPathIcon className={`mr-1 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDuplicate} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                    <DocumentDuplicateIcon className="mr-1 h-4 w-4" />
+                    Duplicate
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleCreateNew} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                    <PlusIcon className="mr-1 h-4 w-4" />
+                    New
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                    <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
+                    Preview
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={isSaving || !activeWorkspaceId}>
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(380px,0.85fr)]">
+            <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
+              <CardHeader className="border-b border-white/10 pb-4">
+                <CardTitle className="text-lg">Slots Editor</CardTitle>
+                <div className="text-sm text-white/55">Main workspace for structured slot editing. The final prompt lives behind Preview now.</div>
+              </CardHeader>
+              <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
+                <div className="space-y-5">
+                  {template.sections.map((section) => (
+                    <div key={section.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="mb-3 text-sm font-medium text-white">{section.label}</div>
+                      <div className="space-y-3">
+                        {section.slotIds.map((slotId) => {
+                          const slot = template.slots.find((entry) => entry.id === slotId);
+                          if (!slot) return null;
+                          const isActive = activeSlotId === slot.id;
+                          const presetChips = slotPresetChips[slot.id] || [];
+                          return (
+                            <label key={slot.id} className="block">
+                              <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
+                                <span>{slot.label}</span>
+                                {isActive ? <span className="text-cyan-300">active</span> : null}
+                              </div>
+                              <Input
+                                value={getSlotValue(draft.state, slot.id)}
+                                onFocus={() => setActiveSlotId(slot.id)}
+                                onChange={(event) => {
+                                  setActiveSlotId(slot.id);
+                                  setDraft((current) => ({ ...current, state: setSlotValue(current.state, slot.id, event.target.value) }));
+                                }}
+                                placeholder={slot.placeholder || slot.label}
+                                className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
+                              />
+                              {presetChips.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {presetChips.map((chip) => (
+                                    <button
+                                      key={chip}
+                                      type="button"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => {
+                                        setActiveSlotId(slot.id);
+                                        setDraft((current) => ({
+                                          ...current,
+                                          state: setSlotValue(current.state, slot.id, chip),
+                                        }));
+                                      }}
+                                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${isActive ? 'border-cyan-400/25 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20' : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10'}`}
+                                    >
+                                      {chip}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
+              <CardHeader className="border-b border-white/10 pb-4">
+                <CardTitle className="text-lg">Editor Sidecar</CardTitle>
+                <div className="text-sm text-white/55">Document utilities, active-slot helpers, and constraints without a permanent prompt output panel.</div>
+              </CardHeader>
+              <CardContent className="min-h-0 flex-1 overflow-hidden p-4">
+                <Tabs defaultValue="library" className="flex h-full flex-col">
+                  <TabsList className="w-full justify-start bg-white/5">
+                    <TabsTrigger value="library">Library</TabsTrigger>
+                    <TabsTrigger value="constraints">Constraints</TabsTrigger>
+                    <TabsTrigger value="documents">Documents</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="library" className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.16em] text-cyan-200/70">Active Slot</div>
+                        <div className="text-sm text-cyan-200">{template.slots.find((slot) => slot.id === activeSlotId)?.label || activeSlotId}</div>
+                      </div>
+
+                      <Input
+                        value={libraryQuery}
+                        onChange={(event) => setLibraryQuery(event.target.value)}
+                        placeholder="Search library blocks"
+                        className="border-white/15 bg-white/5 text-white"
+                      />
+
+                      {isLibraryLoading ? (
+                        <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
+                      ) : libraryBlocks.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                          No library blocks matched this slot yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {libraryBlocks.map((block) => (
+                            <div key={block.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-white">{block.label}</div>
+                                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{block.source} · {block.category}</div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Button type="button" variant="outline" size="sm" onClick={() => applyLibraryBlock(block, 'append')} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                    Append
+                                  </Button>
+                                  <Button type="button" size="sm" onClick={() => applyLibraryBlock(block, 'replace')}>
+                                    Replace
+                                  </Button>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-sm leading-6 text-white/80">{block.content}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="constraints" className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-white/45">Warnings</div>
+                        {warnings.length === 0 && saveWarnings.length === 0 ? (
+                          <div className="text-sm text-emerald-300">No validation warnings.</div>
+                        ) : (
+                          <ul className="space-y-1 text-sm text-amber-300">
+                            {warnings.map((warning) => (
+                              <li key={warning.id}>• {warning.message}</li>
+                            ))}
+                            {saveWarnings.map((warning, index) => (
+                              <li key={`save-warning-${index}`}>• {warning}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      {promptConstructorConstraints
+                        .filter((constraint) => constraint.applicableTemplateIds.includes(draft.templateId))
+                        .map((constraint) => {
+                          const checked = draft.enabledConstraintIds.includes(constraint.id);
+                          return (
+                            <label key={constraint.id} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => setDraft((current) => ({
+                                  ...current,
+                                  enabledConstraintIds: event.target.checked
+                                    ? [...current.enabledConstraintIds, constraint.id]
+                                    : current.enabledConstraintIds.filter((id) => id !== constraint.id),
+                                }))}
+                                className="mt-1"
+                              />
+                              <div>
+                                <div className="text-sm font-medium text-white">{constraint.label}</div>
+                                <div className="text-sm text-white/60">{constraint.content}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="documents" className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white/65">
+                        Current document management moved into the top toolbar so the main layout can stay focused on editing.
+                      </div>
+                      {isLoading ? (
+                        <div className="text-sm text-white/60">Loading...</div>
+                      ) : filteredDocuments.length === 0 ? (
+                        <div className="text-sm text-white/60">No saved prompt documents yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredDocuments.map((document) => (
+                            <button
+                              key={document.id}
+                              type="button"
+                              onClick={() => selectDocument(document)}
+                              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${document.id === draft.id ? 'border-cyan-400 bg-cyan-500/20 text-cyan-100' : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10'}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">{document.title}</div>
+                                <div className="mt-1 text-xs text-white/45">Updated {formatDate(document.updatedAt)}</div>
+                              </div>
+                              <div className="ml-3 shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                                v{document.templateVersion}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl border-white/10 bg-[#0b1020] text-white">
+          <DialogHeader>
+            <DialogTitle>Prompt Preview</DialogTitle>
+            <DialogDescription className="text-white/60">
+              Temporary preview surface for Prompt Constructor v2. Full desktop preview modal sizing lands in the next ticket.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-4">
+              <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90">{renderedPrompt || 'Prompt preview will appear here.'}</pre>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-white/55">{warnings.length + saveWarnings.length} warning(s)</div>
+              <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
+                Copy Prompt
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
