@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   if (!raw) return {};
@@ -13,9 +14,21 @@ function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   }
 }
 
-function buildAvailableActions(asset: { type: string; originKind: string | null }) {
-  if (asset.type !== 'image') return [] as ReuseAction[];
-  return ['txt2img', 'img2img', 'img2vid'] as ReuseAction[];
+function parseSceneSnapshot(snapshot: unknown): SceneSnapshot | null {
+  return snapshot && typeof snapshot === 'object' && (snapshot as Record<string, any>).templateId === 'scene_template_v2'
+    ? snapshot as SceneSnapshot
+    : null;
+}
+
+function buildAvailableActions(asset: { type: string; originKind: string | null }, snapshot: Record<string, any>) {
+  const actions: ReuseAction[] = [];
+  if (asset.type === 'image') {
+    actions.push('txt2img', 'img2img', 'img2vid');
+  }
+  if (parseSceneSnapshot(snapshot.sceneSnapshot)) {
+    actions.push('scene-template-v2');
+  }
+  return actions;
 }
 
 function buildReusePayload(action: ReuseAction, asset: { originalUrl: string; type: string }, snapshot: Record<string, any>) {
@@ -87,10 +100,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Gallery asset not found' }, { status: 404 });
     }
 
+    const snapshot = parseGenerationSnapshot(asset.generationSnapshot as string | null);
+
     return NextResponse.json({
       success: true,
       assetId: asset.id,
-      actions: buildAvailableActions(asset),
+      actions: buildAvailableActions(asset, snapshot),
     });
   } catch (error: any) {
     console.error('Failed to get gallery reuse actions:', error);
@@ -104,7 +119,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json().catch(() => ({}));
     const action = body.action as ReuseAction;
 
-    if (!action || !['txt2img', 'img2img', 'img2vid'].includes(action)) {
+    if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
     }
 
@@ -123,13 +138,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Gallery asset not found' }, { status: 404 });
     }
 
-    const availableActions = buildAvailableActions(asset);
+    const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+    const availableActions = buildAvailableActions(asset, snapshot);
     if (!availableActions.includes(action)) {
       return NextResponse.json({ success: false, error: 'Action is not compatible with this asset' }, { status: 400 });
     }
 
-    const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
-    const payload = buildReusePayload(action, asset, snapshot);
+    if (action === 'scene-template-v2') {
+      const sceneSnapshot = parseSceneSnapshot(snapshot.sceneSnapshot);
+      if (!sceneSnapshot) {
+        return NextResponse.json({ success: false, error: 'This gallery asset does not contain a reusable scene snapshot' }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        assetId: asset.id,
+        availableActions,
+        payload: {
+          workflow: 'scene-template-v2',
+          workspaceId: typeof asset.workspaceId === 'string' ? asset.workspaceId : null,
+          sourceJobId: typeof snapshot.sourceJobId === 'string' ? snapshot.sourceJobId : asset.sourceJobId || asset.id,
+          snapshot: sceneSnapshot,
+        },
+      });
+    }
+
+    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot);
 
     return NextResponse.json({
       success: true,

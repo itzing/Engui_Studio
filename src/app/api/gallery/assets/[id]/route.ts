@@ -12,6 +12,31 @@ function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   }
 }
 
+function toAssetResponse(asset: any, snapshot: Record<string, any>) {
+  return {
+    id: asset.id,
+    workspaceId: asset.workspaceId,
+    type: asset.type,
+    bucket: asset.bucket,
+    originalUrl: asset.originalUrl,
+    previewUrl: asset.previewUrl,
+    thumbnailUrl: asset.thumbnailUrl,
+    favorited: asset.favorited,
+    trashed: asset.trashed,
+    userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
+    autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
+    sourceJobId: asset.sourceJobId,
+    sourceOutputId: asset.sourceOutputId,
+    derivativeStatus: asset.derivativeStatus,
+    enrichmentStatus: asset.enrichmentStatus,
+    prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : null,
+    modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
+    hasSceneSnapshot: !!(snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' && snapshot.sceneSnapshot.templateId === 'scene_template_v2'),
+    addedToGalleryAt: asset.addedToGalleryAt,
+    updatedAt: asset.updatedAt,
+  };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -28,27 +53,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      asset: {
-        id: asset.id,
-        workspaceId: asset.workspaceId,
-        type: asset.type,
-        bucket: asset.bucket,
-        originalUrl: asset.originalUrl,
-        previewUrl: asset.previewUrl,
-        thumbnailUrl: asset.thumbnailUrl,
-        favorited: asset.favorited,
-        trashed: asset.trashed,
-        userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
-        autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
-        sourceJobId: asset.sourceJobId,
-        sourceOutputId: asset.sourceOutputId,
-        derivativeStatus: asset.derivativeStatus,
-        enrichmentStatus: asset.enrichmentStatus,
-        prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : null,
-        modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
-        addedToGalleryAt: asset.addedToGalleryAt,
-        updatedAt: asset.updatedAt,
-      },
+      asset: toAssetResponse(asset, snapshot),
     });
   } catch (error: any) {
     console.error('Failed to fetch gallery asset:', error);
@@ -78,27 +83,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      asset: {
-        id: asset.id,
-        workspaceId: asset.workspaceId,
-        type: asset.type,
-        bucket: asset.bucket,
-        originalUrl: asset.originalUrl,
-        previewUrl: asset.previewUrl,
-        thumbnailUrl: asset.thumbnailUrl,
-        favorited: asset.favorited,
-        trashed: asset.trashed,
-        userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
-        autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
-        sourceJobId: asset.sourceJobId,
-        sourceOutputId: asset.sourceOutputId,
-        derivativeStatus: asset.derivativeStatus,
-        enrichmentStatus: asset.enrichmentStatus,
-        prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : null,
-        modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
-        addedToGalleryAt: asset.addedToGalleryAt,
-        updatedAt: asset.updatedAt,
-      },
+      asset: toAssetResponse(asset, snapshot),
     });
   } catch (error: any) {
     console.error('Failed to update gallery asset:', error);

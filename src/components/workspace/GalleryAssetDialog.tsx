@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, X } from 'lucide-react';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
@@ -101,6 +101,13 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       }
 
       if (typeof window !== 'undefined') {
+        if (action === 'scene-template-v2') {
+          const { persistPromptConstructorReuseDraft } = await import('@/lib/prompt-constructor/persistPromptConstructorReuseDraft');
+          persistPromptConstructorReuseDraft(data.payload);
+          window.location.href = '/prompt-constructor';
+          return;
+        }
+
         const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
         const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
         const result = persistCreateReuseDraft(data.payload);
@@ -243,6 +250,11 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                     >
                       {isEnriching ? 'Running...' : 'Re-run Enrichment'}
                     </Button>
+                    {(asset as any).hasSceneSnapshot && (
+                      <Button variant="outline" size="sm" onClick={() => void handleReuse('scene-template-v2')} disabled={!!isReusing}>
+                        {isReusing === 'scene-template-v2' ? 'Opening...' : 'Reuse scene'}
+                      </Button>
+                    )}
                     {asset.type === 'image' && (
                       <>
                         <Button variant="outline" size="sm" onClick={() => void handleReuse('txt2img')} disabled={!!isReusing}>

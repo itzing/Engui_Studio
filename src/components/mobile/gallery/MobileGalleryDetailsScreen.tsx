@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useMobileGalleryDetails } from '@/hooks/gallery/useMobileGalleryDetails';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
+import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
@@ -84,7 +85,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     }
   };
 
-  const reuse = async (action: 'txt2img' | 'img2img' | 'img2vid') => {
+  const reuse = async (action: 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2') => {
     if (!asset) return;
     const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
       method: 'POST',
@@ -93,6 +94,11 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
+      if (action === 'scene-template-v2') {
+        persistPromptConstructorReuseDraft(data.payload);
+        router.push('/prompt-constructor');
+        return;
+      }
       persistCreateReuseDraft(data.payload);
       router.push('/m/create');
     }
@@ -160,6 +166,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Button variant="outline" onClick={() => void downloadAsset()}><Download className="mr-2 h-4 w-4" />Download</Button>
                 <Button variant="outline" onClick={() => void toggleFavorite()}><Heart className="mr-2 h-4 w-4" />{asset.favorited ? 'Unfavorite' : 'Favorite'}</Button>
+                {(asset as any).hasSceneSnapshot ? <Button variant="outline" onClick={() => void reuse('scene-template-v2')}><Sparkles className="mr-2 h-4 w-4" />Reuse scene</Button> : null}
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
