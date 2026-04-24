@@ -47,7 +47,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const title = body?.title !== undefined ? normalizePromptDocumentTitle(body.title) : existing.title;
-    const state = body?.state !== undefined ? normalizePromptState(body.state) : normalizePromptState(existing.stateJson);
+    const state = body?.state !== undefined
+      ? normalizePromptState(body.state, templateId)
+      : normalizePromptState(existing.stateJson, templateId);
     const enabledConstraintIds = body?.enabledConstraintIds !== undefined
       ? normalizeConstraintIds(body.enabledConstraintIds, templateId)
       : normalizeConstraintIds(existing.enabledConstraintIds, templateId);
@@ -58,7 +60,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         title: title || template.title,
         templateId,
         templateVersion,
-        stateJson: serializePromptState(state),
+        stateJson: serializePromptState(state, templateId),
         enabledConstraintIds: serializeConstraintIds(enabledConstraintIds, templateId),
       },
     });

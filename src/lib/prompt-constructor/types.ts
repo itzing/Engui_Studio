@@ -15,13 +15,15 @@ export type PromptBlockCategory =
   | 'palette'
   | 'mood';
 
-export type SlotType = 'text' | 'enum' | 'library-text';
+export type SlotType = 'text' | 'enum' | 'library-text' | 'dynamic-list';
+
+export type PromptTemplateId = 'single_character_scene_v1' | 'scene_template_v2';
 
 export type ConstraintSnippet = {
   id: string;
   label: string;
   content: string;
-  applicableTemplateIds: string[];
+  applicableTemplateIds: PromptTemplateId[];
   tags: string[];
 };
 
@@ -50,7 +52,7 @@ export type SlotDefinition = {
 };
 
 export type TemplateDefinition<TState> = {
-  id: string;
+  id: PromptTemplateId;
   version: number;
   title: string;
   sections: SectionDefinition[];
@@ -89,11 +91,122 @@ export type SingleCharacterPromptState = {
   };
 };
 
-export type PromptDocument<TState = SingleCharacterPromptState> = {
+export type SceneSummary = {
+  sceneType: string;
+  mainEvent: string;
+  notes: string;
+  tags: string[];
+};
+
+export type CharacterFields = {
+  nameOrRole: string;
+  ageBand: string;
+  genderPresentation: string;
+  appearance: string;
+  outfit: string;
+  expression: string;
+  pose: string;
+  localAction: string;
+  props: string[];
+};
+
+export type CharacterStaging = {
+  screenPosition: string;
+  depthLayer: string;
+  bodyOrientation: string;
+  stance: string;
+  relativePlacementNotes: string;
+};
+
+export type CharacterSlot = {
+  id: string;
+  label: string;
+  role: string;
+  enabled: boolean;
+  presetRef: { id: string; name: string } | null;
+  posePresetRef: { id: string; name: string } | null;
+  fields: CharacterFields;
+  staging: CharacterStaging;
+};
+
+export type CharacterRelation = {
+  id: string;
+  subjectId: string;
+  targetId: string;
+  relationType: string;
+  distance: string;
+  eyeContact: string;
+  bodyOrientation: string;
+  contactDetails: string;
+  relativePlacement: string;
+  dramaticFocus: string;
+  notes: string;
+};
+
+export type CompositionBlock = {
+  shotSize: string;
+  cameraAngle: string;
+  framing: string;
+  subjectPlacement: string;
+  foregroundPriority: string;
+  backgroundPriority: string;
+};
+
+export type EnvironmentBlock = {
+  location: string;
+  timeOfDay: string;
+  lighting: string;
+  weather: string;
+  background: string;
+  environmentDetails: string;
+};
+
+export type StyleBlock = {
+  medium: string;
+  visualStyle: string;
+  detailLevel: string;
+  colorPalette: string;
+  mood: string;
+  renderingStyle: string;
+};
+
+export type ConstraintBlock = {
+  mustKeep: string[];
+  mustAvoid: string[];
+  consistencyRequirements: string[];
+  layoutConstraints: string[];
+  textConstraints: string[];
+};
+
+export type SceneTemplateState = {
+  schemaVersion: 1;
+  sceneSummary: SceneSummary;
+  characterSlots: CharacterSlot[];
+  characterRelations: CharacterRelation[];
+  composition: CompositionBlock;
+  environment: EnvironmentBlock;
+  style: StyleBlock;
+  constraints: ConstraintBlock;
+};
+
+export type PromptState = SingleCharacterPromptState | SceneTemplateState;
+
+export type SceneSnapshot = {
+  schemaVersion: 1;
+  templateId: 'scene_template_v2';
+  sourceDocumentId: string | null;
+  sourceDocumentTitle: string | null;
+  capturedAt: string;
+  state: SceneTemplateState;
+  renderedPrompt: string;
+  warnings: ValidationIssue[];
+};
+
+export type PromptDocument<TState = PromptState> = {
   id: string;
   workspaceId: string;
   title: string;
-  templateId: string;
+  templateId: PromptTemplateId;
   templateVersion: number;
   state: TState;
   enabledConstraintIds: string[];

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unsupported templateId' }, { status: 400 });
     }
 
-    const state = normalizePromptState(body?.state ?? template.createInitialState());
+    const state = normalizePromptState(body?.state ?? template.createInitialState(), templateId);
     const enabledConstraintIds = normalizeConstraintIds(body?.enabledConstraintIds, templateId);
 
     const created = await prisma.promptDocument.create({
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         title: title || template.title,
         templateId,
         templateVersion,
-        stateJson: serializePromptState(state),
+        stateJson: serializePromptState(state, templateId),
         enabledConstraintIds: serializeConstraintIds(enabledConstraintIds, templateId),
         status: 'active',
       },
