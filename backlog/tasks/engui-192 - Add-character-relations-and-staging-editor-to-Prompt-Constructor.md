@@ -1,7 +1,7 @@
 ---
 id: ENGUI-192
 title: Add character relations and staging editor to Prompt Constructor
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:47'
 labels:
@@ -18,8 +18,8 @@ Add a dedicated relations and staging editing flow for scene_template_v2 so mult
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Users can create, edit, and remove structured relations between character slots
-- [ ] #2 Relations support subject, target, relation type, distance, eye contact, body orientation, contact details, relative placement, dramatic focus, and notes
-- [ ] #3 The relations section gracefully collapses or downshifts for single-character scenes instead of forcing irrelevant UI
-- [ ] #4 Rendered prompts and validation warnings incorporate relation data deterministically
+- [x] #1 Users can create, edit, and remove structured relations between character slots
+- [x] #2 Relations support subject, target, relation type, distance, eye contact, body orientation, contact details, relative placement, dramatic focus, and notes
+- [x] #3 The relations section gracefully collapses or downshifts for single-character scenes instead of forcing irrelevant UI
+- [x] #4 Rendered prompts and validation warnings incorporate relation data deterministically
 <!-- AC:END -->

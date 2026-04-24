@@ -14,7 +14,7 @@ import { promptConstructorConstraints } from '@/lib/prompt-constructor/constrain
 import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
-import type { CharacterSlot, PromptDocument, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
+import type { CharacterRelation, CharacterSlot, PromptDocument, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
 
 const defaultTemplateId = 'scene_template_v2';
 const defaultTemplate = getPromptTemplate(defaultTemplateId);
@@ -98,6 +98,22 @@ function createCharacterSlot(index: number): CharacterSlot {
       stance: '',
       relativePlacementNotes: '',
     },
+  };
+}
+
+function createCharacterRelation(subjectId = '', targetId = ''): CharacterRelation {
+  return {
+    id: `rel_${Date.now()}`,
+    subjectId,
+    targetId,
+    relationType: '',
+    distance: '',
+    eyeContact: '',
+    bodyOrientation: '',
+    contactDetails: '',
+    relativePlacement: '',
+    dramaticFocus: '',
+    notes: '',
   };
 }
 
@@ -581,6 +597,49 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         state: {
           ...current.state,
           characterSlots: current.state.characterSlots.filter((slot) => slot.id !== slotId),
+          characterRelations: current.state.characterRelations.filter((relation) => relation.subjectId !== slotId && relation.targetId !== slotId),
+        },
+      };
+    });
+  };
+
+  const addRelation = () => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      const enabledSlots = current.state.characterSlots.filter((slot) => slot.enabled);
+      const subjectId = enabledSlots[0]?.id || '';
+      const targetId = enabledSlots[1]?.id || enabledSlots[0]?.id || '';
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterRelations: [...current.state.characterRelations, createCharacterRelation(subjectId, targetId)],
+        },
+      };
+    });
+  };
+
+  const updateRelation = (relationId: string, updater: (relation: CharacterRelation) => CharacterRelation) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterRelations: current.state.characterRelations.map((relation) => relation.id === relationId ? updater(relation) : relation),
+        },
+      };
+    });
+  };
+
+  const removeRelation = (relationId: string) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterRelations: current.state.characterRelations.filter((relation) => relation.id !== relationId),
         },
       };
     });
@@ -707,7 +766,9 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                 <div className="space-y-4">
                   {template.sections.map((section) => {
                     const isFocusedSection = section.id === activeSectionId;
-                    const filledCount = section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
+                    const filledCount = isSceneTemplateState(draft.state) && section.id === 'relations'
+                      ? draft.state.characterRelations.filter((relation) => [relation.relationType, relation.distance, relation.eyeContact, relation.relativePlacement, relation.notes].some((value) => value.trim().length > 0)).length
+                      : section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
 
                     return (
                       <div
@@ -839,6 +900,120 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                   </div>
                                 ))}
                               </div>
+                            ) : isSceneTemplateState(draft.state) && section.id === 'relations' ? (
+                              <div className="space-y-4">
+                                {draft.state.characterSlots.filter((slot) => slot.enabled).length <= 1 ? (
+                                  <div className="rounded-xl border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                                    Add at least two enabled characters to define structured relations between them.
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="text-sm text-white/65">Structured character-to-character relationships for this scene.</div>
+                                      <Button type="button" size="sm" onClick={addRelation}>
+                                        <PlusIcon className="mr-1 h-4 w-4" />
+                                        Add relation
+                                      </Button>
+                                    </div>
+                                    {draft.state.characterRelations.length === 0 ? (
+                                      <div className="rounded-xl border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                                        No relations yet. Add one so the scene can describe how characters interact.
+                                      </div>
+                                    ) : (
+                                      draft.state.characterRelations.map((relation, index) => {
+                                        const enabledSlots = draft.state.characterSlots.filter((slot) => slot.enabled);
+                                        return (
+                                          <div key={relation.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                            <div className="mb-4 flex items-center justify-between gap-3">
+                                              <div>
+                                                <div className="text-sm font-semibold text-white">Relation #{index + 1}</div>
+                                                <div className="text-xs text-white/45">Describe how one character relates to another.</div>
+                                              </div>
+                                              <Button type="button" variant="outline" size="sm" onClick={() => removeRelation(relation.id)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                                <TrashIcon className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+
+                                            <div className="grid gap-3 xl:grid-cols-2">
+                                              <label className="block rounded-lg border border-white/10 bg-black/10 p-3">
+                                                <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Subject</div>
+                                                <select
+                                                  value={relation.subjectId}
+                                                  onFocus={() => {
+                                                    setActiveSlotId(`relations.${relation.id}.subjectId`);
+                                                    setFocusedSectionId('relations');
+                                                  }}
+                                                  onChange={(event) => updateRelation(relation.id, (current) => ({ ...current, subjectId: event.target.value }))}
+                                                  className="h-10 w-full rounded-md border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                                                >
+                                                  <option value="" className="bg-slate-900">Select subject</option>
+                                                  {enabledSlots.map((slot) => (
+                                                    <option key={slot.id} value={slot.id} className="bg-slate-900">{slot.label || slot.id}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+
+                                              <label className="block rounded-lg border border-white/10 bg-black/10 p-3">
+                                                <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Target</div>
+                                                <select
+                                                  value={relation.targetId}
+                                                  onFocus={() => {
+                                                    setActiveSlotId(`relations.${relation.id}.targetId`);
+                                                    setFocusedSectionId('relations');
+                                                  }}
+                                                  onChange={(event) => updateRelation(relation.id, (current) => ({ ...current, targetId: event.target.value }))}
+                                                  className="h-10 w-full rounded-md border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                                                >
+                                                  <option value="" className="bg-slate-900">Select target</option>
+                                                  {enabledSlots.map((slot) => (
+                                                    <option key={slot.id} value={slot.id} className="bg-slate-900">{slot.label || slot.id}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+
+                                              {[
+                                                ['relationType', 'Relation type', relation.relationType],
+                                                ['distance', 'Distance', relation.distance],
+                                                ['eyeContact', 'Eye contact', relation.eyeContact],
+                                                ['bodyOrientation', 'Body orientation', relation.bodyOrientation],
+                                                ['contactDetails', 'Contact details', relation.contactDetails],
+                                                ['relativePlacement', 'Relative placement', relation.relativePlacement],
+                                                ['dramaticFocus', 'Dramatic focus', relation.dramaticFocus],
+                                              ].map(([fieldId, label, value]) => (
+                                                <label key={fieldId} className="block rounded-lg border border-white/10 bg-black/10 p-3">
+                                                  <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">{label}</div>
+                                                  <Input
+                                                    value={value}
+                                                    onFocus={() => {
+                                                      setActiveSlotId(`relations.${relation.id}.${fieldId}`);
+                                                      setFocusedSectionId('relations');
+                                                    }}
+                                                    onChange={(event) => updateRelation(relation.id, (current) => ({ ...current, [fieldId]: event.target.value }))}
+                                                    className="border-white/15 bg-white/5 text-white"
+                                                  />
+                                                </label>
+                                              ))}
+
+                                              <label className="block rounded-lg border border-white/10 bg-black/10 p-3 xl:col-span-2">
+                                                <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Notes</div>
+                                                <Input
+                                                  value={relation.notes}
+                                                  onFocus={() => {
+                                                    setActiveSlotId(`relations.${relation.id}.notes`);
+                                                    setFocusedSectionId('relations');
+                                                  }}
+                                                  onChange={(event) => updateRelation(relation.id, (current) => ({ ...current, notes: event.target.value }))}
+                                                  className="border-white/15 bg-white/5 text-white"
+                                                />
+                                              </label>
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             ) : (
                               <div className="grid gap-4 xl:grid-cols-2">
                                 {section.slotIds.map((slotId) => {
@@ -881,6 +1056,21 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                     <span className="max-w-[55%] truncate text-right text-white/70">{[slot.role, slot.fields.nameOrRole, slot.fields.appearance].filter(Boolean).join(' · ') || 'Empty'}</span>
                                   </div>
                                 ))}
+                              </div>
+                            ) : isSceneTemplateState(draft.state) && section.id === 'relations' ? (
+                              <div className="space-y-1">
+                                {draft.state.characterSlots.filter((slot) => slot.enabled).length <= 1 ? (
+                                  <div className="py-1 text-white/55">Waiting for more than one enabled character.</div>
+                                ) : draft.state.characterRelations.length === 0 ? (
+                                  <div className="py-1 text-white/55">No relations yet.</div>
+                                ) : (
+                                  draft.state.characterRelations.map((relation) => (
+                                    <div key={relation.id} className="flex items-center justify-between gap-3 py-1">
+                                      <span className="text-white/45">{relation.relationType || 'Relation'}</span>
+                                      <span className="max-w-[55%] truncate text-right text-white/70">{[relation.distance, relation.eyeContact, relation.relativePlacement].filter(Boolean).join(' · ') || 'Empty'}</span>
+                                    </div>
+                                  ))
+                                )}
                               </div>
                             ) : (
                               section.slotIds.map((slotId) => {
