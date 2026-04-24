@@ -9,6 +9,9 @@ export type ImageCreateDraftSnapshot = {
   previewUrl?: string;
   previewUrl2?: string;
   selectedSceneId?: string;
+  sceneSnapshot?: Record<string, any> | null;
+  sourcePromptDocumentId?: string;
+  sourcePromptDocumentTitle?: string;
   inputs?: {
     primary?: CreateMediaRef | null;
     secondary?: CreateMediaRef | null;
@@ -50,6 +53,9 @@ export const createImageDraftSnapshot = (snapshot: ImageCreateDraftSnapshot): Im
   previewUrl: snapshot.previewUrl || '',
   previewUrl2: snapshot.previewUrl2 || '',
   selectedSceneId: snapshot.selectedSceneId || '',
+  sceneSnapshot: snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' ? snapshot.sceneSnapshot : null,
+  sourcePromptDocumentId: snapshot.sourcePromptDocumentId || '',
+  sourcePromptDocumentTitle: snapshot.sourcePromptDocumentTitle || '',
   inputs: {
     primary: snapshot.inputs?.primary || null,
     secondary: snapshot.inputs?.secondary || null,
@@ -78,6 +84,9 @@ export const normalizeImageDraftForModel = (
     previewUrl: primaryImageVisible ? (snapshot?.previewUrl || '') : '',
     previewUrl2: secondaryImageVisible ? (snapshot?.previewUrl2 || '') : '',
     selectedSceneId: snapshot?.selectedSceneId || '',
+    sceneSnapshot: snapshot?.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' ? snapshot.sceneSnapshot : null,
+    sourcePromptDocumentId: snapshot?.sourcePromptDocumentId || '',
+    sourcePromptDocumentTitle: snapshot?.sourcePromptDocumentTitle || '',
     inputs: {
       primary: primaryImageVisible ? (snapshot?.inputs?.primary || null) : null,
       secondary: secondaryImageVisible ? (snapshot?.inputs?.secondary || null) : null,

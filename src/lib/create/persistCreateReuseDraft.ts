@@ -11,6 +11,9 @@ type ReuseDetail = {
   prompt?: string | null;
   options?: unknown;
   imageInputPath?: string | null;
+  sceneSnapshot?: Record<string, any> | null;
+  sourcePromptDocumentId?: string | null;
+  sourcePromptDocumentTitle?: string | null;
 };
 
 function parseReuseOptions(options: unknown): Record<string, any> {
@@ -136,6 +139,9 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       parameterValues,
       previewUrl: shouldReusePrimaryImage && primaryImagePath ? primaryImagePath : '',
       previewUrl2: shouldReuseSecondaryImage && secondaryImagePath ? secondaryImagePath : '',
+      sceneSnapshot: detail.sceneSnapshot && typeof detail.sceneSnapshot === 'object' ? detail.sceneSnapshot : null,
+      sourcePromptDocumentId: detail.sourcePromptDocumentId || '',
+      sourcePromptDocumentTitle: detail.sourcePromptDocumentTitle || '',
       inputs: {
         primary: shouldReusePrimaryImage && primaryImagePath ? {
           kind: 'remote-url',

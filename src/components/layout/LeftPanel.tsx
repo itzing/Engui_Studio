@@ -84,6 +84,15 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
         return () => window.removeEventListener('openSceneManager', handleOpenSceneManager as EventListener);
     }, []);
 
+    React.useEffect(() => {
+        const handleClosePromptConstructor = () => {
+            setIsPromptConstructorOpen(false);
+        };
+
+        window.addEventListener('prompt-constructor-request-close', handleClosePromptConstructor as EventListener);
+        return () => window.removeEventListener('prompt-constructor-request-close', handleClosePromptConstructor as EventListener);
+    }, []);
+
     return (
         <div className={mobile ? 'flex h-full bg-card' : 'flex h-full border-r border-border bg-card'}>
             {/* Form Area */}
@@ -361,7 +370,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                             <div>
                                 <DialogTitle className="text-base">Prompt Constructor</DialogTitle>
                                 <DialogDescription className="text-xs">
-                                    Build reusable single-character prompt documents from structured slots, constraints, and library blocks.
+                                    Build reusable scene drafts from structured sections, constraints, and helper blocks, then send them into Image Create.
                                 </DialogDescription>
                             </div>
                             <button

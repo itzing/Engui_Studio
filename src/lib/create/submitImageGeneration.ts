@@ -15,6 +15,9 @@ export type SubmitImageGenerationParams = {
   imagePreviewUrl?: string | null;
   imagePreviewUrl2?: string | null;
   dimensions?: string | null;
+  sceneSnapshot?: Record<string, any> | null;
+  sourcePromptDocumentId?: string | null;
+  sourcePromptDocumentTitle?: string | null;
 };
 
 export type SubmitImageGenerationResult =
@@ -50,6 +53,9 @@ export const submitImageGeneration = async ({
   imagePreviewUrl,
   imagePreviewUrl2,
   dimensions,
+  sceneSnapshot,
+  sourcePromptDocumentId,
+  sourcePromptDocumentTitle,
 }: SubmitImageGenerationParams): Promise<SubmitImageGenerationResult> => {
   if (currentModel.inputs.includes('text') && !prompt) {
     return { success: false, error: 'Prompt is required', nextSeed: null };
@@ -112,6 +118,18 @@ export const submitImageGeneration = async ({
 
     if (dimensions) {
       formData.append('dimensions', dimensions);
+    }
+
+    if (sceneSnapshot && typeof sceneSnapshot === 'object') {
+      formData.append('sceneSnapshot', JSON.stringify(sceneSnapshot));
+    }
+
+    if (sourcePromptDocumentId) {
+      formData.append('sourcePromptDocumentId', sourcePromptDocumentId);
+    }
+
+    if (sourcePromptDocumentTitle) {
+      formData.append('sourcePromptDocumentTitle', sourcePromptDocumentTitle);
     }
 
     const headers: Record<string, string> = {};

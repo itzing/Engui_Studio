@@ -415,6 +415,9 @@ export function useImageCreateState() {
       imagePreviewUrl: previewUrl,
       imagePreviewUrl2: previewUrl2,
       dimensions: null,
+      sceneSnapshot: currentSnapshot.sceneSnapshot || null,
+      sourcePromptDocumentId: currentSnapshot.sourcePromptDocumentId || null,
+      sourcePromptDocumentTitle: currentSnapshot.sourcePromptDocumentTitle || null,
     });
 
     if (result.success) {
@@ -433,7 +436,7 @@ export function useImageCreateState() {
 
     setIsGenerating(false);
     return result.success;
-  }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, setTimedMessage, settings]);
+  }, [activeWorkspaceId, addJob, currentModel, currentSnapshot.sceneSnapshot, currentSnapshot.sourcePromptDocumentId, currentSnapshot.sourcePromptDocumentTitle, imageFile, imageFile2, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, setTimedMessage, settings]);
 
   const runSavedPromptHelperInstruction = useCallback(async () => {
     if (!currentModel || !promptHelperInstruction.trim() || isPromptHelperLoading) {

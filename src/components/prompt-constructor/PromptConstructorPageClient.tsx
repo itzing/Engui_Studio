@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, ExclamationTriangleIcon, GlobeAltIcon, MagnifyingGlassIcon, PhotoIcon, PlusIcon, SparklesIcon, SwatchIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 import { promptConstructorConstraints } from '@/lib/prompt-constructor/constraints';
-import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
+import { buildSceneSnapshot, resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import { consumePromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
@@ -277,6 +278,7 @@ const sectionIcons: Record<string, typeof UserIcon> = {
 export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
   const { activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
+  const router = useRouter();
   const [documents, setDocuments] = useState<PromptDocumentSummary[]>([]);
   const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
   const template = useMemo(() => getPromptTemplate(draft.templateId), [draft.templateId]);
@@ -620,6 +622,42 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     }
   };
 
+  const handleOpenInCreate = async () => {
+    try {
+      const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+      const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
+      const sceneSnapshot = buildSceneSnapshot(draft as PromptDocument<SceneTemplateState>);
+      if (!sceneSnapshot) {
+        showToast('Only scene_template_v2 drafts can be sent to Image Create', 'error');
+        return;
+      }
+
+      const result = persistCreateReuseDraft({
+        type: 'image',
+        modelId: 'z-image',
+        prompt: renderedPrompt,
+        options: {
+          randomizeSeed: false,
+        },
+        sceneSnapshot,
+        sourcePromptDocumentId: draft.id === 'local-draft' ? null : draft.id,
+        sourcePromptDocumentTitle: draft.title,
+      });
+
+      if (result?.workflow) {
+        announceCreateModeChange(result.workflow);
+        showToast('Scene sent to Image Create with immutable snapshot', 'success');
+        if (embedded) {
+          window.dispatchEvent(new CustomEvent('prompt-constructor-request-close'));
+        } else {
+          router.push('/');
+        }
+      }
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to send scene to Image Create', 'error');
+    }
+  };
+
   const updateCharacterSlot = (slotId: string, updater: (slot: CharacterSlot) => CharacterSlot) => {
     setDraft((current) => {
       if (!isSceneTemplateState(current.state)) return current;
@@ -803,6 +841,10 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
               <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)} className="h-9 border-white/15 bg-transparent px-3 text-white hover:bg-white/10">
                 <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
                 Preview
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void handleOpenInCreate()} className="h-9 border-cyan-400/30 bg-cyan-500/10 px-3 text-cyan-100 hover:bg-cyan-500/20">
+                <SparklesIcon className="mr-1 h-4 w-4" />
+                Open in Create
               </Button>
               <Button size="sm" onClick={handleSave} disabled={isSaving || !activeWorkspaceId} className="h-9 px-3">
                 {isSaving ? 'Saving...' : 'Save'}
@@ -1336,10 +1378,16 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                     <div className="text-xs uppercase tracking-[0.18em] text-white/45">Rendered Scene Prompt</div>
                     <div className="mt-1 text-sm text-white/55">Scrollable output, ready to copy or inspect before generation.</div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                    <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
-                    Copy Prompt
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void handleOpenInCreate()} className="border-cyan-400/30 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20">
+                      <SparklesIcon className="mr-1 h-4 w-4" />
+                      Open in Create
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                      <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
+                      Copy Prompt
+                    </Button>
+                  </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                   <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-white/90">{renderedPrompt || 'Prompt preview will appear here.'}</pre>
