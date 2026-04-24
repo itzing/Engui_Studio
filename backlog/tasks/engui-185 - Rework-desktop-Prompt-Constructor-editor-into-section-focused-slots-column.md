@@ -1,7 +1,7 @@
 ---
 id: ENGUI-185
 title: Rework desktop Prompt Constructor editor into section-focused slots column
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 09:11'
 labels:
@@ -19,8 +19,8 @@ Rework the main Prompt Constructor editor into a section-focused slots column th
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The center column uses the majority of layout space for slot editing
-- [ ] #2 Slots are grouped by section and align with the left navigation rail structure
-- [ ] #3 The active slot is clearly highlighted while editing
-- [ ] #4 Navigating from the rail keeps the editor focused on the selected section without awkward long-scroll-only behavior
+- [x] #1 The center column uses the majority of layout space for slot editing
+- [x] #2 Slots are grouped by section and align with the left navigation rail structure
+- [x] #3 The active slot is clearly highlighted while editing
+- [x] #4 Navigating from the rail keeps the editor focused on the selected section without awkward long-scroll-only behavior
 <!-- AC:END -->

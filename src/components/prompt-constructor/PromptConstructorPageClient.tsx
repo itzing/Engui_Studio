@@ -151,6 +151,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [documentQuery, setDocumentQuery] = useState('');
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [focusedSectionId, setFocusedSectionId] = useState<string>('character');
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -282,10 +283,11 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
   const activeSectionId = useMemo(() => {
     const slot = template?.slots.find((entry) => entry.id === activeSlotId);
-    return slot?.sectionId || template?.sections[0]?.id || 'character';
-  }, [activeSlotId]);
+    return focusedSectionId || slot?.sectionId || template?.sections[0]?.id || 'character';
+  }, [activeSlotId, focusedSectionId]);
 
   const jumpToSection = (sectionId: string) => {
+    setFocusedSectionId(sectionId);
     sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const firstSlotId = template?.sections.find((section) => section.id === sectionId)?.slotIds[0];
     if (firstSlotId) setActiveSlotId(firstSlotId);
@@ -528,70 +530,113 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                 <div className="text-sm text-white/55">Main workspace for structured slot editing. The final prompt lives behind Preview now.</div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
-                <div className="space-y-5">
-                  {template.sections.map((section) => (
-                    <div
-                      key={section.id}
-                      ref={(node) => {
-                        sectionRefs.current[section.id] = node;
-                      }}
-                      className={`rounded-lg border bg-black/10 p-3 ${section.id === activeSectionId ? 'border-cyan-400/35' : 'border-white/10'}`}
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium text-white">{section.label}</div>
-                        <div className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
-                          {section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length}/{section.slotIds.length}
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        {section.slotIds.map((slotId) => {
-                          const slot = template.slots.find((entry) => entry.id === slotId);
-                          if (!slot) return null;
-                          const isActive = activeSlotId === slot.id;
-                          const presetChips = slotPresetChips[slot.id] || [];
-                          return (
-                            <label key={slot.id} className="block">
-                              <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
-                                <span>{slot.label}</span>
-                                {isActive ? <span className="text-cyan-300">active</span> : null}
-                              </div>
-                              <Input
-                                value={getSlotValue(draft.state, slot.id)}
-                                onFocus={() => setActiveSlotId(slot.id)}
-                                onChange={(event) => {
-                                  setActiveSlotId(slot.id);
-                                  setDraft((current) => ({ ...current, state: setSlotValue(current.state, slot.id, event.target.value) }));
-                                }}
-                                placeholder={slot.placeholder || slot.label}
-                                className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
-                              />
-                              {presetChips.length > 0 ? (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {presetChips.map((chip) => (
-                                    <button
-                                      key={chip}
-                                      type="button"
-                                      onMouseDown={(event) => event.preventDefault()}
-                                      onClick={() => {
+                <div className="space-y-4">
+                  {template.sections.map((section) => {
+                    const isFocusedSection = section.id === activeSectionId;
+                    const filledCount = section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
+
+                    return (
+                      <div
+                        key={section.id}
+                        ref={(node) => {
+                          sectionRefs.current[section.id] = node;
+                        }}
+                        className={`rounded-xl border bg-black/10 transition-colors ${isFocusedSection ? 'border-cyan-400/35 bg-cyan-500/5' : 'border-white/10 hover:bg-white/5'}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => jumpToSection(section.id)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                        >
+                          <div>
+                            <div className="text-sm font-semibold text-white">{section.label}</div>
+                            <div className="mt-1 text-xs text-white/45">
+                              {isFocusedSection ? 'Editing this section now' : `Click to focus ${section.label.toLowerCase()}`}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                              {filledCount}/{section.slotIds.length}
+                            </div>
+                            <div className={`text-xs ${isFocusedSection ? 'text-cyan-300' : 'text-white/35'}`}>
+                              {isFocusedSection ? 'Active' : 'Open'}
+                            </div>
+                          </div>
+                        </button>
+
+                        {isFocusedSection ? (
+                          <div className="border-t border-white/10 px-4 pb-4 pt-4">
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              {section.slotIds.map((slotId) => {
+                                const slot = template.slots.find((entry) => entry.id === slotId);
+                                if (!slot) return null;
+                                const isActive = activeSlotId === slot.id;
+                                const presetChips = slotPresetChips[slot.id] || [];
+                                return (
+                                  <label key={slot.id} className="block rounded-lg border border-white/10 bg-white/5 p-3">
+                                    <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
+                                      <span>{slot.label}</span>
+                                      {isActive ? <span className="text-cyan-300">active</span> : null}
+                                    </div>
+                                    <Input
+                                      value={getSlotValue(draft.state, slot.id)}
+                                      onFocus={() => {
                                         setActiveSlotId(slot.id);
-                                        setDraft((current) => ({
-                                          ...current,
-                                          state: setSlotValue(current.state, slot.id, chip),
-                                        }));
+                                        setFocusedSectionId(section.id);
                                       }}
-                                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${isActive ? 'border-cyan-400/25 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20' : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10'}`}
-                                    >
-                                      {chip}
-                                    </button>
-                                  ))}
+                                      onChange={(event) => {
+                                        setActiveSlotId(slot.id);
+                                        setFocusedSectionId(section.id);
+                                        setDraft((current) => ({ ...current, state: setSlotValue(current.state, slot.id, event.target.value) }));
+                                      }}
+                                      placeholder={slot.placeholder || slot.label}
+                                      className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
+                                    />
+                                    {presetChips.length > 0 ? (
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        {presetChips.map((chip) => (
+                                          <button
+                                            key={chip}
+                                            type="button"
+                                            onMouseDown={(event) => event.preventDefault()}
+                                            onClick={() => {
+                                              setActiveSlotId(slot.id);
+                                              setFocusedSectionId(section.id);
+                                              setDraft((current) => ({
+                                                ...current,
+                                                state: setSlotValue(current.state, slot.id, chip),
+                                              }));
+                                            }}
+                                            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${isActive ? 'border-cyan-400/25 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20' : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10'}`}
+                                          >
+                                            {chip}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border-t border-white/10 px-4 py-3 text-sm text-white/55">
+                            {section.slotIds.map((slotId) => {
+                              const slot = template.slots.find((entry) => entry.id === slotId);
+                              if (!slot) return null;
+                              const value = getSlotValue(draft.state, slot.id).trim();
+                              return (
+                                <div key={slot.id} className="flex items-center justify-between gap-3 py-1">
+                                  <span className="text-white/45">{slot.label}</span>
+                                  <span className="max-w-[55%] truncate text-right text-white/70">{value || 'Empty'}</span>
                                 </div>
-                              ) : null}
-                            </label>
-                          );
-                        })}
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
