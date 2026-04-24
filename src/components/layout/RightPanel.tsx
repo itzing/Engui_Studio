@@ -230,9 +230,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         setMobileSelectedGalleryAssetId(assetId);
         if (assetId) {
             lastViewedGalleryAssetIdRef.current = assetId;
+            if (typeof window !== 'undefined' && activeWorkspaceId) {
+                window.localStorage.setItem(`engui.gallery.lastViewed.${activeWorkspaceId}`, assetId);
+            }
         }
         emitGallerySelection(asset);
-    }, [emitGallerySelection]);
+    }, [activeWorkspaceId, emitGallerySelection]);
     useEffect(() => {
         if (!gallerySelectedAssetId) return;
         const nextSelectedAsset = resolveGalleryAssetById(gallerySelectedAssetId);
@@ -326,9 +329,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [mobile, mobileMode]);
 
     useEffect(() => {
+        const previousMode = previousPanelModeRef.current;
         previousPanelModeRef.current = panelMode;
-        if (panelMode === 'gallery') {
-            centerGallerySelectionOnEntryRef.current = false;
+        if (previousMode !== 'gallery' && panelMode === 'gallery') {
+            centerGallerySelectionOnEntryRef.current = true;
             galleryEntryRestoreRequestRef.current = null;
         }
     }, [panelMode]);
@@ -1012,7 +1016,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (typeof window === 'undefined' || !activeWorkspaceId || !galleryRestoreHydratedRef.current) return;
-        window.localStorage.removeItem(`engui.gallery.lastViewed.${activeWorkspaceId}`);
+        const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
+        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current || null;
+        if (assetId) {
+            window.localStorage.setItem(storageKey, assetId);
+        }
     }, [activeWorkspaceId, gallerySelectedAssetId]);
 
     useEffect(() => {
@@ -1076,10 +1084,29 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [scrollGalleryAssetIntoView]);
 
     useEffect(() => {
-        if (panelMode !== 'gallery') return;
-        centerGallerySelectionOnEntryRef.current = false;
-        galleryEntryRestoreRequestRef.current = null;
-    }, [panelMode]);
+        if (panelMode !== 'gallery' || !centerGallerySelectionOnEntryRef.current) return;
+        const assetId = gallerySelectedAssetId || lastViewedGalleryAssetIdRef.current;
+        if (!assetId) {
+            centerGallerySelectionOnEntryRef.current = false;
+            galleryEntryRestoreRequestRef.current = null;
+            return;
+        }
+
+        const centered = scrollGalleryAssetIntoView(assetId, 'center');
+        if (centered) {
+            centerGallerySelectionOnEntryRef.current = false;
+            galleryEntryRestoreRequestRef.current = null;
+            return;
+        }
+
+        if (galleryEntryRestoreRequestRef.current === assetId || galleryRestoreInProgressRef.current) {
+            return;
+        }
+
+        galleryEntryRestoreRequestRef.current = assetId;
+        galleryRestoreInProgressRef.current = true;
+        void fetchGalleryAssets(1, { focusAssetId: assetId });
+    }, [fetchGalleryAssets, gallerySelectedAssetId, panelMode, scrollGalleryAssetIntoView]);
 
     const loadPreviousGalleryPages = useCallback(() => {
         if (galleryRestoreInProgressRef.current || !galleryHasPrevPage || isLoadingPreviousGallery) return;

@@ -267,8 +267,8 @@ export function useMobileGalleryScreen() {
   }, [effectiveWorkspaceId, semanticFilter]);
 
   useEffect(() => {
-    if (!storageKey || typeof window === 'undefined') return;
-    window.localStorage.removeItem(storageKey);
+    if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
+    window.localStorage.setItem(storageKey, selectedAssetId);
   }, [selectedAssetId, storageKey]);
 
   useEffect(() => {
@@ -318,9 +318,13 @@ export function useMobileGalleryScreen() {
   );
 
   const selectAsset = useCallback((asset: MobileGalleryAsset | null, absoluteIndex?: number | null) => {
-    setSelectedAssetId(asset?.id || null);
+    const nextAssetId = asset?.id || null;
+    setSelectedAssetId(nextAssetId);
     setSelectedAbsoluteIndex(typeof absoluteIndex === 'number' ? absoluteIndex : asset ? assetIndexMap[asset.id] ?? null : null);
-  }, [assetIndexMap]);
+    if (nextAssetId && storageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(storageKey, nextAssetId);
+    }
+  }, [assetIndexMap, storageKey]);
 
   const openViewer = useCallback((assetId?: string | null) => {
     const resolvedAssetId = assetId || selectedAssetId;
@@ -356,7 +360,10 @@ export function useMobileGalleryScreen() {
     }
     setSelectedAssetId(asset.id);
     setSelectedAbsoluteIndex(absoluteIndex);
-  }, [openViewer, selectedAssetId]);
+    if (storageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(storageKey, asset.id);
+    }
+  }, [openViewer, selectedAssetId, storageKey]);
 
   const updateLoadedAsset = useCallback((assetId: string, updater: (asset: MobileGalleryAsset) => MobileGalleryAsset | null) => {
     setLoadedPages((prev) => {
