@@ -63,7 +63,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
-  const [semanticFilter, setSemanticFilter] = useState<GallerySemanticFilter>('common');
+  const [semanticFilter, setSemanticFilter] = useState<GallerySemanticFilter>(() => surface === 'desktop' ? 'all' : 'common');
   const [prefsHydrated, setPrefsHydrated] = useState(false);
   const [showTrashed, setShowTrashed] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -77,7 +77,8 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const hydratedSelectionRef = useRef(false);
 
   const storageKey = effectiveWorkspaceId ? `engui.gallery.lastViewed.${effectiveWorkspaceId}` : null;
-  const desktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.${effectiveWorkspaceId}` : null;
+  const desktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.v2.${effectiveWorkspaceId}` : null;
+  const legacyDesktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.${effectiveWorkspaceId}` : null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -87,21 +88,30 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       return;
     }
 
+    if (surface === 'desktop') {
+      const savedDesktop = desktopOverlayKey ? window.localStorage.getItem(desktopOverlayKey) : null;
+      const savedLegacyDesktop = legacyDesktopOverlayKey ? window.localStorage.getItem(legacyDesktopOverlayKey) : null;
+      if (savedDesktop === 'all' || savedDesktop === 'common' || savedDesktop === 'draft' || savedDesktop === 'upscale') {
+        setSemanticFilter(savedDesktop);
+      } else if (savedLegacyDesktop === 'all' || savedLegacyDesktop === 'draft' || savedLegacyDesktop === 'upscale') {
+        setSemanticFilter(savedLegacyDesktop);
+      } else {
+        setSemanticFilter('all');
+      }
+      setPrefsHydrated(true);
+      return;
+    }
+
     const scopedKey = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
     const mobileLegacyKey = 'engui.mobile.library.semanticFilter';
-    const desktopPanelKey = 'engui.rightPanel.gallery.semanticFilter';
-    const candidates = surface === 'desktop'
-      ? [desktopOverlayKey, scopedKey, mobileLegacyKey, desktopPanelKey]
-      : [scopedKey, mobileLegacyKey, desktopOverlayKey, desktopPanelKey];
-    const saved = candidates
-      .filter((key): key is string => Boolean(key))
+    const saved = [scopedKey, mobileLegacyKey]
       .map((key) => window.localStorage.getItem(key))
       .find((value) => value === 'all' || value === 'common' || value === 'draft' || value === 'upscale');
     if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
       setSemanticFilter(saved);
     }
     setPrefsHydrated(true);
-  }, [desktopOverlayKey, effectiveWorkspaceId, surface]);
+  }, [desktopOverlayKey, effectiveWorkspaceId, legacyDesktopOverlayKey, surface]);
 
   const loadedAssets = useMemo(() => {
     const entries = Object.values(loadedPages)
