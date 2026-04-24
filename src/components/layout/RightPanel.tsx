@@ -467,7 +467,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
     }, [activeWorkspaceId, mergeUniqueJobs, selectedFilters]);
 
-    const fetchGalleryAssetsPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }): Promise<GalleryFetchResult | null> => {
+    const fetchGalleryAssetsPage = useCallback(async (page: number, options?: { focusAssetId?: string | null; debugSource?: 'desktop-initial-open' | 'desktop-refresh' | null }): Promise<GalleryFetchResult | null> => {
         if (!activeWorkspaceId) return null;
 
         const params = new URLSearchParams({
@@ -485,6 +485,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         if (options?.focusAssetId) {
             params.set('focusAssetId', options.focusAssetId);
+        }
+        if (options?.debugSource) {
+            params.set('debugSource', options.debugSource);
         }
 
         const response = await fetch(`/api/gallery/assets?${params.toString()}`, {
@@ -712,7 +715,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             lastViewedGalleryAssetIdRef.current = savedAssetId;
             setGallerySelectedAssetId(savedAssetId);
         }
-        void fetchGalleryAssets(1);
+        void fetchGalleryAssets(1, { debugSource: 'desktop-initial-open' });
         galleryRestoreHydratedRef.current = true;
     }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated]);
 
@@ -1891,7 +1894,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 aria-label={panelMode === 'gallery' ? 'Refresh gallery' : 'Refresh jobs'}
                                 onClick={() => {
                                     if (panelMode === 'gallery') {
-                                        void fetchGalleryAssets(1);
+                                        void fetchGalleryAssets(1, { debugSource: 'desktop-refresh' });
                                     } else {
                                         void fetchJobsPage(1, false);
                                     }

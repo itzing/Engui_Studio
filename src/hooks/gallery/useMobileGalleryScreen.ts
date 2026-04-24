@@ -212,7 +212,7 @@ export function useMobileGalleryScreen() {
         : null;
 
       setLoadedPages({});
-      const focusData = await loadPage(1, { debugSource: 'mobile-initial-open' });
+      const focusData = await loadPage(1, { focusAssetId: savedSelection, debugSource: 'mobile-initial-open' });
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;
@@ -225,16 +225,20 @@ export function useMobileGalleryScreen() {
           .map((page) => loadPage(page)),
       );
 
-      const firstPageAssetIds = new Set((focusData.assets || []).map((asset) => asset.id));
+      const focusedAssetId = focusData.focus?.found ? focusData.focus.assetId : null;
+      const focusedAbsoluteIndex = typeof focusData.focus?.absoluteIndex === 'number' ? focusData.focus.absoluteIndex : null;
       const fallbackAssetId = (focusData.assets || [])[0]?.id || null;
-      const selectedId = savedSelection && firstPageAssetIds.has(savedSelection) ? savedSelection : fallbackAssetId;
-      const selectedIndex = selectedId && typeof assetIndexMap[selectedId] === 'number'
+      const selectedId = focusedAssetId || fallbackAssetId;
+      const selectedIndex = focusedAbsoluteIndex ?? (selectedId && typeof assetIndexMap[selectedId] === 'number'
         ? assetIndexMap[selectedId]
-        : (focusData.assets || []).length > 0 ? 0 : null;
+        : (focusData.assets || []).length > 0 ? 0 : null);
 
       setSelectedAssetId(selectedId);
       setSelectedAbsoluteIndex(selectedIndex);
-      setRestoreAbsoluteIndex(null);
+      setRestoreAbsoluteIndex(focusedAbsoluteIndex);
+      if (focusedAbsoluteIndex !== null) {
+        setRestoreTick((value) => value + 1);
+      }
 
       hydratedSelectionRef.current = true;
     } catch (fetchError) {

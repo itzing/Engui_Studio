@@ -102,8 +102,8 @@ export async function GET(request: NextRequest) {
     const paginatedAssets = normalizedAssets.slice(skip, skip + limit);
     const hasNextPage = totalCount > resolvedPage * limit;
 
-    if (debugSource === 'mobile-initial-open' || debugSource === 'mobile-refresh') {
-      console.log('[gallery-mobile-debug]', JSON.stringify({
+    if (debugSource === 'mobile-initial-open' || debugSource === 'mobile-refresh' || debugSource === 'desktop-initial-open' || debugSource === 'desktop-refresh') {
+      console.log('[gallery-debug]', JSON.stringify({
         debugSource,
         workspaceId,
         requestedPage: page,
