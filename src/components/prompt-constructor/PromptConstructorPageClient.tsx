@@ -386,10 +386,17 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     if (!template) return [];
     const issues = template.validate(draft.state, resolveConstraintSnippets(draft.enabledConstraintIds, draft.templateId));
     if (!draft.title.trim()) {
-      issues.unshift({ id: 'missing-title', level: 'warning', message: 'Document title is empty.' });
+      issues.unshift({ id: 'missing-title', level: 'warning', message: 'Scene title is empty.' });
     }
     return issues;
   }, [draft.enabledConstraintIds, draft.state, draft.title, draft.templateId]);
+
+  const activeSlotLabel = useMemo(() => {
+    if (!template) return activeSlotId;
+    if (activeSlotId.startsWith('characters.')) return 'Character field';
+    if (activeSlotId.startsWith('relations.')) return 'Relation field';
+    return template.slots.find((slot) => slot.id === activeSlotId)?.label || activeSlotId;
+  }, [activeSlotId, template]);
 
   const sectionStats = useMemo(() => {
     if (!template) return [];
@@ -410,7 +417,51 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const activeSectionId = useMemo(() => {
     const slot = template?.slots.find((entry) => entry.id === activeSlotId);
     return focusedSectionId || slot?.sectionId || template?.sections[0]?.id || 'character';
-  }, [activeSlotId, focusedSectionId]);
+  }, [activeSlotId, focusedSectionId, template]);
+
+  const helperTitle = useMemo(() => {
+    if (activeSectionId === 'characters') return 'Character Helper';
+    if (activeSectionId === 'relations') return 'Relations Helper';
+    if (activeSectionId === 'sceneSummary') return 'Scene Summary Helper';
+    if (activeSectionId === 'composition') return 'Composition Helper';
+    if (activeSectionId === 'environment') return 'Environment Helper';
+    if (activeSectionId === 'style') return 'Style Helper';
+    if (activeSectionId === 'constraints') return 'Constraints Helper';
+    return 'Scene Helper';
+  }, [activeSectionId]);
+
+  const helperDescription = useMemo(() => {
+    if (activeSectionId === 'characters') return 'Use this side to shape reusable character slots, presets, and staging hints.';
+    if (activeSectionId === 'relations') return 'Use this side to keep multi-character interactions readable and intentional.';
+    if (activeSectionId === 'sceneSummary') return 'Use this side to define the scene intent before filling details.';
+    if (activeSectionId === 'composition') return 'Use this side to steer camera, framing, and subject placement.';
+    if (activeSectionId === 'environment') return 'Use this side to lock in setting, time, lighting, and atmosphere.';
+    if (activeSectionId === 'style') return 'Use this side to keep rendering and mood coherent across the whole scene.';
+    if (activeSectionId === 'constraints') return 'Use this side to reinforce guardrails before generation.';
+    return 'Everything on this side follows the active scene section.';
+  }, [activeSectionId]);
+
+  const helperQuickPresets = useMemo(() => {
+    if (activeSectionId === 'relations') {
+      return ['facing each other', 'locked eye contact', 'close distance', 'one character leaning toward the other'];
+    }
+    if (activeSectionId === 'sceneSummary') {
+      return ['dramatic confrontation', 'quiet intimate moment', 'cinematic portrait scene', 'two-character conversation'];
+    }
+    if (activeSectionId === 'composition') {
+      return ['medium shot', 'eye-level camera', 'clear silhouette separation', 'left-right subject placement'];
+    }
+    if (activeSectionId === 'environment') {
+      return ['soft window light', 'late afternoon', 'lived-in interior', 'muted atmospheric background'];
+    }
+    if (activeSectionId === 'style') {
+      return ['cinematic realism', 'semi-realistic illustration', 'high detail', 'muted palette'];
+    }
+    if (activeSectionId === 'constraints') {
+      return ['no extra people', 'clear character separation', 'no duplicated limbs', 'readable subject focus'];
+    }
+    return slotPresetChips[activeSlotId] || [];
+  }, [activeSectionId, activeSlotId]);
 
   const jumpToSection = (sectionId: string) => {
     setFocusedSectionId(sectionId);
@@ -660,7 +711,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                 <Input
                   value={documentQuery}
                   onChange={(event) => setDocumentQuery(event.target.value)}
-                  placeholder="Search documents"
+                  placeholder="Search scenes"
                   className="h-9 border-white/15 bg-white/5 pl-9 text-white"
                 />
               </div>
@@ -687,14 +738,14 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                 ref={titleInputRef}
                 value={draft.title}
                 onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                placeholder="Prompt document title"
+                placeholder="Scene title"
                 className="h-9 border-white/15 bg-white/5 text-white"
               />
               <div className="flex items-center gap-2 text-[11px] text-white/55">
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 ${isDirty ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
                   {isDirty ? 'Unsaved' : 'Saved'}
                 </span>
-                <span className="truncate">{draft.id === 'local-draft' ? 'New document' : `Updated ${formatDate(draft.updatedAt)}`}</span>
+                <span className="truncate">{draft.id === 'local-draft' ? 'New scene' : `Updated ${formatDate(draft.updatedAt)}`}</span>
               </div>
             </div>
 
@@ -760,7 +811,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
               <CardHeader className="border-b border-white/10 pb-3">
-                <CardTitle className="text-base">Slots Editor</CardTitle>
+                <CardTitle className="text-base">Scene Editor</CardTitle>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
                 <div className="space-y-4">
@@ -1096,24 +1147,24 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
               <CardHeader className="border-b border-white/10 pb-4">
-                <CardTitle className="text-lg">Active Slot Helper</CardTitle>
-                <div className="text-sm text-white/55">Everything on this side follows the currently active slot so you can insert ideas without leaving the editing context.</div>
+                <CardTitle className="text-lg">{helperTitle}</CardTitle>
+                <div className="text-sm text-white/55">{helperDescription}</div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
                 <div className="space-y-4">
                   <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
-                    <div className="mb-2 text-xs uppercase tracking-[0.16em] text-cyan-200/70">Active Slot</div>
-                    <div className="text-sm font-medium text-cyan-100">{template.slots.find((slot) => slot.id === activeSlotId)?.label || activeSlotId}</div>
-                    <div className="mt-1 text-xs text-cyan-200/70">Section: {template.slots.find((slot) => slot.id === activeSlotId)?.sectionId || activeSectionId}</div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.16em] text-cyan-200/70">Active Context</div>
+                    <div className="text-sm font-medium text-cyan-100">{activeSlotLabel}</div>
+                    <div className="mt-1 text-xs text-cyan-200/70">Section: {activeSectionId}</div>
                   </div>
 
                   <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                     <div className="mb-3 text-xs uppercase tracking-[0.18em] text-white/45">Quick Presets</div>
-                    {(slotPresetChips[activeSlotId] || []).length === 0 ? (
+                    {helperQuickPresets.length === 0 ? (
                       <div className="text-sm text-white/60">No quick presets for this slot yet.</div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {(slotPresetChips[activeSlotId] || []).map((chip) => (
+                        {helperQuickPresets.map((chip) => (
                           <button
                             key={chip}
                             type="button"
@@ -1144,7 +1195,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                       <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
                     ) : libraryBlocks.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
-                        No library blocks matched this slot yet.
+                        No library blocks matched this scene context yet.
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -1229,9 +1280,9 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
             <DialogHeader className="border-b border-white/10 px-6 py-5 text-left">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <DialogTitle>Prompt Preview</DialogTitle>
+                  <DialogTitle>Scene Preview</DialogTitle>
                   <DialogDescription className="mt-1 text-white/60">
-                    Final rendered prompt in a dedicated inspection surface, with scrolling, copy, and visible warnings.
+                    Final rendered scene prompt, warnings, and scene context in a dedicated inspection surface.
                   </DialogDescription>
                 </div>
                 <div className="rounded-full bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
@@ -1244,8 +1295,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
               <div className="flex min-h-0 flex-col border-b border-white/10 lg:border-b-0 lg:border-r">
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
                   <div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">Rendered Prompt</div>
-                    <div className="mt-1 text-sm text-white/55">Scrollable output, ready to copy.</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">Rendered Scene Prompt</div>
+                    <div className="mt-1 text-sm text-white/55">Scrollable output, ready to copy or inspect before generation.</div>
                   </div>
                   <Button variant="outline" size="sm" onClick={handleCopy} className="border-white/15 bg-transparent text-white hover:bg-white/10">
                     <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
@@ -1264,6 +1315,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                     <div>Template: {draft.templateId}</div>
                     <div>Warnings: {warnings.length + saveWarnings.length}</div>
                     <div>Status: {isDirty ? 'Unsaved changes' : 'Saved'}</div>
+                    <div>Characters: {isSceneTemplateState(draft.state) ? draft.state.characterSlots.filter((slot) => slot.enabled).length : 1}</div>
+                    <div>Relations: {isSceneTemplateState(draft.state) ? draft.state.characterRelations.length : 0}</div>
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

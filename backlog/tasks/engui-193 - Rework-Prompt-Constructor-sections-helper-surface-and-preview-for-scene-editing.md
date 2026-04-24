@@ -1,7 +1,7 @@
 ---
 id: ENGUI-193
 title: Rework Prompt Constructor sections, helper surface, and preview for scene editing
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:48'
 labels:
@@ -18,9 +18,9 @@ Rework the current desktop Prompt Constructor section model so it matches the sc
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The desktop Prompt Constructor sections align with the scene-template data model from the spec
-- [ ] #2 The section rail, focused editor, and helper surface stay coherent when scenes include multiple characters and relations
-- [ ] #3 The helper surface can show slot-relevant assistance for character, relation, environment, style, and constraints editing
-- [ ] #4 Preview continues to render the full deterministic prompt, warnings, and scene context from the new scene-template state
-- [ ] #5 Mobile Prompt Constructor behavior remains unchanged
+- [x] #1 The desktop Prompt Constructor sections align with the scene-template data model from the spec
+- [x] #2 The section rail, focused editor, and helper surface stay coherent when scenes include multiple characters and relations
+- [x] #3 The helper surface can show slot-relevant assistance for character, relation, environment, style, and constraints editing
+- [x] #4 Preview continues to render the full deterministic prompt, warnings, and scene context from the new scene-template state
+- [x] #5 Mobile Prompt Constructor behavior remains unchanged
 <!-- AC:END -->
