@@ -1,7 +1,7 @@
 ---
 id: ENGUI-191
 title: Build dynamic character slot editor for scene_template_v2
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:46'
 labels:
@@ -18,8 +18,8 @@ Extend the current desktop Prompt Constructor editor so the scene template can h
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Users can add, remove, duplicate, reorder, enable, and disable character slots in Prompt Constructor
-- [ ] #2 Each character slot supports label, role, Character preset reference, Pose preset reference, serializable character fields, and staging fields
-- [ ] #3 The character-slot editor works with save/load, dirty-state, duplication, and preview flows
-- [ ] #4 The current desktop Prompt Constructor shell remains usable when scenes contain more than one character slot
+- [x] #1 Users can add, remove, duplicate, reorder, enable, and disable character slots in Prompt Constructor
+- [x] #2 Each character slot supports label, role, Character preset reference, Pose preset reference, serializable character fields, and staging fields
+- [x] #3 The character-slot editor works with save/load, dirty-state, duplication, and preview flows
+- [x] #4 The current desktop Prompt Constructor shell remains usable when scenes contain more than one character slot
 <!-- AC:END -->

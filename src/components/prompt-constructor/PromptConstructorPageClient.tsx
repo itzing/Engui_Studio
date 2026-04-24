@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowPathIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, ExclamationTriangleIcon, GlobeAltIcon, MagnifyingGlassIcon, PhotoIcon, PlusIcon, SparklesIcon, SwatchIcon, UserIcon } from '@heroicons/react/24/outline';
+import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, ExclamationTriangleIcon, GlobeAltIcon, MagnifyingGlassIcon, PhotoIcon, PlusIcon, SparklesIcon, SwatchIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,9 +14,10 @@ import { promptConstructorConstraints } from '@/lib/prompt-constructor/constrain
 import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
-import type { PromptDocument, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
+import type { CharacterSlot, PromptDocument, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
 
-const template = getPromptTemplate('single_character_scene_v1');
+const defaultTemplateId = 'scene_template_v2';
+const defaultTemplate = getPromptTemplate(defaultTemplateId);
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '';
@@ -41,23 +42,25 @@ function cloneDocument(document: PromptDocument): PromptDocument {
 }
 
 function makeLocalDraft(workspaceId: string | null): PromptDocument {
-  const initialState = template?.createInitialState() ?? {
-    character: { appearance: '', outfit: '', expression: '', pose: '' },
-    action: { mainAction: '' },
-    composition: { shotType: '', cameraAngle: '', framing: '' },
-    environment: { location: '', timeOfDay: '', lighting: '', background: '' },
-    style: { style: '', detailLevel: '', palette: '', mood: '' },
+  const initialState = defaultTemplate?.createInitialState() ?? {
+    sceneSummary: { sceneType: '', mainEvent: '', notes: '', tags: [] },
+    characterSlots: [],
+    characterRelations: [],
+    composition: { shotSize: '', cameraAngle: '', framing: '', subjectPlacement: '', foregroundPriority: '', backgroundPriority: '' },
+    environment: { location: '', timeOfDay: '', lighting: '', weather: '', background: '', environmentDetails: '' },
+    style: { medium: '', visualStyle: '', detailLevel: '', colorPalette: '', mood: '', renderingStyle: '' },
+    constraints: { mustKeep: [], mustAvoid: [], consistencyRequirements: [], layoutConstraints: [], textConstraints: [] },
   };
 
   return {
     id: 'local-draft',
     workspaceId: workspaceId ?? '',
-    title: 'Untitled Prompt',
-    templateId: 'single_character_scene_v1',
+    title: 'Untitled Scene',
+    templateId: defaultTemplateId,
     templateVersion: 1,
     state: initialState,
     enabledConstraintIds: promptConstructorConstraints
-      .filter((constraint) => constraint.applicableTemplateIds.includes('single_character_scene_v1'))
+      .filter((constraint) => constraint.applicableTemplateIds.includes(defaultTemplateId))
       .map((constraint) => constraint.id),
     status: 'active',
     createdAt: new Date().toISOString(),
@@ -65,7 +68,72 @@ function makeLocalDraft(workspaceId: string | null): PromptDocument {
   };
 }
 
-function setSlotValue(state: SingleCharacterPromptState, slotId: string, value: string): SingleCharacterPromptState {
+function isSceneTemplateState(state: PromptState): state is SceneTemplateState {
+  return 'sceneSummary' in state && 'characterSlots' in state;
+}
+
+function createCharacterSlot(index: number): CharacterSlot {
+  return {
+    id: `char_${Date.now()}_${index}`,
+    label: `Character ${String.fromCharCode(65 + index)}`,
+    role: '',
+    enabled: true,
+    presetRef: null,
+    posePresetRef: null,
+    fields: {
+      nameOrRole: '',
+      ageBand: '',
+      genderPresentation: '',
+      appearance: '',
+      outfit: '',
+      expression: '',
+      pose: '',
+      localAction: '',
+      props: [],
+    },
+    staging: {
+      screenPosition: '',
+      depthLayer: '',
+      bodyOrientation: '',
+      stance: '',
+      relativePlacementNotes: '',
+    },
+  };
+}
+
+function setSlotValue(state: PromptState, slotId: string, value: string): PromptState {
+  if (isSceneTemplateState(state)) {
+    switch (slotId) {
+      case 'sceneType': return { ...state, sceneSummary: { ...state.sceneSummary, sceneType: value } };
+      case 'mainEvent': return { ...state, sceneSummary: { ...state.sceneSummary, mainEvent: value } };
+      case 'sceneNotes': return { ...state, sceneSummary: { ...state.sceneSummary, notes: value } };
+      case 'sceneTags': return { ...state, sceneSummary: { ...state.sceneSummary, tags: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      case 'shotSize': return { ...state, composition: { ...state.composition, shotSize: value } };
+      case 'cameraAngle': return { ...state, composition: { ...state.composition, cameraAngle: value } };
+      case 'framing': return { ...state, composition: { ...state.composition, framing: value } };
+      case 'subjectPlacement': return { ...state, composition: { ...state.composition, subjectPlacement: value } };
+      case 'foregroundPriority': return { ...state, composition: { ...state.composition, foregroundPriority: value } };
+      case 'backgroundPriority': return { ...state, composition: { ...state.composition, backgroundPriority: value } };
+      case 'location': return { ...state, environment: { ...state.environment, location: value } };
+      case 'timeOfDay': return { ...state, environment: { ...state.environment, timeOfDay: value } };
+      case 'lighting': return { ...state, environment: { ...state.environment, lighting: value } };
+      case 'weather': return { ...state, environment: { ...state.environment, weather: value } };
+      case 'background': return { ...state, environment: { ...state.environment, background: value } };
+      case 'environmentDetails': return { ...state, environment: { ...state.environment, environmentDetails: value } };
+      case 'medium': return { ...state, style: { ...state.style, medium: value } };
+      case 'visualStyle': return { ...state, style: { ...state.style, visualStyle: value } };
+      case 'detailLevel': return { ...state, style: { ...state.style, detailLevel: value } };
+      case 'colorPalette': return { ...state, style: { ...state.style, colorPalette: value } };
+      case 'mood': return { ...state, style: { ...state.style, mood: value } };
+      case 'renderingStyle': return { ...state, style: { ...state.style, renderingStyle: value } };
+      case 'mustKeep': return { ...state, constraints: { ...state.constraints, mustKeep: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      case 'mustAvoid': return { ...state, constraints: { ...state.constraints, mustAvoid: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      case 'consistencyRequirements': return { ...state, constraints: { ...state.constraints, consistencyRequirements: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      case 'layoutConstraints': return { ...state, constraints: { ...state.constraints, layoutConstraints: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      case 'textConstraints': return { ...state, constraints: { ...state.constraints, textConstraints: value.split(',').map((item) => item.trim()).filter(Boolean) } };
+      default: return state;
+    }
+  }
   switch (slotId) {
     case 'appearance': return { ...state, character: { ...state.character, appearance: value } };
     case 'outfit': return { ...state, character: { ...state.character, outfit: value } };
@@ -87,7 +155,39 @@ function setSlotValue(state: SingleCharacterPromptState, slotId: string, value: 
   }
 }
 
-function getSlotValue(state: SingleCharacterPromptState, slotId: string): string {
+function getSlotValue(state: PromptState, slotId: string): string {
+  if (isSceneTemplateState(state)) {
+    switch (slotId) {
+      case 'sceneType': return state.sceneSummary.sceneType;
+      case 'mainEvent': return state.sceneSummary.mainEvent;
+      case 'sceneNotes': return state.sceneSummary.notes;
+      case 'sceneTags': return state.sceneSummary.tags.join(', ');
+      case 'shotSize': return state.composition.shotSize;
+      case 'cameraAngle': return state.composition.cameraAngle;
+      case 'framing': return state.composition.framing;
+      case 'subjectPlacement': return state.composition.subjectPlacement;
+      case 'foregroundPriority': return state.composition.foregroundPriority;
+      case 'backgroundPriority': return state.composition.backgroundPriority;
+      case 'location': return state.environment.location;
+      case 'timeOfDay': return state.environment.timeOfDay;
+      case 'lighting': return state.environment.lighting;
+      case 'weather': return state.environment.weather;
+      case 'background': return state.environment.background;
+      case 'environmentDetails': return state.environment.environmentDetails;
+      case 'medium': return state.style.medium;
+      case 'visualStyle': return state.style.visualStyle;
+      case 'detailLevel': return state.style.detailLevel;
+      case 'colorPalette': return state.style.colorPalette;
+      case 'mood': return state.style.mood;
+      case 'renderingStyle': return state.style.renderingStyle;
+      case 'mustKeep': return state.constraints.mustKeep.join(', ');
+      case 'mustAvoid': return state.constraints.mustAvoid.join(', ');
+      case 'consistencyRequirements': return state.constraints.consistencyRequirements.join(', ');
+      case 'layoutConstraints': return state.constraints.layoutConstraints.join(', ');
+      case 'textConstraints': return state.constraints.textConstraints.join(', ');
+      default: return '';
+    }
+  }
   switch (slotId) {
     case 'appearance': return state.character.appearance;
     case 'outfit': return state.character.outfit;
@@ -130,11 +230,14 @@ const slotPresetChips: Record<string, string[]> = {
 
 const sectionIcons: Record<string, typeof UserIcon> = {
   character: UserIcon,
+  characters: UsersIcon,
   action: SparklesIcon,
   composition: PhotoIcon,
   environment: GlobeAltIcon,
   style: SwatchIcon,
   constraints: ExclamationTriangleIcon,
+  sceneSummary: SparklesIcon,
+  relations: UsersIcon,
 };
 
 export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
@@ -142,6 +245,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const { showToast } = useToast();
   const [documents, setDocuments] = useState<PromptDocument[]>([]);
   const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
+  const template = useMemo(() => getPromptTemplate(draft.templateId), [draft.templateId]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeSlotId, setActiveSlotId] = useState<string>('appearance');
@@ -166,7 +270,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     const load = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=single_character_scene_v1`, { cache: 'no-store' });
+        const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=${encodeURIComponent(defaultTemplateId)}`, { cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
         if (cancelled) return;
@@ -274,12 +378,18 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const sectionStats = useMemo(() => {
     if (!template) return [];
     return template.sections.map((section) => {
-      const total = section.slotIds.length;
-      const filled = section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
+      let total = section.slotIds.length;
+      let filled = section.slotIds.filter((slotId) => getSlotValue(draft.state, slotId).trim().length > 0).length;
+
+      if (isSceneTemplateState(draft.state) && section.id === 'characters') {
+        total = Math.max(draft.state.characterSlots.length, 1);
+        filled = draft.state.characterSlots.filter((slot) => slot.enabled && [slot.label, slot.role, slot.fields.nameOrRole, slot.fields.appearance].some((value) => value.trim().length > 0)).length;
+      }
+
       const hasWarning = warnings.some((warning) => warning.slotId && section.slotIds.includes(warning.slotId));
       return { ...section, total, filled, hasWarning };
     });
-  }, [draft.state, warnings]);
+  }, [draft.state, template, warnings]);
 
   const activeSectionId = useMemo(() => {
     const slot = template?.slots.find((entry) => entry.id === activeSlotId);
@@ -298,7 +408,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=single_character_scene_v1`, { cache: 'no-store' });
+      const response = await fetch(`/api/prompt-documents?workspaceId=${encodeURIComponent(activeWorkspaceId)}&templateId=${encodeURIComponent(defaultTemplateId)}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
       const items = Array.isArray(data.documents) ? data.documents as PromptDocument[] : [];
@@ -403,6 +513,77 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     } catch {
       showToast('Failed to copy prompt', 'error');
     }
+  };
+
+  const updateCharacterSlot = (slotId: string, updater: (slot: CharacterSlot) => CharacterSlot) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterSlots: current.state.characterSlots.map((slot) => slot.id === slotId ? updater(slot) : slot),
+        },
+      };
+    });
+  };
+
+  const addCharacterSlot = () => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterSlots: [...current.state.characterSlots, createCharacterSlot(current.state.characterSlots.length)],
+        },
+      };
+    });
+  };
+
+  const duplicateCharacterSlot = (slotId: string) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      const index = current.state.characterSlots.findIndex((slot) => slot.id === slotId);
+      if (index < 0) return current;
+      const source = current.state.characterSlots[index];
+      const duplicate: CharacterSlot = {
+        ...source,
+        id: `char_${Date.now()}_${index}`,
+        label: source.label.trim() ? `${source.label} Copy` : `Character ${String.fromCharCode(65 + index)} Copy`,
+        fields: { ...source.fields, props: [...source.fields.props] },
+        staging: { ...source.staging },
+      };
+      const next = [...current.state.characterSlots];
+      next.splice(index + 1, 0, duplicate);
+      return { ...current, state: { ...current.state, characterSlots: next } };
+    });
+  };
+
+  const moveCharacterSlot = (slotId: string, direction: -1 | 1) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      const index = current.state.characterSlots.findIndex((slot) => slot.id === slotId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.state.characterSlots.length) return current;
+      const next = [...current.state.characterSlots];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return { ...current, state: { ...current.state, characterSlots: next } };
+    });
+  };
+
+  const removeCharacterSlot = (slotId: string) => {
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state) || current.state.characterSlots.length <= 1) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterSlots: current.state.characterSlots.filter((slot) => slot.id !== slotId),
+        },
+      };
+    });
   };
 
   if (!template) {
@@ -559,49 +740,161 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
                         {isFocusedSection ? (
                           <div className="border-t border-white/10 px-4 pb-4 pt-4">
-                            <div className="grid gap-4 xl:grid-cols-2">
-                              {section.slotIds.map((slotId) => {
-                                const slot = template.slots.find((entry) => entry.id === slotId);
-                                if (!slot) return null;
-                                const isActive = activeSlotId === slot.id;
-                                return (
-                                  <label key={slot.id} className="block rounded-lg border border-white/10 bg-white/5 p-3">
-                                    <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
-                                      <span>{slot.label}</span>
-                                      {isActive ? <span className="text-cyan-300">active</span> : null}
+                            {isSceneTemplateState(draft.state) && section.id === 'characters' ? (
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-sm text-white/65">Dynamic character slots for this scene.</div>
+                                  <Button type="button" size="sm" onClick={addCharacterSlot}>
+                                    <PlusIcon className="mr-1 h-4 w-4" />
+                                    Add character
+                                  </Button>
+                                </div>
+                                {draft.state.characterSlots.map((slot, index) => (
+                                  <div key={slot.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <div className="text-sm font-semibold text-white">{slot.label || `Character ${index + 1}`}</div>
+                                        <div className="text-xs text-white/45">Slot #{index + 1}</div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/10 px-2 py-1 text-xs text-white/70">
+                                          <input
+                                            type="checkbox"
+                                            checked={slot.enabled}
+                                            onChange={(event) => updateCharacterSlot(slot.id, (current) => ({ ...current, enabled: event.target.checked }))}
+                                          />
+                                          Enabled
+                                        </label>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => moveCharacterSlot(slot.id, -1)} disabled={index === 0} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                          <ArrowUpIcon className="h-4 w-4" />
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => moveCharacterSlot(slot.id, 1)} disabled={index === draft.state.characterSlots.length - 1} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                          <ArrowDownIcon className="h-4 w-4" />
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => duplicateCharacterSlot(slot.id)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                          <DocumentDuplicateIcon className="h-4 w-4" />
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => removeCharacterSlot(slot.id)} disabled={draft.state.characterSlots.length <= 1} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                          <TrashIcon className="h-4 w-4" />
+                                        </Button>
+                                      </div>
                                     </div>
-                                    <Input
-                                      value={getSlotValue(draft.state, slot.id)}
-                                      onFocus={() => {
-                                        setActiveSlotId(slot.id);
-                                        setFocusedSectionId(section.id);
-                                      }}
-                                      onChange={(event) => {
-                                        setActiveSlotId(slot.id);
-                                        setFocusedSectionId(section.id);
-                                        setDraft((current) => ({ ...current, state: setSlotValue(current.state, slot.id, event.target.value) }));
-                                      }}
-                                      placeholder={slot.placeholder || slot.label}
-                                      className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
-                                    />
-                                  </label>
-                                );
-                              })}
-                            </div>
+
+                                    <div className="grid gap-3 xl:grid-cols-2">
+                                      {[
+                                        ['label', 'Label', slot.label],
+                                        ['role', 'Role', slot.role],
+                                        ['characterPreset', 'Character preset ref', slot.presetRef?.name || ''],
+                                        ['posePreset', 'Pose preset ref', slot.posePresetRef?.name || ''],
+                                        ['nameOrRole', 'Name or role', slot.fields.nameOrRole],
+                                        ['appearance', 'Appearance', slot.fields.appearance],
+                                        ['outfit', 'Outfit', slot.fields.outfit],
+                                        ['expression', 'Expression', slot.fields.expression],
+                                        ['pose', 'Pose', slot.fields.pose],
+                                        ['localAction', 'Local action', slot.fields.localAction],
+                                        ['screenPosition', 'Screen position', slot.staging.screenPosition],
+                                        ['depthLayer', 'Depth layer', slot.staging.depthLayer],
+                                        ['bodyOrientation', 'Body orientation', slot.staging.bodyOrientation],
+                                        ['stance', 'Stance', slot.staging.stance],
+                                      ].map(([fieldId, label, value]) => (
+                                        <label key={fieldId} className="block rounded-lg border border-white/10 bg-black/10 p-3">
+                                          <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">{label}</div>
+                                          <Input
+                                            value={value}
+                                            onFocus={() => {
+                                              setActiveSlotId(`characters.${slot.id}.${fieldId}`);
+                                              setFocusedSectionId('characters');
+                                            }}
+                                            onChange={(event) => {
+                                              const nextValue = event.target.value;
+                                              updateCharacterSlot(slot.id, (current) => {
+                                                if (fieldId === 'label') return { ...current, label: nextValue };
+                                                if (fieldId === 'role') return { ...current, role: nextValue };
+                                                if (fieldId === 'characterPreset') return { ...current, presetRef: nextValue.trim() ? { id: current.presetRef?.id || '', name: nextValue } : null };
+                                                if (fieldId === 'posePreset') return { ...current, posePresetRef: nextValue.trim() ? { id: current.posePresetRef?.id || '', name: nextValue } : null };
+                                                if (fieldId === 'screenPosition') return { ...current, staging: { ...current.staging, screenPosition: nextValue } };
+                                                if (fieldId === 'depthLayer') return { ...current, staging: { ...current.staging, depthLayer: nextValue } };
+                                                if (fieldId === 'bodyOrientation') return { ...current, staging: { ...current.staging, bodyOrientation: nextValue } };
+                                                if (fieldId === 'stance') return { ...current, staging: { ...current.staging, stance: nextValue } };
+                                                return { ...current, fields: { ...current.fields, [fieldId]: nextValue } } as CharacterSlot;
+                                              });
+                                            }}
+                                            className="border-white/15 bg-white/5 text-white"
+                                          />
+                                        </label>
+                                      ))}
+                                      <label className="block rounded-lg border border-white/10 bg-black/10 p-3 xl:col-span-2">
+                                        <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Relative placement notes</div>
+                                        <Input
+                                          value={slot.staging.relativePlacementNotes}
+                                          onFocus={() => {
+                                            setActiveSlotId(`characters.${slot.id}.relativePlacementNotes`);
+                                            setFocusedSectionId('characters');
+                                          }}
+                                          onChange={(event) => updateCharacterSlot(slot.id, (current) => ({ ...current, staging: { ...current.staging, relativePlacementNotes: event.target.value } }))}
+                                          className="border-white/15 bg-white/5 text-white"
+                                        />
+                                      </label>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="grid gap-4 xl:grid-cols-2">
+                                {section.slotIds.map((slotId) => {
+                                  const slot = template.slots.find((entry) => entry.id === slotId);
+                                  if (!slot) return null;
+                                  const isActive = activeSlotId === slot.id;
+                                  return (
+                                    <label key={slot.id} className="block rounded-lg border border-white/10 bg-white/5 p-3">
+                                      <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
+                                        <span>{slot.label}</span>
+                                        {isActive ? <span className="text-cyan-300">active</span> : null}
+                                      </div>
+                                      <Input
+                                        value={getSlotValue(draft.state, slot.id)}
+                                        onFocus={() => {
+                                          setActiveSlotId(slot.id);
+                                          setFocusedSectionId(section.id);
+                                        }}
+                                        onChange={(event) => {
+                                          setActiveSlotId(slot.id);
+                                          setFocusedSectionId(section.id);
+                                          setDraft((current) => ({ ...current, state: setSlotValue(current.state, slot.id, event.target.value) }));
+                                        }}
+                                        placeholder={slot.placeholder || slot.label}
+                                        className={`border-white/15 bg-white/5 text-white ${isActive ? 'ring-1 ring-cyan-400/60' : ''}`}
+                                      />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="border-t border-white/10 px-4 py-3 text-sm text-white/55">
-                            {section.slotIds.map((slotId) => {
-                              const slot = template.slots.find((entry) => entry.id === slotId);
-                              if (!slot) return null;
-                              const value = getSlotValue(draft.state, slot.id).trim();
-                              return (
-                                <div key={slot.id} className="flex items-center justify-between gap-3 py-1">
-                                  <span className="text-white/45">{slot.label}</span>
-                                  <span className="max-w-[55%] truncate text-right text-white/70">{value || 'Empty'}</span>
-                                </div>
-                              );
-                            })}
+                            {isSceneTemplateState(draft.state) && section.id === 'characters' ? (
+                              <div className="space-y-1">
+                                {draft.state.characterSlots.map((slot) => (
+                                  <div key={slot.id} className="flex items-center justify-between gap-3 py-1">
+                                    <span className="text-white/45">{slot.label || slot.id}</span>
+                                    <span className="max-w-[55%] truncate text-right text-white/70">{[slot.role, slot.fields.nameOrRole, slot.fields.appearance].filter(Boolean).join(' · ') || 'Empty'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              section.slotIds.map((slotId) => {
+                                const slot = template.slots.find((entry) => entry.id === slotId);
+                                if (!slot) return null;
+                                const value = getSlotValue(draft.state, slot.id).trim();
+                                return (
+                                  <div key={slot.id} className="flex items-center justify-between gap-3 py-1">
+                                    <span className="text-white/45">{slot.label}</span>
+                                    <span className="max-w-[55%] truncate text-right text-white/70">{value || 'Empty'}</span>
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         )}
                       </div>
