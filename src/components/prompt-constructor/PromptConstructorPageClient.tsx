@@ -13,8 +13,9 @@ import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 import { promptConstructorConstraints } from '@/lib/prompt-constructor/constraints';
 import { resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
+import { consumePromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
-import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSummary, PromptState, SceneTemplateState, SingleCharacterPromptState } from '@/lib/prompt-constructor/types';
+import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSummary, PromptState, SceneTemplateState, SingleCharacterPromptState, SceneSnapshot } from '@/lib/prompt-constructor/types';
 
 const defaultTemplateId = 'scene_template_v2';
 const defaultTemplate = getPromptTemplate(defaultTemplateId);
@@ -59,6 +60,23 @@ function makeLocalDraft(workspaceId: string | null): PromptDocument {
     templateId: defaultTemplateId,
     templateVersion: 1,
     state: initialState,
+    enabledConstraintIds: promptConstructorConstraints
+      .filter((constraint) => constraint.applicableTemplateIds.includes(defaultTemplateId))
+      .map((constraint) => constraint.id),
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function makeLocalDraftFromSnapshot(snapshot: SceneSnapshot, workspaceId: string | null): PromptDocument<SceneTemplateState> {
+  return {
+    id: 'local-draft',
+    workspaceId: workspaceId ?? '',
+    title: snapshot.sourceDocumentTitle?.trim() ? `${snapshot.sourceDocumentTitle.trim()} Reuse` : 'Reused Scene',
+    templateId: 'scene_template_v2',
+    templateVersion: 1,
+    state: JSON.parse(JSON.stringify(snapshot.state)) as SceneTemplateState,
     enabledConstraintIds: promptConstructorConstraints
       .filter((constraint) => constraint.applicableTemplateIds.includes(defaultTemplateId))
       .map((constraint) => constraint.id),
@@ -272,12 +290,23 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [focusedSectionId, setFocusedSectionId] = useState<string>('character');
+  const [didHydrateReuseDraft, setDidHydrateReuseDraft] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
+    const reuseDraft = consumePromptConstructorReuseDraft();
+    if (reuseDraft?.snapshot) {
+      setDraft(makeLocalDraftFromSnapshot(reuseDraft.snapshot, reuseDraft.workspaceId || activeWorkspaceId));
+      setSaveWarnings(Array.isArray(reuseDraft.snapshot.warnings) ? reuseDraft.snapshot.warnings.map((warning) => warning.message) : []);
+      setFocusedSectionId('sceneSummary');
+      setDidHydrateReuseDraft(true);
+      showToast('Scene snapshot restored from job', 'success');
+      return;
+    }
+
     setDraft((current) => current.workspaceId ? current : makeLocalDraft(activeWorkspaceId));
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, showToast]);
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -297,7 +326,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         if (cancelled) return;
         const items = Array.isArray(data.documents) ? data.documents as PromptDocumentSummary[] : [];
         setDocuments(items);
-        if (items.length > 0 && draft.id === 'local-draft') {
+        if (items.length > 0 && draft.id === 'local-draft' && !didHydrateReuseDraft) {
           setDraft(items[0]);
         }
       } catch (error: any) {
@@ -313,7 +342,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspaceId, documentQuery, draft.id]);
+  }, [activeWorkspaceId, didHydrateReuseDraft, documentQuery, draft.id]);
 
   useEffect(() => {
     let cancelled = false;

@@ -6,6 +6,7 @@ import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles,
 
 type GalleryBucket = 'common' | 'draft';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
+import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const selectedOutput = job?.outputs?.[0] || null;
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
+  const hasSceneSnapshot = !!(job as any)?.sceneSnapshotJson;
   const loraSummary = useMemo(() => {
     if (!job) return '';
     const options = parseJobOptions((job as any).options);
@@ -142,6 +144,20 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     if (response.ok && data.success && data.payload) {
       persistCreateReuseDraft(data.payload);
       router.push('/m/create');
+    }
+  };
+
+  const openInPromptConstructor = async () => {
+    if (!job) return;
+    const response = await fetch(`/api/jobs/${job.id}/reuse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'scene-template-v2' }),
+    });
+    const data = await response.json();
+    if (response.ok && data.success && data.payload) {
+      persistPromptConstructorReuseDraft(data.payload);
+      router.push('/prompt-constructor');
     }
   };
 
@@ -276,6 +292,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 <Button variant="outline" onClick={() => void saveToBucket('common')} disabled={!selectedOutput || selectedOutput.savedBuckets.includes('common')}>
                   <FolderPlus className="mr-2 h-4 w-4" />{selectedOutput?.savedBuckets.includes('common') ? 'In Gallery' : 'Add to Gallery'}
                 </Button>
+                {hasSceneSnapshot ? <Button variant="outline" onClick={() => void openInPromptConstructor()}><Sparkles className="mr-2 h-4 w-4" />Reuse scene</Button> : null}
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {job.type === 'image' ? <Button onClick={() => void openInCreate('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}

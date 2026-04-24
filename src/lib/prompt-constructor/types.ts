@@ -202,6 +202,12 @@ export type SceneSnapshot = {
   warnings: ValidationIssue[];
 };
 
+export type PromptConstructorReuseDraft = {
+  sourceJobId: string;
+  workspaceId: string | null;
+  snapshot: SceneSnapshot;
+};
+
 export type PromptDocument<TState = PromptState> = {
   id: string;
   workspaceId: string;

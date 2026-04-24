@@ -17,6 +17,9 @@ model Job {
   status        String
   type          String
   prompt        String?
+  sceneSnapshotJson String?
+  sourcePromptDocumentId String?
+  sourcePromptDocumentTitle String?
   runpodJobId   String?   // RunPod job ID 추가
   options       String?
   secureState   String?

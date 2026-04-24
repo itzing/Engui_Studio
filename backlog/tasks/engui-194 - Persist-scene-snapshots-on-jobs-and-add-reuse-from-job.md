@@ -1,7 +1,7 @@
 ---
 id: ENGUI-194
 title: Persist scene snapshots on jobs and add reuse from job
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:49'
 labels:
@@ -19,8 +19,8 @@ When Prompt Constructor generation runs from `scene_template_v2`, persist the im
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Generation from `scene_template_v2` stores a serializable immutable scene snapshot on the created job
-- [ ] #2 Job records retain the rendered prompt and source scene identity together with the snapshot payload
-- [ ] #3 Job details expose a reuse flow that opens a new editable Prompt Constructor draft from the stored scene snapshot
-- [ ] #4 Editing the original saved scene later does not mutate snapshots already attached to existing jobs
+- [x] #1 Generation from `scene_template_v2` stores a serializable immutable scene snapshot on the created job
+- [x] #2 Job records retain the rendered prompt and source scene identity together with the snapshot payload
+- [x] #3 Job details expose a reuse flow that opens a new editable Prompt Constructor draft from the stored scene snapshot
+- [x] #4 Editing the original saved scene later does not mutate snapshots already attached to existing jobs
 <!-- AC:END -->

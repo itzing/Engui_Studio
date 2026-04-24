@@ -14,9 +14,25 @@ import { getApiMessage } from '@/lib/apiMessages';
 import { getModelById } from '@/lib/models/modelConfig';
 import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 import { v4 as uuidv4 } from 'uuid';
+import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
+
+function parseSceneSnapshot(value: FormDataEntryValue | null): SceneSnapshot | null {
+    if (typeof value !== 'string' || !value.trim()) return null;
+
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && parsed.templateId === 'scene_template_v2' && parsed.state && typeof parsed.renderedPrompt === 'string') {
+            return parsed as SceneSnapshot;
+        }
+    } catch (error) {
+        console.warn('Failed to parse scene snapshot from generation request:', error);
+    }
+
+    return null;
+}
 
 // Local storage directory
 const LOCAL_STORAGE_DIR = join(process.cwd(), 'public', 'results');
@@ -84,6 +100,9 @@ export async function POST(request: NextRequest) {
 
         // Extract prompt
         const prompt = formData.get('prompt') as string;
+        const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
+        const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
+        const sourcePromptDocumentTitle = typeof formData.get('sourcePromptDocumentTitle') === 'string' ? (formData.get('sourcePromptDocumentTitle') as string).trim() : '';
 
         // Process input files based on model.inputs
         const inputData: Record<string, any> = {};
@@ -392,6 +411,9 @@ export async function POST(request: NextRequest) {
                 type: model.type,
                 modelId: model.id,
                 prompt: prompt || null,
+                sceneSnapshotJson: sceneSnapshot ? JSON.stringify(sceneSnapshot) : null,
+                sourcePromptDocumentId: sourcePromptDocumentId || sceneSnapshot?.sourceDocumentId || null,
+                sourcePromptDocumentTitle: sourcePromptDocumentTitle || sceneSnapshot?.sourceDocumentTitle || null,
                 options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                     randomizeSeed,
                 })),

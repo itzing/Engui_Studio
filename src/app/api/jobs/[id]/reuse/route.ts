@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 
 type NormalizedJobOutput = {
   outputId: string;
@@ -24,6 +25,21 @@ function parseJobOptions(rawOptions: unknown): Record<string, any> {
 
 function normalizeUrlCandidate(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function parseSceneSnapshot(rawValue: unknown): SceneSnapshot | null {
+  if (!rawValue) return null;
+  if (typeof rawValue === 'string') {
+    try {
+      const parsed = JSON.parse(rawValue);
+      return parsed && parsed.templateId === 'scene_template_v2' ? parsed as SceneSnapshot : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof rawValue === 'object' && (rawValue as Record<string, any>).templateId === 'scene_template_v2'
+    ? rawValue as SceneSnapshot
+    : null;
 }
 
 function buildNormalizedOutputs(job: any): NormalizedJobOutput[] {
@@ -129,13 +145,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const action = body.action as ReuseAction;
     const outputId = typeof body.outputId === 'string' ? body.outputId : 'output-1';
 
-    if (!action || !['txt2img', 'img2img', 'img2vid'].includes(action)) {
+    if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
     }
 
     const job = await prisma.job.findUnique({ where: { id } });
     if (!job) {
       return NextResponse.json({ success: false, error: 'Job not found' }, { status: 404 });
+    }
+
+    if (action === 'scene-template-v2') {
+      const sceneSnapshot = parseSceneSnapshot((job as any).sceneSnapshotJson);
+      if (!sceneSnapshot) {
+        return NextResponse.json({ success: false, error: 'This job does not contain a reusable scene snapshot' }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        jobId: job.id,
+        payload: {
+          workflow: 'scene-template-v2',
+          workspaceId: job.workspaceId || null,
+          sourceJobId: job.id,
+          snapshot: sceneSnapshot,
+        },
+      });
     }
 
     const outputs = buildNormalizedOutputs(job);
