@@ -152,7 +152,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     [loadedAssets],
   );
 
-  const fetchPage = useCallback(async (page: number, options?: { focusAssetId?: string | null; debugSource?: 'mobile-initial-open' | 'mobile-refresh' | null }) => {
+  const fetchPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }) => {
     if (!effectiveWorkspaceId) return null;
 
     const search = new URLSearchParams({
@@ -172,9 +172,6 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     }
     if (options?.focusAssetId) {
       search.set('focusAssetId', options.focusAssetId);
-    }
-    if (options?.debugSource) {
-      search.set('debugSource', options.debugSource);
     }
 
     const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
@@ -231,7 +228,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
         : null;
 
       setLoadedPages({});
-      const focusData = await loadPage(1, { focusAssetId: savedSelection, debugSource: 'mobile-initial-open' });
+      const focusData = await loadPage(1, { focusAssetId: savedSelection });
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;
@@ -355,7 +352,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     setIsLoading(true);
     setError(null);
     try {
-      const focusData = await loadPage(1, { debugSource: 'mobile-refresh' });
+      const focusData = await loadPage(1);
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;

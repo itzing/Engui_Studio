@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
     const focusAssetId = searchParams.get('focusAssetId')?.trim() || null;
-    const debugSource = searchParams.get('debugSource')?.trim() || null;
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
 
@@ -101,26 +100,6 @@ export async function GET(request: NextRequest) {
     const skip = (resolvedPage - 1) * limit;
     const paginatedAssets = normalizedAssets.slice(skip, skip + limit);
     const hasNextPage = totalCount > resolvedPage * limit;
-
-    if (debugSource === 'mobile-initial-open' || debugSource === 'mobile-refresh' || debugSource === 'desktop-initial-open' || debugSource === 'desktop-refresh' || debugSource === 'desktop-auto') {
-      console.log('[gallery-debug]', JSON.stringify({
-        debugSource,
-        workspaceId,
-        requestedPage: page,
-        resolvedPage,
-        limit,
-        type: types.length > 0 ? types : ['all'],
-        includeTrashed,
-        onlyTrashed,
-        favoritesOnly,
-        bucket,
-        q,
-        tokenCount: tokens.length,
-        firstAssetId: paginatedAssets[0]?.id || null,
-        focusAssetId,
-        totalCount,
-      }));
-    }
 
     return NextResponse.json({
       success: true,
