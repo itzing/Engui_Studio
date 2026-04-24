@@ -116,7 +116,7 @@ export function useMobileGalleryScreen() {
     [loadedAssets],
   );
 
-  const fetchPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }) => {
+  const fetchPage = useCallback(async (page: number, options?: { focusAssetId?: string | null; debugSource?: 'mobile-initial-open' | 'mobile-refresh' | null }) => {
     if (!effectiveWorkspaceId) return null;
 
     const search = new URLSearchParams({
@@ -136,6 +136,9 @@ export function useMobileGalleryScreen() {
     }
     if (options?.focusAssetId) {
       search.set('focusAssetId', options.focusAssetId);
+    }
+    if (options?.debugSource) {
+      search.set('debugSource', options.debugSource);
     }
 
     const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
@@ -192,7 +195,7 @@ export function useMobileGalleryScreen() {
         : null;
 
       setLoadedPages({});
-      const focusData = await loadPage(1);
+      const focusData = await loadPage(1, { debugSource: 'mobile-initial-open' });
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;
@@ -309,8 +312,30 @@ export function useMobileGalleryScreen() {
   }, [loadPage, loadedPages, totalCount]);
 
   const refresh = useCallback(async () => {
-    await hydrateInitialState();
-  }, [hydrateInitialState]);
+    if (!effectiveWorkspaceId) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const focusData = await loadPage(1, { debugSource: 'mobile-refresh' });
+      if (!focusData?.pagination) return;
+
+      const basePage = focusData.pagination.page;
+      const pagesToLoad = new Set<number>([basePage]);
+      if (basePage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(basePage + 1);
+
+      await Promise.all(
+        Array.from(pagesToLoad)
+          .filter((page) => page !== focusData.pagination?.page)
+          .map((page) => loadPage(page)),
+      );
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
+      setLoadedPages({});
+      setTotalCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [effectiveWorkspaceId, loadPage]);
 
   const selectedAsset = useMemo(
     () => (selectedAbsoluteIndex !== null ? itemsByAbsoluteIndex[selectedAbsoluteIndex] || null : null),
