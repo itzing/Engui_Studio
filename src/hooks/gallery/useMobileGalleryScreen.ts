@@ -64,6 +64,7 @@ export function useMobileGalleryScreen() {
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<MediaFilter[]>(['image', 'video', 'audio']);
   const [semanticFilter, setSemanticFilter] = useState<GallerySemanticFilter>('common');
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   const [showTrashed, setShowTrashed] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -76,6 +77,22 @@ export function useMobileGalleryScreen() {
   const hydratedSelectionRef = useRef(false);
 
   const storageKey = effectiveWorkspaceId ? `engui.gallery.lastViewed.${effectiveWorkspaceId}` : null;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!effectiveWorkspaceId) {
+      setPrefsHydrated(true);
+      return;
+    }
+
+    const key = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
+    const saved = window.localStorage.getItem(key);
+    if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
+      setSemanticFilter(saved);
+    }
+    setPrefsHydrated(true);
+  }, [effectiveWorkspaceId]);
 
   const loadedAssets = useMemo(() => {
     const entries = Object.values(loadedPages)
@@ -230,9 +247,10 @@ export function useMobileGalleryScreen() {
   }, [effectiveWorkspaceId, loadPage, query, storageKey]);
 
   useEffect(() => {
+    if (!prefsHydrated) return;
     hydratedSelectionRef.current = false;
     void hydrateInitialState();
-  }, [hydrateInitialState]);
+  }, [hydrateInitialState, prefsHydrated]);
 
   const toggleMediaFilter = useCallback((filter: 'all' | MediaFilter) => {
     setSelectedFilters((prev) => {
@@ -256,18 +274,9 @@ export function useMobileGalleryScreen() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !effectiveWorkspaceId) return;
-    const key = `engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`;
-    const saved = window.localStorage.getItem(key);
-    if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
-      setSemanticFilter(saved);
-    }
-  }, [effectiveWorkspaceId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !effectiveWorkspaceId) return;
+    if (typeof window === 'undefined' || !effectiveWorkspaceId || !prefsHydrated) return;
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
-  }, [effectiveWorkspaceId, semanticFilter]);
+  }, [effectiveWorkspaceId, prefsHydrated, semanticFilter]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;

@@ -131,6 +131,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [gallerySearchQuery, setGallerySearchQuery] = useState('');
     const [debouncedGallerySearchQuery, setDebouncedGallerySearchQuery] = useState('');
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
+    const [galleryPrefsHydrated, setGalleryPrefsHydrated] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [galleryAnchorPage, setGalleryAnchorPage] = useState(1);
@@ -321,6 +322,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 setSemanticFilter(savedSemanticFilter);
             }
         }
+        setGalleryPrefsHydrated(true);
     }, [mobile, mobileMode]);
 
     useEffect(() => {
@@ -338,7 +340,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [panelMode]);
 
     useEffect(() => {
-        if (!isMounted || typeof window === 'undefined') return;
+        if (!isMounted || typeof window === 'undefined' || !galleryPrefsHydrated) return;
         if (!mobileMode) {
             window.localStorage.setItem(mobile ? 'engui.mobile.library.panelMode' : 'engui.rightPanel.mode', panelMode);
         }
@@ -353,7 +355,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         window.dispatchEvent(new CustomEvent('rightPanelModeChanged', {
             detail: panelMode,
         }));
-    }, [gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters, semanticFilter]);
+    }, [galleryPrefsHydrated, gallerySearchQuery, gallerySort, isMounted, mobile, mobileMode, panelMode, selectedFilters, semanticFilter]);
 
     useEffect(() => {
         const container = galleryScrollerEl || galleryScrollContainerRef.current;
@@ -703,7 +705,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     }, [activeWorkspaceId, fetchJobsPage, selectedFilters]);
 
     useEffect(() => {
-        if (!activeWorkspaceId || typeof window === 'undefined') return;
+        if (!activeWorkspaceId || typeof window === 'undefined' || !galleryPrefsHydrated) return;
         const storageKey = `engui.gallery.lastViewed.${activeWorkspaceId}`;
         const savedAssetId = window.localStorage.getItem(storageKey);
         if (savedAssetId) {
@@ -712,7 +714,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
         void fetchGalleryAssets(1);
         galleryRestoreHydratedRef.current = true;
-    }, [activeWorkspaceId, fetchGalleryAssets]);
+    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -725,7 +727,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         window.addEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
         return () => window.removeEventListener('galleryAssetChanged', handleGalleryAssetChanged as EventListener);
-    }, [activeWorkspaceId, fetchGalleryAssets]);
+    }, [activeWorkspaceId, fetchGalleryAssets, galleryPrefsHydrated]);
 
     useEffect(() => {
         if (!activeWorkspaceId || panelMode !== 'gallery') return;
