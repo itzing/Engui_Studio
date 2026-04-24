@@ -412,126 +412,115 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   return (
     <>
       <div className={`flex ${embedded ? 'h-full min-h-0' : 'h-screen min-h-screen'} bg-[#0b1020] text-white`}>
-        <div className="flex w-full flex-col gap-4 p-4">
-          <Card className="border-white/10 bg-white/5">
-            <CardContent className="space-y-4 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold text-white">Prompt Constructor v2</div>
-                  <div className="mt-1 text-sm text-white/60">Desktop shell focused on slot editing, document actions, and on-demand prompt preview.</div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-white/55">
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 ${isDirty ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
-                    {isDirty ? 'Unsaved changes' : 'Saved'}
-                  </span>
-                  <span>{draft.id === 'local-draft' ? 'New document' : `Updated ${formatDate(draft.updatedAt)}`}</span>
-                </div>
+        <div className="flex w-full flex-col gap-3 p-4">
+          <div className="grid gap-2 rounded-xl border border-white/10 bg-white/5 p-3 xl:grid-cols-[220px_minmax(220px,1fr)_auto]">
+            <div className="min-w-0 space-y-2">
+              <div className="relative">
+                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                <Input
+                  value={documentQuery}
+                  onChange={(event) => setDocumentQuery(event.target.value)}
+                  placeholder="Search documents"
+                  className="h-9 border-white/15 bg-white/5 pl-9 text-white"
+                />
               </div>
+              <select
+                value={draft.id === 'local-draft' ? '' : draft.id}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  const next = documents.find((document) => document.id === nextId);
+                  if (next) selectDocument(next);
+                }}
+                className="h-9 w-full rounded-md border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+              >
+                <option value="" className="bg-slate-900">Current draft</option>
+                {filteredDocuments.map((document) => (
+                  <option key={document.id} value={document.id} className="bg-slate-900">
+                    {document.title}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div className="grid gap-3 xl:grid-cols-[minmax(260px,320px)_minmax(260px,1fr)_auto]">
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.16em] text-white/45">Document</div>
-                  <div className="relative">
-                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
-                    <Input
-                      value={documentQuery}
-                      onChange={(event) => setDocumentQuery(event.target.value)}
-                      placeholder="Search documents"
-                      className="h-10 border-white/15 bg-white/5 pl-9 text-white"
-                    />
-                  </div>
-                  <select
-                    value={draft.id === 'local-draft' ? '' : draft.id}
-                    onChange={(event) => {
-                      const nextId = event.target.value;
-                      const next = documents.find((document) => document.id === nextId);
-                      if (next) selectDocument(next);
-                    }}
-                    className="h-10 w-full rounded-md border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
-                  >
-                    <option value="" className="bg-slate-900">Current draft</option>
-                    {filteredDocuments.map((document) => (
-                      <option key={document.id} value={document.id} className="bg-slate-900">
-                        {document.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-[0.16em] text-white/45">Title</div>
-                  <Input
-                    ref={titleInputRef}
-                    value={draft.title}
-                    onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="Prompt document title"
-                    className="h-10 border-white/15 bg-white/5 text-white"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-end gap-2 xl:justify-end">
-                  <Button variant="outline" size="sm" onClick={() => void reloadDocuments(draft.id !== 'local-draft' ? draft.id : undefined)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                    <ArrowPathIcon className={`mr-1 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleDuplicate} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                    <DocumentDuplicateIcon className="mr-1 h-4 w-4" />
-                    Duplicate
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleCreateNew} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                    <PlusIcon className="mr-1 h-4 w-4" />
-                    New
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                    <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
-                    Preview
-                  </Button>
-                  <Button size="sm" onClick={handleSave} disabled={isSaving || !activeWorkspaceId}>
-                    {isSaving ? 'Saving...' : 'Save'}
-                  </Button>
-                </div>
+            <div className="min-w-0 space-y-2">
+              <Input
+                ref={titleInputRef}
+                value={draft.title}
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Prompt document title"
+                className="h-9 border-white/15 bg-white/5 text-white"
+              />
+              <div className="flex items-center gap-2 text-[11px] text-white/55">
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 ${isDirty ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
+                  {isDirty ? 'Unsaved' : 'Saved'}
+                </span>
+                <span className="truncate">{draft.id === 'local-draft' ? 'New document' : `Updated ${formatDate(draft.updatedAt)}`}</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[96px_minmax(0,1.35fr)_minmax(380px,0.85fr)]">
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <Button variant="outline" size="sm" onClick={() => void reloadDocuments(draft.id !== 'local-draft' ? draft.id : undefined)} className="h-9 border-white/15 bg-transparent px-3 text-white hover:bg-white/10">
+                <ArrowPathIcon className={`mr-1 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDuplicate} className="h-9 border-white/15 bg-transparent px-3 text-white hover:bg-white/10">
+                <DocumentDuplicateIcon className="mr-1 h-4 w-4" />
+                Duplicate
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCreateNew} className="h-9 border-white/15 bg-transparent px-3 text-white hover:bg-white/10">
+                <PlusIcon className="mr-1 h-4 w-4" />
+                New
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsPreviewOpen(true)} className="h-9 border-white/15 bg-transparent px-3 text-white hover:bg-white/10">
+                <ClipboardDocumentIcon className="mr-1 h-4 w-4" />
+                Preview
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isSaving || !activeWorkspaceId} className="h-9 px-3">
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[68px_minmax(0,1.35fr)_minmax(380px,0.85fr)]">
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
-              <CardContent className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-                <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-white/40">Sections</div>
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-2 p-2">
                 {sectionStats.map((section) => {
                   const Icon = sectionIcons[section.id] || SparklesIcon;
                   const isActive = section.id === activeSectionId;
-                  const isComplete = section.total > 0 && section.filled === section.total;
+                  const filledMarks = Array.from({ length: section.total }, (_, index) => index < section.filled);
+                  const baseTone = section.hasWarning
+                    ? 'amber'
+                    : section.filled === section.total
+                      ? 'emerald'
+                      : 'cyan';
 
                   return (
                     <button
                       key={section.id}
                       type="button"
                       onClick={() => jumpToSection(section.id)}
-                      className={`rounded-xl border px-2 py-3 text-left transition-colors ${isActive ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-100' : section.hasWarning ? 'border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15' : isComplete ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15' : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10'}`}
+                      className={`rounded-lg border px-1.5 py-2 transition-colors ${isActive ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-100' : section.hasWarning ? 'border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15' : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10'}`}
                     >
                       <div className="flex items-center justify-center">
-                        <Icon className="h-5 w-5" />
+                        <Icon className="h-4.5 w-4.5" />
                       </div>
-                      <div className="mt-2 text-center text-[11px] font-medium leading-tight">{section.label}</div>
-                      <div className="mt-1 text-center text-[10px] uppercase tracking-[0.12em] opacity-75">{section.filled}/{section.total}</div>
+                      <div className="mt-1 flex items-center justify-center gap-0.5">
+                        {filledMarks.map((filled, index) => (
+                          <span
+                            key={`${section.id}-mark-${index}`}
+                            className={`inline-block h-[3px] w-2 rounded-full ${filled ? baseTone === 'amber' ? 'bg-amber-300' : baseTone === 'emerald' ? 'bg-emerald-300' : 'bg-cyan-300' : 'bg-white/15'}`}
+                          />
+                        ))}
+                      </div>
                     </button>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={() => setIsPreviewOpen(true)}
-                  className="mt-auto rounded-xl border border-white/10 bg-white/5 px-2 py-3 text-center text-[11px] text-white/70 transition-colors hover:bg-white/10"
-                >
-                  Preview
-                </button>
               </CardContent>
             </Card>
 
             <Card className="flex min-h-0 flex-col border-white/10 bg-white/5">
-              <CardHeader className="border-b border-white/10 pb-4">
-                <CardTitle className="text-lg">Slots Editor</CardTitle>
-                <div className="text-sm text-white/55">Main workspace for structured slot editing. The final prompt lives behind Preview now.</div>
+              <CardHeader className="border-b border-white/10 pb-3">
+                <CardTitle className="text-base">Slots Editor</CardTitle>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 pr-3">
                 <div className="space-y-4">
