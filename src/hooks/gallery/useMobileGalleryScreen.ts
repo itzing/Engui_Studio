@@ -192,13 +192,12 @@ export function useMobileGalleryScreen() {
         : null;
 
       setLoadedPages({});
-      const focusData = await loadPage(1, { focusAssetId: savedSelection });
+      const focusData = await loadPage(1);
       if (!focusData?.pagination) return;
 
-      const focusPage = focusData.focus?.found && focusData.focus.page ? focusData.focus.page : focusData.pagination.page;
-      const pagesToLoad = new Set<number>([focusPage]);
-      if (focusPage > 1) pagesToLoad.add(focusPage - 1);
-      if (focusPage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(focusPage + 1);
+      const basePage = focusData.pagination.page;
+      const pagesToLoad = new Set<number>([basePage]);
+      if (basePage * focusData.pagination.limit < focusData.pagination.totalCount) pagesToLoad.add(basePage + 1);
 
       await Promise.all(
         Array.from(pagesToLoad)
@@ -206,20 +205,16 @@ export function useMobileGalleryScreen() {
           .map((page) => loadPage(page)),
       );
 
-      const focusedAssetId = focusData.focus?.found ? focusData.focus.assetId : null;
-      const focusedAbsoluteIndex = focusData.focus?.found ? focusData.focus.absoluteIndex : null;
+      const firstPageAssetIds = new Set((focusData.assets || []).map((asset) => asset.id));
       const fallbackAssetId = (focusData.assets || [])[0]?.id || null;
-      const fallbackAbsoluteIndex = (focusData.assets || []).length > 0 ? (focusPage - 1) * focusData.pagination.limit : null;
+      const selectedId = savedSelection && firstPageAssetIds.has(savedSelection) ? savedSelection : fallbackAssetId;
+      const selectedIndex = selectedId && typeof assetIndexMap[selectedId] === 'number'
+        ? assetIndexMap[selectedId]
+        : (focusData.assets || []).length > 0 ? 0 : null;
 
-      setSelectedAssetId(focusedAssetId || savedSelection || fallbackAssetId);
-      setSelectedAbsoluteIndex(typeof focusedAbsoluteIndex === 'number' ? focusedAbsoluteIndex : fallbackAbsoluteIndex);
-
-      if (typeof focusedAbsoluteIndex === 'number') {
-        setRestoreAbsoluteIndex(focusedAbsoluteIndex);
-        setRestoreTick((value) => value + 1);
-      } else {
-        setRestoreAbsoluteIndex(null);
-      }
+      setSelectedAssetId(selectedId);
+      setSelectedAbsoluteIndex(selectedIndex);
+      setRestoreAbsoluteIndex(null);
 
       hydratedSelectionRef.current = true;
     } catch (fetchError) {

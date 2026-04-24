@@ -706,9 +706,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (savedAssetId) {
             lastViewedGalleryAssetIdRef.current = savedAssetId;
             setGallerySelectedAssetId(savedAssetId);
-            void fetchGalleryAssets(1, { focusAssetId: savedAssetId });
-            galleryRestoreHydratedRef.current = true;
-            return;
         }
         void fetchGalleryAssets(1);
         galleryRestoreHydratedRef.current = true;
