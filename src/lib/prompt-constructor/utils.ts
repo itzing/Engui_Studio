@@ -314,6 +314,51 @@ export function buildPromptValidation(document: Pick<PromptDocument, 'templateId
   return warnings;
 }
 
+export function convertSingleCharacterToSceneState(state: SingleCharacterPromptState): SceneTemplateState {
+  const next = createInitialSceneTemplateState();
+  const primaryCharacter = next.characterSlots[0];
+
+  primaryCharacter.fields.appearance = state.character.appearance;
+  primaryCharacter.fields.outfit = state.character.outfit;
+  primaryCharacter.fields.expression = state.character.expression;
+  primaryCharacter.fields.pose = state.character.pose;
+  primaryCharacter.fields.localAction = state.action.mainAction;
+
+  next.sceneSummary.sceneType = 'single character scene';
+  next.sceneSummary.mainEvent = state.action.mainAction || 'single character portrait moment';
+  next.composition.shotSize = state.composition.shotType;
+  next.composition.cameraAngle = state.composition.cameraAngle;
+  next.composition.framing = state.composition.framing;
+  next.environment.location = state.environment.location;
+  next.environment.timeOfDay = state.environment.timeOfDay;
+  next.environment.lighting = state.environment.lighting;
+  next.environment.background = state.environment.background;
+  next.style.visualStyle = state.style.style;
+  next.style.detailLevel = state.style.detailLevel;
+  next.style.colorPalette = state.style.palette;
+  next.style.mood = state.style.mood;
+
+  return next;
+}
+
+export function migratePromptDocumentToSceneTemplate(document: PromptDocument): PromptDocument<SceneTemplateState> {
+  if (document.templateId === 'scene_template_v2') {
+    return {
+      ...document,
+      state: normalizePromptState(document.state, 'scene_template_v2') as SceneTemplateState,
+    };
+  }
+
+  const legacyState = normalizePromptState(document.state, 'single_character_scene_v1') as SingleCharacterPromptState;
+  return {
+    ...document,
+    templateId: 'scene_template_v2',
+    templateVersion: 1,
+    state: convertSingleCharacterToSceneState(legacyState),
+    enabledConstraintIds: getDefaultSceneTemplateConstraintIds(),
+  };
+}
+
 export function buildSceneSnapshot(document: Pick<PromptDocument<SceneTemplateState>, 'id' | 'title' | 'templateId' | 'state' | 'enabledConstraintIds'>): SceneSnapshot | null {
   if (document.templateId !== 'scene_template_v2') return null;
 
@@ -344,6 +389,15 @@ export function toPromptDocumentSummary(record: PersistedPromptDocumentRecord): 
     summary.tags = state.sceneSummary.tags;
     summary.characterCount = state.characterSlots.filter((slot) => slot.enabled).length;
     summary.relationCount = state.characterRelations.length;
+  }
+
+  if (templateId === 'single_character_scene_v1') {
+    const state = normalizePromptState(record.stateJson, templateId) as SingleCharacterPromptState;
+    summary.sceneType = 'legacy single character';
+    summary.tags = ['legacy'];
+    summary.characterCount = 1;
+    summary.relationCount = 0;
+    summary.title = summary.title.trim() ? `${summary.title} · Legacy` : 'Legacy scene';
   }
 
   return summary;

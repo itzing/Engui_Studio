@@ -1,7 +1,7 @@
 ---
 id: ENGUI-196
 title: Make scene_template_v2 the default flow and run migration QA
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-04-24 16:51'
 labels:
@@ -20,9 +20,9 @@ Make `scene_template_v2` the default Prompt Constructor creation flow, keep lega
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 New Prompt Constructor scenes default to `scene_template_v2`
-- [ ] #2 Existing legacy `single_character_scene_v1` documents remain loadable during migration
-- [ ] #3 QA covers save/load, scene search, preview, multi-character editing, job snapshot reuse, and gallery snapshot reuse
-- [ ] #4 User-facing Prompt Constructor wording is scene-oriented wherever the redesign requires it
-- [ ] #5 The redesigned flow does not regress mobile Prompt Constructor behavior
+- [x] #1 New Prompt Constructor scenes default to `scene_template_v2`
+- [x] #2 Existing legacy `single_character_scene_v1` documents remain loadable during migration
+- [x] #3 QA covers save/load, scene search, preview, multi-character editing, job snapshot reuse, and gallery snapshot reuse
+- [x] #4 User-facing Prompt Constructor wording is scene-oriented wherever the redesign requires it
+- [x] #5 The redesigned flow does not regress mobile Prompt Constructor behavior
 <!-- AC:END -->

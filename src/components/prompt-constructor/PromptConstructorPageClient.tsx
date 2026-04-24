@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 import { promptConstructorConstraints } from '@/lib/prompt-constructor/constraints';
-import { buildSceneSnapshot, resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
+import { buildSceneSnapshot, migratePromptDocumentToSceneTemplate, resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import { consumePromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
@@ -37,7 +37,7 @@ function cloneDocument(document: PromptDocument): PromptDocument {
   return {
     ...document,
     id: 'local-draft',
-    title: document.title.trim() ? `${document.title.trim()} Copy` : 'Untitled Prompt Copy',
+    title: document.title.trim() ? `${document.title.trim()} Copy` : 'Untitled Scene Copy',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -319,21 +319,17 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       try {
         const params = new URLSearchParams({
           workspaceId: activeWorkspaceId,
-          templateId: defaultTemplateId,
         });
         if (documentQuery.trim()) params.set('query', documentQuery.trim());
         const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
         const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
+        if (!response.ok) throw new Error(data?.error || 'Failed to load scenes');
         if (cancelled) return;
         const items = Array.isArray(data.documents) ? data.documents as PromptDocumentSummary[] : [];
         setDocuments(items);
-        if (items.length > 0 && draft.id === 'local-draft' && !didHydrateReuseDraft) {
-          setDraft(items[0]);
-        }
       } catch (error: any) {
         if (!cancelled) {
-          console.warn('Prompt documents not available yet:', error);
+          console.warn('Scenes are not available yet:', error);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -507,12 +503,11 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     try {
       const params = new URLSearchParams({
         workspaceId: activeWorkspaceId,
-        templateId: defaultTemplateId,
       });
       if (documentQuery.trim()) params.set('query', documentQuery.trim());
       const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Failed to load prompt documents');
+      if (!response.ok) throw new Error(data?.error || 'Failed to load scenes');
       const items = Array.isArray(data.documents) ? data.documents as PromptDocumentSummary[] : [];
       setDocuments(items);
       if (preferredId) {
@@ -521,7 +516,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         if (detailResponse.ok && detailData.document) setDraft(detailData.document as PromptDocument);
       }
     } catch (error) {
-      console.warn('Failed to reload prompt documents:', error);
+      console.warn('Failed to reload scenes:', error);
     } finally {
       setIsLoading(false);
     }
@@ -536,8 +531,15 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       const response = await fetch(`/api/prompt-documents/${next.id}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Failed to load scene');
-      setDraft(data.document as PromptDocument);
-      setSaveWarnings([]);
+      const loadedDocument = data.document as PromptDocument;
+      if (loadedDocument.templateId === 'single_character_scene_v1') {
+        setDraft(migratePromptDocumentToSceneTemplate(loadedDocument));
+        setSaveWarnings(['Legacy single-character scene was opened through the new scene editor. Save to migrate it to scene_template_v2.']);
+        showToast('Loaded legacy scene in migration mode', 'success');
+      } else {
+        setDraft(loadedDocument);
+        setSaveWarnings([]);
+      }
     } catch (error: any) {
       showToast(error?.message || 'Failed to load scene', 'error');
     }
@@ -566,7 +568,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Failed to save prompt document');
+      if (!response.ok) throw new Error(data?.error || 'Failed to save scene');
 
       const next = data.document as PromptDocument;
       setDraft(next);
