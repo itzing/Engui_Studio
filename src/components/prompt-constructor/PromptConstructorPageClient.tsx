@@ -1024,6 +1024,37 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                         </label>
                                       ))}
                                       <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                                        <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45">Gender</div>
+                                        <div className="flex gap-2" role="group" aria-label={`Gender toggle ${slot.label || slot.id}`}>
+                                          {(['male', 'female'] as const).map((genderOption) => {
+                                            const selected = (slot.fields.genderPresentation || '').trim().toLowerCase() === genderOption;
+                                            return (
+                                              <Button
+                                                key={genderOption}
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setActiveSlotId(`characters.${slot.id}.genderPresentation`);
+                                                  setFocusedSectionId('characters');
+                                                  updateCharacterSlot(slot.id, (current) => ({
+                                                    ...current,
+                                                    fields: {
+                                                      ...current.fields,
+                                                      genderPresentation: genderOption,
+                                                    },
+                                                  }));
+                                                }}
+                                                className={`${selected ? 'border-cyan-400/40 bg-cyan-500/15 text-cyan-100' : 'border-white/15 bg-transparent text-white/80 hover:bg-white/10'}`}
+                                                data-testid={`gender-toggle-${genderOption}-${slot.id}`}
+                                              >
+                                                {genderOption}
+                                              </Button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                                         <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Character preset</div>
                                         <div className="flex min-h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80" data-testid={`character-preset-badge-${slot.id}`}>
                                           {slot.presetRef?.name?.trim() || 'No character preset linked'}

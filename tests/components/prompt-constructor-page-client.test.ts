@@ -68,7 +68,7 @@ function buildSceneDocument(id: string, title: string) {
           fields: {
             nameOrRole: 'wanderer',
             ageBand: '',
-            genderPresentation: '',
+            genderPresentation: 'female',
             appearance: 'white hair',
             outfit: 'travel cloak',
             expression: 'relieved',
@@ -233,6 +233,77 @@ describe('PromptConstructorPageClient regressions', () => {
     expect(screen.queryByDisplayValue('Hero Base')).toBeNull();
     expect(screen.queryByDisplayValue('Reaching Forward')).toBeNull();
     expect(screen.getByDisplayValue('reaching forward')).toBeTruthy();
+  });
+
+  it('uses a male/female toggle for gender and persists selection compatibly', async () => {
+    const loadedDocument = buildSceneDocument('scene-gender', 'Gender scene');
+    const saveResponseDocument = {
+      ...loadedDocument,
+      state: {
+        ...loadedDocument.state,
+        characterSlots: loadedDocument.state.characterSlots.map((slot) => ({
+          ...slot,
+          fields: {
+            ...slot.fields,
+            genderPresentation: 'male',
+          },
+        })),
+      },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      if (method === 'GET' && url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [{
+            id: 'scene-gender',
+            workspaceId: 'ws-1',
+            title: 'Gender scene',
+            templateId: 'scene_template_v2',
+            templateVersion: 1,
+            status: 'active',
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            sceneType: 'dramatic reunion',
+            tags: ['dramatic'],
+            characterCount: 1,
+            relationCount: 0,
+          }],
+        });
+      }
+      if (method === 'GET' && url.endsWith('/api/prompt-documents/scene-gender')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      if (method === 'PUT' && url.endsWith('/api/prompt-documents/scene-gender')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body.state.characterSlots[0].fields.genderPresentation).toBe('male');
+        return jsonResponse({ success: true, document: saveResponseDocument, warnings: [] });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Gender scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-gender' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Gender scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+    expect(screen.queryByDisplayValue('female')).toBeNull();
+    expect(screen.getByTestId('gender-toggle-female-char_1')).toBeTruthy();
+    expect(screen.getByTestId('gender-toggle-male-char_1')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('gender-toggle-male-char_1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('Scene saved', 'success');
+    });
   });
 
   it('saves a new scene and stays stable after the summary reload', async () => {
