@@ -63,8 +63,8 @@ function buildSceneDocument(id: string, title: string) {
           label: 'Character A',
           role: 'hero',
           enabled: true,
-          presetRef: null,
-          posePresetRef: null,
+          presetRef: { id: 'char-preset-1', name: 'Hero Base' },
+          posePresetRef: { id: 'pose-preset-1', name: 'Reaching Forward' },
           fields: {
             nameOrRole: 'wanderer',
             ageBand: '',
@@ -183,6 +183,56 @@ describe('PromptConstructorPageClient regressions', () => {
     });
 
     expect(screen.getByText('Saved')).toBeTruthy();
+  });
+
+  it('shows preset refs as read-only badges while keeping pose editable', async () => {
+    const loadedDocument = buildSceneDocument('scene-refs', 'Preset scene');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [
+            {
+              id: 'scene-refs',
+              workspaceId: 'ws-1',
+              title: 'Preset scene',
+              templateId: 'scene_template_v2',
+              templateVersion: 1,
+              status: 'active',
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              sceneType: 'dramatic reunion',
+              tags: ['dramatic'],
+              characterCount: 1,
+              relationCount: 0,
+            },
+          ],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-refs')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Preset scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-refs' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Preset scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+
+    expect(screen.getByTestId('character-preset-badge-char_1').textContent).toContain('Hero Base');
+    expect(screen.getByTestId('pose-preset-badge-char_1').textContent).toContain('Reaching Forward');
+    expect(screen.queryByDisplayValue('Hero Base')).toBeNull();
+    expect(screen.queryByDisplayValue('Reaching Forward')).toBeNull();
+    expect(screen.getByDisplayValue('reaching forward')).toBeTruthy();
   });
 
   it('saves a new scene and stays stable after the summary reload', async () => {

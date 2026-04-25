@@ -489,7 +489,10 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
   const jumpToSection = (sectionId: string) => {
     setFocusedSectionId(sectionId);
-    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const sectionNode = sectionRefs.current[sectionId];
+    if (sectionNode && typeof sectionNode.scrollIntoView === 'function') {
+      sectionNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     const firstSlotId = template?.sections.find((section) => section.id === sectionId)?.slotIds[0];
     if (firstSlotId) setActiveSlotId(firstSlotId);
   };
@@ -985,8 +988,6 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                       {[
                                         ['label', 'Label', slot.label],
                                         ['role', 'Role', slot.role],
-                                        ['characterPreset', 'Character preset ref', slot.presetRef?.name || ''],
-                                        ['posePreset', 'Pose preset ref', slot.posePresetRef?.name || ''],
                                         ['nameOrRole', 'Name or role', slot.fields.nameOrRole],
                                         ['appearance', 'Appearance', slot.fields.appearance],
                                         ['outfit', 'Outfit', slot.fields.outfit],
@@ -1011,8 +1012,6 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                               updateCharacterSlot(slot.id, (current) => {
                                                 if (fieldId === 'label') return { ...current, label: nextValue };
                                                 if (fieldId === 'role') return { ...current, role: nextValue };
-                                                if (fieldId === 'characterPreset') return { ...current, presetRef: nextValue.trim() ? { id: current.presetRef?.id || '', name: nextValue } : null };
-                                                if (fieldId === 'posePreset') return { ...current, posePresetRef: nextValue.trim() ? { id: current.posePresetRef?.id || '', name: nextValue } : null };
                                                 if (fieldId === 'screenPosition') return { ...current, staging: { ...current.staging, screenPosition: nextValue } };
                                                 if (fieldId === 'depthLayer') return { ...current, staging: { ...current.staging, depthLayer: nextValue } };
                                                 if (fieldId === 'bodyOrientation') return { ...current, staging: { ...current.staging, bodyOrientation: nextValue } };
@@ -1024,6 +1023,18 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                           />
                                         </label>
                                       ))}
+                                      <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                                        <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Character preset</div>
+                                        <div className="flex min-h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80" data-testid={`character-preset-badge-${slot.id}`}>
+                                          {slot.presetRef?.name?.trim() || 'No character preset linked'}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                                        <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Pose preset</div>
+                                        <div className="flex min-h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80" data-testid={`pose-preset-badge-${slot.id}`}>
+                                          {slot.posePresetRef?.name?.trim() || 'No pose preset linked'}
+                                        </div>
+                                      </div>
                                       <label className="block rounded-lg border border-white/10 bg-black/10 p-3 xl:col-span-2">
                                         <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Relative placement notes</div>
                                         <Input
