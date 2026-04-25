@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, ExclamationTriangleIcon, GlobeAltIcon, MagnifyingGlassIcon, PhotoIcon, PlusIcon, SparklesIcon, SwatchIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,15 @@ function formatDate(value: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+
+function buildDocumentFingerprint(document: Pick<PromptDocument, 'title' | 'state' | 'enabledConstraintIds'> | null): string | null {
+  if (!document) return null;
+  return JSON.stringify({
+    title: document.title,
+    state: document.state,
+    enabledConstraintIds: [...document.enabledConstraintIds].sort(),
+  });
 }
 
 function cloneDocument(document: PromptDocument): PromptDocument {
@@ -281,6 +290,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const router = useRouter();
   const [documents, setDocuments] = useState<PromptDocumentSummary[]>([]);
   const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
+  const [persistedDraftFingerprint, setPersistedDraftFingerprint] = useState<string | null>(null);
   const template = useMemo(() => getPromptTemplate(draft.templateId), [draft.templateId]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -300,6 +310,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     const reuseDraft = consumePromptConstructorReuseDraft();
     if (reuseDraft?.snapshot) {
       setDraft(makeLocalDraftFromSnapshot(reuseDraft.snapshot, reuseDraft.workspaceId || activeWorkspaceId));
+      setPersistedDraftFingerprint(null);
       setSaveWarnings(Array.isArray(reuseDraft.snapshot.warnings) ? reuseDraft.snapshot.warnings.map((warning) => warning.message) : []);
       setFocusedSectionId('sceneSummary');
       setDidHydrateReuseDraft(true);
@@ -308,6 +319,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     }
 
     setDraft((current) => current.workspaceId ? current : makeLocalDraft(activeWorkspaceId));
+    setPersistedDraftFingerprint(null);
   }, [activeWorkspaceId, showToast]);
 
   useEffect(() => {
@@ -372,23 +384,9 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     };
   }, [activeSlotId, activeWorkspaceId, libraryQuery]);
 
-  const draftFingerprint = useMemo(() => JSON.stringify({
-    title: draft.title,
-    state: draft.state,
-    enabledConstraintIds: [...draft.enabledConstraintIds].sort(),
-  }), [draft.enabledConstraintIds, draft.state, draft.title]);
+  const draftFingerprint = useMemo(() => buildDocumentFingerprint(draft), [draft]);
 
-  const persistedFingerprint = useMemo(() => {
-    const persisted = documents.find((item) => item.id === draft.id);
-    if (!persisted) return null;
-    return JSON.stringify({
-      title: persisted.title,
-      state: persisted.state,
-      enabledConstraintIds: [...persisted.enabledConstraintIds].sort(),
-    });
-  }, [documents, draft.id]);
-
-  const isDirty = draft.id === 'local-draft' || persistedFingerprint !== draftFingerprint;
+  const isDirty = draft.id === 'local-draft' || persistedDraftFingerprint !== draftFingerprint;
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -513,7 +511,11 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       if (preferredId) {
         const detailResponse = await fetch(`/api/prompt-documents/${preferredId}`, { cache: 'no-store' });
         const detailData = await detailResponse.json();
-        if (detailResponse.ok && detailData.document) setDraft(detailData.document as PromptDocument);
+        if (detailResponse.ok && detailData.document) {
+          const loadedDocument = detailData.document as PromptDocument;
+          setDraft(loadedDocument);
+          setPersistedDraftFingerprint(buildDocumentFingerprint(loadedDocument));
+        }
       }
     } catch (error) {
       console.warn('Failed to reload scenes:', error);
@@ -534,10 +536,12 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       const loadedDocument = data.document as PromptDocument;
       if (loadedDocument.templateId === 'single_character_scene_v1') {
         setDraft(migratePromptDocumentToSceneTemplate(loadedDocument));
+        setPersistedDraftFingerprint(buildDocumentFingerprint(loadedDocument));
         setSaveWarnings(['Legacy single-character scene was opened through the new scene editor. Save to migrate it to scene_template_v2.']);
         showToast('Loaded legacy scene in migration mode', 'success');
       } else {
         setDraft(loadedDocument);
+        setPersistedDraftFingerprint(buildDocumentFingerprint(loadedDocument));
         setSaveWarnings([]);
       }
     } catch (error: any) {
@@ -572,6 +576,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
       const next = data.document as PromptDocument;
       setDraft(next);
+      setPersistedDraftFingerprint(buildDocumentFingerprint(next));
       setSaveWarnings(Array.isArray(data.warnings) ? data.warnings.map((warning: { message?: string }) => warning?.message || '').filter(Boolean) : []);
       await reloadDocuments(next.id);
       showToast('Scene saved', 'success');
@@ -588,12 +593,14 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       if (!confirmed) return;
     }
     setDraft(makeLocalDraft(activeWorkspaceId));
+    setPersistedDraftFingerprint(null);
     setSaveWarnings([]);
     window.requestAnimationFrame(() => titleInputRef.current?.focus());
   };
 
   const handleDuplicate = () => {
     setDraft(cloneDocument(draft));
+    setPersistedDraftFingerprint(null);
     setSaveWarnings([]);
     window.requestAnimationFrame(() => titleInputRef.current?.focus());
   };
