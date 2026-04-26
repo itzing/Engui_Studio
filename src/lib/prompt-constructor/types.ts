@@ -103,6 +103,10 @@ export type CharacterFields = {
   ageBand: string;
   genderPresentation: string;
   appearance: string;
+  useRandomCharacterAppearance: boolean;
+  randomCharacterId: string;
+  randomCharacterName: string;
+  randomCharacterAppearance: string;
   outfit: string;
   expression: string;
   pose: string;

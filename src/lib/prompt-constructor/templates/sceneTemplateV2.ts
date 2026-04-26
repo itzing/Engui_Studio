@@ -25,6 +25,10 @@ function createCharacterSlot(index: number): CharacterSlot {
       ageBand: '',
       genderPresentation: '',
       appearance: '',
+      useRandomCharacterAppearance: false,
+      randomCharacterId: '',
+      randomCharacterName: '',
+      randomCharacterAppearance: '',
       outfit: '',
       expression: '',
       pose: '',
@@ -109,7 +113,13 @@ function resolveRenderedGender(value: string, ageValue: string): string {
 function renderCharacterSlot(slot: CharacterSlot, index: number): string {
   const formattedAge = formatCharacterAge(slot.fields.ageBand);
   const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
-  const formattedName = slot.fields.nameOrRole.trim();
+  const effectiveName = slot.fields.useRandomCharacterAppearance
+    ? slot.fields.randomCharacterName.trim()
+    : slot.fields.nameOrRole.trim();
+  const effectiveAppearance = slot.fields.useRandomCharacterAppearance
+    ? slot.fields.randomCharacterAppearance.trim()
+    : slot.fields.appearance.trim();
+  const formattedName = effectiveName;
   const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
   const formattedExpression = slot.fields.expression.trim() ? `Face expression: ${slot.fields.expression.trim()}` : '';
   const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
@@ -120,7 +130,7 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
     formattedAge,
     formattedGender,
     formattedExpression,
-    cleanPromptFragment(slot.fields.appearance),
+    cleanPromptFragment(effectiveAppearance),
     cleanPromptFragment(slot.fields.outfit),
     formattedPose,
     cleanPromptFragment(slot.fields.localAction),
@@ -222,7 +232,11 @@ export function validateSceneTemplateV2(state: SceneTemplateState, constraints: 
   }
 
   enabledSlots.forEach((slot) => {
-    const slotIdentity = [slot.fields.nameOrRole, slot.fields.appearance, slot.role].some((value) => value.trim().length > 0);
+    const slotIdentity = [
+      slot.role,
+      slot.fields.useRandomCharacterAppearance ? slot.fields.randomCharacterName : slot.fields.nameOrRole,
+      slot.fields.useRandomCharacterAppearance ? slot.fields.randomCharacterAppearance : slot.fields.appearance,
+    ].some((value) => value.trim().length > 0);
     if (!slotIdentity) {
       warnings.push({
         id: `thin-character-slot-${slot.id}`,

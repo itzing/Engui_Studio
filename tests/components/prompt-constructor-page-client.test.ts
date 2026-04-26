@@ -80,6 +80,10 @@ function buildSceneDocument(id: string, title: string) {
             ageBand: '',
             genderPresentation: 'female',
             appearance: 'white hair',
+            useRandomCharacterAppearance: false,
+            randomCharacterId: '',
+            randomCharacterName: '',
+            randomCharacterAppearance: '',
             outfit: 'travel cloak',
             expression: 'relieved',
             pose: 'reaching forward',
@@ -475,6 +479,9 @@ describe('PromptConstructorPageClient regressions', () => {
       if (url.endsWith('/api/prompt-documents/scene-open-in-create')) {
         return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
       }
+      if (url.endsWith('/api/characters')) {
+        return jsonResponse({ success: true, characters: [] });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -500,6 +507,87 @@ describe('PromptConstructorPageClient regressions', () => {
 
     expect(mockAnnounceCreateModeChange).toHaveBeenCalledWith('image');
     expect(mockShowToast).toHaveBeenCalledWith('Scene prompt sent to Image Create', 'success');
+  });
+
+  it('disables name and appearance and renders a random matching character when random is enabled', async () => {
+    const loadedDocument = buildSceneDocument('scene-random', 'Random scene');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [{
+            id: 'scene-random',
+            workspaceId: 'ws-1',
+            title: 'Random scene',
+            templateId: 'scene_template_v2',
+            templateVersion: 1,
+            status: 'active',
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            sceneType: 'dramatic reunion',
+            tags: ['dramatic'],
+            characterCount: 1,
+            relationCount: 0,
+          }],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-random')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      if (url.endsWith('/api/characters')) {
+        return jsonResponse({
+          success: true,
+          characters: [
+            {
+              id: 'character-female',
+              name: 'Luna',
+              gender: 'female',
+              traits: { hair_color: 'silver hair', eye_color: 'amber eyes' },
+              editorState: {},
+              currentVersionId: 'version-f',
+              previewStatusSummary: null,
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              deletedAt: null,
+            },
+            {
+              id: 'character-male',
+              name: 'Kai',
+              gender: 'male',
+              traits: { hair_color: 'black hair' },
+              editorState: {},
+              currentVersionId: 'version-m',
+              previewStatusSummary: null,
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              deletedAt: null,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Random scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-random' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Random scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+    fireEvent.click(screen.getByTestId('random-character-toggle-char_1'));
+
+    await waitFor(() => {
+      expect((screen.getByTestId('character-field-nameOrRole-char_1') as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByTestId('character-field-appearance-char_1') as HTMLInputElement).disabled).toBe(true);
+      expect(screen.getByText(/Using random character: Luna/i)).toBeTruthy();
+    });
   });
 
   it('saves a new scene and stays stable after the summary reload', async () => {

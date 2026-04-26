@@ -17,6 +17,7 @@ import { buildSceneSnapshot, migratePromptDocumentToSceneTemplate, resolveConstr
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import { consumePromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
+import { normalizeCharacterGender } from '@/lib/characters/utils';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
 import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSummary, PromptState, SceneTemplateState, SingleCharacterPromptState, SceneSnapshot } from '@/lib/prompt-constructor/types';
 
@@ -137,6 +138,10 @@ function createCharacterSlot(index: number): CharacterSlot {
       ageBand: '',
       genderPresentation: '',
       appearance: '',
+      useRandomCharacterAppearance: false,
+      randomCharacterId: '',
+      randomCharacterName: '',
+      randomCharacterAppearance: '',
       outfit: '',
       expression: '',
       pose: '',
@@ -177,6 +182,38 @@ function parseCharacterSlotFieldPath(slotId: string): { characterId: string; fie
 
 function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
   return buildCharacterPromptFromSummary(character, { includeName: false });
+}
+
+function pickRandomCharacterForSlot(slot: CharacterSlot, characters: CharacterSummary[]): CharacterSummary | null {
+  const targetGender = normalizeCharacterGender(slot.fields.genderPresentation, 'female') || 'female';
+  const matches = characters.filter((character) => (normalizeCharacterGender(character.gender, 'female') || 'female') === targetGender);
+  if (matches.length === 0) return null;
+  const index = Math.floor(Math.random() * matches.length);
+  return matches[index] || null;
+}
+
+function applyRandomCharacterToSlot(slot: CharacterSlot, character: CharacterSummary | null): CharacterSlot {
+  if (!character) {
+    return {
+      ...slot,
+      fields: {
+        ...slot.fields,
+        randomCharacterId: '',
+        randomCharacterName: '',
+        randomCharacterAppearance: '',
+      },
+    };
+  }
+
+  return {
+    ...slot,
+    fields: {
+      ...slot.fields,
+      randomCharacterId: character.id,
+      randomCharacterName: character.name || '',
+      randomCharacterAppearance: buildCharacterAppearanceFromManager(character),
+    },
+  };
 }
 
 function setSlotValue(state: PromptState, slotId: string, value: string): PromptState {
@@ -334,6 +371,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [libraryQuery, setLibraryQuery] = useState('');
   const [libraryBlocks, setLibraryBlocks] = useState<PromptBlock[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [availableCharacters, setAvailableCharacters] = useState<CharacterSummary[]>([]);
   const [helperCharacters, setHelperCharacters] = useState<CharacterSummary[]>([]);
   const [isHelperCharactersLoading, setIsHelperCharactersLoading] = useState(false);
   const [documentQuery, setDocumentQuery] = useState('');
@@ -440,32 +478,19 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   useEffect(() => {
     let cancelled = false;
 
-    const activeCharacterField = parseCharacterSlotFieldPath(activeSlotId);
-    if (!isSceneTemplateState(draft.state) || !activeCharacterField || activeCharacterField.fieldId !== 'appearance') {
-      setHelperCharacters([]);
-      setIsHelperCharactersLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     const load = async () => {
-      setIsHelperCharactersLoading(true);
       try {
         const response = await fetch('/api/characters', { cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Failed to load characters');
         if (!cancelled) {
-          const characters = Array.isArray(data.characters) ? data.characters as CharacterSummary[] : [];
-          setHelperCharacters(characters);
+          setAvailableCharacters(Array.isArray(data.characters) ? data.characters as CharacterSummary[] : []);
         }
       } catch (error) {
         if (!cancelled) {
-          console.warn('Failed to load helper characters:', error);
-          setHelperCharacters([]);
+          console.warn('Failed to load characters:', error);
+          setAvailableCharacters([]);
         }
-      } finally {
-        if (!cancelled) setIsHelperCharactersLoading(false);
       }
     };
 
@@ -473,7 +498,55 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     return () => {
       cancelled = true;
     };
-  }, [activeSlotId, draft.state]);
+  }, []);
+
+  useEffect(() => {
+    const activeCharacterField = parseCharacterSlotFieldPath(activeSlotId);
+    if (!isSceneTemplateState(draft.state) || !activeCharacterField || activeCharacterField.fieldId !== 'appearance') {
+      setHelperCharacters([]);
+      setIsHelperCharactersLoading(false);
+      return;
+    }
+
+    setIsHelperCharactersLoading(false);
+    setHelperCharacters(availableCharacters);
+  }, [activeSlotId, availableCharacters, draft.state]);
+
+  useEffect(() => {
+    if (!isSceneTemplateState(draft.state) || availableCharacters.length === 0) return;
+
+    let changed = false;
+    const nextSlots = draft.state.characterSlots.map((slot) => {
+      if (!slot.fields.useRandomCharacterAppearance) return slot;
+
+      const currentGender = normalizeCharacterGender(slot.fields.genderPresentation, 'female') || 'female';
+      const currentRandomGender = slot.fields.randomCharacterId
+        ? normalizeCharacterGender(availableCharacters.find((character) => character.id === slot.fields.randomCharacterId)?.gender, 'female')
+        : null;
+      const shouldRefresh = !slot.fields.randomCharacterId
+        || !slot.fields.randomCharacterName.trim()
+        || !slot.fields.randomCharacterAppearance.trim()
+        || currentRandomGender !== currentGender;
+
+      if (!shouldRefresh) return slot;
+
+      changed = true;
+      return applyRandomCharacterToSlot(slot, pickRandomCharacterForSlot(slot, availableCharacters));
+    });
+
+    if (!changed) return;
+
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterSlots: current.state.characterSlots.map((slot) => nextSlots.find((nextSlot) => nextSlot.id === slot.id) || slot),
+        },
+      };
+    });
+  }, [availableCharacters, draft.state]);
 
   useEffect(() => {
     if (!activeWorkspaceId || !didHydrateReuseDraft || !didInitialDocumentsLoad || didRestoreLastOpenedDocument) return;
@@ -545,7 +618,12 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
       if (isSceneTemplateState(draft.state) && section.id === 'characters') {
         total = Math.max(draft.state.characterSlots.length, 1);
-        filled = draft.state.characterSlots.filter((slot) => slot.enabled && [slot.label, slot.role, slot.fields.nameOrRole, slot.fields.appearance].some((value) => value.trim().length > 0)).length;
+        filled = draft.state.characterSlots.filter((slot) => slot.enabled && [
+          slot.label,
+          slot.role,
+          slot.fields.useRandomCharacterAppearance ? slot.fields.randomCharacterName : slot.fields.nameOrRole,
+          slot.fields.useRandomCharacterAppearance ? slot.fields.randomCharacterAppearance : slot.fields.appearance,
+        ].some((value) => value.trim().length > 0)).length;
       }
 
       const hasWarning = warnings.some((warning) => warning.slotId && section.slotIds.includes(warning.slotId));
@@ -1141,30 +1219,71 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                         ['depthLayer', 'Depth layer', slot.staging.depthLayer],
                                         ['bodyOrientation', 'Body orientation', slot.staging.bodyOrientation],
                                         ['stance', 'Stance', slot.staging.stance],
-                                      ].map(([fieldId, label, value]) => (
-                                        <label key={fieldId} className="block rounded-lg border border-white/10 bg-black/10 p-3">
-                                          <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">{label}</div>
-                                          <Input
-                                            value={value}
-                                            onFocus={() => {
-                                              setActiveSlotId(`characters.${slot.id}.${fieldId}`);
-                                              setFocusedSectionId('characters');
-                                            }}
-                                            onChange={(event) => {
-                                              const nextValue = event.target.value;
-                                              updateCharacterSlot(slot.id, (current) => {
-                                                if (fieldId === 'role') return { ...current, role: nextValue };
-                                                if (fieldId === 'screenPosition') return { ...current, staging: { ...current.staging, screenPosition: nextValue } };
-                                                if (fieldId === 'depthLayer') return { ...current, staging: { ...current.staging, depthLayer: nextValue } };
-                                                if (fieldId === 'bodyOrientation') return { ...current, staging: { ...current.staging, bodyOrientation: nextValue } };
-                                                if (fieldId === 'stance') return { ...current, staging: { ...current.staging, stance: nextValue } };
-                                                return { ...current, fields: { ...current.fields, [fieldId]: nextValue } } as CharacterSlot;
-                                              });
-                                            }}
-                                            className="border-white/15 bg-white/5 text-white"
-                                          />
-                                        </label>
-                                      ))}
+                                      ].map(([fieldId, label, value]) => {
+                                        const isRandomLockedField = slot.fields.useRandomCharacterAppearance && (fieldId === 'nameOrRole' || fieldId === 'appearance');
+                                        return (
+                                          <label key={fieldId} className="block rounded-lg border border-white/10 bg-black/10 p-3">
+                                            <div className="mb-1 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/45">
+                                              <span>{label}</span>
+                                              {fieldId === 'appearance' ? (
+                                                <span className="flex items-center gap-2 text-[11px] normal-case tracking-normal text-white/70">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={slot.fields.useRandomCharacterAppearance === true}
+                                                    onChange={(event) => {
+                                                      const checked = event.target.checked;
+                                                      updateCharacterSlot(slot.id, (current) => ({
+                                                        ...current,
+                                                        fields: checked
+                                                          ? applyRandomCharacterToSlot({
+                                                            ...current,
+                                                            fields: {
+                                                              ...current.fields,
+                                                              useRandomCharacterAppearance: true,
+                                                            },
+                                                          }, pickRandomCharacterForSlot(current, availableCharacters)).fields
+                                                          : {
+                                                            ...current.fields,
+                                                            useRandomCharacterAppearance: false,
+                                                            randomCharacterId: '',
+                                                            randomCharacterName: '',
+                                                            randomCharacterAppearance: '',
+                                                          },
+                                                      }));
+                                                    }}
+                                                    data-testid={`random-character-toggle-${slot.id}`}
+                                                  />
+                                                  Random
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                            <Input
+                                              value={value}
+                                              disabled={isRandomLockedField}
+                                              onFocus={() => {
+                                                setActiveSlotId(`characters.${slot.id}.${fieldId}`);
+                                                setFocusedSectionId('characters');
+                                              }}
+                                              onChange={(event) => {
+                                                const nextValue = event.target.value;
+                                                updateCharacterSlot(slot.id, (current) => {
+                                                  if (fieldId === 'role') return { ...current, role: nextValue };
+                                                  if (fieldId === 'screenPosition') return { ...current, staging: { ...current.staging, screenPosition: nextValue } };
+                                                  if (fieldId === 'depthLayer') return { ...current, staging: { ...current.staging, depthLayer: nextValue } };
+                                                  if (fieldId === 'bodyOrientation') return { ...current, staging: { ...current.staging, bodyOrientation: nextValue } };
+                                                  if (fieldId === 'stance') return { ...current, staging: { ...current.staging, stance: nextValue } };
+                                                  return { ...current, fields: { ...current.fields, [fieldId]: nextValue } } as CharacterSlot;
+                                                });
+                                              }}
+                                              className="border-white/15 bg-white/5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                              data-testid={`character-field-${fieldId}-${slot.id}`}
+                                            />
+                                            {fieldId === 'appearance' && slot.fields.useRandomCharacterAppearance && slot.fields.randomCharacterName.trim() ? (
+                                              <div className="mt-2 text-[11px] text-cyan-200">Using random character: {slot.fields.randomCharacterName}</div>
+                                            ) : null}
+                                          </label>
+                                        );
+                                      })}
                                       <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                                         <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45">Gender</div>
                                         <div className="flex gap-2" role="group" aria-label={`Gender toggle ${slot.label || slot.id}`}>

@@ -27,6 +27,10 @@ function buildState(ageBand: string, genderPresentation: string): SceneTemplateS
           ageBand,
           genderPresentation,
           appearance: 'silver hair, pale skin',
+          useRandomCharacterAppearance: false,
+          randomCharacterId: '',
+          randomCharacterName: '',
+          randomCharacterAppearance: '',
           outfit: 'black coat',
           expression: 'calm',
           pose: 'looking forward',
@@ -92,5 +96,21 @@ describe('renderSceneTemplateV2 character formatting', () => {
 
     expect(girlPrompt).toContain('17yo\ngirl');
     expect(boyPrompt).toContain('16yo\nboy');
+  });
+
+  it('uses random character name and appearance when random appearance is enabled', () => {
+    const state = buildState('22', 'female');
+    state.characterSlots[0].fields.nameOrRole = '';
+    state.characterSlots[0].fields.appearance = '';
+    state.characterSlots[0].fields.useRandomCharacterAppearance = true;
+    state.characterSlots[0].fields.randomCharacterId = 'character-random';
+    state.characterSlots[0].fields.randomCharacterName = 'Luna';
+    state.characterSlots[0].fields.randomCharacterAppearance = 'female, amber eyes, braided silver hair';
+
+    const prompt = renderSceneTemplateV2(state, []);
+
+    expect(prompt).toContain('Character 1: Luna');
+    expect(prompt).toContain('female, amber eyes, braided silver hair');
+    expect(prompt).not.toContain('Character 1: Mira');
   });
 });
