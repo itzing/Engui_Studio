@@ -78,18 +78,19 @@ function buildState(ageBand: string, genderPresentation: string): SceneTemplateS
 }
 
 describe('renderSceneTemplateV2 character formatting', () => {
-  it('renders name, role, age, gender, expression, and appearance in the requested order for adults', () => {
+  it('renders name first and splits character fields onto separate lines', () => {
     const prompt = renderSceneTemplateV2(buildState('22', 'female'), []);
 
-    expect(prompt).toContain('Character 1: name: Mira, Role: hero, 22yo, female, calm face expression, silver hair, pale skin');
+    expect(prompt).toContain('Character 1: Mira\nRole: hero\n22yo\nfemale\ncalm face expression\nsilver hair, pale skin\nblack coat\nPose: looking forward');
+    expect(prompt).not.toContain('name: Mira');
     expect(prompt).not.toContain('Character A');
   });
 
-  it('renders under-18 male/female as boy/girl', () => {
+  it('renders under-18 male/female as boy/girl on separate lines', () => {
     const girlPrompt = renderSceneTemplateV2(buildState('17', 'female'), []);
     const boyPrompt = renderSceneTemplateV2(buildState('16', 'male'), []);
 
-    expect(girlPrompt).toContain('17yo, girl');
-    expect(boyPrompt).toContain('16yo, boy');
+    expect(girlPrompt).toContain('17yo\ngirl');
+    expect(boyPrompt).toContain('16yo\nboy');
   });
 });

@@ -109,9 +109,10 @@ function resolveRenderedGender(value: string, ageValue: string): string {
 function renderCharacterSlot(slot: CharacterSlot, index: number): string {
   const formattedAge = formatCharacterAge(slot.fields.ageBand);
   const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
-  const formattedName = slot.fields.nameOrRole.trim() ? `name: ${slot.fields.nameOrRole.trim()}` : '';
+  const formattedName = slot.fields.nameOrRole.trim();
   const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
   const formattedExpression = slot.fields.expression.trim() ? `${slot.fields.expression.trim()} face expression` : '';
+  const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
 
   const parts = [
     formattedName,
@@ -119,19 +120,20 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
     formattedAge,
     formattedGender,
     formattedExpression,
-    slot.fields.appearance,
-    slot.fields.outfit,
-    slot.fields.pose,
-    slot.fields.localAction,
+    cleanPromptFragment(slot.fields.appearance),
+    cleanPromptFragment(slot.fields.outfit),
+    formattedPose,
+    cleanPromptFragment(slot.fields.localAction),
     joinPromptFragments(slot.fields.props),
-    slot.staging.screenPosition,
-    slot.staging.depthLayer,
-    slot.staging.bodyOrientation,
-    slot.staging.stance,
-    slot.staging.relativePlacementNotes,
-  ];
+    cleanPromptFragment(slot.staging.screenPosition),
+    cleanPromptFragment(slot.staging.depthLayer),
+    cleanPromptFragment(slot.staging.bodyOrientation),
+    cleanPromptFragment(slot.staging.stance),
+    cleanPromptFragment(slot.staging.relativePlacementNotes),
+  ].filter(Boolean);
 
-  return renderLabeledSentence(`Character ${index + 1}`, parts);
+  if (parts.length === 0) return '';
+  return `Character ${index + 1}: ${parts[0]}\n${parts.slice(1).join('\n')}.`;
 }
 
 function renderRelation(relation: CharacterRelation, slotIndex: Map<string, string>): string {

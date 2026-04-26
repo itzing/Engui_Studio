@@ -28,11 +28,13 @@ export function renderLabeledSentence(label: string, parts: Array<string | null 
 
 export function normalizeRenderedPrompt(input: string): string {
   return input
+    .replace(/\r\n/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\n[ \t]+/g, '\n')
     .replace(/,\s*\./g, '.')
-    .replace(/\s+/g, ' ')
-    .replace(/ \n/g, '\n')
-    .replace(/\n /g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
     .trim();
 }
