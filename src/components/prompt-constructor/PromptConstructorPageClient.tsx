@@ -22,6 +22,28 @@ import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSu
 
 const defaultTemplateId = 'scene_template_v2';
 const defaultTemplate = getPromptTemplate(defaultTemplateId);
+const lastOpenedPromptDocumentStorageKeyPrefix = 'prompt-constructor:last-opened:';
+
+function getLastOpenedPromptDocumentStorageKey(workspaceId: string | null): string | null {
+  return workspaceId ? `${lastOpenedPromptDocumentStorageKeyPrefix}${workspaceId}` : null;
+}
+
+function readLastOpenedPromptDocumentId(workspaceId: string | null): string | null {
+  if (typeof window === 'undefined') return null;
+  const key = getLastOpenedPromptDocumentStorageKey(workspaceId);
+  return key ? window.localStorage.getItem(key) : null;
+}
+
+function writeLastOpenedPromptDocumentId(workspaceId: string | null, documentId: string | null): void {
+  if (typeof window === 'undefined') return;
+  const key = getLastOpenedPromptDocumentStorageKey(workspaceId);
+  if (!key) return;
+  if (!documentId || documentId === 'local-draft') {
+    window.localStorage.removeItem(key);
+    return;
+  }
+  window.localStorage.setItem(key, documentId);
+}
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '';
@@ -303,6 +325,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [documents, setDocuments] = useState<PromptDocumentSummary[]>([]);
   const [draft, setDraft] = useState<PromptDocument>(() => makeLocalDraft(activeWorkspaceId));
   const [persistedDraftFingerprint, setPersistedDraftFingerprint] = useState<string | null>(null);
+  const [didInitialDocumentsLoad, setDidInitialDocumentsLoad] = useState(false);
+  const [didRestoreLastOpenedDocument, setDidRestoreLastOpenedDocument] = useState(false);
   const template = useMemo(() => getPromptTemplate(draft.templateId), [draft.templateId]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -321,6 +345,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
+    setDidInitialDocumentsLoad(false);
+    setDidRestoreLastOpenedDocument(false);
     const reuseDraft = consumePromptConstructorReuseDraft();
     if (reuseDraft?.snapshot) {
       setDraft(makeLocalDraftFromSnapshot(reuseDraft.snapshot, reuseDraft.workspaceId || activeWorkspaceId));
@@ -334,6 +360,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
     setDraft((current) => current.workspaceId ? current : makeLocalDraft(activeWorkspaceId));
     setPersistedDraftFingerprint(null);
+    setDidHydrateReuseDraft(true);
   }, [activeWorkspaceId, showToast]);
 
   useEffect(() => {
@@ -358,7 +385,10 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
           console.warn('Scenes are not available yet:', error);
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setDidInitialDocumentsLoad(true);
+        }
       }
     };
 
@@ -444,6 +474,30 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       cancelled = true;
     };
   }, [activeSlotId, draft.state]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !didHydrateReuseDraft || !didInitialDocumentsLoad || didRestoreLastOpenedDocument) return;
+    if (draft.id !== 'local-draft') {
+      setDidRestoreLastOpenedDocument(true);
+      return;
+    }
+
+    const lastOpenedId = readLastOpenedPromptDocumentId(activeWorkspaceId);
+    if (!lastOpenedId) {
+      setDidRestoreLastOpenedDocument(true);
+      return;
+    }
+
+    const savedDocument = documents.find((document) => document.id === lastOpenedId);
+    if (!savedDocument) {
+      writeLastOpenedPromptDocumentId(activeWorkspaceId, null);
+      setDidRestoreLastOpenedDocument(true);
+      return;
+    }
+
+    setDidRestoreLastOpenedDocument(true);
+    void selectDocument(savedDocument, { skipDirtyCheck: true });
+  }, [activeWorkspaceId, didHydrateReuseDraft, didInitialDocumentsLoad, didRestoreLastOpenedDocument, documents, draft.id]);
 
   const draftFingerprint = useMemo(() => buildDocumentFingerprint(draft), [draft]);
 
@@ -583,6 +637,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         const detailData = await detailResponse.json();
         if (detailResponse.ok && detailData.document) {
           const loadedDocument = detailData.document as PromptDocument;
+          writeLastOpenedPromptDocumentId(activeWorkspaceId, loadedDocument.id);
           setDraft(loadedDocument);
           setPersistedDraftFingerprint(buildDocumentFingerprint(loadedDocument));
         }
@@ -594,8 +649,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     }
   };
 
-  const selectDocument = async (next: PromptDocumentSummary) => {
-    if (isDirty && draft.id !== next.id) {
+  const selectDocument = async (next: PromptDocumentSummary, options?: { skipDirtyCheck?: boolean }) => {
+    if (!options?.skipDirtyCheck && isDirty && draft.id !== next.id) {
       const confirmed = window.confirm('You have unsaved changes in the current scene. Switch scenes anyway?');
       if (!confirmed) return;
     }
@@ -604,6 +659,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Failed to load scene');
       const loadedDocument = data.document as PromptDocument;
+      writeLastOpenedPromptDocumentId(activeWorkspaceId, loadedDocument.id);
       if (loadedDocument.templateId === 'single_character_scene_v1') {
         setDraft(migratePromptDocumentToSceneTemplate(loadedDocument));
         setPersistedDraftFingerprint(buildDocumentFingerprint(loadedDocument));
@@ -645,6 +701,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       if (!response.ok) throw new Error(data?.error || 'Failed to save scene');
 
       const next = data.document as PromptDocument;
+      writeLastOpenedPromptDocumentId(activeWorkspaceId, next.id);
       setDraft(next);
       setPersistedDraftFingerprint(buildDocumentFingerprint(next));
       setSaveWarnings(Array.isArray(data.warnings) ? data.warnings.map((warning: { message?: string }) => warning?.message || '').filter(Boolean) : []);

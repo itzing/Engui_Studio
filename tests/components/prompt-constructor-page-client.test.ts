@@ -137,6 +137,7 @@ describe('PromptConstructorPageClient regressions', () => {
     vi.clearAllMocks();
     mockLoadPromptBlocks.mockResolvedValue([]);
     mockConsumeReuseDraft.mockReturnValue(null);
+    window.localStorage.clear();
     window.confirm = vi.fn(() => true);
   });
 
@@ -183,6 +184,49 @@ describe('PromptConstructorPageClient regressions', () => {
     });
 
     expect(screen.getByText('Saved')).toBeTruthy();
+  });
+
+  it('restores the last opened saved draft automatically on open', async () => {
+    const loadedDocument = buildSceneDocument('scene-last-opened', 'Last opened scene');
+    window.localStorage.setItem('prompt-constructor:last-opened:ws-1', 'scene-last-opened');
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [
+            {
+              id: 'scene-last-opened',
+              workspaceId: 'ws-1',
+              title: 'Last opened scene',
+              templateId: 'scene_template_v2',
+              templateVersion: 1,
+              status: 'active',
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              sceneType: 'dramatic reunion',
+              tags: ['dramatic'],
+              characterCount: 1,
+              relationCount: 0,
+            },
+          ],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-last-opened')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Last opened scene')).toBeTruthy();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/prompt-documents/scene-last-opened', { cache: 'no-store' });
   });
 
   it('shows preset refs as read-only badges while keeping pose editable', async () => {
