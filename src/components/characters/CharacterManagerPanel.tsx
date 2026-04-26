@@ -38,6 +38,20 @@ type ImportPreview = {
   traits: CharacterTraitMap;
 };
 
+export function parseImportText(input: string): ImportPreview {
+  const structured = parseStructuredImportText(input);
+  const freeText = parseFreeTextImportText(input);
+
+  return {
+    name: structured.name || freeText.name,
+    gender: normalizeCharacterGender(structured.gender || freeText.gender, 'female') || 'female',
+    traits: {
+      ...freeText.traits,
+      ...structured.traits,
+    },
+  };
+}
+
 type ImageExtractPreview = CharacterExtractResult & {
   sourceImageUrl: string | null;
 };
@@ -172,7 +186,7 @@ function parseStructuredImportText(input: string): ImportPreview {
 
   const parsed: ImportPreview = {
     name: '',
-    gender: 'female',
+    gender: '',
     traits: {},
   };
 
@@ -192,7 +206,7 @@ function parseStructuredImportText(input: string): ImportPreview {
     }
 
     if (normalizedKey === 'gender') {
-      parsed.gender = normalizeCharacterGender(value, 'female') || 'female';
+      parsed.gender = normalizeCharacterGender(value, '') || '';
       continue;
     }
 
@@ -205,7 +219,7 @@ function parseStructuredImportText(input: string): ImportPreview {
 function parseFreeTextImportText(input: string): ImportPreview {
   const parsed: ImportPreview = {
     name: '',
-    gender: 'female',
+    gender: '',
     traits: {},
   };
 
@@ -223,8 +237,8 @@ function parseFreeTextImportText(input: string): ImportPreview {
     parsed.name = titleCaseName(nameMatch[1]);
   }
 
-  if (/\b(female|woman)\b/i.test(normalizedInput)) parsed.gender = 'female';
-  else if (/\b(male|man)\b/i.test(normalizedInput)) parsed.gender = 'male';
+  if (/\b(female|woman|girl)\b/i.test(normalizedInput)) parsed.gender = 'female';
+  else if (/\b(male|man|boy)\b/i.test(normalizedInput)) parsed.gender = 'male';
 
   const segments = normalizedInput
     .split(/[\n,;]+/)
@@ -241,8 +255,8 @@ function parseFreeTextImportText(input: string): ImportPreview {
     }
 
     if (!parsed.gender) {
-      if (/\b(female|woman)\b/i.test(segment)) parsed.gender = 'female';
-      else if (/\b(male|man)\b/i.test(segment)) parsed.gender = 'male';
+      if (/\b(female|woman|girl)\b/i.test(segment)) parsed.gender = 'female';
+      else if (/\b(male|man|boy)\b/i.test(segment)) parsed.gender = 'male';
     }
 
     let match: RegExpMatchArray | null = null;
@@ -385,20 +399,6 @@ function parseFreeTextImportText(input: string): ImportPreview {
   }
 
   return parsed;
-}
-
-function parseImportText(input: string): ImportPreview {
-  const structured = parseStructuredImportText(input);
-  const freeText = parseFreeTextImportText(input);
-
-  return {
-    name: structured.name || freeText.name,
-    gender: structured.gender || freeText.gender,
-    traits: {
-      ...freeText.traits,
-      ...structured.traits,
-    },
-  };
 }
 
 type CharacterListMode = 'active' | 'trash';

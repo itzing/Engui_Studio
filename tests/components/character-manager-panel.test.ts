@@ -13,7 +13,7 @@ vi.mock('@/components/ui/toast', () => ({
   useToast: () => ({ showToast: mockShowToast }),
 }));
 
-import CharacterManagerPanel from '@/components/characters/CharacterManagerPanel';
+import CharacterManagerPanel, { parseImportText } from '@/components/characters/CharacterManagerPanel';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
   return Promise.resolve({
@@ -43,6 +43,13 @@ describe('CharacterManagerPanel gender behavior', () => {
     await waitFor(() => {
       expect(screen.getByText('female')).toBeTruthy();
     });
+  });
+
+  it('parses free-text male imports correctly instead of falling back to female', () => {
+    const parsed = parseImportText('man named alaric, having northern european ethnicity, fair porcelain skin tone, rectangular face shape');
+
+    expect(parsed.name).toBe('Alaric');
+    expect(parsed.gender).toBe('male');
   });
 
   it('uses a male/female toggle and saves gender-only changes', async () => {
