@@ -784,7 +784,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
   const handleOpenInCreate = async () => {
     try {
-      const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+      const { persistPromptIntoImageCreateDraft } = await import('@/lib/create/persistCreateReuseDraft');
       const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
       const sceneSnapshot = buildSceneSnapshot(draft as PromptDocument<SceneTemplateState>);
       if (!sceneSnapshot) {
@@ -792,13 +792,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
         return;
       }
 
-      const result = persistCreateReuseDraft({
-        type: 'image',
-        modelId: 'z-image',
+      const result = persistPromptIntoImageCreateDraft({
         prompt: renderedPrompt,
-        options: {
-          randomizeSeed: false,
-        },
         sceneSnapshot,
         sourcePromptDocumentId: draft.id === 'local-draft' ? null : draft.id,
         sourcePromptDocumentTitle: draft.title,
@@ -806,7 +801,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
       if (result?.workflow) {
         announceCreateModeChange(result.workflow);
-        showToast('Scene sent to Image Create with immutable snapshot', 'success');
+        showToast('Scene prompt sent to Image Create', 'success');
         if (embedded) {
           window.dispatchEvent(new CustomEvent('prompt-constructor-request-close'));
         } else {

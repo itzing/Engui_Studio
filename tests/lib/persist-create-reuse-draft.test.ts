@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const setActiveMode = vi.fn();
 const setWorkflowActiveModel = vi.fn();
 const saveWorkflowDraft = vi.fn();
+const getWorkflowActiveModel = vi.fn();
+const getWorkflowDraft = vi.fn();
 const getModelById = vi.fn();
 const isInputVisible = vi.fn();
 
@@ -10,6 +12,8 @@ vi.mock('@/lib/createDrafts', () => ({
   setActiveMode,
   setWorkflowActiveModel,
   saveWorkflowDraft,
+  getWorkflowActiveModel,
+  getWorkflowDraft,
 }));
 
 vi.mock('@/lib/models/modelConfig', () => ({
@@ -22,8 +26,64 @@ describe('persistCreateReuseDraft', () => {
     setActiveMode.mockReset();
     setWorkflowActiveModel.mockReset();
     saveWorkflowDraft.mockReset();
+    getWorkflowActiveModel.mockReset();
+    getWorkflowDraft.mockReset();
     getModelById.mockReset();
     isInputVisible.mockReset();
+  });
+
+  it('updates only the prompt and scene linkage in the current image draft for Prompt Constructor handoff', async () => {
+    getWorkflowActiveModel.mockReturnValue('flux-dev');
+    getWorkflowDraft.mockReturnValue({
+      prompt: 'old prompt',
+      showAdvanced: true,
+      randomizeSeed: true,
+      parameterValues: { width: 1344, height: 768, lora: '/runpod-volume/loras/existing.safetensors' },
+      previewUrl: '/generations/reference.png',
+      previewUrl2: '',
+      inputs: {
+        primary: { kind: 'remote-url', url: '/generations/reference.png', source: 'job' },
+        secondary: null,
+      },
+    });
+    getModelById.mockReturnValue({
+      id: 'flux-dev',
+      parameters: [
+        { name: 'width', default: 1024 },
+        { name: 'height', default: 1024 },
+        { name: 'lora', default: '' },
+      ],
+    });
+    isInputVisible.mockImplementation((_model, input) => input === 'image');
+    const { persistPromptIntoImageCreateDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    const result = persistPromptIntoImageCreateDraft({
+      prompt: 'new prompt only',
+      sceneSnapshot: { templateId: 'scene_template_v2' },
+      sourcePromptDocumentId: 'scene-1',
+      sourcePromptDocumentTitle: 'Temple reunion',
+    });
+
+    expect(result?.workflow).toBe('image');
+    expect(result?.modelId).toBe('flux-dev');
+    expect(setActiveMode).toHaveBeenCalledWith('image');
+    expect(setWorkflowActiveModel).toHaveBeenCalledWith('image', 'flux-dev');
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'flux-dev', expect.objectContaining({
+      prompt: 'new prompt only',
+      randomizeSeed: true,
+      parameterValues: expect.objectContaining({
+        width: 1344,
+        height: 768,
+        lora: '/runpod-volume/loras/existing.safetensors',
+      }),
+      previewUrl: '/generations/reference.png',
+      inputs: expect.objectContaining({
+        primary: expect.objectContaining({ url: '/generations/reference.png' }),
+      }),
+      sourcePromptDocumentId: 'scene-1',
+      sourcePromptDocumentTitle: 'Temple reunion',
+      sceneSnapshot: { templateId: 'scene_template_v2' },
+    }));
   });
 
   it('writes img2img payloads into the image workflow draft before navigation', async () => {

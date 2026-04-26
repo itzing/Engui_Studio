@@ -111,7 +111,7 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
   const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
   const formattedName = slot.fields.nameOrRole.trim();
   const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
-  const formattedExpression = slot.fields.expression.trim() ? `${slot.fields.expression.trim()} face expression` : '';
+  const formattedExpression = slot.fields.expression.trim() ? `Face expression: ${slot.fields.expression.trim()}` : '';
   const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
 
   const parts = [

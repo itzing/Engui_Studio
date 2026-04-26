@@ -1,7 +1,7 @@
 'use client';
 
-import { createImageDraftSnapshot, normalizeImageDraftForModel, normalizeRandomizeSeed } from '@/lib/create/imageDraft';
-import { saveWorkflowDraft, setActiveMode, setWorkflowActiveModel } from '@/lib/createDrafts';
+import { createImageDraftSnapshot, normalizeImageDraftForModel, normalizeRandomizeSeed, type ImageCreateDraftSnapshot } from '@/lib/create/imageDraft';
+import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setActiveMode, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
 type ReuseDetail = {
@@ -92,6 +92,27 @@ function normalizeZImageLoraSlots(options: Record<string, any>): Array<{ path: s
   return legacyPath
     ? [{ path: legacyPath, weight: typeof legacyWeight === 'number' && Number.isFinite(legacyWeight) ? legacyWeight : 1.0 }]
     : [];
+}
+
+export function persistPromptIntoImageCreateDraft(
+  detail: Pick<ReuseDetail, 'prompt' | 'sceneSnapshot' | 'sourcePromptDocumentId' | 'sourcePromptDocumentTitle'>,
+  defaults = { imageModelId: 'z-image' },
+) {
+  const modelId = getWorkflowActiveModel('image') || defaults.imageModelId;
+  const currentDraft = getWorkflowDraft<ImageCreateDraftSnapshot>('image', modelId);
+  const snapshot = normalizeImageDraftForModel(modelId, createImageDraftSnapshot({
+    ...(currentDraft || {}),
+    prompt: detail.prompt || '',
+    sceneSnapshot: detail.sceneSnapshot && typeof detail.sceneSnapshot === 'object' ? detail.sceneSnapshot : null,
+    sourcePromptDocumentId: detail.sourcePromptDocumentId || '',
+    sourcePromptDocumentTitle: detail.sourcePromptDocumentTitle || '',
+  }));
+
+  setActiveMode('image');
+  setWorkflowActiveModel('image', modelId);
+  saveWorkflowDraft('image', modelId, snapshot);
+
+  return { workflow: 'image' as const, modelId, snapshot };
 }
 
 export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageModelId: 'flux-krea', videoModelId: 'wan22' }) {

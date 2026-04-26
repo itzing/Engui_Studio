@@ -5,11 +5,13 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockShowToast, mockPush, mockLoadPromptBlocks, mockConsumeReuseDraft } = vi.hoisted(() => ({
+const { mockShowToast, mockPush, mockLoadPromptBlocks, mockConsumeReuseDraft, mockPersistPromptIntoImageCreateDraft, mockAnnounceCreateModeChange } = vi.hoisted(() => ({
   mockShowToast: vi.fn(),
   mockPush: vi.fn(),
   mockLoadPromptBlocks: vi.fn(),
   mockConsumeReuseDraft: vi.fn(),
+  mockPersistPromptIntoImageCreateDraft: vi.fn(() => ({ workflow: 'image', modelId: 'flux-dev', snapshot: {} })),
+  mockAnnounceCreateModeChange: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -30,6 +32,14 @@ vi.mock('@/lib/prompt-constructor/providers', () => ({
 
 vi.mock('@/lib/prompt-constructor/persistPromptConstructorReuseDraft', () => ({
   consumePromptConstructorReuseDraft: mockConsumeReuseDraft,
+}));
+
+vi.mock('@/lib/create/persistCreateReuseDraft', () => ({
+  persistPromptIntoImageCreateDraft: mockPersistPromptIntoImageCreateDraft,
+}));
+
+vi.mock('@/lib/create/createModeEvents', () => ({
+  announceCreateModeChange: mockAnnounceCreateModeChange,
 }));
 
 import PromptConstructorPageClient from '@/components/prompt-constructor/PromptConstructorPageClient';
@@ -137,6 +147,8 @@ describe('PromptConstructorPageClient regressions', () => {
     vi.clearAllMocks();
     mockLoadPromptBlocks.mockResolvedValue([]);
     mockConsumeReuseDraft.mockReturnValue(null);
+    mockPersistPromptIntoImageCreateDraft.mockClear();
+    mockAnnounceCreateModeChange.mockClear();
     window.localStorage.clear();
     window.confirm = vi.fn(() => true);
   });
@@ -435,6 +447,59 @@ describe('PromptConstructorPageClient regressions', () => {
     expect(appearanceInput.value).toContain('female');
     expect(appearanceInput.value).toContain('silver hair');
     expect(appearanceInput.value).not.toContain('Mira');
+  });
+
+  it('sends only the rendered prompt into Image Create without replacing the whole draft', async () => {
+    const loadedDocument = buildSceneDocument('scene-open-in-create', 'Open in Create scene');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [{
+            id: 'scene-open-in-create',
+            workspaceId: 'ws-1',
+            title: 'Open in Create scene',
+            templateId: 'scene_template_v2',
+            templateVersion: 1,
+            status: 'active',
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            sceneType: 'dramatic reunion',
+            tags: ['dramatic'],
+            characterCount: 1,
+            relationCount: 0,
+          }],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-open-in-create')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Open in Create scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-open-in-create' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Open in Create scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open in Create' })[0]);
+
+    await waitFor(() => {
+      expect(mockPersistPromptIntoImageCreateDraft).toHaveBeenCalledWith(expect.objectContaining({
+        prompt: expect.stringContaining('Character 1: wanderer'),
+        sourcePromptDocumentId: 'scene-open-in-create',
+        sourcePromptDocumentTitle: 'Open in Create scene',
+      }));
+    });
+
+    expect(mockAnnounceCreateModeChange).toHaveBeenCalledWith('image');
+    expect(mockShowToast).toHaveBeenCalledWith('Scene prompt sent to Image Create', 'success');
   });
 
   it('saves a new scene and stays stable after the summary reload', async () => {
