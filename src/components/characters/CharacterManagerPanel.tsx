@@ -15,6 +15,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { characterTraitDefinitionMap, characterTraitDefinitionsByGroup } from '@/lib/characters/schema';
 import type { CharacterExtractResult, CharacterSummary, CharacterTraitMap, CharacterVersionSummary } from '@/lib/characters/types';
+import { normalizeCharacterGender } from '@/lib/characters/utils';
 
 type DraftCharacter = {
   id: string | null;
@@ -41,11 +42,17 @@ type ImageExtractPreview = CharacterExtractResult & {
   sourceImageUrl: string | null;
 };
 
+const GENDER_OPTIONS = ['male', 'female'] as const;
+
+function renderGenderLabel(value: string | null | undefined) {
+  return normalizeCharacterGender(value, 'female') || 'female';
+}
+
 function createEmptyDraft(): DraftCharacter {
   return {
     id: null,
     name: '',
-    gender: '',
+    gender: 'female',
     traits: {},
     editorState: {},
     previewStatusSummary: null,
@@ -57,7 +64,7 @@ function buildDraft(character: CharacterSummary): DraftCharacter {
   return {
     id: character.id,
     name: character.name,
-    gender: character.gender || '',
+    gender: normalizeCharacterGender(character.gender, 'female') || 'female',
     traits: character.traits || {},
     editorState: character.editorState || {},
     previewStatusSummary: character.previewStatusSummary,
@@ -74,7 +81,7 @@ function buildDraftFromSnapshot(snapshot: {
   return {
     id: null,
     name: snapshot.name,
-    gender: snapshot.gender || '',
+    gender: normalizeCharacterGender(snapshot.gender, 'female') || 'female',
     traits: snapshot.traits || {},
     editorState: snapshot.editorState || {},
     previewStatusSummary: null,
@@ -165,7 +172,7 @@ function parseStructuredImportText(input: string): ImportPreview {
 
   const parsed: ImportPreview = {
     name: '',
-    gender: '',
+    gender: 'female',
     traits: {},
   };
 
@@ -185,7 +192,7 @@ function parseStructuredImportText(input: string): ImportPreview {
     }
 
     if (normalizedKey === 'gender') {
-      parsed.gender = value;
+      parsed.gender = normalizeCharacterGender(value, 'female') || 'female';
       continue;
     }
 
@@ -198,7 +205,7 @@ function parseStructuredImportText(input: string): ImportPreview {
 function parseFreeTextImportText(input: string): ImportPreview {
   const parsed: ImportPreview = {
     name: '',
-    gender: '',
+    gender: 'female',
     traits: {},
   };
 
@@ -597,8 +604,13 @@ export default function CharacterManagerPanel() {
     if (!draft) return false;
     if (!draft.name.trim()) return false;
     if (!draft.id) return true;
-    return !traitsEqual(draft.baseTraits, draft.traits);
-  }, [draft]);
+    const selectedGender = normalizeCharacterGender(selectedCharacter?.gender, 'female') || 'female';
+    return !traitsEqual(draft.baseTraits, draft.traits)
+      || draft.name.trim() !== (selectedCharacter?.name || '').trim()
+      || draft.gender !== selectedGender
+      || draft.previewStatusSummary !== (selectedCharacter?.previewStatusSummary || null)
+      || JSON.stringify(draft.editorState || {}) !== JSON.stringify(selectedCharacter?.editorState || {});
+  }, [draft, selectedCharacter]);
 
   const toggleGroupLock = (groupId: string) => {
     if (!draft) return;
@@ -628,7 +640,7 @@ export default function CharacterManagerPanel() {
     if (!draft) return;
     setModalValues({
       name: draft.name,
-      gender: draft.gender,
+      gender: normalizeCharacterGender(draft.gender, 'female') || 'female',
     });
     setModalState({ kind: 'basics' });
   };
@@ -656,7 +668,7 @@ export default function CharacterManagerPanel() {
       setDraft({
         ...draft,
         name: (modalValues.name || '').trim(),
-        gender: (modalValues.gender || '').trim(),
+        gender: normalizeCharacterGender(modalValues.gender, 'female') || 'female',
       });
       closeModal();
       return;
@@ -719,7 +731,7 @@ export default function CharacterManagerPanel() {
     try {
       const payload = {
         name: draft.name.trim(),
-        gender: draft.gender.trim(),
+        gender: normalizeCharacterGender(draft.gender, 'female') || 'female',
         traits: draft.traits,
         editorState: draft.editorState,
         previewStatusSummary: draft.previewStatusSummary,
@@ -835,7 +847,7 @@ export default function CharacterManagerPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: effectiveExtractName,
-          gender: extractPreview.gender,
+          gender: normalizeCharacterGender(extractPreview.gender, 'female') || 'female',
           traits: extractPreview.traits,
           editorState: {},
           previewStatusSummary: extractPreview.summary || null,
@@ -880,7 +892,7 @@ export default function CharacterManagerPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: effectiveImportName,
-          gender: importPreview.gender,
+          gender: normalizeCharacterGender(importPreview.gender, 'female') || 'female',
           traits: importPreview.traits,
           editorState: {},
           previewStatusSummary: null,
@@ -939,7 +951,7 @@ export default function CharacterManagerPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: nextName,
-          gender: selectedCharacter?.gender || '',
+          gender: normalizeCharacterGender(selectedCharacter?.gender, 'female') || 'female',
           traits: selectedCloneVersion.traitsSnapshot,
           editorState: selectedCloneVersion.editorStateSnapshot,
           previewStatusSummary: null,
@@ -980,7 +992,7 @@ export default function CharacterManagerPanel() {
     setDraft({
       ...draft,
       name: selectedCharacter.name,
-      gender: selectedCharacter.gender || draft.gender,
+      gender: normalizeCharacterGender(selectedCharacter.gender, 'female') || draft.gender,
       traits: version.traitsSnapshot,
       editorState: version.editorStateSnapshot,
     });
@@ -1270,7 +1282,7 @@ export default function CharacterManagerPanel() {
                     <div className="min-w-0">
                       <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
                       <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
-                        {character.gender || 'Unspecified gender'} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                        {renderGenderLabel(character.gender)} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -1378,7 +1390,7 @@ export default function CharacterManagerPanel() {
                 </div>
                 <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Gender</div>
-                  <div className="mt-1 text-xs font-medium break-words">{draft.gender || 'Optional'}</div>
+                  <div className="mt-1 text-xs font-medium break-words">{renderGenderLabel(draft.gender)}</div>
                 </div>
                 <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Draft status</div>
@@ -1611,7 +1623,24 @@ export default function CharacterManagerPanel() {
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium">Gender</div>
-                  <Input value={modalValues.gender || ''} onChange={(event) => setModalValues((prev) => ({ ...prev, gender: event.target.value }))} />
+                  <div className="flex gap-2" role="group" aria-label="Character gender toggle">
+                    {GENDER_OPTIONS.map((genderOption) => {
+                      const selected = (normalizeCharacterGender(modalValues.gender, 'female') || 'female') === genderOption;
+                      return (
+                        <Button
+                          key={genderOption}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setModalValues((prev) => ({ ...prev, gender: genderOption }))}
+                          className={`${selected ? 'border-cyan-400/40 bg-cyan-500/15 text-cyan-100' : 'border-white/15 bg-transparent text-white/80 hover:bg-white/10'}`}
+                          data-testid={`character-manager-gender-toggle-${genderOption}`}
+                        >
+                          {genderOption}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             )}
@@ -1688,7 +1717,7 @@ export default function CharacterManagerPanel() {
               <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
                 <div className="text-xs font-medium">Parsed preview</div>
                 <div className="text-[11px] text-muted-foreground">Name: <span className="text-foreground">{effectiveImportName || 'Missing, confirmation blocked'}</span></div>
-                <div className="text-[11px] text-muted-foreground">Gender: <span className="text-foreground">{importPreview.gender || 'Not provided'}</span></div>
+                <div className="text-[11px] text-muted-foreground">Gender: <span className="text-foreground">{renderGenderLabel(importPreview.gender)}</span></div>
                 <div className="text-[11px] text-muted-foreground">Traits parsed: <span className="text-foreground">{Object.keys(importPreview.traits).length}</span></div>
                 <div className="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 pt-1">
                   {Object.entries(importPreview.traits).map(([key, value]) => (
@@ -1772,7 +1801,7 @@ export default function CharacterManagerPanel() {
                 {extractPreview ? (
                   <>
                     <div className="text-[11px] text-muted-foreground">Name: <span className="text-foreground">{effectiveExtractName || 'Missing, confirmation blocked'}</span></div>
-                    <div className="text-[11px] text-muted-foreground">Gender: <span className="text-foreground">{extractPreview.gender || 'Not provided'}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Gender: <span className="text-foreground">{renderGenderLabel(extractPreview.gender)}</span></div>
                     <div className="text-[11px] text-muted-foreground">Confidence: <span className="text-foreground">{extractPreview.confidence}</span></div>
                     <div className="text-[11px] text-muted-foreground">Summary: <span className="text-foreground">{extractPreview.summary}</span></div>
                     <div className="text-[11px] text-muted-foreground">Traits extracted: <span className="text-foreground">{Object.keys(extractPreview.traits).length}</span></div>

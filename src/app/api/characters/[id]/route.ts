@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   buildChangeSummary,
+  normalizeCharacterGender,
   normalizeEditorState,
   normalizeTraits,
   serializeEditorState,
@@ -26,9 +27,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const name = typeof body?.name === 'string' ? body.name.trim() : existing.name;
-    const gender = typeof body?.gender === 'string'
-      ? (body.gender.trim() || null)
-      : existing.gender;
+    const gender = Object.prototype.hasOwnProperty.call(body || {}, 'gender')
+      ? normalizeCharacterGender(body?.gender, 'female')
+      : normalizeCharacterGender(existing.gender, 'female');
     const nextTraits = normalizeTraits(body?.traits);
     const nextEditorState = normalizeEditorState(body?.editorState);
     const previewStatusSummary = typeof body?.previewStatusSummary === 'string'
@@ -41,12 +42,40 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     const previousTraits = normalizeTraits(JSON.parse(existing.traits || '{}'));
     const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits);
+    const basicsChanged = name !== existing.name
+      || gender !== normalizeCharacterGender(existing.gender, 'female')
+      || previewStatusSummary !== existing.previewStatusSummary
+      || JSON.stringify(nextEditorState) !== JSON.stringify(normalizeEditorState(JSON.parse(existing.editorState || '{}')));
 
-    if (!traitsChanged) {
+    if (!traitsChanged && !basicsChanged) {
       return NextResponse.json({
         success: true,
         character: toCharacterSummary({ ...existing, _count: { versions: 0 } }),
         persisted: false,
+      });
+    }
+    if (!traitsChanged && basicsChanged) {
+      const updatedCharacter = await prisma.character.update({
+        where: { id },
+        data: {
+          name,
+          gender,
+          editorState: serializeEditorState(nextEditorState),
+          previewStatusSummary,
+        },
+        include: {
+          _count: {
+            select: {
+              versions: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        character: toCharacterSummary(updatedCharacter),
+        persisted: true,
       });
     }
 

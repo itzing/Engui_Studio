@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   buildChangeSummary,
+  normalizeCharacterGender,
   normalizeEditorState,
   normalizeTraits,
   serializeEditorState,
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
-    const gender = typeof body?.gender === 'string' && body.gender.trim() ? body.gender.trim() : null;
+    const gender = normalizeCharacterGender(body?.gender, 'female');
     const traits = normalizeTraits(body?.traits);
     const editorState = normalizeEditorState(body?.editorState);
     const previewStatusSummary = typeof body?.previewStatusSummary === 'string' && body.previewStatusSummary.trim()

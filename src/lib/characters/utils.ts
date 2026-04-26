@@ -1,5 +1,26 @@
 import type { CharacterEditorState, CharacterTraitMap, CharacterSummary, CharacterVersionSummary } from './types';
 
+export function normalizeCharacterGender(input: unknown, fallback: string | null = 'female'): string | null {
+  if (typeof input !== 'string') {
+    return fallback;
+  }
+
+  const normalized = input.trim().toLowerCase();
+  if (normalized === 'male' || normalized === 'female') {
+    return normalized;
+  }
+
+  if (normalized === 'man') {
+    return 'male';
+  }
+
+  if (normalized === 'woman') {
+    return 'female';
+  }
+
+  return fallback;
+}
+
 type PersistedCharacterRecord = {
   id: string;
   name: string;
