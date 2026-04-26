@@ -590,6 +590,105 @@ describe('PromptConstructorPageClient regressions', () => {
     });
   });
 
+  it('re-picks a new random matching character on each Open in Create click', async () => {
+    const loadedDocument = buildSceneDocument('scene-random-open', 'Random open scene');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [{
+            id: 'scene-random-open',
+            workspaceId: 'ws-1',
+            title: 'Random open scene',
+            templateId: 'scene_template_v2',
+            templateVersion: 1,
+            status: 'active',
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            sceneType: 'dramatic reunion',
+            tags: ['dramatic'],
+            characterCount: 1,
+            relationCount: 0,
+          }],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-random-open')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      if (url.endsWith('/api/characters')) {
+        return jsonResponse({
+          success: true,
+          characters: [
+            {
+              id: 'character-female-1',
+              name: 'Luna',
+              gender: 'female',
+              traits: { hair_color: 'silver hair', eye_color: 'amber eyes' },
+              editorState: {},
+              currentVersionId: 'version-f1',
+              previewStatusSummary: null,
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              deletedAt: null,
+            },
+            {
+              id: 'character-female-2',
+              name: 'Nova',
+              gender: 'female',
+              traits: { hair_color: 'black hair', eye_color: 'green eyes' },
+              editorState: {},
+              currentVersionId: 'version-f2',
+              previewStatusSummary: null,
+              createdAt: '2026-04-25T12:00:00.000Z',
+              updatedAt: '2026-04-25T12:00:00.000Z',
+              deletedAt: null,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.99)
+      .mockReturnValueOnce(0);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Random open scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-random-open' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Random open scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+    fireEvent.click(screen.getByTestId('random-character-toggle-char_1'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Using random character: Luna/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open in Create' })[0]);
+
+    await waitFor(() => {
+      expect(mockPersistPromptIntoImageCreateDraft).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/Using random character: Nova/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open in Create' })[0]);
+
+    await waitFor(() => {
+      expect(mockPersistPromptIntoImageCreateDraft).toHaveBeenCalledTimes(2);
+      expect(screen.getByText(/Using random character: Luna/i)).toBeTruthy();
+    });
+
+    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[0]?.[0]?.prompt).toContain('Character 1: Nova');
+    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[1]?.[0]?.prompt).toContain('Character 1: Luna');
+  });
+
   it('saves a new scene and stays stable after the summary reload', async () => {
     const savedDocument = buildSceneDocument('scene-new', 'Moonlit balcony');
     let listCalls = 0;

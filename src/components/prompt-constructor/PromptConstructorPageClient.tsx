@@ -216,6 +216,22 @@ function applyRandomCharacterToSlot(slot: CharacterSlot, character: CharacterSum
   };
 }
 
+function refreshRandomCharactersInDocument(document: PromptDocument, characters: CharacterSummary[]): PromptDocument {
+  if (!isSceneTemplateState(document.state)) return document;
+
+  return {
+    ...document,
+    state: {
+      ...document.state,
+      characterSlots: document.state.characterSlots.map((slot) => (
+        slot.fields.useRandomCharacterAppearance
+          ? applyRandomCharacterToSlot(slot, pickRandomCharacterForSlot(slot, characters))
+          : slot
+      )),
+    },
+  };
+}
+
 function setSlotValue(state: PromptState, slotId: string, value: string): PromptState {
   if (isSceneTemplateState(state)) {
     switch (slotId) {
@@ -864,14 +880,23 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     try {
       const { persistPromptIntoImageCreateDraft } = await import('@/lib/create/persistCreateReuseDraft');
       const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
-      const sceneSnapshot = buildSceneSnapshot(draft as PromptDocument<SceneTemplateState>);
+      const createDraft = refreshRandomCharactersInDocument(draft, availableCharacters);
+      const createPrompt = (() => {
+        const createTemplate = getPromptTemplate(createDraft.templateId);
+        return createTemplate
+          ? createTemplate.render(createDraft.state, resolveConstraintSnippets(createDraft.enabledConstraintIds, createDraft.templateId))
+          : renderedPrompt;
+      })();
+      const sceneSnapshot = buildSceneSnapshot(createDraft as PromptDocument<SceneTemplateState>);
       if (!sceneSnapshot) {
         showToast('Only scene_template_v2 drafts can be sent to Image Create', 'error');
         return;
       }
 
+      setDraft(createDraft);
+
       const result = persistPromptIntoImageCreateDraft({
-        prompt: renderedPrompt,
+        prompt: createPrompt,
         sceneSnapshot,
         sourcePromptDocumentId: draft.id === 'local-draft' ? null : draft.id,
         sourcePromptDocumentTitle: draft.title,
