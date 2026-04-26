@@ -21,6 +21,9 @@ import {
 import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
+import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
+import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
+import type { CharacterSummary } from '@/lib/characters/types';
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
@@ -38,6 +41,12 @@ export default function ImageGenerationForm() {
     const [showReuseSuccess, setShowReuseSuccess] = useState(false);
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
     const [randomizeSeed, setRandomizeSeed] = useState(false);
+    const [promptDocuments, setPromptDocuments] = useState<PromptDocumentSummary[]>([]);
+    const [isPromptDocumentsLoading, setIsPromptDocumentsLoading] = useState(false);
+    const [isPromptDraftSyncing, setIsPromptDraftSyncing] = useState(false);
+    const [selectedPromptDocumentId, setSelectedPromptDocumentId] = useState('');
+    const [selectedPromptDocumentTitle, setSelectedPromptDocumentTitle] = useState('');
+    const [sceneSnapshot, setSceneSnapshot] = useState<Record<string, any> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef2 = useRef<HTMLInputElement>(null);
     const formRef = useRef<HTMLDivElement>(null);
@@ -100,7 +109,10 @@ export default function ImageGenerationForm() {
         parameterValues,
         previewUrl,
         previewUrl2,
-    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, showAdvanced]);
+        sceneSnapshot,
+        sourcePromptDocumentId: selectedPromptDocumentId,
+        sourcePromptDocumentTitle: selectedPromptDocumentTitle,
+    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
 
     const applySnapshot = React.useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
         const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -109,6 +121,9 @@ export default function ImageGenerationForm() {
         setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
         setRandomizeSeed(normalizeRandomizeSeed(snapshot?.randomizeSeed));
         setParameterValues(mergedParameterValues);
+        setSceneSnapshot(snapshot?.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' ? snapshot.sceneSnapshot : null);
+        setSelectedPromptDocumentId(typeof snapshot?.sourcePromptDocumentId === 'string' ? snapshot.sourcePromptDocumentId : '');
+        setSelectedPromptDocumentTitle(typeof snapshot?.sourcePromptDocumentTitle === 'string' ? snapshot.sourcePromptDocumentTitle : '');
 
         const nextPreviewUrl = typeof snapshot?.previewUrl === 'string' ? snapshot.previewUrl : '';
         const nextPreviewUrl2 = typeof snapshot?.previewUrl2 === 'string' ? snapshot.previewUrl2 : '';
@@ -191,6 +206,117 @@ export default function ImageGenerationForm() {
     const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
     const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
     const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+    const isPromptDraftSelected = selectedPromptDocumentId.trim().length > 0;
+
+    const loadPromptDocumentForCreate = React.useCallback(async (documentId: string) => {
+        const response = await fetch(`/api/prompt-documents/${documentId}`, { cache: 'no-store' });
+        const data = await response.json();
+
+        if (!response.ok || !data?.success || !data?.document) {
+            throw new Error(data?.error || 'Failed to load prompt draft');
+        }
+
+        return data.document as PromptDocument;
+    }, []);
+
+    const loadCharactersForPromptDraft = React.useCallback(async () => {
+        const response = await fetch('/api/characters', { cache: 'no-store' });
+        const data = await response.json();
+
+        if (!response.ok || !data?.success) {
+            throw new Error(data?.error || 'Failed to load characters');
+        }
+
+        return (Array.isArray(data.characters) ? data.characters : []) as CharacterSummary[];
+    }, []);
+
+    const syncSelectedPromptDraft = React.useCallback(async (documentId: string) => {
+        const document = await loadPromptDocumentForCreate(documentId);
+        const characters = documentUsesRandomCharacterAppearance(document) ? await loadCharactersForPromptDraft() : [];
+        const rendered = renderPromptDocumentForCreate(document, characters);
+
+        setSelectedPromptDocumentTitle(document.title || '');
+        setPrompt(rendered.renderedPrompt || '');
+        setSceneSnapshot(rendered.sceneSnapshot);
+
+        return {
+            document,
+            renderedPrompt: rendered.renderedPrompt,
+            sceneSnapshot: rendered.sceneSnapshot,
+        };
+    }, [loadCharactersForPromptDraft, loadPromptDocumentForCreate]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadPromptDocuments = async () => {
+            if (!activeWorkspaceId) {
+                setPromptDocuments([]);
+                return;
+            }
+
+            setIsPromptDocumentsLoading(true);
+            try {
+                const params = new URLSearchParams({ workspaceId: activeWorkspaceId });
+                const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok || !data?.success) {
+                    throw new Error(data?.error || 'Failed to load prompt drafts');
+                }
+
+                if (!cancelled) {
+                    setPromptDocuments(Array.isArray(data.documents) ? data.documents : []);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setPromptDocuments([]);
+                    console.warn('Failed to load prompt drafts for Image Create:', error);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsPromptDocumentsLoading(false);
+                }
+            }
+        };
+
+        void loadPromptDocuments();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeWorkspaceId]);
+
+    useEffect(() => {
+        if (!selectedPromptDocumentId) return;
+        let cancelled = false;
+
+        const sync = async () => {
+            setIsPromptDraftSyncing(true);
+            try {
+                await syncSelectedPromptDraft(selectedPromptDocumentId);
+            } catch (error) {
+                if (!cancelled) {
+                    setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to sync prompt draft' });
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsPromptDraftSyncing(false);
+                }
+            }
+        };
+
+        void sync();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedPromptDocumentId, syncSelectedPromptDraft]);
+
+    useEffect(() => {
+        if (!selectedPromptDocumentId || selectedPromptDocumentTitle.trim()) return;
+        const summary = promptDocuments.find((entry) => entry.id === selectedPromptDocumentId);
+        if (summary?.title) {
+            setSelectedPromptDocumentTitle(summary.title);
+        }
+    }, [promptDocuments, selectedPromptDocumentId, selectedPromptDocumentTitle]);
 
     const submitPromptHelper = async ({
         instructionOverride,
@@ -707,7 +833,7 @@ export default function ImageGenerationForm() {
         e.preventDefault();
         setMessage(null);
 
-        if (currentModel.inputs.includes('text') && !prompt) {
+        if (currentModel.inputs.includes('text') && !prompt && !isPromptDraftSelected) {
             return;
         }
 
@@ -716,9 +842,31 @@ export default function ImageGenerationForm() {
         const form = e.target as HTMLFormElement;
         const dimInput = form.elements.namedItem('dimensions') as HTMLSelectElement | null;
 
+        let promptForSubmit = prompt;
+        let sceneSnapshotForSubmit = sceneSnapshot;
+        let sourcePromptDocumentIdForSubmit = selectedPromptDocumentId || null;
+        let sourcePromptDocumentTitleForSubmit = selectedPromptDocumentTitle || null;
+
+        if (isPromptDraftSelected) {
+            try {
+                setIsPromptDraftSyncing(true);
+                const synced = await syncSelectedPromptDraft(selectedPromptDocumentId);
+                promptForSubmit = synced.renderedPrompt;
+                sceneSnapshotForSubmit = synced.sceneSnapshot;
+                sourcePromptDocumentIdForSubmit = synced.document.id;
+                sourcePromptDocumentTitleForSubmit = synced.document.title;
+            } catch (error) {
+                setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to sync prompt draft' });
+                setIsGenerating(false);
+                setIsPromptDraftSyncing(false);
+                return;
+            }
+            setIsPromptDraftSyncing(false);
+        }
+
         const result = await submitImageGeneration({
             currentModel,
-            prompt,
+            prompt: promptForSubmit,
             parameterValues,
             randomizeSeed,
             activeWorkspaceId,
@@ -728,6 +876,9 @@ export default function ImageGenerationForm() {
             imagePreviewUrl: previewUrl,
             imagePreviewUrl2: previewUrl2,
             dimensions: dimInput?.value || null,
+            sceneSnapshot: sceneSnapshotForSubmit,
+            sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
+            sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
         });
 
         if (result.success) {
@@ -949,13 +1100,49 @@ export default function ImageGenerationForm() {
                 {/* Prompt - only show if model accepts text input */}
                 {currentModel.inputs.includes('text') && (
                     <div className="space-y-3">
+                        {!isPhoneLayout && (
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Prompt draft</Label>
+                                <select
+                                    className="h-10 w-full rounded-lg border border-border bg-secondary/50 px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                                    value={selectedPromptDocumentId}
+                                    onChange={(event) => {
+                                        const nextId = event.target.value;
+                                        if (!nextId) {
+                                            setSelectedPromptDocumentId('');
+                                            setSelectedPromptDocumentTitle('');
+                                            setSceneSnapshot(null);
+                                            return;
+                                        }
+                                        const summary = promptDocuments.find((entry) => entry.id === nextId);
+                                        setSelectedPromptDocumentId(nextId);
+                                        setSelectedPromptDocumentTitle(summary?.title || '');
+                                    }}
+                                    disabled={isPromptDocumentsLoading || isGenerating}
+                                    data-testid="image-create-prompt-draft-selector"
+                                >
+                                    <option value="">Manual prompt</option>
+                                    {promptDocuments.map((document) => (
+                                        <option key={document.id} value={document.id}>
+                                            {document.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="text-[11px] text-muted-foreground">
+                                    {isPromptDraftSelected
+                                        ? 'Prompt is synced from the selected draft on every generate.'
+                                        : 'Select a saved Prompt Constructor draft to lock prompt editing.'}
+                                </div>
+                            </div>
+                        )}
                         <div className="relative">
                             <textarea
-                                className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${(isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected) ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
-                                disabled={isPromptHelperLoading}
+                                disabled={isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected}
+                                data-testid="image-create-prompt-textarea"
                             />
                         </div>
                         <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'}`}>
@@ -966,7 +1153,7 @@ export default function ImageGenerationForm() {
                                     setPromptHelperError(null);
                                     setIsPromptHelperOpen(true);
                                 }}
-                                disabled={!isPromptHelperConfigured || isPromptHelperLoading || isVisionPromptLoading}
+                                disabled={!isPromptHelperConfigured || isPromptHelperLoading || isVisionPromptLoading || isPromptDraftSelected || isPromptDraftSyncing}
                                 className="w-full justify-center gap-2"
                             >
                                 {isPromptHelperLoading ? (
@@ -986,7 +1173,7 @@ export default function ImageGenerationForm() {
                                 variant="outline"
                                 size="icon"
                                 onClick={() => void runSavedPromptHelperInstruction()}
-                                disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isVisionPromptLoading}
+                                disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isVisionPromptLoading || isPromptDraftSelected || isPromptDraftSyncing}
                                 className={isPhoneLayout ? 'h-11 w-full shrink-0' : 'h-10 w-10 shrink-0'}
                                 title={promptHelperInstruction.trim() ? 'Apply saved Prompt Helper instruction' : 'Save a Prompt Helper instruction first'}
                             >
@@ -1000,7 +1187,7 @@ export default function ImageGenerationForm() {
                                     setImagePromptResult('');
                                     setHasCopiedImagePromptResult(false);
                                 }}
-                                disabled={!isVisionPromptHelperConfigured || isVisionPromptLoading || isPromptHelperLoading}
+                                disabled={!isVisionPromptHelperConfigured || isVisionPromptLoading || isPromptHelperLoading || isPromptDraftSelected || isPromptDraftSyncing}
                                 className="w-full justify-center gap-2"
                             >
                                 <ImagePlus className="h-4 w-4" />
@@ -1210,10 +1397,10 @@ export default function ImageGenerationForm() {
                     )}
                     <Button
                         type="submit"
-                        disabled={isGenerating || isLoadingMedia}
+                        disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-2.5"
                     >
-                        {isLoadingMedia ? t('generationForm.loadingMedia') : isGenerating ? t('generationForm.generating') : t('generationForm.generate')}
+                        {isLoadingMedia ? t('generationForm.loadingMedia') : isGenerating ? t('generationForm.generating') : isPromptDraftSyncing ? 'Syncing prompt draft...' : t('generationForm.generate')}
                     </Button>
                 </div>
             </form >
