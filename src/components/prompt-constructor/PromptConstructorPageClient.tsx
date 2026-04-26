@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
+import type { CharacterSummary } from '@/lib/characters/types';
 import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 import { promptConstructorConstraints } from '@/lib/prompt-constructor/constraints';
 import { buildSceneSnapshot, migratePromptDocumentToSceneTemplate, resolveConstraintSnippets } from '@/lib/prompt-constructor/utils';
 import { loadPromptBlocks } from '@/lib/prompt-constructor/providers';
 import { consumePromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
+import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
 import type { PromptBlock } from '@/lib/prompt-constructor/providers/types';
 import type { CharacterRelation, CharacterSlot, PromptDocument, PromptDocumentSummary, PromptState, SceneTemplateState, SingleCharacterPromptState, SceneSnapshot } from '@/lib/prompt-constructor/types';
 
@@ -143,6 +145,16 @@ function createCharacterRelation(subjectId = '', targetId = ''): CharacterRelati
     dramaticFocus: '',
     notes: '',
   };
+}
+
+function parseCharacterSlotFieldPath(slotId: string): { characterId: string; fieldId: string } | null {
+  const match = /^characters\.([^\.]+)\.([^\.]+)$/.exec(slotId);
+  if (!match) return null;
+  return { characterId: match[1], fieldId: match[2] };
+}
+
+function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
+  return buildCharacterPromptFromSummary(character, { includeName: false });
 }
 
 function setSlotValue(state: PromptState, slotId: string, value: string): PromptState {
@@ -298,6 +310,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   const [libraryQuery, setLibraryQuery] = useState('');
   const [libraryBlocks, setLibraryBlocks] = useState<PromptBlock[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [helperCharacters, setHelperCharacters] = useState<CharacterSummary[]>([]);
+  const [isHelperCharactersLoading, setIsHelperCharactersLoading] = useState(false);
   const [documentQuery, setDocumentQuery] = useState('');
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -357,6 +371,15 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   useEffect(() => {
     let cancelled = false;
 
+    const activeCharacterField = parseCharacterSlotFieldPath(activeSlotId);
+    if (isSceneTemplateState(draft.state) && activeCharacterField) {
+      setLibraryBlocks([]);
+      setIsLibraryLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const load = async () => {
       setIsLibraryLoading(true);
       try {
@@ -382,7 +405,45 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     return () => {
       cancelled = true;
     };
-  }, [activeSlotId, activeWorkspaceId, libraryQuery]);
+  }, [activeSlotId, activeWorkspaceId, libraryQuery, draft.state]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const activeCharacterField = parseCharacterSlotFieldPath(activeSlotId);
+    if (!isSceneTemplateState(draft.state) || !activeCharacterField || activeCharacterField.fieldId !== 'appearance') {
+      setHelperCharacters([]);
+      setIsHelperCharactersLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const load = async () => {
+      setIsHelperCharactersLoading(true);
+      try {
+        const response = await fetch('/api/characters', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Failed to load characters');
+        if (!cancelled) {
+          const characters = Array.isArray(data.characters) ? data.characters as CharacterSummary[] : [];
+          setHelperCharacters(characters);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load helper characters:', error);
+          setHelperCharacters([]);
+        }
+      } finally {
+        if (!cancelled) setIsHelperCharactersLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSlotId, draft.state]);
 
   const draftFingerprint = useMemo(() => buildDocumentFingerprint(draft), [draft]);
 
@@ -466,6 +527,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
   }, [activeSectionId]);
 
   const helperQuickPresets = useMemo(() => {
+    const activeCharacterField = parseCharacterSlotFieldPath(activeSlotId);
+    if (isSceneTemplateState(draft.state) && activeCharacterField) return [];
     if (activeSectionId === 'relations') {
       return ['facing each other', 'locked eye contact', 'close distance', 'one character leaning toward the other'];
     }
@@ -485,7 +548,11 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
       return ['no extra people', 'clear character separation', 'no duplicated limbs', 'readable subject focus'];
     }
     return slotPresetChips[activeSlotId] || [];
-  }, [activeSectionId, activeSlotId]);
+  }, [activeSectionId, activeSlotId, draft.state]);
+
+  const activeCharacterField = useMemo(() => parseCharacterSlotFieldPath(activeSlotId), [activeSlotId]);
+  const isSceneCharacterFieldActive = isSceneTemplateState(draft.state) && !!activeCharacterField;
+  const showCharacterManagerHelper = isSceneCharacterFieldActive && activeCharacterField?.fieldId === 'appearance';
 
   const jumpToSection = (sectionId: string) => {
     setFocusedSectionId(sectionId);
@@ -623,6 +690,30 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
   const applyLibraryBlock = (block: PromptBlock, mode: 'replace' | 'append') => {
     applyTextToActiveSlot(block.content, mode);
+  };
+
+  const selectCharacterForActiveAppearance = (character: CharacterSummary) => {
+    if (!isSceneTemplateState(draft.state) || !activeCharacterField || activeCharacterField.fieldId !== 'appearance') return;
+    const appearance = buildCharacterAppearanceFromManager(character);
+    setDraft((current) => {
+      if (!isSceneTemplateState(current.state)) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          characterSlots: current.state.characterSlots.map((slot) => slot.id === activeCharacterField.characterId
+            ? {
+              ...slot,
+              fields: {
+                ...slot.fields,
+                nameOrRole: character.name || slot.fields.nameOrRole,
+                appearance,
+              },
+            }
+            : slot),
+        },
+      };
+    });
   };
 
   const handleCopy = async () => {
@@ -989,6 +1080,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                         ['label', 'Label', slot.label],
                                         ['role', 'Role', slot.role],
                                         ['nameOrRole', 'Name or role', slot.fields.nameOrRole],
+                                        ['ageBand', 'Age', slot.fields.ageBand],
                                         ['appearance', 'Appearance', slot.fields.appearance],
                                         ['outfit', 'Outfit', slot.fields.outfit],
                                         ['expression', 'Expression', slot.fields.expression],
@@ -1309,50 +1401,90 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-white/10 bg-black/10 p-3">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div className="text-xs uppercase tracking-[0.18em] text-white/45">Library Suggestions</div>
-                      <div className="text-xs text-white/45">Insert into current slot</div>
+                  {showCharacterManagerHelper ? (
+                    <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/45">Character Manager</div>
+                        <div className="text-xs text-white/45">Select fills name and appearance</div>
+                      </div>
+
+                      {isHelperCharactersLoading ? (
+                        <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading characters…</div>
+                      ) : helperCharacters.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                          No characters found in Character Manager yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {helperCharacters.map((character) => {
+                            const renderedAppearance = buildCharacterAppearanceFromManager(character);
+                            return (
+                              <div key={character.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-white">{character.name}</div>
+                                    <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">character manager</div>
+                                  </div>
+                                  <Button type="button" size="sm" onClick={() => selectCharacterForActiveAppearance(character)} data-testid={`select-character-${character.id}`}>
+                                    Select
+                                  </Button>
+                                </div>
+                                <div className="mt-3 text-sm leading-6 text-white/80">{renderedAppearance || 'No appearance traits saved yet.'}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-
-                    <Input
-                      value={libraryQuery}
-                      onChange={(event) => setLibraryQuery(event.target.value)}
-                      placeholder="Search library blocks"
-                      className="mb-3 border-white/15 bg-white/5 text-white"
-                    />
-
-                    {isLibraryLoading ? (
-                      <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
-                    ) : libraryBlocks.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
-                        No library blocks matched this scene context yet.
+                  ) : isSceneCharacterFieldActive ? (
+                    <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/60">
+                      No helper content for this character field yet.
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/45">Library Suggestions</div>
+                        <div className="text-xs text-white/45">Insert into current slot</div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {libraryBlocks.map((block) => (
-                          <div key={block.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-white">{block.label}</div>
-                                <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{block.source} · {block.category}</div>
+
+                      <Input
+                        value={libraryQuery}
+                        onChange={(event) => setLibraryQuery(event.target.value)}
+                        placeholder="Search library blocks"
+                        className="mb-3 border-white/15 bg-white/5 text-white"
+                      />
+
+                      {isLibraryLoading ? (
+                        <div className="rounded-lg border border-white/10 bg-black/10 p-4 text-sm text-white/60">Loading library…</div>
+                      ) : libraryBlocks.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-white/15 bg-black/10 p-4 text-sm text-white/65">
+                          No library blocks matched this scene context yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {libraryBlocks.map((block) => (
+                            <div key={block.id} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-white">{block.label}</div>
+                                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{block.source} · {block.category}</div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Button type="button" variant="outline" size="sm" onClick={() => applyLibraryBlock(block, 'append')} className="border-white/15 bg-transparent text-white hover:bg-white/10">
+                                    Append
+                                  </Button>
+                                  <Button type="button" size="sm" onClick={() => applyLibraryBlock(block, 'replace')}>
+                                    Replace
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <Button type="button" variant="outline" size="sm" onClick={() => applyLibraryBlock(block, 'append')} className="border-white/15 bg-transparent text-white hover:bg-white/10">
-                                  Append
-                                </Button>
-                                <Button type="button" size="sm" onClick={() => applyLibraryBlock(block, 'replace')}>
-                                  Replace
-                                </Button>
-                              </div>
+                              <div className="mt-3 text-sm leading-6 text-white/80">{block.content}</div>
                             </div>
-                            <div className="mt-3 text-sm leading-6 text-white/80">{block.content}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-white/45">Warnings</div>
                     {warnings.length === 0 && saveWarnings.length === 0 ? (

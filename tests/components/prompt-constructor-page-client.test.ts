@@ -306,6 +306,91 @@ describe('PromptConstructorPageClient regressions', () => {
     });
   });
 
+  it('shows Character Manager picks only for appearance and fills name plus appearance without the character name', async () => {
+    const loadedDocument = buildSceneDocument('scene-character-helper', 'Character helper scene');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          documents: [{
+            id: 'scene-character-helper',
+            workspaceId: 'ws-1',
+            title: 'Character helper scene',
+            templateId: 'scene_template_v2',
+            templateVersion: 1,
+            status: 'active',
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            sceneType: 'dramatic reunion',
+            tags: ['dramatic'],
+            characterCount: 1,
+            relationCount: 0,
+          }],
+        });
+      }
+      if (url.endsWith('/api/prompt-documents/scene-character-helper')) {
+        return jsonResponse({ success: true, document: loadedDocument, warnings: [], renderedPrompt: 'Scene: dramatic reunion' });
+      }
+      if (url.endsWith('/api/characters')) {
+        return jsonResponse({
+          success: true,
+          characters: [{
+            id: 'character-mira',
+            name: 'Mira',
+            gender: 'female',
+            traits: {
+              skin_tone: 'pale skin',
+              hair_color: 'silver hair',
+              eye_color: 'green eyes',
+            },
+            editorState: {},
+            currentVersionId: 'version-1',
+            previewStatusSummary: null,
+            createdAt: '2026-04-25T12:00:00.000Z',
+            updatedAt: '2026-04-25T12:00:00.000Z',
+            deletedAt: null,
+          }],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(PromptConstructorPageClient));
+
+    await screen.findByRole('option', { name: /Character helper scene/i });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'scene-character-helper' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Character helper scene')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+    expect(screen.getByText('Age')).toBeTruthy();
+    expect(screen.getByDisplayValue('white hair')).toBeTruthy();
+
+    fireEvent.focus(screen.getByDisplayValue('wanderer'));
+    expect(screen.queryByTestId('select-character-character-mira')).toBeNull();
+    expect(screen.getByText('No helper content for this character field yet.')).toBeTruthy();
+
+    fireEvent.focus(screen.getByDisplayValue('white hair'));
+
+    await screen.findByTestId('select-character-character-mira');
+    expect(screen.getByText('Mira')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('select-character-character-mira'));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Mira')).toBeTruthy();
+    });
+
+    const appearanceInput = screen.getByDisplayValue(/female/i) as HTMLInputElement;
+    expect(appearanceInput.value).toContain('female');
+    expect(appearanceInput.value).toContain('silver hair');
+    expect(appearanceInput.value).not.toContain('Mira');
+  });
+
   it('saves a new scene and stays stable after the summary reload', async () => {
     const savedDocument = buildSceneDocument('scene-new', 'Moonlit balcony');
     let listCalls = 0;

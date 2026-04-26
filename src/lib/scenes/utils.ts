@@ -113,11 +113,14 @@ export function serializeSceneTags(input: unknown): string {
   return JSON.stringify(normalizeChipArray(input));
 }
 
-export function buildCharacterPromptFromSummary(character: CharacterSummary | null | undefined): string {
+export function buildCharacterPromptFromSummary(
+  character: CharacterSummary | null | undefined,
+  options: { includeName?: boolean } = {},
+): string {
   if (!character) return '';
 
   const parts: string[] = [];
-  if (character.name.trim()) {
+  if (options.includeName !== false && character.name.trim()) {
     parts.push(character.name.trim());
   }
   if (character.gender?.trim()) {
