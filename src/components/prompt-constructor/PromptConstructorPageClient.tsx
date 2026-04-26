@@ -1105,7 +1105,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                   <div key={slot.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
                                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                                       <div>
-                                        <div className="text-sm font-semibold text-white">{slot.label || `Character ${index + 1}`}</div>
+                                        <div className="text-sm font-semibold text-white">{`Character ${index + 1}`}</div>
                                         <div className="text-xs text-white/45">Slot #{index + 1}</div>
                                       </div>
                                       <div className="flex flex-wrap items-center gap-2">
@@ -1134,9 +1134,8 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
 
                                     <div className="grid gap-3 xl:grid-cols-2">
                                       {[
-                                        ['label', 'Label', slot.label],
                                         ['role', 'Role', slot.role],
-                                        ['nameOrRole', 'Name or role', slot.fields.nameOrRole],
+                                        ['nameOrRole', 'Name', slot.fields.nameOrRole],
                                         ['ageBand', 'Age', slot.fields.ageBand],
                                         ['appearance', 'Appearance', slot.fields.appearance],
                                         ['outfit', 'Outfit', slot.fields.outfit],
@@ -1159,7 +1158,6 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                             onChange={(event) => {
                                               const nextValue = event.target.value;
                                               updateCharacterSlot(slot.id, (current) => {
-                                                if (fieldId === 'label') return { ...current, label: nextValue };
                                                 if (fieldId === 'role') return { ...current, role: nextValue };
                                                 if (fieldId === 'screenPosition') return { ...current, staging: { ...current.staging, screenPosition: nextValue } };
                                                 if (fieldId === 'depthLayer') return { ...current, staging: { ...current.staging, depthLayer: nextValue } };

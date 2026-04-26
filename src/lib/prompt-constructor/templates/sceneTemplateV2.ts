@@ -86,16 +86,41 @@ export function createInitialSceneTemplateState(): SceneTemplateState {
   };
 }
 
+function formatCharacterAge(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const match = trimmed.match(/\d+/);
+  if (!match) return trimmed;
+  return `${match[0]}yo`;
+}
+
+function resolveRenderedGender(value: string, ageValue: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return '';
+  const ageMatch = ageValue.trim().match(/\d+/);
+  const age = ageMatch ? Number.parseInt(ageMatch[0], 10) : null;
+  if (age !== null && Number.isFinite(age) && age < 18) {
+    if (normalized === 'male') return 'boy';
+    if (normalized === 'female') return 'girl';
+  }
+  return normalized;
+}
+
 function renderCharacterSlot(slot: CharacterSlot, index: number): string {
+  const formattedAge = formatCharacterAge(slot.fields.ageBand);
+  const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
+  const formattedName = slot.fields.nameOrRole.trim() ? `name: ${slot.fields.nameOrRole.trim()}` : '';
+  const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
+  const formattedExpression = slot.fields.expression.trim() ? `${slot.fields.expression.trim()} face expression` : '';
+
   const parts = [
-    slot.label || `Character ${index + 1}`,
-    slot.role,
-    slot.fields.nameOrRole,
-    slot.fields.ageBand,
-    slot.fields.genderPresentation,
+    formattedName,
+    formattedRole,
+    formattedAge,
+    formattedGender,
+    formattedExpression,
     slot.fields.appearance,
     slot.fields.outfit,
-    slot.fields.expression,
     slot.fields.pose,
     slot.fields.localAction,
     joinPromptFragments(slot.fields.props),

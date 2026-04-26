@@ -272,6 +272,8 @@ describe('PromptConstructorPageClient regressions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
 
+    expect(screen.getByText('Name')).toBeTruthy();
+    expect(screen.queryByText('Label')).toBeNull();
     expect(screen.getByTestId('character-preset-badge-char_1').textContent).toContain('Hero Base');
     expect(screen.getByTestId('pose-preset-badge-char_1').textContent).toContain('Reaching Forward');
     expect(screen.queryByDisplayValue('Hero Base')).toBeNull();
