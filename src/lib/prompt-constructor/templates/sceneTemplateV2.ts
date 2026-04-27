@@ -123,6 +123,7 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
   const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
   const formattedExpression = slot.fields.expression.trim() ? `Face expression: ${slot.fields.expression.trim()}` : '';
   const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
+  const formattedLocalAction = slot.fields.localAction.trim() ? `Local action: ${slot.fields.localAction.trim()}` : '';
 
   const parts = [
     formattedName,
@@ -133,7 +134,7 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
     cleanPromptFragment(effectiveAppearance),
     cleanPromptFragment(slot.fields.outfit),
     formattedPose,
-    cleanPromptFragment(slot.fields.localAction),
+    formattedLocalAction,
     joinPromptFragments(slot.fields.props),
     cleanPromptFragment(slot.staging.screenPosition),
     cleanPromptFragment(slot.staging.depthLayer),

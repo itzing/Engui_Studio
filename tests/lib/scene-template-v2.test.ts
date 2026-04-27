@@ -85,7 +85,7 @@ describe('renderSceneTemplateV2 character formatting', () => {
   it('renders name first and splits character fields onto separate lines', () => {
     const prompt = renderSceneTemplateV2(buildState('22', 'female'), []);
 
-    expect(prompt).toContain('Character 1: Mira\nRole: hero\n22yo\nfemale\nFace expression: calm\nsilver hair, pale skin\nblack coat\nPose: looking forward');
+    expect(prompt).toContain('Character 1: Mira\nRole: hero\n22yo\nfemale\nFace expression: calm\nsilver hair, pale skin\nblack coat\nPose: looking forward\nLocal action: standing still');
     expect(prompt).not.toContain('name: Mira');
     expect(prompt).not.toContain('Character A');
   });

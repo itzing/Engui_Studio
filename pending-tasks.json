@@ -26,5 +26,15 @@
     "notes": "Approved in chat-specific confirm:yes fallback. Scope: add mobile tile in create panel, picker for saved Prompt Constructor drafts, show selected draft title, hide prompt area and prompt-related buttons when selected, then test/build/restart/commit/push.",
     "finishedAt": "2026-04-27T09:42:30Z",
     "result": "Implemented the mobile Prompt Constructor draft tile and picker, hid manual prompt controls while a draft is selected, re-synced the selected draft on every Generate, added regression tests, passed targeted vitest coverage, completed production build, restarted engui-studio.service, and verified local HTTP 200 on port 3010."
+  },
+  {
+    "id": "engui-local-action-label-2026-04-27",
+    "createdAt": "2026-04-27T10:16:10Z",
+    "task": "Label Local action in Prompt Constructor character render",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved in chat-specific confirm:yes fallback. Scope: add explicit `Local action:` label in Prompt Constructor render output, add regression coverage, then build/restart/commit/push.",
+    "finishedAt": "2026-04-27T10:18:10Z",
+    "result": "Added labeled `Local action:` rendering for sceneTemplateV2 character output, updated regression test coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
   }
 ]
