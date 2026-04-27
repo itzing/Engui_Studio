@@ -77,5 +77,15 @@
     "notes": "User correction after ENGUI-212. Scope: restore original Character N character-block headers, replace Character N references with corresponding names only in non-character sections, update regression tests, then build/restart/commit/push.",
     "finishedAt": "2026-04-27T14:18:04Z",
     "result": "Restored Character N headers in sceneTemplateV2 character blocks, replaced Character N with resolved character names only in non-character sections, updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
+  },
+  {
+    "id": "engui-exclude-gender-from-constructor-character-helper-2026-04-27",
+    "createdAt": "2026-04-27T14:39:00Z",
+    "task": "Exclude gender from Character Manager appearance render inside Prompt Constructor",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: remove male/female from Character Manager appearance text used by Prompt Constructor direct picks and random character appearance, update regression tests, then build/restart/commit/push.",
+    "finishedAt": "2026-04-27T14:41:09Z",
+    "result": "Character Manager appearance text used by Prompt Constructor now excludes gender for direct character picks and random character appearance, while keeping other scene assembly behavior intact; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
   }
 ]

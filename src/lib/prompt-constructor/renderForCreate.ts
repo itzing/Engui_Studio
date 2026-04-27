@@ -5,7 +5,7 @@ import type { CharacterSlot, PromptDocument, SceneSnapshot, SceneTemplateState }
 import { buildRenderedPrompt, buildSceneSnapshot } from './utils';
 
 function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
-  return buildCharacterPromptFromSummary(character, { includeName: false });
+  return buildCharacterPromptFromSummary(character, { includeName: false, includeGender: false });
 }
 
 function pickRandomCharacterForSlot(slot: CharacterSlot, characters: CharacterSummary[]): CharacterSummary | null {

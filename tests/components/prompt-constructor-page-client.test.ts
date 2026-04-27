@@ -368,7 +368,7 @@ describe('PromptConstructorPageClient regressions', () => {
     });
   });
 
-  it('shows Character Manager picks only for appearance and fills name plus appearance without the character name', async () => {
+  it('shows Character Manager picks only for appearance and fills name plus appearance without character name or gender', async () => {
     const loadedDocument = buildSceneDocument('scene-character-helper', 'Character helper scene');
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
@@ -447,9 +447,10 @@ describe('PromptConstructorPageClient regressions', () => {
       expect(screen.getByDisplayValue('Mira')).toBeTruthy();
     });
 
-    const appearanceInput = screen.getByDisplayValue(/female/i) as HTMLInputElement;
-    expect(appearanceInput.value).toContain('female');
+    const appearanceInput = screen.getByDisplayValue(/silver hair/i) as HTMLInputElement;
     expect(appearanceInput.value).toContain('silver hair');
+    expect(appearanceInput.value).toContain('green eyes');
+    expect(appearanceInput.value).not.toContain('female');
     expect(appearanceInput.value).not.toContain('Mira');
   });
 

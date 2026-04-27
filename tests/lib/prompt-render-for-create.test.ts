@@ -132,5 +132,9 @@ describe('renderPromptDocumentForCreate', () => {
 
     expect(first.renderedPrompt).toContain('Character 1: Luna');
     expect(second.renderedPrompt).toContain('Character 1: Nova');
+    expect((first.document.state as any).characterSlots[0].fields.randomCharacterAppearance).toContain('silver hair');
+    expect((first.document.state as any).characterSlots[0].fields.randomCharacterAppearance).not.toContain('female');
+    expect((second.document.state as any).characterSlots[0].fields.randomCharacterAppearance).toContain('black hair');
+    expect((second.document.state as any).characterSlots[0].fields.randomCharacterAppearance).not.toContain('female');
   });
 });

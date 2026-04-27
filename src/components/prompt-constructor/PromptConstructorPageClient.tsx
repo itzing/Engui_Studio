@@ -181,7 +181,7 @@ function parseCharacterSlotFieldPath(slotId: string): { characterId: string; fie
 }
 
 function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
-  return buildCharacterPromptFromSummary(character, { includeName: false });
+  return buildCharacterPromptFromSummary(character, { includeName: false, includeGender: false });
 }
 
 function pickRandomCharacterForSlot(slot: CharacterSlot, characters: CharacterSummary[]): CharacterSummary | null {

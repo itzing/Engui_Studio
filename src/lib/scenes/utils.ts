@@ -115,7 +115,7 @@ export function serializeSceneTags(input: unknown): string {
 
 export function buildCharacterPromptFromSummary(
   character: CharacterSummary | null | undefined,
-  options: { includeName?: boolean } = {},
+  options: { includeName?: boolean; includeGender?: boolean } = {},
 ): string {
   if (!character) return '';
 
@@ -123,7 +123,7 @@ export function buildCharacterPromptFromSummary(
   if (options.includeName !== false && character.name.trim()) {
     parts.push(character.name.trim());
   }
-  if (character.gender?.trim()) {
+  if (options.includeGender !== false && character.gender?.trim()) {
     parts.push(character.gender.trim());
   }
 
