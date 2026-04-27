@@ -499,7 +499,7 @@ describe('PromptConstructorPageClient regressions', () => {
 
     await waitFor(() => {
       expect(mockPersistPromptIntoImageCreateDraft).toHaveBeenCalledWith(expect.objectContaining({
-        prompt: expect.stringContaining('wanderer:\nRole: hero'),
+        prompt: expect.stringContaining('Character 1: wanderer'),
         sourcePromptDocumentId: 'scene-open-in-create',
         sourcePromptDocumentTitle: 'Open in Create scene',
       }));
@@ -685,8 +685,8 @@ describe('PromptConstructorPageClient regressions', () => {
       expect(screen.getByText(/Using random character: Luna/i)).toBeTruthy();
     });
 
-    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[0]?.[0]?.prompt).toContain('Nova:\nRole: hero');
-    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[1]?.[0]?.prompt).toContain('Luna:\nRole: hero');
+    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[0]?.[0]?.prompt).toContain('Character 1: Nova');
+    expect(mockPersistPromptIntoImageCreateDraft.mock.calls[1]?.[0]?.prompt).toContain('Character 1: Luna');
   });
 
   it('saves a new scene and stays stable after the summary reload', async () => {

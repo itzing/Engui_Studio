@@ -67,5 +67,15 @@
     "notes": "Approved in chat-specific confirm:yes fallback. Scope: replace sceneTemplateV2 numbered character headers with actual rendered names when available, reuse the same references in relation lines, update regression tests, then build/restart/commit/push.",
     "finishedAt": "2026-04-27T14:05:33Z",
     "result": "sceneTemplateV2 now renders actual character names as headers and relation references, with fallback to role or numbered label when needed; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
+  },
+  {
+    "id": "engui-replace-character-references-outside-blocks-2026-04-27",
+    "createdAt": "2026-04-27T14:12:00Z",
+    "task": "Keep Character N headers in character sections and replace Character N with names only outside those sections",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User correction after ENGUI-212. Scope: restore original Character N character-block headers, replace Character N references with corresponding names only in non-character sections, update regression tests, then build/restart/commit/push.",
+    "finishedAt": "2026-04-27T14:18:04Z",
+    "result": "Restored Character N headers in sceneTemplateV2 character blocks, replaced Character N with resolved character names only in non-character sections, updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
   }
 ]

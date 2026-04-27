@@ -110,30 +110,54 @@ function resolveRenderedGender(value: string, ageValue: string): string {
   return normalized;
 }
 
-function resolveCharacterReference(slot: CharacterSlot, index: number): string {
+function resolveCharacterNameForReferences(slot: CharacterSlot, index: number): string {
   const effectiveName = slot.fields.useRandomCharacterAppearance
     ? slot.fields.randomCharacterName.trim()
     : slot.fields.nameOrRole.trim();
 
   if (effectiveName) return effectiveName;
-  if (slot.role.trim()) return slot.role.trim();
   return `Character ${index + 1}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceCharacterReferences(input: string, referenceMap: Map<string, string>): string {
+  let output = input;
+
+  referenceMap.forEach((replacement, label) => {
+    if (!replacement || replacement === label) return;
+    output = output.replace(new RegExp(`\\b${escapeRegExp(label)}\\b`, 'g'), replacement);
+  });
+
+  return output;
+}
+
+function replaceCharacterReferencesInParts(
+  parts: Array<string | null | undefined>,
+  referenceMap: Map<string, string>,
+): Array<string | null | undefined> {
+  return parts.map((part) => (typeof part === 'string' ? replaceCharacterReferences(part, referenceMap) : part));
 }
 
 function renderCharacterSlot(slot: CharacterSlot, index: number): string {
   const formattedAge = formatCharacterAge(slot.fields.ageBand);
   const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
+  const effectiveName = slot.fields.useRandomCharacterAppearance
+    ? slot.fields.randomCharacterName.trim()
+    : slot.fields.nameOrRole.trim();
   const effectiveAppearance = slot.fields.useRandomCharacterAppearance
     ? slot.fields.randomCharacterAppearance.trim()
     : slot.fields.appearance.trim();
-  const characterReference = resolveCharacterReference(slot, index);
-  const usesRoleAsReference = !slot.fields.useRandomCharacterAppearance && !slot.fields.nameOrRole.trim() && slot.role.trim() === characterReference;
-  const formattedRole = !usesRoleAsReference && slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
+  const formattedName = effectiveName;
+  const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
   const formattedExpression = slot.fields.expression.trim() ? `Face expression: ${slot.fields.expression.trim()}` : '';
   const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
   const formattedLocalAction = slot.fields.localAction.trim() ? `Local action: ${slot.fields.localAction.trim()}` : '';
 
   const parts = [
+    formattedName,
     formattedRole,
     formattedAge,
     formattedGender,
@@ -150,23 +174,25 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
     cleanPromptFragment(slot.staging.relativePlacementNotes),
   ].filter(Boolean);
 
-  if (parts.length === 0) return `${characterReference}.`;
-  return `${characterReference}:\n${parts.join('\n')}.`;
+  if (parts.length === 0) return '';
+  return `Character ${index + 1}: ${parts[0]}\n${parts.slice(1).join('\n')}.`;
 }
 
-function renderRelation(relation: CharacterRelation, slotIndex: Map<string, string>): string {
+function renderRelation(relation: CharacterRelation, slotIndex: Map<string, string>, referenceMap: Map<string, string>): string {
   const subjectLabel = slotIndex.get(relation.subjectId) || relation.subjectId;
   const targetLabel = slotIndex.get(relation.targetId) || relation.targetId;
 
   return joinPromptFragments([
     `${subjectLabel} ${relation.relationType || 'relates to'} ${targetLabel}`,
-    relation.distance,
-    relation.eyeContact,
-    relation.bodyOrientation,
-    relation.contactDetails,
-    relation.relativePlacement,
-    relation.dramaticFocus,
-    relation.notes,
+    ...replaceCharacterReferencesInParts([
+      relation.distance,
+      relation.eyeContact,
+      relation.bodyOrientation,
+      relation.contactDetails,
+      relation.relativePlacement,
+      relation.dramaticFocus,
+      relation.notes,
+    ], referenceMap),
   ]);
 }
 
@@ -185,42 +211,47 @@ function buildConstraintParts(state: SceneTemplateState, constraints: Constraint
 
 export function renderSceneTemplateV2(state: SceneTemplateState, constraints: ConstraintSnippet[]): string {
   const enabledSlots = state.characterSlots.filter((slot) => slot.enabled);
-  const slotIndex = new Map(enabledSlots.map((slot, index) => [slot.id, resolveCharacterReference(slot, index)]));
+  const slotIndex = new Map(enabledSlots.map((slot, index) => [slot.id, resolveCharacterNameForReferences(slot, index)]));
+  const referenceMap = new Map(enabledSlots.map((slot, index) => [`Character ${index + 1}`, resolveCharacterNameForReferences(slot, index)]));
 
   const lines = [
-    renderLabeledSentence('Scene', [state.sceneSummary.sceneType, state.sceneSummary.mainEvent, state.sceneSummary.notes]),
+    renderLabeledSentence('Scene', replaceCharacterReferencesInParts([
+      state.sceneSummary.sceneType,
+      state.sceneSummary.mainEvent,
+      state.sceneSummary.notes,
+    ], referenceMap)),
     ...enabledSlots.map((slot, index) => renderCharacterSlot(slot, index)),
     renderLabeledSentence(
       'Interaction',
       state.characterRelations
         .filter((relation) => slotIndex.has(relation.subjectId) && slotIndex.has(relation.targetId))
-        .map((relation) => renderRelation(relation, slotIndex)),
+        .map((relation) => renderRelation(relation, slotIndex, referenceMap)),
     ),
-    renderLabeledSentence('Composition', [
+    renderLabeledSentence('Composition', replaceCharacterReferencesInParts([
       state.composition.shotSize,
       state.composition.cameraAngle,
       state.composition.framing,
       state.composition.subjectPlacement,
       state.composition.foregroundPriority,
       state.composition.backgroundPriority,
-    ]),
-    renderLabeledSentence('Environment', [
+    ], referenceMap)),
+    renderLabeledSentence('Environment', replaceCharacterReferencesInParts([
       state.environment.location,
       state.environment.timeOfDay,
       state.environment.lighting,
       state.environment.weather,
       state.environment.background,
       state.environment.environmentDetails,
-    ]),
-    renderLabeledSentence('Style', [
+    ], referenceMap)),
+    renderLabeledSentence('Style', replaceCharacterReferencesInParts([
       state.style.medium,
       state.style.visualStyle,
       state.style.detailLevel,
       state.style.colorPalette,
       state.style.mood,
       state.style.renderingStyle,
-    ]),
-    renderLabeledSentence('Constraints', buildConstraintParts(state, constraints)),
+    ], referenceMap)),
+    renderLabeledSentence('Constraints', replaceCharacterReferencesInParts(buildConstraintParts(state, constraints), referenceMap)),
   ].filter(Boolean);
 
   return normalizeRenderedPrompt(lines.join('\n'));

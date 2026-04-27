@@ -130,7 +130,7 @@ describe('renderPromptDocumentForCreate', () => {
     const first = renderPromptDocumentForCreate(document, characters);
     const second = renderPromptDocumentForCreate(document, characters);
 
-    expect(first.renderedPrompt).toContain('Luna:\nRole: hero');
-    expect(second.renderedPrompt).toContain('Nova:\nRole: hero');
+    expect(first.renderedPrompt).toContain('Character 1: Luna');
+    expect(second.renderedPrompt).toContain('Character 1: Nova');
   });
 });
