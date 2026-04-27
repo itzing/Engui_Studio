@@ -1,0 +1,30 @@
+[
+  {
+    "id": "engui-151-2026-04-20",
+    "createdAt": "2026-04-20T18:40:00Z",
+    "task": "Implement ENGUI-151 unified create draft store v2 and storage adapters, then continue sequentially through follow-up tickets",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Work sequentially ticket-by-ticket. Do not touch prisma/db. Current untracked path prisma/db/ must remain untouched."
+  },
+  {
+    "id": "engui-image-create-prompt-draft-selector-2026-04-26",
+    "createdAt": "2026-04-26T22:29:56Z",
+    "task": "Add desktop Image Create prompt draft selector with prompt locking and re-render-on-generate behavior",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved by user via chat-specific confirm:yes fallback. Scope: add Prompt Constructor draft selector in desktop Image Create, disable prompt field when selected, re-render prompt on each generate, preserve random character refresh behavior, then build/restart/commit/push.",
+    "finishedAt": "2026-04-26T22:42:27Z",
+    "result": "Implemented desktop Prompt Constructor draft selector in Image Create, added rerender-on-generate flow with scene snapshot persistence, added regression tests, passed vitest and production build, restarted engui-studio.service, verified HTTP 200."
+  },
+  {
+    "id": "engui-mobile-image-create-prompt-draft-selector-2026-04-27",
+    "createdAt": "2026-04-27T09:24:05Z",
+    "task": "Add mobile Image Create Prompt Constructor draft selector tile with prompt section hiding",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved in chat-specific confirm:yes fallback. Scope: add mobile tile in create panel, picker for saved Prompt Constructor drafts, show selected draft title, hide prompt area and prompt-related buttons when selected, then test/build/restart/commit/push.",
+    "finishedAt": "2026-04-27T09:42:30Z",
+    "result": "Implemented the mobile Prompt Constructor draft tile and picker, hid manual prompt controls while a draft is selected, re-synced the selected draft on every Generate, added regression tests, passed targeted vitest coverage, completed production build, restarted engui-studio.service, and verified local HTTP 200 on port 3010."
+  }
+]

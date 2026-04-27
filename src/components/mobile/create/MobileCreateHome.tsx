@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ImagePlus, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -8,6 +8,7 @@ import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar'
 import type { CreateMode } from '@/lib/createDrafts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
@@ -27,6 +28,7 @@ export default function MobileCreateHome({
   onModeChange: (mode: CreateMode) => void;
 }) {
   const { showToast } = useToast();
+  const [showPromptDraftSelector, setShowPromptDraftSelector] = useState(false);
   const {
     currentModel,
     promptSummary,
@@ -46,6 +48,14 @@ export default function MobileCreateHome({
     controlNetEnabled,
     supportsControlNet,
     parameterValues,
+    promptDocuments,
+    isPromptDocumentsLoading,
+    isPromptDraftSyncing,
+    selectedPromptDocumentId,
+    selectedPromptDocumentTitle,
+    isPromptDraftSelected,
+    selectPromptDocument,
+    clearPromptDocument,
     isGenerating,
     submit,
     message,
@@ -129,22 +139,39 @@ export default function MobileCreateHome({
                     </div>
                   </div>
                 ) : null}
+
+                <button
+                  type="button"
+                  className={`col-span-2 rounded-md border px-3 py-3 text-left transition-colors ${isPromptDraftSelected ? 'border-primary/30 bg-primary/10' : 'border-border bg-background/40 hover:bg-accent/40'}`}
+                  onClick={() => setShowPromptDraftSelector(true)}
+                  data-testid="mobile-prompt-draft-tile"
+                >
+                  <div className="text-base font-semibold leading-none text-foreground">Prompt draft</div>
+                  <div className="mt-1 truncate text-sm text-muted-foreground" data-testid="mobile-prompt-draft-title">
+                    {selectedPromptDocumentTitle.trim() || 'Not selected'}
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground/80">
+                    {isPromptDraftSyncing ? 'Syncing draft...' : isPromptDraftSelected ? 'Tap to change' : 'Tap to choose'}
+                  </div>
+                </button>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Prompt</CardDescription>
-              <CardTitle className="text-lg">Prompt editor</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-0">
-              <p className="line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{promptSummary}</p>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/m/create/prompt">Edit prompt</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          {!isPromptDraftSelected ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Prompt</CardDescription>
+                <CardTitle className="text-lg">Prompt editor</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <p className="line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{promptSummary}</p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/m/create/prompt">Edit prompt</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {(primaryImageVisible || secondaryImageVisible) && (
             <div className="grid gap-4">
@@ -234,12 +261,72 @@ export default function MobileCreateHome({
         </div>
       </div>
 
+      <Dialog open={showPromptDraftSelector} onOpenChange={setShowPromptDraftSelector}>
+        <DialogContent className="max-h-[80dvh] w-[calc(100vw-2rem)] max-w-lg overflow-hidden p-0">
+          <DialogHeader className="border-b px-4 py-4">
+            <DialogTitle>Select Prompt Draft</DialogTitle>
+            <DialogDescription>Choose a saved Prompt Constructor draft or keep using a manual prompt.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65dvh] overflow-y-auto px-4 py-4">
+            <div className="space-y-2">
+              {isPromptDocumentsLoading ? (
+                <div className="rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground">Loading prompt drafts...</div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left ${!isPromptDraftSelected ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40 hover:border-primary/40 hover:bg-primary/5'}`}
+                    onClick={() => {
+                      clearPromptDocument();
+                      setShowPromptDraftSelector(false);
+                    }}
+                  >
+                    <div className="min-w-0 pr-3">
+                      <div className="truncate text-sm font-medium text-foreground">Manual prompt</div>
+                      <div className="mt-1 text-xs text-muted-foreground">No Prompt Constructor draft selected</div>
+                    </div>
+                    {!isPromptDraftSelected ? <WandSparkles className="h-4 w-4 shrink-0 text-primary" /> : null}
+                  </button>
+
+                  {promptDocuments.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                      No saved Prompt Constructor drafts yet.
+                    </div>
+                  ) : (
+                    promptDocuments.map((document) => {
+                      const isSelected = isPromptDraftSelected && selectedPromptDocumentId === document.id;
+                      return (
+                        <button
+                          key={document.id}
+                          type="button"
+                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left ${isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-background/40 hover:border-primary/40 hover:bg-primary/5'}`}
+                          onClick={() => {
+                            selectPromptDocument(document.id);
+                            setShowPromptDraftSelector(false);
+                          }}
+                        >
+                          <div className="min-w-0 pr-3">
+                            <div className="truncate text-sm font-medium text-foreground">{document.title}</div>
+                            <div className="mt-1 truncate text-xs text-muted-foreground">{document.sceneType || document.templateId}</div>
+                          </div>
+                          {isSelected ? <WandSparkles className="h-4 w-4 shrink-0 text-primary" /> : null}
+                        </button>
+                      );
+                    })
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="space-y-3">
           <Button
             className="w-full"
             size="lg"
-            disabled={isGenerating || isLoadingMedia}
+            disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
             onClick={async () => {
               await submit();
             }}
@@ -249,6 +336,11 @@ export default function MobileCreateHome({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Starting generation...
               </>
+            ) : isPromptDraftSyncing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing draft...
+              </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
@@ -257,12 +349,14 @@ export default function MobileCreateHome({
             )}
           </Button>
 
-          <Button variant="outline" className="w-full" asChild>
-            <Link href="/m/create/prompt">
-              <WandSparkles className="mr-2 h-4 w-4" />
-              Open focused prompt editor
-            </Link>
-          </Button>
+          {!isPromptDraftSelected ? (
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/m/create/prompt">
+                <WandSparkles className="mr-2 h-4 w-4" />
+                Open focused prompt editor
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </div>
     </MobileScreen>

@@ -5,7 +5,6 @@ import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
 import {
   createImageDraftSnapshot,
   mergeImageDraftParameterValues,
-  normalizeImageDraftForModel,
   normalizeRandomizeSeed,
   type ImageCreateDraftSnapshot,
 } from '@/lib/create/imageDraft';
@@ -13,9 +12,12 @@ import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/creat
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useStudio } from '@/lib/context/StudioContext';
-import { getModelById, getModelsByType, isInputVisible, type ModelConfig, type ModelParameter } from '@/lib/models/modelConfig';
+import { getModelById, getModelsByType, isInputVisible, type ModelParameter } from '@/lib/models/modelConfig';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
+import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
+import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
+import type { CharacterSummary } from '@/lib/characters/types';
 
 const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
@@ -52,6 +54,12 @@ export function useImageCreateState() {
   const [message, setMessage] = useState<FlashMessage>(null);
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [isLoadingLoras, setIsLoadingLoras] = useState(false);
+  const [promptDocuments, setPromptDocuments] = useState<PromptDocumentSummary[]>([]);
+  const [isPromptDocumentsLoading, setIsPromptDocumentsLoading] = useState(false);
+  const [isPromptDraftSyncing, setIsPromptDraftSyncing] = useState(false);
+  const [selectedPromptDocumentId, setSelectedPromptDocumentId] = useState('');
+  const [selectedPromptDocumentTitle, setSelectedPromptDocumentTitle] = useState('');
+  const [sceneSnapshot, setSceneSnapshot] = useState<Record<string, any> | null>(null);
   const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
   const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
   const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
@@ -91,6 +99,7 @@ export function useImageCreateState() {
   const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
   const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
   const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+  const isPromptDraftSelected = selectedPromptDocumentId.trim().length > 0;
 
   const basicParameters = useMemo(() => {
     if (!currentModel) return [];
@@ -114,11 +123,14 @@ export function useImageCreateState() {
     parameterValues,
     previewUrl,
     previewUrl2,
+    sceneSnapshot,
+    sourcePromptDocumentId: selectedPromptDocumentId,
+    sourcePromptDocumentTitle: selectedPromptDocumentTitle,
     inputs: {
       primary: primaryInputRef,
       secondary: secondaryInputRef,
     },
-  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, secondaryInputRef, prompt, randomizeSeed, showAdvanced]);
+  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, sceneSnapshot, secondaryInputRef, prompt, randomizeSeed, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
 
   const applySnapshot = useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
     const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -135,6 +147,9 @@ export function useImageCreateState() {
     setPreviewUrl2(normalizedSnapshot.previewUrl2 || '');
     setImageFile(null);
     setImageFile2(null);
+    setSceneSnapshot(normalizedSnapshot.sceneSnapshot && typeof normalizedSnapshot.sceneSnapshot === 'object' ? normalizedSnapshot.sceneSnapshot : null);
+    setSelectedPromptDocumentId(normalizedSnapshot.sourcePromptDocumentId || '');
+    setSelectedPromptDocumentTitle(normalizedSnapshot.sourcePromptDocumentTitle || '');
     setPrimaryInputRef(normalizedSnapshot.inputs?.primary || null);
     setSecondaryInputRef(normalizedSnapshot.inputs?.secondary || null);
 
@@ -159,7 +174,7 @@ export function useImageCreateState() {
     }
   }, []);
 
-  const { hydrateSnapshot, switchModel } = useImageCreateDraftPersistence({
+  const { switchModel } = useImageCreateDraftPersistence({
     defaultModelId: DEFAULT_IMAGE_MODEL,
     selectedModel,
     setSelectedModel,
@@ -231,6 +246,130 @@ export function useImageCreateState() {
     };
   }, [activeWorkspaceId, hasLoRAParameter]);
 
+  const setTimedMessage = useCallback((nextMessage: FlashMessage) => {
+    setMessage(nextMessage);
+    if (successTimerRef.current !== null) {
+      window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+    if (nextMessage?.type === 'success') {
+      successTimerRef.current = window.setTimeout(() => {
+        setMessage(null);
+        successTimerRef.current = null;
+      }, 2200);
+    }
+  }, []);
+
+  const loadPromptDocumentForCreate = useCallback(async (documentId: string) => {
+    const response = await fetch(`/api/prompt-documents/${documentId}`, { cache: 'no-store' });
+    const data = await response.json();
+
+    if (!response.ok || !data?.success || !data?.document) {
+      throw new Error(data?.error || 'Failed to load prompt draft');
+    }
+
+    return data.document as PromptDocument;
+  }, []);
+
+  const loadCharactersForPromptDraft = useCallback(async () => {
+    const response = await fetch('/api/characters', { cache: 'no-store' });
+    const data = await response.json();
+
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.error || 'Failed to load characters');
+    }
+
+    return (Array.isArray(data.characters) ? data.characters : []) as CharacterSummary[];
+  }, []);
+
+  const syncSelectedPromptDraft = useCallback(async (documentId: string) => {
+    const document = await loadPromptDocumentForCreate(documentId);
+    const characters = documentUsesRandomCharacterAppearance(document) ? await loadCharactersForPromptDraft() : [];
+    const rendered = renderPromptDocumentForCreate(document, characters);
+
+    setSelectedPromptDocumentTitle(document.title || '');
+    setPrompt(rendered.renderedPrompt || '');
+    setSceneSnapshot(rendered.sceneSnapshot);
+
+    return {
+      document,
+      renderedPrompt: rendered.renderedPrompt,
+      sceneSnapshot: rendered.sceneSnapshot,
+    };
+  }, [loadCharactersForPromptDraft, loadPromptDocumentForCreate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPromptDocuments = async () => {
+      if (!activeWorkspaceId) {
+        setPromptDocuments([]);
+        return;
+      }
+
+      setIsPromptDocumentsLoading(true);
+      try {
+        const params = new URLSearchParams({ workspaceId: activeWorkspaceId });
+        const response = await fetch(`/api/prompt-documents?${params.toString()}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || 'Failed to load prompt drafts');
+        }
+
+        if (!cancelled) {
+          setPromptDocuments(Array.isArray(data.documents) ? data.documents : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load mobile prompt drafts:', error);
+          setPromptDocuments([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPromptDocumentsLoading(false);
+        }
+      }
+    };
+
+    void loadPromptDocuments();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedPromptDocumentId) return;
+    let cancelled = false;
+
+    const sync = async () => {
+      setIsPromptDraftSyncing(true);
+      try {
+        await syncSelectedPromptDraft(selectedPromptDocumentId);
+      } catch (error) {
+        if (!cancelled) {
+          setTimedMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to sync prompt draft' });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPromptDraftSyncing(false);
+        }
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPromptDocumentId, setTimedMessage, syncSelectedPromptDraft]);
+
+  useEffect(() => {
+    if (!selectedPromptDocumentId || selectedPromptDocumentTitle.trim()) return;
+    const summary = promptDocuments.find((entry) => entry.id === selectedPromptDocumentId);
+    if (summary?.title) {
+      setSelectedPromptDocumentTitle(summary.title);
+    }
+  }, [promptDocuments, selectedPromptDocumentId, selectedPromptDocumentTitle]);
+
   useEffect(() => {
     if (!currentModel?.parameters.some((param) => param.name === 'use_controlnet')) {
       return;
@@ -247,20 +386,6 @@ export function useImageCreateState() {
       };
     });
   }, [currentModel, hasPrimaryImage]);
-
-  const setTimedMessage = useCallback((nextMessage: FlashMessage) => {
-    setMessage(nextMessage);
-    if (successTimerRef.current !== null) {
-      window.clearTimeout(successTimerRef.current);
-      successTimerRef.current = null;
-    }
-    if (nextMessage?.type === 'success') {
-      successTimerRef.current = window.setTimeout(() => {
-        setMessage(null);
-        successTimerRef.current = null;
-      }, 2200);
-    }
-  }, []);
 
   const updateDimensionsFromImageUrl = useCallback((url: string) => {
     if (!url || !widthParameter || !heightParameter) return;
@@ -327,9 +452,31 @@ export function useImageCreateState() {
 
     setMessage(null);
     setIsGenerating(true);
+    let promptForSubmit = prompt;
+    let sceneSnapshotForSubmit = sceneSnapshot;
+    let sourcePromptDocumentIdForSubmit = selectedPromptDocumentId || null;
+    let sourcePromptDocumentTitleForSubmit = selectedPromptDocumentTitle || null;
+
+    if (isPromptDraftSelected) {
+      try {
+        setIsPromptDraftSyncing(true);
+        const synced = await syncSelectedPromptDraft(selectedPromptDocumentId);
+        promptForSubmit = synced.renderedPrompt;
+        sceneSnapshotForSubmit = synced.sceneSnapshot;
+        sourcePromptDocumentIdForSubmit = synced.document.id;
+        sourcePromptDocumentTitleForSubmit = synced.document.title;
+      } catch (error) {
+        setTimedMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to sync prompt draft' });
+        setIsGenerating(false);
+        setIsPromptDraftSyncing(false);
+        return false;
+      }
+      setIsPromptDraftSyncing(false);
+    }
+
     const result = await submitImageGeneration({
       currentModel,
-      prompt,
+      prompt: promptForSubmit,
       parameterValues,
       randomizeSeed,
       activeWorkspaceId,
@@ -339,9 +486,9 @@ export function useImageCreateState() {
       imagePreviewUrl: previewUrl,
       imagePreviewUrl2: previewUrl2,
       dimensions: null,
-      sceneSnapshot: currentSnapshot.sceneSnapshot || null,
-      sourcePromptDocumentId: currentSnapshot.sourcePromptDocumentId || null,
-      sourcePromptDocumentTitle: currentSnapshot.sourcePromptDocumentTitle || null,
+      sceneSnapshot: sceneSnapshotForSubmit,
+      sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
+      sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
     });
 
     if (result.success) {
@@ -360,10 +507,10 @@ export function useImageCreateState() {
 
     setIsGenerating(false);
     return result.success;
-  }, [activeWorkspaceId, addJob, currentModel, currentSnapshot.sceneSnapshot, currentSnapshot.sourcePromptDocumentId, currentSnapshot.sourcePromptDocumentTitle, imageFile, imageFile2, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, setTimedMessage, settings]);
+  }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
 
   const runSavedPromptHelperInstruction = useCallback(async () => {
-    if (!currentModel || !promptHelperInstruction.trim() || isPromptHelperLoading) {
+    if (!currentModel || !promptHelperInstruction.trim() || isPromptHelperLoading || isPromptDraftSelected) {
       return;
     }
 
@@ -393,7 +540,7 @@ export function useImageCreateState() {
     } finally {
       setIsPromptHelperLoading(false);
     }
-  }, [currentHeight, currentModel, currentNegativePrompt, currentWidth, negativePromptParameterName, prompt, promptHelperInstruction, isPromptHelperLoading, setTimedMessage]);
+  }, [currentHeight, currentModel, currentNegativePrompt, currentWidth, isPromptDraftSelected, negativePromptParameterName, prompt, promptHelperInstruction, isPromptHelperLoading, setTimedMessage]);
 
 
   const promptSummary = prompt.trim() || 'No prompt yet';
@@ -449,6 +596,29 @@ export function useImageCreateState() {
     basicSummaryItems,
     availableLoras,
     isLoadingLoras,
+    promptDocuments,
+    isPromptDocumentsLoading,
+    isPromptDraftSyncing,
+    selectedPromptDocumentId,
+    selectedPromptDocumentTitle,
+    isPromptDraftSelected,
+    selectPromptDocument: (documentId: string) => {
+      if (!documentId) {
+        setSelectedPromptDocumentId('');
+        setSelectedPromptDocumentTitle('');
+        setSceneSnapshot(null);
+        return;
+      }
+
+      const summary = promptDocuments.find((entry) => entry.id === documentId);
+      setSelectedPromptDocumentId(documentId);
+      setSelectedPromptDocumentTitle(summary?.title || '');
+    },
+    clearPromptDocument: () => {
+      setSelectedPromptDocumentId('');
+      setSelectedPromptDocumentTitle('');
+      setSceneSnapshot(null);
+    },
     isParameterVisible,
     previewUrl,
     previewUrl2,
