@@ -36,5 +36,15 @@
     "notes": "Approved in chat-specific confirm:yes fallback. Scope: add explicit `Local action:` label in Prompt Constructor render output, add regression coverage, then build/restart/commit/push.",
     "finishedAt": "2026-04-27T10:18:10Z",
     "result": "Added labeled `Local action:` rendering for sceneTemplateV2 character output, updated regression test coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
+  },
+  {
+    "id": "engui-local-action-before-pose-2026-04-27",
+    "createdAt": "2026-04-27T10:20:50Z",
+    "task": "Reorder Local action before Pose in Prompt Constructor character render",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved in chat-specific confirm:yes fallback. Scope: move `Local action:` above `Pose:` in sceneTemplateV2 render, update regression coverage, then build/restart/commit/push.",
+    "finishedAt": "2026-04-27T10:22:08Z",
+    "result": "Reordered sceneTemplateV2 character output so `Local action:` now appears before `Pose:`, updated regression test coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
   }
 ]
