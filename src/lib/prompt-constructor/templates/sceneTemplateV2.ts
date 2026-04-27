@@ -110,23 +110,30 @@ function resolveRenderedGender(value: string, ageValue: string): string {
   return normalized;
 }
 
-function renderCharacterSlot(slot: CharacterSlot, index: number): string {
-  const formattedAge = formatCharacterAge(slot.fields.ageBand);
-  const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
+function resolveCharacterReference(slot: CharacterSlot, index: number): string {
   const effectiveName = slot.fields.useRandomCharacterAppearance
     ? slot.fields.randomCharacterName.trim()
     : slot.fields.nameOrRole.trim();
+
+  if (effectiveName) return effectiveName;
+  if (slot.role.trim()) return slot.role.trim();
+  return `Character ${index + 1}`;
+}
+
+function renderCharacterSlot(slot: CharacterSlot, index: number): string {
+  const formattedAge = formatCharacterAge(slot.fields.ageBand);
+  const formattedGender = resolveRenderedGender(slot.fields.genderPresentation, slot.fields.ageBand);
   const effectiveAppearance = slot.fields.useRandomCharacterAppearance
     ? slot.fields.randomCharacterAppearance.trim()
     : slot.fields.appearance.trim();
-  const formattedName = effectiveName;
-  const formattedRole = slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
+  const characterReference = resolveCharacterReference(slot, index);
+  const usesRoleAsReference = !slot.fields.useRandomCharacterAppearance && !slot.fields.nameOrRole.trim() && slot.role.trim() === characterReference;
+  const formattedRole = !usesRoleAsReference && slot.role.trim() ? `Role: ${slot.role.trim()}` : '';
   const formattedExpression = slot.fields.expression.trim() ? `Face expression: ${slot.fields.expression.trim()}` : '';
   const formattedPose = slot.fields.pose.trim() ? `Pose: ${slot.fields.pose.trim()}` : '';
   const formattedLocalAction = slot.fields.localAction.trim() ? `Local action: ${slot.fields.localAction.trim()}` : '';
 
   const parts = [
-    formattedName,
     formattedRole,
     formattedAge,
     formattedGender,
@@ -143,8 +150,8 @@ function renderCharacterSlot(slot: CharacterSlot, index: number): string {
     cleanPromptFragment(slot.staging.relativePlacementNotes),
   ].filter(Boolean);
 
-  if (parts.length === 0) return '';
-  return `Character ${index + 1}: ${parts[0]}\n${parts.slice(1).join('\n')}.`;
+  if (parts.length === 0) return `${characterReference}.`;
+  return `${characterReference}:\n${parts.join('\n')}.`;
 }
 
 function renderRelation(relation: CharacterRelation, slotIndex: Map<string, string>): string {
@@ -178,7 +185,7 @@ function buildConstraintParts(state: SceneTemplateState, constraints: Constraint
 
 export function renderSceneTemplateV2(state: SceneTemplateState, constraints: ConstraintSnippet[]): string {
   const enabledSlots = state.characterSlots.filter((slot) => slot.enabled);
-  const slotIndex = new Map(enabledSlots.map((slot, index) => [slot.id, slot.label.trim() || `Character ${index + 1}`]));
+  const slotIndex = new Map(enabledSlots.map((slot, index) => [slot.id, resolveCharacterReference(slot, index)]));
 
   const lines = [
     renderLabeledSentence('Scene', [state.sceneSummary.sceneType, state.sceneSummary.mainEvent, state.sceneSummary.notes]),

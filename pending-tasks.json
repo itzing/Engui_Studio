@@ -57,4 +57,15 @@
     "finishedAt": "2026-04-27T10:37:56Z",
     "result": "Moved appearance lower in sceneTemplateV2 character output so it now renders after outfit, local action, pose, and props; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
   }
+,
+  {
+    "id": "engui-use-character-names-in-render-2026-04-27",
+    "createdAt": "2026-04-27T13:57:00Z",
+    "task": "Use actual character names instead of generic Character N in Prompt Constructor render",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved in chat-specific confirm:yes fallback. Scope: replace sceneTemplateV2 numbered character headers with actual rendered names when available, reuse the same references in relation lines, update regression tests, then build/restart/commit/push.",
+    "finishedAt": "2026-04-27T14:05:33Z",
+    "result": "sceneTemplateV2 now renders actual character names as headers and relation references, with fallback to role or numbered label when needed; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
+  }
 ]
