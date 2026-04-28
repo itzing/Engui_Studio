@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
+import { maybeAutoSaveUpscaleResult } from '@/lib/upscaleAutoSave';
 
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
@@ -599,7 +600,7 @@ async function markJobCompleted(params: {
       }
     : null;
 
-  await persistJobUpdate(job.id, {
+  const completedJob = await persistJobUpdate(job.id, {
     status: 'completed',
     resultUrl,
     thumbnailUrl: thumbnailUrl ?? job.thumbnailUrl ?? undefined,
@@ -609,6 +610,8 @@ async function markJobCompleted(params: {
     options: JSON.stringify(options),
     secureState: nextSecureState ? JSON.stringify(nextSecureState) : job.secureState,
   });
+
+  await maybeAutoSaveUpscaleResult(completedJob);
 }
 
 async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, settings: any, resultStoragePath?: string | null) {

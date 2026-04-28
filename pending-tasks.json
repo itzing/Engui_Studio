@@ -157,5 +157,13 @@
     "notes": "Direct user correction. Scope: place the mobile fullscreen gallery loading spinner in the top center on the same line as info/close, not in the image center, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T16:54:36Z",
     "result": "Moved the mobile fullscreen gallery loading spinner into the top-center overlay line between the left and right header controls, while preserving per-image reset behavior on swipe. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
+  },
+  {
+    "id": "engui-upscale-autosave-gallery-2026-04-28",
+    "createdAt": "2026-04-28T17:35:34Z",
+    "task": "Auto-add completed upscale jobs to gallery bucket upscale",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: move upscale autosave from lazy job-details read path into the real completion path so completed upscale jobs immediately create gallery assets in bucket `upscale`, then build/restart/commit/push."
   }
 ]
