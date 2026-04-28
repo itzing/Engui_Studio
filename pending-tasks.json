@@ -117,5 +117,15 @@
     "notes": "Direct user command. Scope: show a small top-left spinner only for the current mobile fullscreen gallery image while it is loading, and restart that indicator when the user swipes to another image, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T16:36:41Z",
     "result": "Added a mobile-only top-left loading spinner in the shared fullscreen gallery viewer, tied to the current image load lifecycle so it resets on every swipe to a different image. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
+  },
+  {
+    "id": "engui-job-details-upscale-2026-04-28",
+    "createdAt": "2026-04-28T16:39:33Z",
+    "task": "Add Upscale button to desktop and mobile job details",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command after surface clarification. Scope: add Upscale action to desktop and mobile job details screens, matching job-list behavior for image/video jobs, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T16:42:04Z",
+    "result": "Added Upscale actions to desktop and mobile job details for image/video jobs, wired to the same /api/upscale flow used by list actions with matching success/error toasts. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/jobs and /."
   }
 ]

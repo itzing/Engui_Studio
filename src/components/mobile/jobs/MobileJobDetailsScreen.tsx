@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
 
@@ -37,6 +37,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const router = useRouter();
   const { showToast } = useToast();
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
+  const [isUpscaling, setIsUpscaling] = useState(false);
   const selectedOutput = job?.outputs?.[0] || null;
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
@@ -158,6 +159,37 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     if (response.ok && data.success && data.payload) {
       persistPromptConstructorReuseDraft(data.payload);
       router.push('/prompt-constructor');
+    }
+  };
+
+  const upscaleJob = async () => {
+    if (!job || isUpscaling) return;
+    if (job.type !== 'image' && job.type !== 'video') {
+      showToast('Upscale is only available for image and video results', 'error');
+      return;
+    }
+
+    setIsUpscaling(true);
+    showToast(`Starting upscale for ${job.type}...`, 'info');
+
+    try {
+      const response = await fetch('/api/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, type: job.type }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.job) {
+        showToast(data.error || 'Failed to create upscale job', 'error');
+        return;
+      }
+      showToast('Upscale job created and processing', 'success');
+      router.push('/m/jobs');
+    } catch (error) {
+      console.error('Failed to create mobile job details upscale job:', error);
+      showToast('Failed to create upscale job', 'error');
+    } finally {
+      setIsUpscaling(false);
     }
   };
 
@@ -301,6 +333,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {job.type === 'image' ? <Button onClick={() => void openInCreate('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
+                {(job.type === 'image' || job.type === 'video') ? <Button variant="outline" onClick={() => void upscaleJob()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
                 {isFinished ? <Button variant="destructive" onClick={() => void deleteJob()}><Trash2 className="mr-2 h-4 w-4" />Delete job</Button> : null}
               </div>

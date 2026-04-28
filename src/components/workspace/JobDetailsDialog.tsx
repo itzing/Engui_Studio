@@ -5,7 +5,7 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { Download, Trash2, Copy, X } from 'lucide-react';
+import { Download, Trash2, Copy, Sparkles, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -33,7 +33,7 @@ type JobOutput = {
 };
 
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
-    const { deleteJob, cancelJob } = useStudio();
+    const { addJob, deleteJob, cancelJob } = useStudio();
     const { t } = useI18n();
     const { showToast } = useToast();
 
@@ -54,6 +54,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const [jobOutputs, setJobOutputs] = useState<JobOutput[]>([]);
     const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
     const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
+    const [isUpscaling, setIsUpscaling] = useState(false);
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -172,6 +173,38 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         }
         showToast(result.removed ? 'Job deleted' : 'Job cancelled', 'success');
         onOpenChange(false);
+    };
+
+    const handleUpscale = async () => {
+        if (!job || isUpscaling) return;
+        if (job.type !== 'image' && job.type !== 'video') {
+            showToast('Upscale is only available for image and video results', 'error');
+            return;
+        }
+
+        setIsUpscaling(true);
+        showToast(`Starting upscale for ${job.type}...`, 'info');
+
+        try {
+            const response = await fetch('/api/upscale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId: job.id, type: job.type }),
+            });
+            const data = await response.json();
+
+            if (data.success && data.job) {
+                addJob(data.job);
+                showToast('Upscale job created and processing', 'success');
+            } else {
+                showToast(data.error || 'Failed to create upscale job', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to create job details upscale job:', error);
+            showToast('Failed to create upscale job', 'error');
+        } finally {
+            setIsUpscaling(false);
+        }
     };
 
     const handleSaveToGalleryBucket = async (bucket: GalleryBucket) => {
@@ -496,6 +529,17 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             >
                                 {selectedOutput?.savedBuckets.includes('common') ? 'In Gallery' : savingBucket === 'common' ? 'Saving...' : 'Add to Gallery'}
                             </Button>
+                            {(job?.type === 'image' || job?.type === 'video') && (
+                                <Button
+                                    className="flex-1"
+                                    variant="outline"
+                                    onClick={() => void handleUpscale()}
+                                    disabled={isUpscaling}
+                                >
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    {isUpscaling ? 'Starting...' : 'Upscale'}
+                                </Button>
+                            )}
                             {isFinished && (
                                 <Button
                                     variant="ghost"
