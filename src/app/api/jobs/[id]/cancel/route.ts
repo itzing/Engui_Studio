@@ -14,12 +14,14 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Job not found' }, { status: 404 });
     }
 
-    const cancelledJob = await cancelJobExecution(job);
+    const result = await cancelJobExecution(job);
 
     return NextResponse.json({
       success: true,
-      job: cancelledJob,
-      message: 'Job cancelled',
+      outcome: result.outcome,
+      job: result.job ?? null,
+      deletedJobId: result.deletedJobId ?? null,
+      message: result.outcome === 'deleted' ? 'Job deleted locally because it no longer exists on the server' : 'Job cancelled',
     });
   } catch (error: any) {
     console.error('Error cancelling job:', error);

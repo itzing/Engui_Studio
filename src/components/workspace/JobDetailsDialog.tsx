@@ -165,12 +165,12 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
     const handleCancel = async () => {
         if (!job || !confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
-        const ok = await cancelJob(job.id);
-        if (!ok) {
+        const result = await cancelJob(job.id);
+        if (!result.success) {
             showToast('Failed to cancel job', 'error');
             return;
         }
-        showToast('Job cancelled', 'success');
+        showToast(result.removed ? 'Job deleted' : 'Job cancelled', 'success');
         onOpenChange(false);
     };
 

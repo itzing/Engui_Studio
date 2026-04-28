@@ -173,10 +173,15 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const cancelJob = async () => {
     if (!job) return;
     const response = await fetch(`/api/jobs/${job.id}/cancel`, { method: 'POST' });
-    const data = await response.json();
-    if (response.ok && data.success) {
-      await refresh();
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) return;
+    if (data.outcome === 'deleted' || data.deletedJobId) {
+      showToast('Job deleted', 'success');
+      router.push('/m/jobs');
+      return;
     }
+    showToast('Job cancelled', 'success');
+    await refresh();
   };
 
   const copyError = async () => {

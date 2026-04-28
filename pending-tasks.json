@@ -87,5 +87,15 @@
     "notes": "Direct user command. Scope: remove male/female from Character Manager appearance text used by Prompt Constructor direct picks and random character appearance, update regression tests, then build/restart/commit/push.",
     "finishedAt": "2026-04-27T14:41:09Z",
     "result": "Character Manager appearance text used by Prompt Constructor now excludes gender for direct character picks and random character appearance, while keeping other scene assembly behavior intact; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
+  },
+  {
+    "id": "engui-delete-missing-upstream-job-on-cancel-2026-04-28",
+    "createdAt": "2026-04-28T13:22:00Z",
+    "task": "Delete a local job if cancel is requested after the upstream server already lost it",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: when cancel hits missing upstream job, delete it locally instead of marking cancelled; update desktop and mobile flows plus regression tests, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T13:24:21Z",
+    "result": "Missing-upstream cancel now deletes the local job instead of marking it cancelled; desktop and mobile cancel flows treat this as a successful delete, route regression coverage was added, targeted vitest passed, production build succeeded, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
   }
 ]

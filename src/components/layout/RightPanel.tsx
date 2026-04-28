@@ -904,9 +904,19 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         e.stopPropagation();
         if (!confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
 
-        const ok = await cancelJob(jobId);
-        if (!ok) {
+        const result = await cancelJob(jobId);
+        if (!result.success) {
             showToast('Failed to cancel job', 'error');
+            return;
+        }
+
+        if (result.removed) {
+            setLoadedJobs(prev => prev.filter(job => job.id !== jobId));
+            if (selectedJob?.id === jobId) {
+                setDetailsOpen(false);
+                setSelectedJob(null);
+            }
+            showToast('Job deleted', 'success');
             return;
         }
 

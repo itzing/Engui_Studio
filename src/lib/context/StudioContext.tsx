@@ -168,7 +168,7 @@ interface StudioContextType {
     addCompletedJob: (job: Job) => void;
     updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => void;
     deleteJob: (id: string) => Promise<boolean>;
-    cancelJob: (id: string) => Promise<boolean>;
+    cancelJob: (id: string) => Promise<{ success: boolean; removed?: boolean }>;
     clearFinishedJobs: (workspaceId: string | null) => Promise<{ success: boolean; deleted?: number; deletedFiles?: number; error?: string }>;
     reuseJobInput: (jobId: string) => void;
 
@@ -538,8 +538,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 headers: { 'Content-Type': 'application/json' },
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data.success || !data.job) {
+            if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Failed to cancel job');
+            }
+
+            if (data.outcome === 'deleted' || data.deletedJobId) {
+                setJobs(prev => prev.filter(job => job.id !== id));
+                return { success: true, removed: true };
             }
 
             setJobs(prev => prev.map(job => job.id === id ? {
@@ -547,10 +552,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 status: 'failed',
                 error: 'cancelled',
             } : job));
-            return true;
+            return { success: true, removed: false };
         } catch (error) {
             console.error('Failed to cancel job:', error);
-            return false;
+            return { success: false };
         }
     };
 
