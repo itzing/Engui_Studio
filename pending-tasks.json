@@ -127,5 +127,15 @@
     "notes": "Direct user command after surface clarification. Scope: add Upscale action to desktop and mobile job details screens, matching job-list behavior for image/video jobs, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T16:42:04Z",
     "result": "Added Upscale actions to desktop and mobile job details for image/video jobs, wired to the same /api/upscale flow used by list actions with matching success/error toasts. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/jobs and /."
+  },
+  {
+    "id": "engui-mobile-gallery-spinner-center-2026-04-28",
+    "createdAt": "2026-04-28T16:43:36Z",
+    "task": "Move mobile gallery image loading spinner to the center",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: move the mobile fullscreen gallery image loading spinner from top-left to center so it no longer clashes with the info button, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T16:45:18Z",
+    "result": "Moved the mobile fullscreen gallery image loading spinner into the center overlay so it no longer conflicts with the info button, while keeping the per-image reset behavior on swipe. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
   }
 ]

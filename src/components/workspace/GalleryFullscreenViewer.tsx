@@ -599,11 +599,12 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       {!isDesktop && !currentImageLoaded ? (
         <div
           key={currentItem.id}
-          className="absolute left-3 z-10 flex items-center justify-center rounded-full bg-black/70 text-white border border-white/10"
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)', width: '2rem', height: '2rem' }}
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
           aria-label="Loading image"
         >
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white border border-white/10">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
         </div>
       ) : null}
 
