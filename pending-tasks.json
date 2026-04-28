@@ -162,8 +162,10 @@
     "id": "engui-upscale-autosave-gallery-2026-04-28",
     "createdAt": "2026-04-28T17:35:34Z",
     "task": "Auto-add completed upscale jobs to gallery bucket upscale",
-    "status": "pending",
+    "status": "done",
     "chatId": "telegram:450189741",
-    "notes": "Direct user command. Scope: move upscale autosave from lazy job-details read path into the real completion path so completed upscale jobs immediately create gallery assets in bucket `upscale`, then build/restart/commit/push."
+    "notes": "Direct user command. Scope: move upscale autosave from lazy job-details read path into the real completion path so completed upscale jobs immediately create gallery assets in bucket `upscale`, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T17:40:41Z",
+    "result": "Moved upscale autosave into the RunPod completion path by extracting a shared helper and invoking it immediately after job completion persistence. Completed upscale image/video jobs now create gallery assets in bucket `upscale` without waiting for job-details reads, and queued gallery derivative/enrichment jobs as part of autosave. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/gallery."
   }
 ]
