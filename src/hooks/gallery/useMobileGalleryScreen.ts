@@ -347,6 +347,13 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     }
   }, [loadPage, loadedPages, totalCount]);
 
+  useEffect(() => {
+    if (!viewerOpen || selectedAbsoluteIndex === null || totalCount <= 0) return;
+    const preloadStart = Math.max(0, selectedAbsoluteIndex - PAGE_SIZE);
+    const preloadEnd = Math.min(totalCount - 1, selectedAbsoluteIndex + PAGE_SIZE);
+    void ensureRangeLoaded(preloadStart, preloadEnd);
+  }, [ensureRangeLoaded, selectedAbsoluteIndex, totalCount, viewerOpen]);
+
   const refresh = useCallback(async () => {
     if (!effectiveWorkspaceId) return;
     setIsLoading(true);

@@ -97,5 +97,15 @@
     "notes": "Direct user command. Scope: when cancel hits missing upstream job, delete it locally instead of marking cancelled; update desktop and mobile flows plus regression tests, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T13:24:21Z",
     "result": "Missing-upstream cancel now deletes the local job instead of marking it cancelled; desktop and mobile cancel flows treat this as a successful delete, route regression coverage was added, targeted vitest passed, production build succeeded, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
+  },
+  {
+    "id": "engui-gallery-viewer-prefetch-2026-04-28",
+    "createdAt": "2026-04-28T13:33:20Z",
+    "task": "Keep fullscreen gallery viewer paging through the full gallery instead of stopping at the loaded batch",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Approved via Telegram confirm button. Scope: preload adjacent gallery pages while swiping in fullscreen viewer so mobile and desktop gallery continue past the initial loaded batch, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T13:35:27Z",
+    "result": "Fullscreen gallery viewer now preloads adjacent pages while open, so mobile and desktop gallery swiping continues past the initially loaded batch; production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
   }
 ]
