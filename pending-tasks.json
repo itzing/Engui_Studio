@@ -177,5 +177,15 @@
     "notes": "Urgent direct user report. Scope: repair RunPod completion path so normal jobs no longer fail after successful artifact finalization, make upscale gallery autosave best-effort and non-fatal, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T17:46:35Z",
     "result": "Fixed the completion regression by returning the updated row from persistJobUpdate and making upscale gallery autosave best-effort with try/catch logging, so a gallery autosave problem can no longer flip a successfully finalized job into failed. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
+  },
+  {
+    "id": "engui-repair-failed-completed-jobs-2026-04-28",
+    "createdAt": "2026-04-28T17:49:55Z",
+    "task": "Repair failed jobs that actually completed during the autosave regression window",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: detect jobs flipped to failed by the autosave regression using the exact undefined workspaceId error plus existing result artifacts, restore them to completed, then verify and commit/push.",
+    "finishedAt": "2026-04-28T17:50:44Z",
+    "result": "Repaired 6 jobs that were falsely marked failed by the autosave regression by selecting only rows with the exact undefined workspaceId error and an existing result artifact, then restoring them to status `completed` and clearing the error. Verified the repaired jobs retained valid local artifacts."
   }
 ]
