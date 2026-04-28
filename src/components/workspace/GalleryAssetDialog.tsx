@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, X } from 'lucide-react';
+import { Download, Sparkles, Trash2, X } from 'lucide-react';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 import { useToast } from '@/components/ui/toast';
@@ -43,6 +43,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
+  const [isUpscaling, setIsUpscaling] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -83,6 +84,36 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       showToast(error instanceof Error ? error.message : 'Failed to enrich gallery asset', 'error');
     } finally {
       setIsEnriching(false);
+    }
+  };
+
+  const handleUpscale = async () => {
+    if (!asset || isUpscaling) return;
+    if (asset.type !== 'image' && asset.type !== 'video') {
+      showToast('Upscale is only available for image and video results', 'error');
+      return;
+    }
+
+    setIsUpscaling(true);
+    showToast(`Starting upscale for ${asset.type}...`, 'info');
+
+    try {
+      const response = await fetch('/api/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ galleryAssetId: asset.id, type: asset.type }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.job) {
+        throw new Error(data.error || 'Failed to create upscale job');
+      }
+      showToast('Upscale job created and processing', 'success');
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to upscale gallery asset:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to create upscale job', 'error');
+    } finally {
+      setIsUpscaling(false);
     }
   };
 
@@ -267,6 +298,12 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                           {isReusing === 'img2vid' ? 'Opening...' : 'Open in img2vid'}
                         </Button>
                       </>
+                    )}
+                    {(asset.type === 'image' || asset.type === 'video') && (
+                      <Button variant="outline" size="sm" onClick={() => void handleUpscale()} disabled={isUpscaling}>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        {isUpscaling ? 'Starting...' : 'Upscale'}
+                      </Button>
                     )}
                   </div>
                 </div>

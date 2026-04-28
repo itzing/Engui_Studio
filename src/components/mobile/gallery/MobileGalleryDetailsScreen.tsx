@@ -17,6 +17,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const router = useRouter();
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
+  const [isUpscaling, setIsUpscaling] = useState(false);
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
@@ -82,6 +83,29 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     const data = await response.json();
     if (response.ok && data.success) {
       setAsset((prev) => prev ? { ...prev, userTags: data.userTags || tags } : prev);
+    }
+  };
+
+  const upscale = async () => {
+    if (!asset || isUpscaling) return;
+    if (asset.type !== 'image' && asset.type !== 'video') return;
+
+    setIsUpscaling(true);
+    try {
+      const response = await fetch('/api/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ galleryAssetId: asset.id, type: asset.type }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.job) {
+        throw new Error(data.error || 'Failed to create upscale job');
+      }
+      router.push('/m/jobs');
+    } catch (error) {
+      console.error('Failed to create mobile gallery upscale job:', error);
+    } finally {
+      setIsUpscaling(false);
     }
   };
 
@@ -170,6 +194,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
+                {(asset.type === 'image' || asset.type === 'video') ? <Button variant="outline" onClick={() => void upscale()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 <Button variant="destructive" onClick={() => void toggleTrash()}><Trash2 className="mr-2 h-4 w-4" />{asset.trashed ? 'Restore' : 'Move to trash'}</Button>
                 {asset.sourceJobId ? <Button variant="ghost" asChild><Link href={`/m/jobs/${asset.sourceJobId}`}>Open source job</Link></Button> : null}
               </div>
