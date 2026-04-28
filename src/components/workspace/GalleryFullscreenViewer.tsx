@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Heart, HeartOff, Info, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
+import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
 
 export type GalleryViewerBucket = 'common' | 'draft' | 'upscale';
 import { Button } from '@/components/ui/button';
@@ -596,6 +596,17 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
+      {!isDesktop && !currentImageLoaded ? (
+        <div
+          key={currentItem.id}
+          className="absolute left-3 z-10 flex items-center justify-center rounded-full bg-black/70 text-white border border-white/10"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)', width: '2rem', height: '2rem' }}
+          aria-label="Loading image"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : null}
+
       {showCloseButton && (
         <>
           {(onOpenInfo || renderHeaderActions) && currentItem?.id && (
