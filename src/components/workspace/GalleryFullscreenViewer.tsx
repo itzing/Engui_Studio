@@ -599,7 +599,8 @@ export function GalleryFullscreenViewer({ open, items, currentIndex, onIndexChan
       {!isDesktop && !currentImageLoaded ? (
         <div
           key={currentItem.id}
-          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+          className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
           aria-label="Loading image"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white border border-white/10">

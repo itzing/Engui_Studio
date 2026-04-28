@@ -147,5 +147,15 @@
     "notes": "Direct user command. Scope: add Upscale to mobile gallery details and desktop gallery asset dialog, using the galleryAssetId upscale flow, then build/restart/commit/push.",
     "finishedAt": "2026-04-28T16:50:39Z",
     "result": "Added Upscale actions to both mobile gallery details and the desktop GalleryAssetDialog, wired to the galleryAssetId-based /api/upscale flow for image/video assets. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
+  },
+  {
+    "id": "engui-mobile-gallery-spinner-top-center-2026-04-28",
+    "createdAt": "2026-04-28T16:52:50Z",
+    "task": "Move mobile gallery loading spinner to the top center line",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user correction. Scope: place the mobile fullscreen gallery loading spinner in the top center on the same line as info/close, not in the image center, then build/restart/commit/push.",
+    "finishedAt": "2026-04-28T16:54:36Z",
+    "result": "Moved the mobile fullscreen gallery loading spinner into the top-center overlay line between the left and right header controls, while preserving per-image reset behavior on swipe. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for /m/gallery and /."
   }
 ]
