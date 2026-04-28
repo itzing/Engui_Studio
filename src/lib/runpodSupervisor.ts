@@ -470,7 +470,7 @@ async function materializeEncryptedResult(job: any, output: any, settings: any) 
 }
 
 async function persistJobUpdate(jobId: string, data: JsonObject) {
-  await prisma.job.update({
+  return prisma.job.update({
     where: { id: jobId },
     data,
   });
@@ -611,7 +611,11 @@ async function markJobCompleted(params: {
     secureState: nextSecureState ? JSON.stringify(nextSecureState) : job.secureState,
   });
 
-  await maybeAutoSaveUpscaleResult(completedJob);
+  try {
+    await maybeAutoSaveUpscaleResult(completedJob);
+  } catch (error: any) {
+    console.error('Upscale autosave failed after job completion:', error);
+  }
 }
 
 async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, settings: any, resultStoragePath?: string | null) {
