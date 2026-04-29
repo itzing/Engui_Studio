@@ -11,9 +11,11 @@
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
     "createdAt": "2026-04-29T09:24:00Z",
     "task": "Backfill gallery upscale bucket for oversized images",
-    "status": "pending",
+    "status": "done",
     "chatId": "telegram:450189741",
-    "notes": "Revert requested by user. Rolling back the gallery upscale backfill feature commits `654b4a5` and `0f05754`, then build/restart/push."
+    "notes": "Revert requested by user. Rolling back the gallery upscale backfill feature commits `654b4a5` and `0f05754`, then build/restart/push.",
+    "finishedAt": "2026-04-29T09:38:45Z",
+    "result": "Reverted the gallery upscale backfill feature commit, removing the one-off backlog task file, the upscale-backfill API route, the shared backfill library, and the gallery panel trigger. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/gallery."
   },
   {
     "id": "engui-image-create-prompt-draft-selector-2026-04-26",
