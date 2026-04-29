@@ -11,9 +11,11 @@
     "id": "engui-stale-missing-jobs-ui-cleanup-2026-04-29",
     "createdAt": "2026-04-29T19:32:00Z",
     "task": "Remove stale jobs from UI when the local or upstream record is missing",
-    "status": "pending",
+    "status": "done",
     "chatId": "telegram:450189741",
-    "notes": "Direct user command. Scope: stop endless status polling on missing jobs, treat cancel/delete 404 responses as stale-cleanup success, and remove stale jobs from desktop and mobile job UIs; then build/restart/commit/push."
+    "notes": "Direct user command. Scope: stop endless status polling on missing jobs, treat cancel/delete 404 responses as stale-cleanup success, and remove stale jobs from desktop and mobile job UIs; then build/restart/commit/push.",
+    "finishedAt": "2026-04-29T19:32:30Z",
+    "result": "Desktop and mobile jobs polling now remove stale active jobs when `/api/generate/status` returns 404, and cancel/delete actions now treat local 404 responses as stale-cleanup success by removing the visible job card instead of surfacing a hard error. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
   },
   {
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
