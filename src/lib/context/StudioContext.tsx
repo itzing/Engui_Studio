@@ -519,6 +519,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 method: 'DELETE'
             });
             const data = await response.json().catch(() => ({}));
+
+            if (response.status === 404) {
+                setJobs(prev => prev.filter(job => job.id !== id));
+                return true;
+            }
+
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Failed to delete job');
             }
@@ -538,6 +544,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 headers: { 'Content-Type': 'application/json' },
             });
             const data = await response.json().catch(() => ({}));
+
+            if (response.status === 404) {
+                setJobs(prev => prev.filter(job => job.id !== id));
+                return { success: true, removed: true };
+            }
+
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Failed to cancel job');
             }
@@ -684,9 +696,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             for (const job of activeJobs) {
                 try {
                     const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`);
-                    const data = await response.json();
 
-                    if (!data.success) {
+                    if (response.status === 404) {
+                        setJobs(prev => prev.filter(j => j.id !== job.id));
+                        continue;
+                    }
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data.success) {
                         continue;
                     }
 

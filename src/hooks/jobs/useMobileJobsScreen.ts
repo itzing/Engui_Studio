@@ -155,6 +155,28 @@ export function useMobileJobsScreen() {
     });
   }, []);
 
+  const removeLoadedJob = useCallback((jobId: string) => {
+    setLoadedPages((prev) => {
+      let changed = false;
+      const nextPages: Record<number, LoadedJobsPage> = {};
+
+      for (const [pageKey, page] of Object.entries(prev)) {
+        const nextJobs = page.jobs.filter((job) => job.id !== jobId);
+        if (nextJobs.length !== page.jobs.length) {
+          changed = true;
+          nextPages[Number(pageKey)] = { ...page, jobs: nextJobs };
+        } else {
+          nextPages[Number(pageKey)] = page;
+        }
+      }
+
+      return changed ? nextPages : prev;
+    });
+    setTotalCount((prev) => Math.max(0, prev - 1));
+    setSelectedJobId((prev) => (prev === jobId ? null : prev));
+    setSelectedAbsoluteIndex((prev) => (selectedJobId === jobId ? null : prev));
+  }, [selectedJobId]);
+
   const loadPage = useCallback(async (pageNumber: number, options?: { focusJobId?: string | null }) => {
     if (pageNumber < 1 || loadingPagesRef.current.has(pageNumber)) return null;
     loadingPagesRef.current.add(pageNumber);
@@ -245,6 +267,10 @@ export function useMobileJobsScreen() {
       void Promise.all(activeJobs.map(async (job) => {
         try {
           const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`, { cache: 'no-store' });
+          if (response.status === 404) {
+            removeLoadedJob(job.id);
+            return;
+          }
           const data = await response.json().catch(() => ({}));
           if (!response.ok || !data.success) return;
 
@@ -294,7 +320,7 @@ export function useMobileJobsScreen() {
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [loadedEntries, patchJob]);
+  }, [loadedEntries, patchJob, removeLoadedJob]);
 
   const ensureRangeLoaded = useCallback(async (startIndex: number, endIndex: number) => {
     if (totalCount <= 0) return;

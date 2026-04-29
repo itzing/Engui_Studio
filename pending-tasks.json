@@ -8,6 +8,14 @@
     "notes": "Work sequentially ticket-by-ticket. Do not touch prisma/db. Current untracked path prisma/db/ must remain untouched."
   },
   {
+    "id": "engui-stale-missing-jobs-ui-cleanup-2026-04-29",
+    "createdAt": "2026-04-29T19:32:00Z",
+    "task": "Remove stale jobs from UI when the local or upstream record is missing",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: stop endless status polling on missing jobs, treat cancel/delete 404 responses as stale-cleanup success, and remove stale jobs from desktop and mobile job UIs; then build/restart/commit/push."
+  },
+  {
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
     "createdAt": "2026-04-29T09:24:00Z",
     "task": "Backfill gallery upscale bucket for oversized images",
