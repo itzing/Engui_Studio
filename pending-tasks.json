@@ -8,6 +8,14 @@
     "notes": "Work sequentially ticket-by-ticket. Do not touch prisma/db. Current untracked path prisma/db/ must remain untouched."
   },
   {
+    "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
+    "createdAt": "2026-04-29T09:24:00Z",
+    "task": "Backfill gallery upscale bucket for oversized images",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: add a background-safe gallery backfill that scans image assets, detects images larger than the 1024x1536 baseline, marks non-upscale assets as bucket `upscale`, and expose a gallery UI trigger; then build/restart/commit/push."
+  },
+  {
     "id": "engui-image-create-prompt-draft-selector-2026-04-26",
     "createdAt": "2026-04-26T22:29:56Z",
     "task": "Add desktop Image Create prompt draft selector with prompt locking and re-render-on-generate behavior",

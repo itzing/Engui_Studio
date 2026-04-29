@@ -144,6 +144,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isLoadingPreviousGallery, setIsLoadingPreviousGallery] = useState(false);
     const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
     const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
+    const [isBackfillingUpscales, setIsBackfillingUpscales] = useState(false);
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
@@ -1502,6 +1503,40 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
     };
 
+    const handleGalleryUpscaleBackfill = async () => {
+        if (!activeWorkspaceId || isBackfillingUpscales) return;
+        setIsBackfillingUpscales(true);
+        try {
+            let totalProcessed = 0;
+            let totalUpdated = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const response = await fetch('/api/gallery/assets/upscale-backfill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workspaceId: activeWorkspaceId, limit: 100 }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to backfill gallery upscales');
+                }
+
+                totalProcessed += data.processed || 0;
+                totalUpdated += data.updated || 0;
+                hasMore = Boolean(data.hasMore) && (data.processed || 0) > 0;
+            }
+
+            showToast(`Marked ${totalUpdated} upscale assets out of ${totalProcessed} scanned`, 'success');
+            void fetchGalleryAssets(1);
+        } catch (error) {
+            console.error('Failed to backfill gallery upscales:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to backfill gallery upscales', 'error');
+        } finally {
+            setIsBackfillingUpscales(false);
+        }
+    };
+
     const handleGalleryPermanentDelete = async (asset: GalleryAsset) => {
         if (!confirm('Delete this gallery asset forever? This will remove stored files too.')) return;
         try {
@@ -1933,6 +1968,14 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         className="text-[10px] text-blue-400 hover:text-blue-300 disabled:opacity-50"
                                     >
                                         {isBackfillingDerivatives ? 'Generating...' : 'Backfill previews'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleGalleryUpscaleBackfill()}
+                                        disabled={isBackfillingUpscales}
+                                        className="text-[10px] text-violet-400 hover:text-violet-300 disabled:opacity-50"
+                                    >
+                                        {isBackfillingUpscales ? 'Scanning...' : 'Mark upscales'}
                                     </button>
                                     {showTrashed && (
                                         <button
