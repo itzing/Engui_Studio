@@ -91,6 +91,22 @@ function extractS3KeyFromUrl(url: string): string | null {
     }
 }
 
+async function cleanupUploadedUpscaleInputs(s3: S3Service, storagePaths: Array<string | null | undefined>) {
+    const warnings: string[] = [];
+
+    for (const storagePath of storagePaths) {
+        if (!storagePath) continue;
+
+        try {
+            await s3.deleteFile(storagePathToS3Key(storagePath));
+        } catch (error: any) {
+            warnings.push(`${storagePath}:${error?.message || 'cleanup failed'}`);
+        }
+    }
+
+    return warnings;
+}
+
 async function loadSourcePlaintext(sourceUrl: string, mediaType: 'image' | 'video', s3: S3Service): Promise<Buffer> {
     if (sourceUrl.startsWith('/') && !sourceUrl.startsWith('/runpod-volume/')) {
         const localFilePath = path.join(process.cwd(), 'public', sourceUrl.replace(/^\/+/, ''));
@@ -258,33 +274,16 @@ export async function POST(request: NextRequest) {
         }
 
         const resolvedWorkspaceId = await resolveJobWorkspaceId(source.userId, source.workspaceId);
-
-        const newJob = await prisma.job.create({
-            data: {
-                userId: source.userId,
-                workspaceId: resolvedWorkspaceId,
-                modelId,
-                type: mediaType as any,
-                status: 'queueing_up',
-                prompt: `Upscale of: ${source.prompt}`,
-                options: JSON.stringify(buildOptions({
-                    source,
-                    type,
-                    secureMode: true,
-                    secureInputMode: 'media_inputs_encrypted',
-                }))
-            }
-        });
-
+        const jobId = uuidv4();
         const attemptId = uuidv4();
         const s3 = createS3Service(settings);
         const plaintext = await loadSourcePlaintext(source.resultUrl, mediaType, s3);
         const mime = inferMimeFromSource(source.resultUrl, mediaType);
-        const inputFileName = `${newJob.id}__${attemptId}__input.bin`;
+        const inputFileName = `${jobId}__${attemptId}__input.bin`;
         const inputDescriptor = await uploadEncryptedMediaInput({
             s3,
             masterKey,
-            jobId: newJob.id,
+            jobId,
             modelId,
             attemptId,
             role: mediaType === 'image' ? 'source_image' : 'source_video',
@@ -299,10 +298,10 @@ export async function POST(request: NextRequest) {
             __encryptSensitiveUpscale: true,
             media_inputs: [inputDescriptor],
             transport_request: {
-                output_dir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`,
-                output_file_name: buildOutputFileName(newJob.id, attemptId, 'result.bin')
+                output_dir: `${buildAttemptPaths(jobId, attemptId).outputsDir}/`,
+                output_file_name: buildOutputFileName(jobId, attemptId, 'result.bin')
             },
-            job_id: newJob.id,
+            job_id: jobId,
             attempt_id: attemptId,
             model_id: modelId,
             task_type: taskType,
@@ -313,7 +312,7 @@ export async function POST(request: NextRequest) {
 
         const secureState = createSecureStateSkeleton({
             attemptId,
-            outputDir: `${buildAttemptPaths(newJob.id, attemptId).outputsDir}/`,
+            outputDir: `${buildAttemptPaths(jobId, attemptId).outputsDir}/`,
             secureBlockPresent: false,
             mediaInputs: [inputDescriptor],
         });
@@ -336,10 +335,15 @@ export async function POST(request: NextRequest) {
                 secureInputMode: 'media_inputs_encrypted',
             }));
 
-            await prisma.job.update({
-                where: { id: newJob.id },
+            const createdJob = await prisma.job.create({
                 data: {
+                    id: jobId,
+                    userId: source.userId,
+                    workspaceId: resolvedWorkspaceId,
+                    modelId,
+                    type: mediaType as any,
                     status: 'queued',
+                    prompt: `Upscale of: ${source.prompt}`,
                     options: updatedOptions,
                     secureState: JSON.stringify({
                         ...secureState,
@@ -356,59 +360,23 @@ export async function POST(request: NextRequest) {
 
             return NextResponse.json({
                 success: true,
-                job: {
-                    ...newJob,
-                    status: 'queued',
-                    options: updatedOptions,
-                    secureState: JSON.stringify({
-                        ...secureState,
-                        phase: 'runpod_queued',
-                        activeAttempt: {
-                            ...secureState.activeAttempt,
-                            runpodJobId,
-                        },
-                    })
-                },
+                job: createdJob,
                 runpodJobId,
             });
         } catch (runpodError: any) {
-            const failedOptions = JSON.stringify(buildOptions({
-                source,
-                type,
-                attemptId,
-                secureMode: true,
-                secureInputMode: 'media_inputs_encrypted',
-                error: runpodError.message,
-            }));
+            const cleanupWarnings = await cleanupUploadedUpscaleInputs(s3, [inputDescriptor.storage_path]);
 
-            await prisma.job.update({
-                where: { id: newJob.id },
-                data: {
-                    status: 'failed',
-                    options: failedOptions,
-                    secureState: JSON.stringify({
-                        ...secureState,
-                        phase: 'failed',
-                        failure: {
-                            source: 'engui.upscale.submit',
-                            error: {
-                                code: 'UPSCALE_SUBMIT_FAILED',
-                                message: runpodError.message,
-                            },
-                            recordedAt: new Date().toISOString(),
-                        }
-                    })
-                }
-            });
+            if (cleanupWarnings.length > 0) {
+                console.warn('Upscale submit cleanup warnings:', {
+                    jobId,
+                    attemptId,
+                    warnings: cleanupWarnings,
+                });
+            }
 
             return NextResponse.json({
                 success: false,
                 error: `Failed to submit to RunPod: ${runpodError.message}`,
-                job: {
-                    ...newJob,
-                    status: 'failed',
-                    options: failedOptions,
-                }
             }, { status: 500 });
         }
     } catch (error: any) {

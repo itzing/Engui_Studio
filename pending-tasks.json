@@ -187,5 +187,13 @@
     "notes": "Direct user command. Scope: detect jobs flipped to failed by the autosave regression using the exact undefined workspaceId error plus existing result artifacts, restore them to completed, then verify and commit/push.",
     "finishedAt": "2026-04-28T17:50:44Z",
     "result": "Repaired 6 jobs that were falsely marked failed by the autosave regression by selecting only rows with the exact undefined workspaceId error and an existing result artifact, then restoring them to status `completed` and clearing the error. Verified the repaired jobs retained valid local artifacts."
+  },
+  {
+    "id": "engui-upscale-submit-order-and-s3-cleanup-2026-04-29",
+    "createdAt": "2026-04-29T09:10:00Z",
+    "task": "Refactor upscale submit order and clean S3 inputs on RunPod submit failure",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: change upscale flow to prepare input and submit to RunPod before creating the local job, and best-effort clean uploaded S3 input artifacts when submitJob fails; then build/restart/commit/push. GitHub issues are disabled on the repo, so no issue could be created."
   }
 ]
