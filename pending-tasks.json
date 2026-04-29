@@ -11,11 +11,9 @@
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
     "createdAt": "2026-04-29T09:24:00Z",
     "task": "Backfill gallery upscale bucket for oversized images",
-    "status": "done",
+    "status": "pending",
     "chatId": "telegram:450189741",
-    "notes": "Direct user command. Scope: add a background-safe gallery backfill that scans image assets, detects images larger than the 1024x1536 baseline, marks non-upscale assets as bucket `upscale`, and expose a gallery UI trigger; then build/restart/commit/push.",
-    "finishedAt": "2026-04-29T09:27:10Z",
-    "result": "Added a gallery upscale-bucket backfill library and API route, exposed a gallery UI trigger that can scan in batches, and deployed it. Then ran a one-time backfill across the existing Default workspace gallery, scanning 1225 non-upscale image assets and marking 9 of them as `upscale` based on actual image dimensions exceeding the 1024x1536 baseline. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/gallery."
+    "notes": "Revert requested by user. Rolling back the gallery upscale backfill feature commits `654b4a5` and `0f05754`, then build/restart/push."
   },
   {
     "id": "engui-image-create-prompt-draft-selector-2026-04-26",
