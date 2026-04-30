@@ -14,6 +14,7 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
+import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function VideoGenerationForm() {
@@ -114,7 +115,9 @@ export default function VideoGenerationForm() {
                 }>('video', videoSelectedModel);
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
-                setParameterValues(draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {});
+                const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
+                const sanitized = sanitizeHydratedLoraParameterValues(videoSelectedModel, restoredParameterValues, availableLoras.map((lora) => lora.s3Path));
+                setParameterValues(sanitized.parameterValues && typeof sanitized.parameterValues === 'object' ? sanitized.parameterValues : {});
                 setImageFile(null);
                 setVideoFile(null);
                 setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
@@ -359,6 +362,20 @@ export default function VideoGenerationForm() {
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
 
+    useEffect(() => {
+        if (!currentModel || !hasLoRAParameter(currentModel)) {
+            return;
+        }
+
+        const sanitized = sanitizeHydratedLoraParameterValues(
+            currentModel.id,
+            parameterValues,
+            availableLoras.map((lora) => lora.s3Path),
+        );
+        if (sanitized.changed) {
+            setParameterValues(sanitized.parameterValues || {});
+        }
+    }, [availableLoras, currentModel, parameterValues]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

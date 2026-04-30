@@ -19,6 +19,7 @@ import {
     normalizeRandomizeSeed,
 } from '@/lib/create/imageDraft';
 import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
+import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
@@ -593,6 +594,20 @@ export default function ImageGenerationForm() {
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
 
 
+    useEffect(() => {
+        if (!currentModel || !hasLoRAParameter(currentModel)) {
+            return;
+        }
+
+        const sanitized = sanitizeHydratedLoraParameterValues(
+            currentModel.id,
+            parameterValues,
+            availableLoras.map((lora) => lora.s3Path),
+        );
+        if (sanitized.changed) {
+            setParameterValues(sanitized.parameterValues || {});
+        }
+    }, [availableLoras, currentModel, parameterValues]);
 
     // Handler for parameter changes
     const handleParameterChange = (paramName: string, value: any) => {

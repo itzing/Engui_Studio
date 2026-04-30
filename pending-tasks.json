@@ -18,6 +18,16 @@
     "result": "Desktop and mobile jobs polling now remove stale active jobs when `/api/generate/status` returns 404, and cancel/delete actions now treat local 404 responses as stale-cleanup success by removing the visible job card instead of surfacing a hard error. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
   },
   {
+    "id": "engui-clear-deleted-loras-from-drafts-2026-04-30",
+    "createdAt": "2026-04-30T23:45:00Z",
+    "task": "Clear deleted LoRAs from persisted create drafts and startup hydration",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: remove deleted LoRAs from image/video draft storage on manager delete and auto-clear invalid LoRA slots from hydrated UI parameterValues when the available LoRA list no longer contains them; then build/restart/commit/push.",
+    "finishedAt": "2026-04-30T23:49:40Z",
+    "result": "Deleting a LoRA from the manager now strips matching references from persisted image and video create drafts in local storage. Image and video create hydration/startup now validate persisted LoRA slots against the fetched LoRA list and auto-clear stale slot values with weight reset before submit can serialize deleted filenames. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/create."
+  },
+  {
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
     "createdAt": "2026-04-29T09:24:00Z",
     "task": "Backfill gallery upscale bucket for oversized images",

@@ -14,6 +14,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
+import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
 import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -283,6 +284,7 @@ export function LoRAManagementDialog({
     setError(null);
     setSuccessMessage(null);
     setIsDeleting(true);
+    const deletedLora = loras.find((entry) => entry.id === id);
     
     try {
       const response = await fetch(`/api/lora/${id}`, {
@@ -303,6 +305,10 @@ export function LoRAManagementDialog({
           setSuccessMessage(`✓ ${t('loraManagement.messages.deleteSuccess')}`);
         }
         
+        if (deletedLora) {
+          removeDeletedLoraFromCreateDrafts([deletedLora.s3Path, deletedLora.fileName]);
+        }
+
         // Refresh the list
         await fetchLoras();
         onLoRAUploaded?.();

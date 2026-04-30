@@ -10,6 +10,7 @@ import {
 } from '@/lib/create/imageDraft';
 import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/createMediaStore';
 import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
+import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getModelById, getModelsByType, isInputVisible, type ModelParameter } from '@/lib/models/modelConfig';
@@ -245,6 +246,22 @@ export function useImageCreateState() {
       cancelled = true;
     };
   }, [activeWorkspaceId, hasLoRAParameter]);
+
+  useEffect(() => {
+    if (!currentModel || !hasLoRAParameter) {
+      return;
+    }
+
+    const sanitized = sanitizeHydratedLoraParameterValues(
+      currentModel.id,
+      parameterValues,
+      availableLoras.map((lora) => lora.s3Path),
+    );
+
+    if (sanitized.changed) {
+      setParameterValues(sanitized.parameterValues || {});
+    }
+  }, [availableLoras, currentModel, hasLoRAParameter, parameterValues]);
 
   const setTimedMessage = useCallback((nextMessage: FlashMessage) => {
     setMessage(nextMessage);
