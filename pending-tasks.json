@@ -266,5 +266,15 @@
     "notes": "User asked to continue autonomously and say when testing is ready. Goal: make validation cleaner after YARL viewer migration.",
     "finishedAt": "2026-05-01T20:04:37.369Z",
     "result": "Investigated the earlier .next/types failure. Missing-file error was transient during concurrent artifact regeneration, but a clean sequential typecheck showed broad pre-existing repo type debt unrelated to the YARL migration. Fixed viewer-related type issues introduced during migration, rebuilt successfully, and redeployed."
+  },
+  {
+    "id": "engui-yarl-gesture-polish-2026-05-01",
+    "createdAt": "2026-05-01T20:27:04.571Z",
+    "task": "Polish YARL viewer gestures: restore pull-down close on mobile and make desktop navigation non-drag, near-instant.",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User reported swipe-down close not working and desktop drag-slide feeling wrong.",
+    "finishedAt": "2026-05-01T20:30:38.759Z",
+    "result": "Adjusted YARL gesture/navigation behavior: set controller touchAction to none to improve pull-down-close capture, disabled desktop pointer swipe navigation, set desktop navigation animation to instant, and added desktop edge click zones for previous/next navigation. Build passed and engui-studio.service restarted."
   }
 ]

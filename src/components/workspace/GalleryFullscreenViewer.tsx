@@ -261,6 +261,16 @@ export function GalleryFullscreenViewer({
     }, 280);
   }, [currentItem?.id, handleFavoriteToggle, isSlideshowPlaying, scheduleOverlayAutohide]);
 
+  const goToPrevious = useCallback(() => {
+    if (items.length <= 1) return;
+    onIndexChange(safeIndex <= 0 ? items.length - 1 : safeIndex - 1);
+  }, [items.length, onIndexChange, safeIndex]);
+
+  const goToNext = useCallback(() => {
+    if (items.length <= 1) return;
+    onIndexChange(safeIndex >= items.length - 1 ? 0 : safeIndex + 1);
+  }, [items.length, onIndexChange, safeIndex]);
+
   const getNextSlideshowIndex = useCallback(() => {
     if (items.length <= 1) return safeIndex;
 
@@ -394,11 +404,22 @@ export function GalleryFullscreenViewer({
           imageFit: 'contain',
           imageProps: { draggable: false },
         }}
+        animation={{
+          fade: 180,
+          swipe: isDesktop ? 0 : 500,
+          navigation: isDesktop ? 0 : 320,
+          easing: {
+            fade: 'ease',
+            swipe: 'ease-out',
+            navigation: 'ease-out',
+          },
+        }}
         controller={{
           closeOnBackdropClick: false,
           closeOnPullDown: true,
           closeOnPullUp: false,
-          touchAction: 'pan-y',
+          disableSwipeNavigation: isDesktop,
+          touchAction: 'none',
         }}
         zoom={{
           maxZoomPixelRatio: 3,
@@ -460,6 +481,29 @@ export function GalleryFullscreenViewer({
                     <Loader2 className="h-4 w-4 animate-spin" />
                   </div>
                 </div>
+              ) : null}
+
+              {isDesktop && items.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 left-0 z-10 hidden w-[20%] min-w-20 bg-transparent sm:block"
+                    aria-label="Previous image"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      goToPrevious();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 z-10 hidden w-[20%] min-w-20 bg-transparent sm:block"
+                    aria-label="Next image"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      goToNext();
+                    }}
+                  />
+                </>
               ) : null}
 
               {favoriteOverlay ? (
