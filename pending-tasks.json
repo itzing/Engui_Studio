@@ -28,6 +28,16 @@
     "result": "Deleting a LoRA from the manager now strips matching references from persisted image and video create drafts in local storage. Image and video create hydration/startup now validate persisted LoRA slots against the fetched LoRA list and auto-clear stale slot values with weight reset before submit can serialize deleted filenames. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/create."
   },
   {
+    "id": "engui-preserve-reuse-loras-until-catalog-load-2026-05-01",
+    "createdAt": "2026-05-01T07:48:00Z",
+    "task": "Preserve reused LoRAs until the LoRA catalog has actually loaded",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: stop clearing restored LoRA slots during initial hydration when `/api/lora` has not completed yet; only validate/clear after a successful catalog response, then build/restart/commit/push.",
+    "finishedAt": "2026-05-01T07:50:08Z",
+    "result": "Removed early LoRA sanitization during image/video draft hydration so reuse payloads keep their saved LoRA values until `/api/lora` returns successfully. Validation and stale-slot cleanup now run only off the successful catalog response path. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/create."
+  },
+  {
     "id": "engui-gallery-upscale-bucket-backfill-2026-04-29",
     "createdAt": "2026-04-29T09:24:00Z",
     "task": "Backfill gallery upscale bucket for oversized images",

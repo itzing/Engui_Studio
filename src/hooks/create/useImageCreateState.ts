@@ -228,7 +228,18 @@ export function useImageCreateState() {
         const data = await response.json();
 
         if (!cancelled) {
-          setAvailableLoras(data.success && Array.isArray(data.loras) ? data.loras : []);
+          const nextLoras = data.success && Array.isArray(data.loras) ? data.loras : [];
+          setAvailableLoras(nextLoras);
+          if (data.success && currentModel && hasLoRAParameter) {
+            const sanitized = sanitizeHydratedLoraParameterValues(
+              currentModel.id,
+              parameterValues,
+              nextLoras.map((lora) => lora.s3Path),
+            );
+            if (sanitized.changed) {
+              setParameterValues(sanitized.parameterValues || {});
+            }
+          }
         }
       } catch {
         if (!cancelled) {
@@ -247,21 +258,6 @@ export function useImageCreateState() {
     };
   }, [activeWorkspaceId, hasLoRAParameter]);
 
-  useEffect(() => {
-    if (!currentModel || !hasLoRAParameter) {
-      return;
-    }
-
-    const sanitized = sanitizeHydratedLoraParameterValues(
-      currentModel.id,
-      parameterValues,
-      availableLoras.map((lora) => lora.s3Path),
-    );
-
-    if (sanitized.changed) {
-      setParameterValues(sanitized.parameterValues || {});
-    }
-  }, [availableLoras, currentModel, hasLoRAParameter, parameterValues]);
 
   const setTimedMessage = useCallback((nextMessage: FlashMessage) => {
     setMessage(nextMessage);

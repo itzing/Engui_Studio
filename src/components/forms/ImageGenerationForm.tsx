@@ -551,6 +551,16 @@ export default function ImageGenerationForm() {
 
             if (data.success && data.loras) {
                 setAvailableLoras(data.loras);
+                if (currentModel && hasLoRAParameter(currentModel)) {
+                    const sanitized = sanitizeHydratedLoraParameterValues(
+                        currentModel.id,
+                        parameterValues,
+                        data.loras.map((lora: LoRAFile) => lora.s3Path),
+                    );
+                    if (sanitized.changed) {
+                        setParameterValues(sanitized.parameterValues || {});
+                    }
+                }
             } else {
                 console.error('Failed to fetch LoRAs:', data.error);
                 setAvailableLoras([]);
@@ -593,21 +603,6 @@ export default function ImageGenerationForm() {
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
 
-
-    useEffect(() => {
-        if (!currentModel || !hasLoRAParameter(currentModel)) {
-            return;
-        }
-
-        const sanitized = sanitizeHydratedLoraParameterValues(
-            currentModel.id,
-            parameterValues,
-            availableLoras.map((lora) => lora.s3Path),
-        );
-        if (sanitized.changed) {
-            setParameterValues(sanitized.parameterValues || {});
-        }
-    }, [availableLoras, currentModel, parameterValues]);
 
     // Handler for parameter changes
     const handleParameterChange = (paramName: string, value: any) => {

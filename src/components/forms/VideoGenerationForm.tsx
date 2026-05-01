@@ -116,8 +116,7 @@ export default function VideoGenerationForm() {
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
                 const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
-                const sanitized = sanitizeHydratedLoraParameterValues(videoSelectedModel, restoredParameterValues, availableLoras.map((lora) => lora.s3Path));
-                setParameterValues(sanitized.parameterValues && typeof sanitized.parameterValues === 'object' ? sanitized.parameterValues : {});
+                setParameterValues(restoredParameterValues);
                 setImageFile(null);
                 setVideoFile(null);
                 setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
@@ -325,6 +324,16 @@ export default function VideoGenerationForm() {
 
             if (data.success && data.loras) {
                 setAvailableLoras(data.loras);
+                if (currentModel && hasLoRAParameter(currentModel)) {
+                    const sanitized = sanitizeHydratedLoraParameterValues(
+                        currentModel.id,
+                        parameterValues,
+                        data.loras.map((lora: LoRAFile) => lora.s3Path),
+                    );
+                    if (sanitized.changed) {
+                        setParameterValues(sanitized.parameterValues || {});
+                    }
+                }
             } else {
                 console.error('Failed to fetch LoRAs:', data.error);
                 setAvailableLoras([]);
@@ -361,21 +370,6 @@ export default function VideoGenerationForm() {
             fetchAvailableLoras();
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
-
-    useEffect(() => {
-        if (!currentModel || !hasLoRAParameter(currentModel)) {
-            return;
-        }
-
-        const sanitized = sanitizeHydratedLoraParameterValues(
-            currentModel.id,
-            parameterValues,
-            availableLoras.map((lora) => lora.s3Path),
-        );
-        if (sanitized.changed) {
-            setParameterValues(sanitized.parameterValues || {});
-        }
-    }, [availableLoras, currentModel, parameterValues]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
