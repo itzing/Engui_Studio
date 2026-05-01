@@ -275,9 +275,14 @@ export function GalleryFullscreenViewer({
     onIndexChange(safeIndex >= items.length - 1 ? 0 : safeIndex + 1);
   }, [items.length, onIndexChange, safeIndex]);
 
+  const isEffectivelyZoomed = useCallback(() => {
+    const liveZoom = zoomRef.current?.zoom;
+    return (liveZoom ?? currentZoom) > 1.0001;
+  }, [currentZoom]);
+
   const handleMobileGestureStart = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
-    if (currentZoom > 1.0001) {
+    if (isEffectivelyZoomed()) {
       mobileGestureStartRef.current = null;
       return;
     }
@@ -288,11 +293,18 @@ export function GalleryFullscreenViewer({
     const touch = event.touches[0];
     if (!touch) return;
     mobileGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, [currentZoom, isDesktop]);
+  }, [isDesktop, isEffectivelyZoomed]);
+
+  const handleMobileGestureMove = useCallback((event: React.TouchEvent) => {
+    if (isDesktop) return;
+    if (isEffectivelyZoomed() || event.touches.length !== 1) {
+      mobileGestureStartRef.current = null;
+    }
+  }, [isDesktop, isEffectivelyZoomed]);
 
   const handleMobileGestureEnd = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
-    if (currentZoom > 1.0001) {
+    if (isEffectivelyZoomed()) {
       mobileGestureStartRef.current = null;
       return;
     }
@@ -320,7 +332,7 @@ export function GalleryFullscreenViewer({
     if (deltaX >= 40) {
       goToPrevious();
     }
-  }, [currentZoom, goToNext, goToPrevious, isDesktop]);
+  }, [goToNext, goToPrevious, isDesktop, isEffectivelyZoomed]);
 
   const getNextSlideshowIndex = useCallback(() => {
     if (items.length <= 1) return safeIndex;
@@ -526,7 +538,12 @@ export function GalleryFullscreenViewer({
             return undefined;
           },
           slideContainer: ({ children }) => (
-            <div className="h-full w-full" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
+            <div
+              className="h-full w-full"
+              onTouchStart={handleMobileGestureStart}
+              onTouchMove={handleMobileGestureMove}
+              onTouchEnd={handleMobileGestureEnd}
+            >
               {children}
             </div>
           ),
