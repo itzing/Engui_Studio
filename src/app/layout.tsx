@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "yet-another-react-lightbox/styles.css";
 import { I18nProvider } from "@/lib/i18n/context";
 import { ToastProvider } from "@/components/ui/toast";
 import { PWARegistration } from "@/components/pwa/PWARegistration";

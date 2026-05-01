@@ -96,8 +96,7 @@
     "notes": "Approved by direct command. Scope: move appearance after props in sceneTemplateV2 render, update regression coverage, then build/restart/commit/push.",
     "finishedAt": "2026-04-27T10:37:56Z",
     "result": "Moved appearance lower in sceneTemplateV2 character output so it now renders after outfit, local action, pose, and props; updated regression coverage, passed targeted vitest, completed production build, restarted engui-studio.service, and verified HTTP 200 for /prompt-constructor on port 3010."
-  }
-,
+  },
   {
     "id": "engui-use-character-names-in-render-2026-04-27",
     "createdAt": "2026-04-27T13:57:00Z",
@@ -237,5 +236,15 @@
     "notes": "Direct user command. Scope: change upscale flow to prepare input and submit to RunPod before creating the local job, and best-effort clean uploaded S3 input artifacts when submitJob fails; then build/restart/commit/push. GitHub issues are disabled on the repo, so no issue could be created.",
     "finishedAt": "2026-04-29T09:13:41Z",
     "result": "Refactored the upscale route so it prepares and uploads secure input, submits to RunPod, and only then creates the local queued job with runpodJobId already attached. Added best-effort cleanup of uploaded S3 input artifacts when submitJob fails, logging cleanup warnings without masking the submit failure. Production build passed, engui-studio.service restarted, and HTTP 200 was verified for / and /m/jobs."
+  },
+  {
+    "id": "engui-yarl-viewer-migration-2026-05-01",
+    "createdAt": "2026-05-01T19:42:14.448Z",
+    "task": "Implement first-pass YARL migration for shared GalleryFullscreenViewer across gallery and jobs, then build/restart/commit/push.",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: add YARL dependency, replace shared viewer internals while preserving current host contract, validate build, restart service, commit and push.",
+    "finishedAt": "2026-05-01T19:47:20.505Z",
+    "result": "Implemented first-pass YARL-based shared GalleryFullscreenViewer wrapper, preserving host contract across gallery and jobs; added package dependency, updated layout styles import, build passed."
   }
 ]
