@@ -276,5 +276,15 @@
     "notes": "User reported swipe-down close not working and desktop drag-slide feeling wrong.",
     "finishedAt": "2026-05-01T20:30:38.759Z",
     "result": "Adjusted YARL gesture/navigation behavior: set controller touchAction to none to improve pull-down-close capture, disabled desktop pointer swipe navigation, set desktop navigation animation to instant, and added desktop edge click zones for previous/next navigation. Build passed and engui-studio.service restarted."
+  },
+  {
+    "id": "engui-yarl-mobile-instant-and-zoom-tune-2026-05-01",
+    "createdAt": "2026-05-01T20:36:21.065Z",
+    "task": "Make mobile YARL navigation instant and disable excessive double-tap/pinch zoom behavior.",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User requested instant mobile navigation, no double-tap zoom, and pinch zoom capped to 100%.",
+    "finishedAt": "2026-05-01T20:38:08.426Z",
+    "result": "Made YARL slide navigation instant on mobile too, and effectively disabled image zooming beyond 1x by setting minZoom=1, maxZoom=1, and maxZoomPixelRatio=1; this also prevents double-tap zoom amplification and pinch pixelization. Build passed and engui-studio.service restarted."
   }
 ]

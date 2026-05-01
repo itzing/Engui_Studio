@@ -406,8 +406,8 @@ export function GalleryFullscreenViewer({
         }}
         animation={{
           fade: 180,
-          swipe: isDesktop ? 0 : 500,
-          navigation: isDesktop ? 0 : 320,
+          swipe: 0,
+          navigation: 0,
           easing: {
             fade: 'ease',
             swipe: 'ease-out',
@@ -422,9 +422,12 @@ export function GalleryFullscreenViewer({
           touchAction: 'none',
         }}
         zoom={{
-          maxZoomPixelRatio: 3,
+          minZoom: 1,
+          maxZoom: 1,
+          maxZoomPixelRatio: 1,
           doubleClickMaxStops: 1,
           pinchZoomV4: true,
+          scrollToZoom: false,
         }}
         labels={{
           Lightbox: 'Fullscreen gallery viewer',
