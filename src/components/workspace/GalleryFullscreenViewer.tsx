@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
+import type { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
 
@@ -61,6 +62,7 @@ export function GalleryFullscreenViewer({
   const overlayTimeoutRef = useRef<number | null>(null);
   const slideshowTimeoutRef = useRef<number | null>(null);
   const mobileGestureStartRef = useRef<{ x: number; y: number } | null>(null);
+  const zoomRef = useRef<ZoomRef | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -73,6 +75,7 @@ export function GalleryFullscreenViewer({
   const [isIntervalPopoverOpen, setIsIntervalPopoverOpen] = useState(false);
   const [isSlideshowPlaying, setIsSlideshowPlaying] = useState(false);
   const [slideshowCountdownSeconds, setSlideshowCountdownSeconds] = useState<number | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(1);
 
   const safeIndex = useMemo(() => clampIndex(currentIndex, items.length), [currentIndex, items.length]);
   const currentItem = useMemo(() => items[safeIndex] || null, [items, safeIndex]);
@@ -123,6 +126,7 @@ export function GalleryFullscreenViewer({
       setIsSlideshowPlaying(false);
       setIsIntervalPopoverOpen(false);
       setSlideshowCountdownSeconds(null);
+      setCurrentZoom(1);
     }
 
     previousOpenRef.current = open;
@@ -273,6 +277,10 @@ export function GalleryFullscreenViewer({
 
   const handleMobileGestureStart = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
+    if (currentZoom > 1.0001) {
+      mobileGestureStartRef.current = null;
+      return;
+    }
     if (event.touches.length !== 1) {
       mobileGestureStartRef.current = null;
       return;
@@ -280,10 +288,14 @@ export function GalleryFullscreenViewer({
     const touch = event.touches[0];
     if (!touch) return;
     mobileGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, [isDesktop]);
+  }, [currentZoom, isDesktop]);
 
   const handleMobileGestureEnd = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
+    if (currentZoom > 1.0001) {
+      mobileGestureStartRef.current = null;
+      return;
+    }
     if (event.changedTouches.length !== 1) {
       mobileGestureStartRef.current = null;
       return;
@@ -308,7 +320,7 @@ export function GalleryFullscreenViewer({
     if (deltaX >= 40) {
       goToPrevious();
     }
-  }, [goToNext, goToPrevious, isDesktop]);
+  }, [currentZoom, goToNext, goToPrevious, isDesktop]);
 
   const getNextSlideshowIndex = useCallback(() => {
     if (items.length <= 1) return safeIndex;
@@ -461,6 +473,7 @@ export function GalleryFullscreenViewer({
           touchAction: 'none',
         }}
         zoom={{
+          ref: zoomRef,
           maxZoomPixelRatio: 1,
           doubleClickMaxStops: 1,
           pinchZoomV4: true,
@@ -471,12 +484,16 @@ export function GalleryFullscreenViewer({
         }}
         on={{
           view: ({ index }) => {
+            setCurrentZoom(1);
             if (index !== currentIndex) {
               onIndexChange(index);
             }
           },
           click: () => {
             handleViewerClick();
+          },
+          zoom: ({ zoom }) => {
+            setCurrentZoom(zoom);
           },
         }}
         render={{
