@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -245,7 +246,6 @@ export function GalleryFullscreenViewer({
         singleTapTimeoutRef.current = null;
       }
       lastTapRef.current = { time: 0, itemId: null };
-      void handleFavoriteToggle();
       return;
     }
 
@@ -259,7 +259,7 @@ export function GalleryFullscreenViewer({
       }
       singleTapTimeoutRef.current = null;
     }, 280);
-  }, [currentItem?.id, handleFavoriteToggle, isSlideshowPlaying, scheduleOverlayAutohide]);
+  }, [currentItem?.id, isSlideshowPlaying, scheduleOverlayAutohide]);
 
   const goToPrevious = useCallback(() => {
     if (items.length <= 1) return;
@@ -425,6 +425,7 @@ export function GalleryFullscreenViewer({
         }}
         index={safeIndex}
         slides={slides as never}
+        plugins={[Zoom]}
         className="engui-yarl-root"
         carousel={{
           finite: false,
@@ -450,6 +451,12 @@ export function GalleryFullscreenViewer({
           closeOnPullUp: false,
           disableSwipeNavigation: true,
           touchAction: 'none',
+        }}
+        zoom={{
+          maxZoomPixelRatio: 3,
+          doubleClickMaxStops: 1,
+          pinchZoomV4: true,
+          scrollToZoom: false,
         }}
         labels={{
           Lightbox: 'Fullscreen gallery viewer',
@@ -564,6 +571,18 @@ export function GalleryFullscreenViewer({
                           title="Info"
                         >
                           <Info className="w-5 h-5" />
+                        </Button>
+                      ) : null}
+                      {onToggleFavorite ? (
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className={`h-10 w-10 rounded-full border ${currentItem.favorited ? 'bg-pink-500/25 hover:bg-pink-500/35 text-pink-200 border-pink-400/40' : 'bg-black/70 hover:bg-black/85 text-white border-white/10'}`}
+                          onClick={() => void handleFavoriteToggle()}
+                          aria-label={currentItem.favorited ? 'Unfavorite item' : 'Favorite item'}
+                          title={currentItem.favorited ? 'Unfavorite' : 'Favorite'}
+                        >
+                          <Heart className={`w-5 h-5 ${currentItem.favorited ? 'fill-current' : ''}`} />
                         </Button>
                       ) : null}
                       {renderHeaderActions ? renderHeaderActions(currentItem.id) : null}
