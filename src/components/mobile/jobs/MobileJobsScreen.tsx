@@ -393,7 +393,7 @@ export default function MobileJobsScreen() {
 
       <GalleryFullscreenViewer
         open={viewerOpen}
-        items={loadedViewerItems.map((item) => ({ id: item.id, url: item.url, favorited: false, type: 'image' }))}
+        items={loadedViewerItems.map((item) => ({ id: item.id, url: item.url, favorited: false, type: item.type }))}
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
         onClose={closeViewer}

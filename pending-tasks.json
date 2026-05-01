@@ -246,5 +246,13 @@
     "notes": "Direct user command. Scope: add YARL dependency, replace shared viewer internals while preserving current host contract, validate build, restart service, commit and push.",
     "finishedAt": "2026-05-01T19:47:20.505Z",
     "result": "Implemented first-pass YARL-based shared GalleryFullscreenViewer wrapper, preserving host contract across gallery and jobs; added package dependency, updated layout styles import, build passed."
+  },
+  {
+    "id": "engui-yarl-viewer-qa-fix-2026-05-01",
+    "createdAt": "2026-05-01T19:55:16.610Z",
+    "task": "Run QA/fix pass for YARL shared viewer across gallery and jobs hosts, then build/restart/commit/push.",
+    "status": "pending",
+    "chatId": "telegram:450189741",
+    "notes": "Direct user command. Scope: inspect shared viewer integration after first-pass YARL migration, fix host regressions, validate build, restart service, commit and push."
   }
 ]

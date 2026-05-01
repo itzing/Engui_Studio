@@ -97,6 +97,7 @@ export function useMobileJobsScreen() {
         id: job.id,
         url: job.resultUrl!,
         favorited: false,
+        type: job.type,
         absoluteIndex,
       })),
     [loadedEntries],
