@@ -286,5 +286,15 @@
     "notes": "User requested instant mobile navigation, no double-tap zoom, and pinch zoom capped to 100%.",
     "finishedAt": "2026-05-01T20:38:08.426Z",
     "result": "Made YARL slide navigation instant on mobile too, and effectively disabled image zooming beyond 1x by setting minZoom=1, maxZoom=1, and maxZoomPixelRatio=1; this also prevents double-tap zoom amplification and pinch pixelization. Build passed and engui-studio.service restarted."
+  },
+  {
+    "id": "engui-yarl-disable-zoom-custom-mobile-swipe-2026-05-01",
+    "createdAt": "2026-05-01T20:43:22.866Z",
+    "task": "Disable YARL zoom entirely and replace mobile drag-swipe with threshold-based instant navigation without moving current slide.",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User reported double-tap zoom still active and mobile swipe still drags current frame.",
+    "finishedAt": "2026-05-01T20:45:37.562Z",
+    "result": "Removed YARL Zoom plugin entirely to eliminate double-tap and pinch zoom behavior across mobile and desktop. Disabled built-in swipe navigation entirely and added custom mobile horizontal swipe threshold handling on slide content so mobile left/right swipe advances without dragging the current frame. Build passed and engui-studio.service restarted."
   }
 ]

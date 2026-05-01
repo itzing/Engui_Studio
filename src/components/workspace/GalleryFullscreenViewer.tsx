@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -60,6 +59,7 @@ export function GalleryFullscreenViewer({
   const lastTapRef = useRef<{ time: number; itemId: string | null }>({ time: 0, itemId: null });
   const overlayTimeoutRef = useRef<number | null>(null);
   const slideshowTimeoutRef = useRef<number | null>(null);
+  const mobileGestureStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -271,6 +271,37 @@ export function GalleryFullscreenViewer({
     onIndexChange(safeIndex >= items.length - 1 ? 0 : safeIndex + 1);
   }, [items.length, onIndexChange, safeIndex]);
 
+  const handleMobileGestureStart = useCallback((event: React.TouchEvent) => {
+    if (isDesktop) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    mobileGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, [isDesktop]);
+
+  const handleMobileGestureEnd = useCallback((event: React.TouchEvent) => {
+    if (isDesktop) return;
+    const start = mobileGestureStartRef.current;
+    mobileGestureStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      return;
+    }
+
+    if (deltaX <= -40) {
+      goToNext();
+      return;
+    }
+
+    if (deltaX >= 40) {
+      goToPrevious();
+    }
+  }, [goToNext, goToPrevious, isDesktop]);
+
   const getNextSlideshowIndex = useCallback(() => {
     if (items.length <= 1) return safeIndex;
 
@@ -394,7 +425,6 @@ export function GalleryFullscreenViewer({
         }}
         index={safeIndex}
         slides={slides as never}
-        plugins={[Zoom]}
         className="engui-yarl-root"
         carousel={{
           finite: false,
@@ -418,16 +448,8 @@ export function GalleryFullscreenViewer({
           closeOnBackdropClick: false,
           closeOnPullDown: true,
           closeOnPullUp: false,
-          disableSwipeNavigation: isDesktop,
+          disableSwipeNavigation: true,
           touchAction: 'none',
-        }}
-        zoom={{
-          minZoom: 1,
-          maxZoom: 1,
-          maxZoomPixelRatio: 1,
-          doubleClickMaxStops: 1,
-          pinchZoomV4: true,
-          scrollToZoom: false,
         }}
         labels={{
           Lightbox: 'Fullscreen gallery viewer',
@@ -451,25 +473,31 @@ export function GalleryFullscreenViewer({
 
             if (customSlide.type === 'video') {
               return (
-                <video
-                  src={customSlide.src}
-                  className="max-h-full max-w-full object-contain"
-                  controls
-                  playsInline
-                  preload="metadata"
-                />
+                <div className="flex h-full w-full items-center justify-center" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
+                  <video
+                    src={customSlide.src}
+                    className="max-h-full max-w-full object-contain"
+                    controls
+                    playsInline
+                    preload="metadata"
+                  />
+                </div>
               );
             }
 
             if (customSlide.type === 'audio') {
               return (
-                <div className="flex h-full w-full items-center justify-center px-6">
+                <div className="flex h-full w-full items-center justify-center px-6" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
                   <audio src={customSlide.src} controls preload="metadata" className="w-full max-w-xl" />
                 </div>
               );
             }
 
-            return undefined;
+            return (
+              <div className="flex h-full w-full items-center justify-center" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
+                <img src={customSlide.src} alt={customSlide.alt} className="max-h-full max-w-full object-contain select-none" draggable={false} />
+              </div>
+            );
           },
           controls: () => (
             <>
