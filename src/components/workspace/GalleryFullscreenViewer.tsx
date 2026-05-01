@@ -56,10 +56,10 @@ export function GalleryFullscreenViewer({
   renderFooterActions,
 }: GalleryFullscreenViewerProps) {
   const previousOpenRef = useRef(false);
-  const singleTapTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const singleTapTimeoutRef = useRef<number | null>(null);
   const lastTapRef = useRef<{ time: number; itemId: string | null }>({ time: 0, itemId: null });
-  const overlayTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const slideshowTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const overlayTimeoutRef = useRef<number | null>(null);
+  const slideshowTimeoutRef = useRef<number | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
   const [showControls, setShowControls] = useState(true);

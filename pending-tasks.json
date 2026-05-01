@@ -251,8 +251,20 @@
     "id": "engui-yarl-viewer-qa-fix-2026-05-01",
     "createdAt": "2026-05-01T19:55:16.610Z",
     "task": "Run QA/fix pass for YARL shared viewer across gallery and jobs hosts, then build/restart/commit/push.",
-    "status": "pending",
+    "status": "done",
     "chatId": "telegram:450189741",
-    "notes": "Direct user command. Scope: inspect shared viewer integration after first-pass YARL migration, fix host regressions, validate build, restart service, commit and push."
+    "notes": "Direct user command. Scope: inspect shared viewer integration after first-pass YARL migration, fix host regressions, validate build, restart service, commit and push.",
+    "finishedAt": "2026-05-01T19:59:53.578Z",
+    "result": "QA/fix pass complete. Found and fixed jobs-host regression where completed video items were passed into GalleryFullscreenViewer as image slides. Build passed, service restarted, and /m/jobs returned HTTP 200. Typecheck remains blocked by pre-existing stale .next/types include issue in tsconfig."
+  },
+  {
+    "id": "engui-tsconfig-next-types-fix-2026-05-01",
+    "createdAt": "2026-05-01T20:01:47.601Z",
+    "task": "Fix stale .next/types tsconfig issue in Engui Studio, then validate build and deploy.",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User asked to continue autonomously and say when testing is ready. Goal: make validation cleaner after YARL viewer migration.",
+    "finishedAt": "2026-05-01T20:04:37.369Z",
+    "result": "Investigated the earlier .next/types failure. Missing-file error was transient during concurrent artifact regeneration, but a clean sequential typecheck showed broad pre-existing repo type debt unrelated to the YARL migration. Fixed viewer-related type issues introduced during migration, rebuilt successfully, and redeployed."
   }
 ]

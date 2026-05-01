@@ -45,6 +45,14 @@ type LoadedJobsPage = {
   jobs: MobileJobsScreenItem[];
 };
 
+type MobileJobViewerItem = {
+  id: string;
+  url: string;
+  favorited: false;
+  type: 'image' | 'video';
+  absoluteIndex: number;
+};
+
 const PAGE_SIZE = 24;
 
 export function useMobileJobsScreen() {
@@ -90,12 +98,14 @@ export function useMobileJobsScreen() {
     return next;
   }, [loadedEntries]);
 
-  const loadedViewerItems = useMemo(
+  const loadedViewerItems = useMemo<MobileJobViewerItem[]>(
     () => loadedEntries
-      .filter(({ job }) => job.status === 'completed' && !!job.resultUrl && (job.type === 'image' || job.type === 'video'))
+      .filter((entry): entry is { job: MobileJobsScreenItem & { resultUrl: string; type: 'image' | 'video' }; absoluteIndex: number } => (
+        entry.job.status === 'completed' && !!entry.job.resultUrl && (entry.job.type === 'image' || entry.job.type === 'video')
+      ))
       .map(({ job, absoluteIndex }) => ({
         id: job.id,
-        url: job.resultUrl!,
+        url: job.resultUrl,
         favorited: false,
         type: job.type,
         absoluteIndex,
