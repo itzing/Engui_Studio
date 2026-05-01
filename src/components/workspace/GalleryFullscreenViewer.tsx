@@ -461,7 +461,7 @@ export function GalleryFullscreenViewer({
           touchAction: 'none',
         }}
         zoom={{
-          maxZoomPixelRatio: 3,
+          maxZoomPixelRatio: 1,
           doubleClickMaxStops: 1,
           pinchZoomV4: true,
           scrollToZoom: false,
