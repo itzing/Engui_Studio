@@ -273,6 +273,10 @@ export function GalleryFullscreenViewer({
 
   const handleMobileGestureStart = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
+    if (event.touches.length !== 1) {
+      mobileGestureStartRef.current = null;
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) return;
     mobileGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
@@ -280,6 +284,10 @@ export function GalleryFullscreenViewer({
 
   const handleMobileGestureEnd = useCallback((event: React.TouchEvent) => {
     if (isDesktop) return;
+    if (event.changedTouches.length !== 1) {
+      mobileGestureStartRef.current = null;
+      return;
+    }
     const start = mobileGestureStartRef.current;
     mobileGestureStartRef.current = null;
     const touch = event.changedTouches[0];
@@ -480,32 +488,31 @@ export function GalleryFullscreenViewer({
 
             if (customSlide.type === 'video') {
               return (
-                <div className="flex h-full w-full items-center justify-center" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
-                  <video
-                    src={customSlide.src}
-                    className="max-h-full max-w-full object-contain"
-                    controls
-                    playsInline
-                    preload="metadata"
-                  />
-                </div>
+                <video
+                  src={customSlide.src}
+                  className="max-h-full max-w-full object-contain"
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
               );
             }
 
             if (customSlide.type === 'audio') {
               return (
-                <div className="flex h-full w-full items-center justify-center px-6" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
+                <div className="flex h-full w-full items-center justify-center px-6">
                   <audio src={customSlide.src} controls preload="metadata" className="w-full max-w-xl" />
                 </div>
               );
             }
 
-            return (
-              <div className="flex h-full w-full items-center justify-center" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
-                <img src={customSlide.src} alt={customSlide.alt} className="max-h-full max-w-full object-contain select-none" draggable={false} />
-              </div>
-            );
+            return undefined;
           },
+          slideContainer: ({ children }) => (
+            <div className="h-full w-full" onTouchStart={handleMobileGestureStart} onTouchEnd={handleMobileGestureEnd}>
+              {children}
+            </div>
+          ),
           controls: () => (
             <>
               {!isDesktop && !currentImageLoaded ? (
