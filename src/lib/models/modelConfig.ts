@@ -363,7 +363,15 @@ export const MODELS: ModelConfig[] = [
             { name: 'lora3', label: 'LoRA 3', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional third LoRA model' },
             { name: 'loraWeight3', label: 'LoRA 3 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
             { name: 'lora4', label: 'LoRA 4', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional fourth LoRA model' },
-            { name: 'loraWeight4', label: 'LoRA 4 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' }
+            { name: 'loraWeight4', label: 'LoRA 4 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora5', label: 'LoRA 5', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional fifth LoRA model' },
+            { name: 'loraWeight5', label: 'LoRA 5 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora6', label: 'LoRA 6', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional sixth LoRA model' },
+            { name: 'loraWeight6', label: 'LoRA 6 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora7', label: 'LoRA 7', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional seventh LoRA model' },
+            { name: 'loraWeight7', label: 'LoRA 7 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' },
+            { name: 'lora8', label: 'LoRA 8', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional eighth LoRA model' },
+            { name: 'loraWeight8', label: 'LoRA 8 Weight', type: 'number', default: 1.0, min: -5.0, max: 5.0, step: 0.1, group: 'advanced' }
         ]
     },
 

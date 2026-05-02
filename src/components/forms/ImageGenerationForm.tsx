@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Sparkles, Upload, WandSparkles } from 'lucide-react';
+import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Plus, Sparkles, Upload, WandSparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
@@ -89,6 +89,7 @@ export default function ImageGenerationForm() {
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
+    const [showDesktopLoraSelector, setShowDesktopLoraSelector] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
 
@@ -188,6 +189,45 @@ export default function ImageGenerationForm() {
     }, [hasRestoredDraftRef, imageModels, selectedModel]);
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
+    const isZImageModel = currentModel?.id === 'z-image';
+    const zImageLoraParams = useMemo(() => {
+        if (!isZImageModel || !currentModel) return [];
+        return currentModel.parameters.filter((param) => param.type === 'lora-selector');
+    }, [currentModel, isZImageModel]);
+    const zImageLoraWeightByName = useMemo(() => {
+        const map: Record<string, string> = {};
+        if (!isZImageModel || !currentModel) return map;
+        currentModel.parameters
+            .filter((param) => /^loraWeight\d*$/.test(param.name))
+            .forEach((param) => {
+                const suffix = param.name.replace('loraWeight', '');
+                const loraName = suffix ? `lora${suffix}` : 'lora';
+                map[loraName] = param.name;
+            });
+        return map;
+    }, [currentModel, isZImageModel]);
+    const selectedZImageLoraSlots = useMemo(() => {
+        return zImageLoraParams
+            .map((param) => {
+                const path = String(parameterValues[param.name] ?? '').trim();
+                if (!path) return null;
+                const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
+                const weightParamName = zImageLoraWeightByName[param.name];
+                const rawWeight = weightParamName ? parameterValues[weightParamName] : undefined;
+                const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+                return {
+                    param,
+                    path,
+                    matchedLoRA,
+                    weightParamName,
+                    weight: Number.isFinite(weight) ? weight : 1,
+                };
+            })
+            .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
+    }, [availableLoras, parameterValues, zImageLoraParams, zImageLoraWeightByName]);
+    const nextEmptyZImageLoraParam = useMemo(() => {
+        return zImageLoraParams.find((param) => !String(parameterValues[param.name] ?? '').trim()) ?? null;
+    }, [parameterValues, zImageLoraParams]);
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
@@ -1309,7 +1349,75 @@ export default function ImageGenerationForm() {
 
                     <div className={`space-y-4 animate-in slide-in-from-top-2 duration-200 ${showAdvanced ? '' : 'hidden'}`}>
                         {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
-                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height').map(param => (
+                        {isZImageModel && zImageLoraParams.length > 0 && (
+                            <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-medium text-foreground">LoRAs</div>
+                                        <div className="text-xs text-muted-foreground">Only selected LoRAs are shown here.</div>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {selectedZImageLoraSlots.length}/{zImageLoraParams.length}
+                                    </div>
+                                </div>
+
+                                {selectedZImageLoraSlots.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {selectedZImageLoraSlots.map((slot) => (
+                                            <div key={slot.param.name} className="rounded-lg border border-border/70 bg-background/50 p-3">
+                                                <div className="mb-3 flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-sm font-medium text-foreground">
+                                                            {slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-muted-foreground">Weight {slot.weight.toFixed(2)}</div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            handleParameterChange(slot.param.name, '');
+                                                            if (slot.weightParamName) {
+                                                                handleParameterChange(slot.weightParamName, 1);
+                                                            }
+                                                        }}
+                                                    >
+                                                        Clear
+                                                    </Button>
+                                                </div>
+                                                {slot.weightParamName && (
+                                                    <div className="flex items-center gap-3">
+                                                        <Input
+                                                            type="number"
+                                                            value={slot.weight}
+                                                            min={-5}
+                                                            max={5}
+                                                            step={0.1}
+                                                            className="h-8 w-32 text-sm"
+                                                            onChange={(e) => handleParameterChange(slot.weightParamName, parseFloat(e.target.value))}
+                                                        />
+                                                        <span className="text-xs text-muted-foreground">Adjust LoRA weight</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                                        No LoRAs selected yet.
+                                    </div>
+                                )}
+
+                                {nextEmptyZImageLoraParam && (
+                                    <Button type="button" variant="outline" className="w-full" onClick={() => setShowDesktopLoraSelector(true)}>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add LoRA
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height' && !(isZImageModel && (p.type === 'lora-selector' || /^loraWeight\d*$/.test(p.name)))).map(param => (
                             <div key={`${param.name}-${param.default}`} className="space-y-2">
                                 {param.type !== 'boolean' && param.type !== 'lora-selector' && <Label className="text-xs">{param.label}</Label>}
                                 {param.type === 'lora-selector' ? (
@@ -1597,6 +1705,48 @@ export default function ImageGenerationForm() {
                             Close
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showDesktopLoraSelector} onOpenChange={setShowDesktopLoraSelector}>
+                <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden p-0">
+                    <DialogHeader className="border-b px-6 py-4">
+                        <DialogTitle>Select LoRA</DialogTitle>
+                    </DialogHeader>
+                    <div className="max-h-[65vh] overflow-y-auto px-6 py-4">
+                        <div className="space-y-2">
+                            {isLoadingLoras ? (
+                                <div className="rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground">Loading LoRAs...</div>
+                            ) : availableLoras.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                                    No LoRAs installed yet.
+                                </div>
+                            ) : (
+                                availableLoras.map((lora) => (
+                                    <button
+                                        key={lora.id}
+                                        type="button"
+                                        className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-3 text-left hover:border-primary/40 hover:bg-primary/5"
+                                        onClick={() => {
+                                            if (!nextEmptyZImageLoraParam) return;
+                                            handleParameterChange(nextEmptyZImageLoraParam.name, lora.s3Path);
+                                            const weightParamName = zImageLoraWeightByName[nextEmptyZImageLoraParam.name];
+                                            if (weightParamName && (parameterValues[weightParamName] === undefined || parameterValues[weightParamName] === '')) {
+                                                handleParameterChange(weightParamName, 1);
+                                            }
+                                            setShowDesktopLoraSelector(false);
+                                        }}
+                                    >
+                                        <div className="min-w-0 pr-3">
+                                            <div className="truncate text-sm font-medium text-foreground">{lora.fileName}</div>
+                                            <div className="mt-1 truncate text-xs text-muted-foreground">{lora.fileSize}</div>
+                                        </div>
+                                        <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
 
