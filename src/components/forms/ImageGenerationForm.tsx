@@ -190,33 +190,42 @@ export default function ImageGenerationForm() {
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
     const isZImageModel = currentModel?.id === 'z-image';
-    const zImageLoraParams = useMemo(() => {
+    const zImageAddCap = 8;
+    const zImageConfiguredLoraParamNames = useMemo(() => {
         if (!isZImageModel || !currentModel) return [];
-        return currentModel.parameters.filter((param) => param.type === 'lora-selector');
+        return currentModel.parameters.filter((param) => param.type === 'lora-selector').map((param) => param.name);
     }, [currentModel, isZImageModel]);
+    const zImageDynamicLoraParamNames = useMemo(() => {
+        if (!isZImageModel) return [];
+        const names = new Set<string>(zImageConfiguredLoraParamNames);
+        Object.keys(parameterValues)
+            .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
+            .forEach((key) => names.add(key));
+        return Array.from(names).sort((a, b) => {
+            const getIndex = (value: string) => value === 'lora' ? 1 : Number.parseInt(value.slice(4), 10);
+            return getIndex(a) - getIndex(b);
+        });
+    }, [isZImageModel, parameterValues, zImageConfiguredLoraParamNames]);
     const zImageLoraWeightByName = useMemo(() => {
         const map: Record<string, string> = {};
-        if (!isZImageModel || !currentModel) return map;
-        currentModel.parameters
-            .filter((param) => /^loraWeight\d*$/.test(param.name))
-            .forEach((param) => {
-                const suffix = param.name.replace('loraWeight', '');
-                const loraName = suffix ? `lora${suffix}` : 'lora';
-                map[loraName] = param.name;
-            });
+        if (!isZImageModel) return map;
+        zImageDynamicLoraParamNames.forEach((name) => {
+            const suffix = name === 'lora' ? '' : name.slice(4);
+            map[name] = suffix ? `loraWeight${suffix}` : 'loraWeight';
+        });
         return map;
-    }, [currentModel, isZImageModel]);
+    }, [isZImageModel, zImageDynamicLoraParamNames]);
     const selectedZImageLoraSlots = useMemo(() => {
-        return zImageLoraParams
-            .map((param) => {
-                const path = String(parameterValues[param.name] ?? '').trim();
+        return zImageDynamicLoraParamNames
+            .map((name) => {
+                const path = String(parameterValues[name] ?? '').trim();
                 if (!path) return null;
                 const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
-                const weightParamName = zImageLoraWeightByName[param.name];
+                const weightParamName = zImageLoraWeightByName[name];
                 const rawWeight = weightParamName ? parameterValues[weightParamName] : undefined;
                 const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
                 return {
-                    param,
+                    paramName: name,
                     path,
                     matchedLoRA,
                     weightParamName,
@@ -224,10 +233,16 @@ export default function ImageGenerationForm() {
                 };
             })
             .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
-    }, [availableLoras, parameterValues, zImageLoraParams, zImageLoraWeightByName]);
+    }, [availableLoras, parameterValues, zImageDynamicLoraParamNames, zImageLoraWeightByName]);
     const nextEmptyZImageLoraParam = useMemo(() => {
-        return zImageLoraParams.find((param) => !String(parameterValues[param.name] ?? '').trim()) ?? null;
-    }, [parameterValues, zImageLoraParams]);
+        for (let i = 1; i <= zImageAddCap; i += 1) {
+            const name = i === 1 ? 'lora' : `lora${i}`;
+            if (!String(parameterValues[name] ?? '').trim()) {
+                return name;
+            }
+        }
+        return null;
+    }, [parameterValues]);
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
@@ -1349,7 +1364,7 @@ export default function ImageGenerationForm() {
 
                     <div className={`space-y-4 animate-in slide-in-from-top-2 duration-200 ${showAdvanced ? '' : 'hidden'}`}>
                         {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
-                        {isZImageModel && zImageLoraParams.length > 0 && (
+                        {isZImageModel && zImageDynamicLoraParamNames.length > 0 && (
                             <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
@@ -1357,14 +1372,14 @@ export default function ImageGenerationForm() {
                                         <div className="text-xs text-muted-foreground">Only selected LoRAs are shown here.</div>
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                        {selectedZImageLoraSlots.length}/{zImageLoraParams.length}
+                                        {selectedZImageLoraSlots.length}{selectedZImageLoraSlots.length > zImageAddCap ? ` (add capped at ${zImageAddCap})` : `/${zImageAddCap}`}
                                     </div>
                                 </div>
 
                                 {selectedZImageLoraSlots.length > 0 ? (
                                     <div className="space-y-3">
                                         {selectedZImageLoraSlots.map((slot) => (
-                                            <div key={slot.param.name} className="rounded-lg border border-border/70 bg-background/50 p-3">
+                                            <div key={slot.paramName} className="rounded-lg border border-border/70 bg-background/50 p-3">
                                                 <div className="mb-3 flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-medium text-foreground">
@@ -1377,7 +1392,7 @@ export default function ImageGenerationForm() {
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() => {
-                                                            handleParameterChange(slot.param.name, '');
+                                                            handleParameterChange(slot.paramName, '');
                                                             if (slot.weightParamName) {
                                                                 handleParameterChange(slot.weightParamName, 1);
                                                             }
@@ -1729,8 +1744,8 @@ export default function ImageGenerationForm() {
                                         className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-3 text-left hover:border-primary/40 hover:bg-primary/5"
                                         onClick={() => {
                                             if (!nextEmptyZImageLoraParam) return;
-                                            handleParameterChange(nextEmptyZImageLoraParam.name, lora.s3Path);
-                                            const weightParamName = zImageLoraWeightByName[nextEmptyZImageLoraParam.name];
+                                            handleParameterChange(nextEmptyZImageLoraParam, lora.s3Path);
+                                            const weightParamName = zImageLoraWeightByName[nextEmptyZImageLoraParam];
                                             if (weightParamName && (parameterValues[weightParamName] === undefined || parameterValues[weightParamName] === '')) {
                                                 handleParameterChange(weightParamName, 1);
                                             }

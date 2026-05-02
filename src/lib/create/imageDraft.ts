@@ -70,7 +70,11 @@ export const normalizeImageDraftForModel = (
   const allowedParameterNames = new Set((model?.parameters || []).map((param) => param.name));
   const filteredParameterValues = Object.fromEntries(
     Object.entries((snapshot?.parameterValues && typeof snapshot.parameterValues === 'object') ? snapshot.parameterValues : {})
-      .filter(([key]) => allowedParameterNames.has(key)),
+      .filter(([key]) => {
+        if (allowedParameterNames.has(key)) return true;
+        if (modelId === 'z-image' && (/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key))) return true;
+        return false;
+      }),
   );
   const parameterValues = mergeImageDraftParameterValues(modelId, filteredParameterValues);
   const primaryImageVisible = !!(model && isInputVisible(model, 'image', parameterValues));

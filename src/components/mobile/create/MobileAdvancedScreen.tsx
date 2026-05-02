@@ -69,18 +69,28 @@ export default function MobileAdvancedScreen() {
     };
   }, []);
 
-  const loraParams = editableParameters.filter((param) => param.type === 'lora-selector');
+  const zImageAddCap = 8;
+  const configuredLoraParamNames = useMemo(() => {
+    return editableParameters.filter((param) => param.type === 'lora-selector').map((param) => param.name);
+  }, [editableParameters]);
+  const dynamicLoraParamNames = useMemo(() => {
+    const names = new Set<string>(configuredLoraParamNames);
+    Object.keys(parameterValues)
+      .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
+      .forEach((key) => names.add(key));
+    return Array.from(names).sort((a, b) => {
+      const getIndex = (value: string) => value === 'lora' ? 1 : Number.parseInt(value.slice(4), 10);
+      return getIndex(a) - getIndex(b);
+    });
+  }, [configuredLoraParamNames, parameterValues]);
   const loraWeightByName = useMemo(() => {
     const map: Record<string, string> = {};
-    editableParameters
-      .filter((param) => /^loraWeight\d*$/.test(param.name))
-      .forEach((param) => {
-        const suffix = param.name.replace('loraWeight', '');
-        const loraName = suffix ? `lora${suffix}` : 'lora';
-        map[loraName] = param.name;
-      });
+    dynamicLoraParamNames.forEach((name) => {
+      const suffix = name === 'lora' ? '' : name.slice(4);
+      map[name] = suffix ? `loraWeight${suffix}` : 'loraWeight';
+    });
     return map;
-  }, [editableParameters]);
+  }, [dynamicLoraParamNames]);
 
   const widthParam = editableParameters.find((param) => param.name === 'width');
   const heightParam = editableParameters.find((param) => param.name === 'height');
@@ -98,16 +108,16 @@ export default function MobileAdvancedScreen() {
     return true;
   });
 
-  const selectedLoraSlots = loraParams
-    .map((param) => {
-      const path = String(parameterValues[param.name] ?? '').trim();
+  const selectedLoraSlots = dynamicLoraParamNames
+    .map((paramName) => {
+      const path = String(parameterValues[paramName] ?? '').trim();
       if (!path) return null;
       const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
-      const weightParamName = loraWeightByName[param.name];
+      const weightParamName = loraWeightByName[paramName];
       const rawWeight = weightParamName ? parameterValues[weightParamName] : undefined;
       const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
       return {
-        param,
+        paramName,
         path,
         matchedLoRA,
         weightParamName,
@@ -116,7 +126,15 @@ export default function MobileAdvancedScreen() {
     })
     .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
 
-  const nextEmptyLoraParam = loraParams.find((param) => !String(parameterValues[param.name] ?? '').trim());
+  const nextEmptyLoraParam = useMemo(() => {
+    for (let i = 1; i <= zImageAddCap; i += 1) {
+      const name = i === 1 ? 'lora' : `lora${i}`;
+      if (!String(parameterValues[name] ?? '').trim()) {
+        return name;
+      }
+    }
+    return null;
+  }, [parameterValues]);
 
   const persistEndpointDrafts = (drafts: Record<string, string>, showSavedToast = false) => {
     const currentSettings = latestSettingsRef.current;
@@ -192,11 +210,11 @@ export default function MobileAdvancedScreen() {
       <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." />
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 custom-scrollbar">
         <div className="space-y-4">
-          {loraParams.length > 0 ? (
+          {dynamicLoraParamNames.length > 0 ? (
             <Card>
               <CardContent className="space-y-3 pt-6">
                 {selectedLoraSlots.map((slot) => (
-                  <div key={slot.param.name} className="rounded-lg border border-border/60 bg-background/40 p-3">
+                  <div key={slot.paramName} className="rounded-lg border border-border/60 bg-background/40 p-3">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-foreground">
@@ -208,7 +226,7 @@ export default function MobileAdvancedScreen() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          handleParameterChange(slot.param.name, '');
+                          handleParameterChange(slot.paramName, '');
                           if (slot.weightParamName) {
                             handleParameterChange(slot.weightParamName, 1);
                           }
@@ -343,8 +361,8 @@ export default function MobileAdvancedScreen() {
                         className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-3 text-left hover:border-primary/40 hover:bg-primary/5"
                         onClick={() => {
                           if (!nextEmptyLoraParam) return;
-                          handleParameterChange(nextEmptyLoraParam.name, lora.s3Path);
-                          const weightParamName = loraWeightByName[nextEmptyLoraParam.name];
+                          handleParameterChange(nextEmptyLoraParam, lora.s3Path);
+                          const weightParamName = loraWeightByName[nextEmptyLoraParam];
                           if (weightParamName && (parameterValues[weightParamName] === undefined || parameterValues[weightParamName] === '')) {
                             handleParameterChange(weightParamName, 1);
                           }

@@ -21,10 +21,20 @@ function getStorage() {
   }
 }
 
-function getLoraParamNames(model: ModelConfig | undefined) {
-  return (model?.parameters || [])
-    .filter((param) => param.type === 'lora-selector')
-    .map((param) => param.name);
+function getLoraParamNames(model: ModelConfig | undefined, modelId?: string, parameterValues?: Record<string, any>) {
+  const names = new Set(
+    (model?.parameters || [])
+      .filter((param) => param.type === 'lora-selector')
+      .map((param) => param.name)
+  );
+
+  if (modelId === 'z-image' && parameterValues && typeof parameterValues === 'object') {
+    Object.keys(parameterValues)
+      .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
+      .forEach((key) => names.add(key));
+  }
+
+  return Array.from(names);
 }
 
 function getLinkedWeightParamName(loraParamName: string, model: ModelConfig | undefined) {
@@ -56,7 +66,7 @@ function sanitizeDraftParameterValues(
   removedLoraPaths?: Set<string>,
 ) {
   const model = getModelById(modelId);
-  const loraParamNames = getLoraParamNames(model);
+  const loraParamNames = getLoraParamNames(model, modelId, parameterValues);
   if (!parameterValues || typeof parameterValues !== 'object' || loraParamNames.length === 0) {
     return { parameterValues, changed: false };
   }

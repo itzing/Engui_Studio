@@ -106,13 +106,25 @@ export const submitImageGeneration = async ({
       formData.append('image2', resolvedImageFile2);
     }
 
+    const appendedParamNames = new Set<string>();
+
     currentModel.parameters.forEach(param => {
       const value = parameterValues[param.name] ?? param.default;
 
       if (value !== undefined && value !== null) {
         formData.append(param.name, value.toString());
+        appendedParamNames.add(param.name);
       }
     });
+
+    if (currentModel.id === 'z-image') {
+      Object.entries(parameterValues).forEach(([key, value]) => {
+        if (appendedParamNames.has(key)) return;
+        if (!/^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key)) return;
+        if (value === undefined || value === null || value === '') return;
+        formData.append(key, String(value));
+      });
+    }
 
     formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
 
