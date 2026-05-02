@@ -321,20 +321,37 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Collect LoRA parameters for z-image (up to 4 slots)
+        // Collect LoRA parameters for z-image from any submitted slot keys.
         // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
         if (modelId === 'z-image') {
             const zImageLoraSlots: Array<{ path: string; weight: number }> = [];
+            const loraIndexes = new Set<number>();
 
-            for (let i = 1; i <= 4; i++) {
-                const loraKey = i === 1 ? 'lora' : `lora${i}`;
-                const loraWeightKey = i === 1 ? 'loraWeight' : `loraWeight${i}`;
+            for (const key of formData.keys()) {
+                if (!/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key)) {
+                    continue;
+                }
+
+                const suffix = key.slice('lora'.length);
+                const slotIndex = suffix === '' ? 1 : Number.parseInt(suffix, 10);
+
+                if (Number.isInteger(slotIndex) && slotIndex > 0) {
+                    loraIndexes.add(slotIndex);
+                }
+            }
+
+            const orderedLoraIndexes = Array.from(loraIndexes).sort((a, b) => a - b);
+
+            for (const slotIndex of orderedLoraIndexes) {
+                const loraKey = slotIndex === 1 ? 'lora' : `lora${slotIndex}`;
+                const loraWeightKey = slotIndex === 1 ? 'loraWeight' : `loraWeight${slotIndex}`;
                 const lora = formData.get(loraKey) as string;
                 const rawWeight = formData.get(loraWeightKey) as string;
 
+                delete parameters[loraKey];
+                delete parameters[loraWeightKey];
+
                 if (!lora || lora.trim() === '') {
-                    delete parameters[loraKey];
-                    delete parameters[loraWeightKey];
                     continue;
                 }
 
@@ -348,9 +365,6 @@ export async function POST(request: NextRequest) {
                     inputData['lora'] = [];
                 }
                 inputData['lora'].push([loraFileName, weight]);
-
-                delete parameters[loraKey];
-                delete parameters[loraWeightKey];
             }
 
             if (zImageLoraSlots.length > 0) {

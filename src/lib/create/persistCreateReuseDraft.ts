@@ -135,7 +135,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
 
     if (modelId === 'z-image') {
-      const normalizedLoraSlots = normalizeZImageLoraSlots(parsedOptions).slice(0, 4);
+      const normalizedLoraSlots = normalizeZImageLoraSlots(parsedOptions);
 
       normalizedLoraSlots.forEach((slot, index) => {
         const loraKey = index === 0 ? 'lora' : `lora${index + 1}`;
