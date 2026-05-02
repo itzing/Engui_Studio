@@ -1406,8 +1406,8 @@ export default function ImageGenerationForm() {
                                                         <Input
                                                             type="number"
                                                             value={slot.weight}
-                                                            min={-5}
-                                                            max={5}
+                                                            min={-10}
+                                                            max={10}
                                                             step={0.1}
                                                             className="h-8 w-32 text-sm"
                                                             onChange={(e) => handleParameterChange(slot.weightParamName, parseFloat(e.target.value))}
