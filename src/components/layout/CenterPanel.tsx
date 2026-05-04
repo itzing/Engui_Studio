@@ -226,8 +226,10 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       const currentIndex = navigationItems.findIndex(item => item.id === baseId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
       const nextIndex = direction === 'next'
-        ? (safeIndex + 1) % navigationItems.length
-        : (safeIndex - 1 + navigationItems.length) % navigationItems.length;
+        ? Math.min(navigationItems.length - 1, safeIndex + 1)
+        : Math.max(0, safeIndex - 1);
+
+      if (nextIndex === safeIndex) return;
 
       setHoverPreview(null);
       setSelectedImageJobId(navigationItems[nextIndex].id);
