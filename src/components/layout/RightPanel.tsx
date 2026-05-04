@@ -1246,14 +1246,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             return;
         }
 
-        let nextIndex: number;
+        let nextIndex = currentIndex;
 
         if (direction === 'previous') {
-            // ArrowRight: move to previous/older item in the list (wrap to start)
-            nextIndex = (currentIndex + 1) % filteredJobs.length;
+            nextIndex = Math.min(filteredJobs.length - 1, currentIndex + 1);
         } else {
-            // ArrowLeft: move to next/newer item in the list (wrap to end)
-            nextIndex = (currentIndex - 1 + filteredJobs.length) % filteredJobs.length;
+            nextIndex = Math.max(0, currentIndex - 1);
         }
 
         setSelectedJob(filteredJobs[nextIndex]);

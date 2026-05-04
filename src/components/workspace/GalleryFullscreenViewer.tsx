@@ -80,6 +80,8 @@ export function GalleryFullscreenViewer({
   const safeIndex = useMemo(() => clampIndex(currentIndex, items.length), [currentIndex, items.length]);
   const currentItem = useMemo(() => items[safeIndex] || null, [items, safeIndex]);
   const slideshowEnabled = isDesktop && items.length > 1;
+  const canGoPrevious = safeIndex > 0;
+  const canGoNext = safeIndex < items.length - 1;
 
   const slides = useMemo<ViewerSlide[]>(() => items.map((item) => ({
     src: item.url,
@@ -266,14 +268,14 @@ export function GalleryFullscreenViewer({
   }, [currentItem?.id, isSlideshowPlaying, scheduleOverlayAutohide]);
 
   const goToPrevious = useCallback(() => {
-    if (items.length <= 1) return;
-    onIndexChange(safeIndex <= 0 ? items.length - 1 : safeIndex - 1);
-  }, [items.length, onIndexChange, safeIndex]);
+    if (items.length <= 1 || !canGoPrevious) return;
+    onIndexChange(safeIndex - 1);
+  }, [canGoPrevious, items.length, onIndexChange, safeIndex]);
 
   const goToNext = useCallback(() => {
-    if (items.length <= 1) return;
-    onIndexChange(safeIndex >= items.length - 1 ? 0 : safeIndex + 1);
-  }, [items.length, onIndexChange, safeIndex]);
+    if (items.length <= 1 || !canGoNext) return;
+    onIndexChange(safeIndex + 1);
+  }, [canGoNext, items.length, onIndexChange, safeIndex]);
 
   const isEffectivelyZoomed = useCallback(() => {
     const liveZoom = zoomRef.current?.zoom;
@@ -460,7 +462,7 @@ export function GalleryFullscreenViewer({
         plugins={[Zoom]}
         className="engui-yarl-root"
         carousel={{
-          finite: false,
+          finite: true,
           preload: 2,
           padding: isDesktop ? '16px' : '0px',
           spacing: isDesktop ? '16px' : '0px',
@@ -568,6 +570,7 @@ export function GalleryFullscreenViewer({
                     type="button"
                     className="absolute inset-y-0 left-0 z-10 hidden w-[20%] min-w-20 bg-transparent sm:block"
                     aria-label="Previous image"
+                    disabled={!canGoPrevious}
                     onClick={(event) => {
                       event.stopPropagation();
                       goToPrevious();
@@ -577,6 +580,7 @@ export function GalleryFullscreenViewer({
                     type="button"
                     className="absolute inset-y-0 right-0 z-10 hidden w-[20%] min-w-20 bg-transparent sm:block"
                     aria-label="Next image"
+                    disabled={!canGoNext}
                     onClick={(event) => {
                       event.stopPropagation();
                       goToNext();
