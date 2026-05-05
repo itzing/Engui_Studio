@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -228,7 +228,8 @@ export default function MobileJobsScreen() {
     upscaleJob,
   } = useMobileJobsScreen();
 
-  const [viewerJobDetail, setViewerJobDetail] = useState<MobileJobDetail | null>(null);
+  const [viewerJobDetailsById, setViewerJobDetailsById] = useState<Record<string, MobileJobDetail>>({});
+  const [viewerJobDetailLoadingId, setViewerJobDetailLoadingId] = useState<string | null>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: totalCount,
@@ -260,29 +261,39 @@ export default function MobileJobsScreen() {
   }, [loadedViewerItems, selectedJobId]);
 
   const activeViewerItemId = (selectedLoadedViewerIndex >= 0 ? loadedViewerItems[selectedLoadedViewerIndex]?.id : loadedViewerItems[viewerIndex]?.id) || null;
-  const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
-  const canAddToGallery = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('common');
-  const canSaveDraft = !!viewerJobDetail && !!viewerOutput && !viewerOutput.savedBuckets.includes('draft') && !viewerOutput.savedBuckets.includes('upscale');
-  const canMarkUpscale = !!viewerJobDetail && !!viewerOutput && viewerJobDetail.type === 'image' && !viewerOutput.savedBuckets.includes('upscale');
-  const canUpscale = viewerJobDetail ? (viewerJobDetail.type === 'image' || viewerJobDetail.type === 'video') : false;
+
+  const patchViewerJobDetail = useCallback((jobId: string, updater: (job: MobileJobDetail) => MobileJobDetail) => {
+    setViewerJobDetailsById((prev) => {
+      const current = prev[jobId];
+      if (!current) return prev;
+      const next = updater(current);
+      if (next === current) return prev;
+      return { ...prev, [jobId]: next };
+    });
+  }, []);
 
   useEffect(() => {
     if (!viewerOpen || !activeViewerItemId) {
-      setViewerJobDetail(null);
+      setViewerJobDetailLoadingId(null);
       return;
     }
 
     let cancelled = false;
+    setViewerJobDetailLoadingId(activeViewerItemId);
+
     const loadViewerJobDetail = async () => {
       try {
         const response = await fetch(`/api/jobs/${activeViewerItemId}`, { cache: 'no-store' });
         const data = await response.json();
-        if (!cancelled) {
-          setViewerJobDetail(response.ok && data.success && data.job ? data.job : null);
+        if (cancelled) return;
+        if (response.ok && data.success && data.job) {
+          setViewerJobDetailsById((prev) => ({ ...prev, [activeViewerItemId]: data.job }));
         }
       } catch {
+        // Keep any previously cached detail instead of blanking the footer actions.
+      } finally {
         if (!cancelled) {
-          setViewerJobDetail(null);
+          setViewerJobDetailLoadingId((current) => (current === activeViewerItemId ? null : current));
         }
       }
     };
@@ -401,9 +412,23 @@ export default function MobileJobsScreen() {
           router.push(`/m/jobs/${itemId}`);
         }}
         renderFooterActions={(item, meta) => {
-          if (viewerJobDetail?.id !== item.id || !viewerOutput) return null;
+          const viewerJobDetail = viewerJobDetailsById[item.id] || null;
+          const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
+          const canAddToGallery = !!viewerOutput && !viewerOutput.savedBuckets.includes('common');
+          const canSaveDraft = !!viewerOutput && !viewerOutput.savedBuckets.includes('draft') && !viewerOutput.savedBuckets.includes('upscale');
+          const canMarkUpscale = !!viewerOutput && viewerJobDetail?.type === 'image' && !viewerOutput.savedBuckets.includes('upscale');
+          const canUpscale = item.type === 'image' || item.type === 'video';
+          const isDetailLoading = viewerJobDetailLoadingId === item.id && !viewerJobDetail;
+
+          if (!viewerJobDetail && !canUpscale) return null;
+
           return (
             <>
+              {isDetailLoading ? (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white border border-white/10">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              ) : null}
               {canSaveDraft ? (
                 <Button
                   size="icon"
@@ -417,7 +442,7 @@ export default function MobileJobsScreen() {
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
-                      setViewerJobDetail((prev) => prev ? {
+                      patchViewerJobDetail(item.id, (prev) => ({
                         ...prev,
                         outputs: prev.outputs.map((output, index) => index === 0 ? {
                           ...output,
@@ -429,7 +454,7 @@ export default function MobileJobsScreen() {
                             draft: [...(output.galleryAssetIdsByBucket.draft || []), data.asset.id],
                           } : output.galleryAssetIdsByBucket,
                         } : output),
-                      } : prev);
+                      }));
                     }
                   }}
                   aria-label="Save output as draft"
@@ -451,7 +476,7 @@ export default function MobileJobsScreen() {
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
-                      setViewerJobDetail((prev) => prev ? {
+                      patchViewerJobDetail(item.id, (prev) => ({
                         ...prev,
                         outputs: prev.outputs.map((output, index) => index === 0 ? {
                           ...output,
@@ -463,7 +488,7 @@ export default function MobileJobsScreen() {
                             common: [...(output.galleryAssetIdsByBucket.common || []), data.asset.id],
                           } : output.galleryAssetIdsByBucket,
                         } : output),
-                      } : prev);
+                      }));
                     }
                   }}
                   aria-label="Add job output to gallery"
@@ -485,7 +510,7 @@ export default function MobileJobsScreen() {
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
-                      setViewerJobDetail((prev) => prev ? {
+                      patchViewerJobDetail(item.id, (prev) => ({
                         ...prev,
                         outputs: prev.outputs.map((output, index) => index === 0 ? {
                           ...output,
@@ -497,7 +522,7 @@ export default function MobileJobsScreen() {
                             upscale: [...(output.galleryAssetIdsByBucket.upscale || []), data.asset.id],
                           } : output.galleryAssetIdsByBucket,
                         } : output),
-                      } : prev);
+                      }));
                     }
                   }}
                   aria-label="Mark output as upscale"
@@ -515,7 +540,7 @@ export default function MobileJobsScreen() {
                     const response = await fetch('/api/upscale', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ jobId: item.id, type: viewerJobDetail.type }),
+                      body: JSON.stringify({ jobId: item.id, type: item.type }),
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
