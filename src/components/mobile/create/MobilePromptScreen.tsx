@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, WandSparkles } from 'lucide-react';
+import { Loader2, WandSparkles, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -61,7 +61,22 @@ export default function MobilePromptScreen() {
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</label>
+                {prompt.trim() ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+                    onClick={() => setPrompt('')}
+                    aria-label="Clear prompt"
+                    title="Clear prompt"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
               <textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
