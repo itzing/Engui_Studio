@@ -1404,13 +1404,11 @@ export default function ImageGenerationForm() {
                                                 {slot.weightParamName && (
                                                     <div className="flex items-center gap-3">
                                                         <Input
-                                                            type="number"
-                                                            value={slot.weight}
-                                                            min={-10}
-                                                            max={10}
-                                                            step={0.1}
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={parameterValues[slot.weightParamName] ?? slot.weight}
                                                             className="h-8 w-32 text-sm"
-                                                            onChange={(e) => handleParameterChange(slot.weightParamName, parseFloat(e.target.value))}
+                                                            onChange={(e) => handleNumericParameterInput(slot.weightParamName!, e.target.value)}
                                                         />
                                                         <span className="text-xs text-muted-foreground">Adjust LoRA weight</span>
                                                     </div>
