@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, SlidersHorizontal } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
@@ -68,6 +68,21 @@ export default function MobileAdvancedScreen() {
       }
     };
   }, []);
+
+  const navigateBackToCreate = useCallback(() => {
+    if (typeof document !== 'undefined') {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+    }
+
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
+        router.push('/m/create');
+      });
+    }, 40);
+  }, [router]);
 
   const zImageAddCap = 8;
   const configuredLoraParamNames = useMemo(() => {
@@ -181,12 +196,12 @@ export default function MobileAdvancedScreen() {
       },
     });
 
-    router.push('/m/create');
+    navigateBackToCreate();
   };
 
   const handleSave = () => {
     saveEndpointDrafts(false);
-    router.push('/m/create');
+    navigateBackToCreate();
   };
 
   const showWeightToast = (value: number) => {

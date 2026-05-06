@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, WandSparkles, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
@@ -30,14 +30,29 @@ export default function MobilePromptScreen() {
     initialPromptHelperInstructionRef.current = promptHelperInstruction;
   }, []);
 
+  const navigateBackToCreate = useCallback(() => {
+    if (typeof document !== 'undefined') {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+    }
+
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
+        router.push('/m/create');
+      });
+    }, 40);
+  }, [router]);
+
   const handleCancel = () => {
     setPrompt(initialPromptRef.current);
     setPromptHelperInstruction(initialPromptHelperInstructionRef.current);
-    router.push('/m/create');
+    navigateBackToCreate();
   };
 
   const handleSave = () => {
-    router.push('/m/create');
+    navigateBackToCreate();
   };
 
   return (
@@ -126,7 +141,7 @@ export default function MobilePromptScreen() {
 
       <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         {isPromptDraftSelected ? (
-          <Button size="lg" className="w-full" onClick={() => router.push('/m/create')}>Back</Button>
+          <Button size="lg" className="w-full" onClick={navigateBackToCreate}>Back</Button>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" size="lg" onClick={handleCancel}>Cancel</Button>
