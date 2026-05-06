@@ -405,6 +405,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [selectingVersionShotId, setSelectingVersionShotId] = useState<string | null>(null);
   const [reviewStateVersionId, setReviewStateVersionId] = useState<string | null>(null);
   const [skipShotId, setSkipShotId] = useState<string | null>(null);
+  const [addingVersionToGalleryId, setAddingVersionToGalleryId] = useState<string | null>(null);
   const [versionCursorByShot, setVersionCursorByShot] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
@@ -591,6 +592,26 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setSkipShotId(null);
     }
   }, [refreshSelectedRun]);
+
+  const handleAddVersionToGallery = useCallback(async (shotId: string, versionId: string) => {
+    setAddingVersionToGalleryId(versionId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/versions/${versionId}/add-to-gallery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket: 'common' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to add version to gallery');
+      setInfoMessage(data.alreadyInGallery ? 'Version already exists in Gallery.' : 'Version added to Gallery.');
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to add version to gallery'));
+    } finally {
+      setAddingVersionToGalleryId(null);
+    }
+  }, []);
 
   const handleRunShot = useCallback(async (shotId: string) => {
     setRunningShotId(shotId);
@@ -855,6 +876,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId || shot.skipped}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { hidden: !activeVersion.hidden })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.hidden ? 'Unhide' : 'Hide'}</Button> : null}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { rejected: !activeVersion.rejected })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.rejected ? 'Unreject' : 'Reject'}</Button> : null}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleAddVersionToGallery(shot.id, activeVersion.id)} disabled={addingVersionToGalleryId === activeVersion.id || shot.skipped}>{addingVersionToGalleryId === activeVersion.id ? 'Adding…' : 'Add to Gallery'}</Button> : null}
                               <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId || shot.skipped}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
                             </div>
                           </div>
@@ -925,6 +947,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id || version.hidden || version.rejected || detailShot.skipped}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
                               <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { hidden: !version.hidden })} disabled={reviewStateVersionId === version.id || detailShot.skipped}>{reviewStateVersionId === version.id ? 'Saving…' : version.hidden ? 'Unhide' : 'Hide'}</Button>
                               <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { rejected: !version.rejected })} disabled={reviewStateVersionId === version.id || detailShot.skipped}>{reviewStateVersionId === version.id ? 'Saving…' : version.rejected ? 'Unreject' : 'Reject'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleAddVersionToGallery(detailShot.id, version.id)} disabled={addingVersionToGalleryId === version.id || detailShot.skipped}>{addingVersionToGalleryId === version.id ? 'Adding…' : 'Add to Gallery'}</Button>
                             </div>
                           </div>
                         </div>

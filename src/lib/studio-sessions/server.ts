@@ -21,6 +21,8 @@ import {
 import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
 import { getModelById } from '@/lib/models/modelConfig';
 import { RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
+import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
+import { queueGalleryEnrichment } from '@/lib/galleryEnrichment';
 import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
 function parseJsonObject(value: unknown): Record<string, any> {
@@ -790,6 +792,59 @@ async function syncStudioSessionShotSelectionAfterVersionReviewState(shotId: str
   });
   await syncStudioSessionRunStatus(shot.runId);
   return shouldClearSelection;
+}
+
+export async function addStudioSessionShotVersionToGallery(input: { shotId: string; versionId: string; bucket?: 'common' | 'draft' | 'upscale' }) {
+  const version = await prisma.studioSessionShotVersion.findFirst({
+    where: {
+      id: input.versionId,
+      shotId: input.shotId,
+      status: 'completed',
+    },
+  });
+  if (!version || !version.originalUrl || !version.contentHash) return null;
+
+  const bucket = input.bucket ?? 'common';
+  const existing = await prisma.galleryAsset.findFirst({
+    where: {
+      workspaceId: version.workspaceId,
+      contentHash: version.contentHash,
+      originalUrl: version.originalUrl,
+      bucket,
+      trashed: false,
+    },
+    orderBy: { addedToGalleryAt: 'desc' },
+  });
+  if (existing) {
+    return { alreadyInGallery: true, asset: existing };
+  }
+
+  const asset = await prisma.galleryAsset.create({
+    data: {
+      workspaceId: version.workspaceId,
+      type: 'image',
+      bucket,
+      originKind: 'job_output',
+      sourceJobId: version.sourceJobId,
+      sourceOutputId: version.id,
+      contentHash: version.contentHash,
+      originalUrl: version.originalUrl,
+      previewUrl: version.previewUrl || version.originalUrl,
+      thumbnailUrl: version.thumbnailUrl,
+      generationSnapshot: JSON.stringify({
+        ...(parseJsonObject(version.generationSnapshotJson)),
+        studioSessionVersionId: version.id,
+        studioSessionShotId: version.shotId,
+        studioSessionRevisionId: version.revisionId,
+      }),
+      derivativeStatus: 'pending',
+      enrichmentStatus: 'pending',
+    },
+  });
+
+  queueGalleryDerivatives(asset.id);
+  queueGalleryEnrichment(asset.id);
+  return { alreadyInGallery: false, asset };
 }
 
 export async function updateStudioSessionShotSkipState(input: { shotId: string; skipped: boolean }) {
