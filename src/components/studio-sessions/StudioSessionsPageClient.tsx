@@ -408,6 +408,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
   const [pickerPoses, setPickerPoses] = useState<StudioSessionPoseSnapshot[]>([]);
   const [loadingPicker, setLoadingPicker] = useState(false);
+  const [detailShotId, setDetailShotId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
@@ -665,6 +666,21 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
     return map;
   }, [shots, versionsByShot]);
+  const detailShot = useMemo(() => shots.find((shot) => shot.id === detailShotId) ?? null, [detailShotId, shots]);
+  const detailShotVersions = useMemo(() => detailShot ? (versionsByShot.get(detailShot.id) ?? []) : [], [detailShot, versionsByShot]);
+  const detailSelectedVersion = useMemo(() => detailShot ? selectedVersionMap.get(detailShot.id) ?? null : null, [detailShot, selectedVersionMap]);
+  const detailCurrentRevision = useMemo(() => detailShot?.currentRevisionId ? revisions.find((revision) => revision.id === detailShot.currentRevisionId) ?? null : null, [detailShot, revisions]);
+  const detailCurrentRevisionVersions = useMemo(() => detailCurrentRevision ? detailShotVersions.filter((version) => version.revisionId === detailCurrentRevision.id) : [], [detailCurrentRevision, detailShotVersions]);
+  const detailHistoricalRevisions = useMemo(() => {
+    if (!detailShot) return [] as Array<{ revision: StudioSessionShotRevisionSummary; versions: StudioSessionShotVersionSummary[] }>;
+    return revisions
+      .filter((revision) => revision.shotId === detailShot.id && revision.id !== detailShot.currentRevisionId)
+      .map((revision) => ({
+        revision,
+        versions: detailShotVersions.filter((version) => version.revisionId === revision.id),
+      }))
+      .sort((left, right) => right.revision.revisionNumber - left.revision.revisionNumber);
+  }, [detailShot, detailShotVersions, revisions]);
 
   return (
     <>
@@ -786,6 +802,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               </div>
                             ) : null}
                             <div className="mt-4 flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => setDetailShotId(shot.id)}>Open detail</Button>
                               <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
                               {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
@@ -802,6 +819,84 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={detailShotId !== null} onOpenChange={(open) => { if (!open) setDetailShotId(null); }}>
+        <DialogContent className="h-[90vh] w-[min(94vw,1400px)] max-w-none border-white/10 bg-[#0b1020] p-0 text-white">
+          <DialogHeader className="border-b border-white/10 px-6 py-4 text-left">
+            <DialogTitle>{detailShot ? `${detailShot.label} detail` : 'Shot detail'}</DialogTitle>
+            <DialogDescription>
+              {detailCurrentRevision
+                ? `Current revision ${detailCurrentRevision.revisionNumber} stays primary. Older pose revisions remain available as separate history.`
+                : 'Review versions and revision history for this shot.'}
+            </DialogDescription>
+          </DialogHeader>
+          {!detailShot ? <div className="p-6 text-sm text-white/60">Shot not found.</div> : (
+            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-h-0 overflow-y-auto p-6">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-medium text-white">Current revision</div>
+                      {detailCurrentRevision ? (
+                        <>
+                          <div className="mt-2 text-sm text-emerald-200">{detailCurrentRevision.poseSnapshot.name}</div>
+                          <div className="mt-1 text-xs text-white/50">rev {detailCurrentRevision.revisionNumber} · {detailCurrentRevision.derivedOrientation} · {detailCurrentRevision.derivedFraming}</div>
+                          <div className="mt-2 text-sm text-white/70">{detailCurrentRevision.assembledPromptSnapshot.positivePrompt}</div>
+                        </>
+                      ) : <div className="mt-2 text-sm text-white/55">No current revision yet.</div>}
+                    </div>
+                    {detailSelectedVersion ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Selected version v{detailSelectedVersion.versionNumber}</div> : null}
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div className="mb-3 text-xs uppercase tracking-[0.16em] text-white/45">Versions in current revision</div>
+                  {detailCurrentRevisionVersions.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">No versions have been materialized for the current revision yet.</div> : (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {detailCurrentRevisionVersions.map((version) => (
+                        <div key={version.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+                          {version.previewUrl ? <img src={version.previewUrl} alt={`${detailShot.label} version ${version.versionNumber}`} className="aspect-[4/5] w-full object-cover" /> : <div className="aspect-[4/5] bg-black/20" />}
+                          <div className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-medium text-white">Version {version.versionNumber}</div>
+                                <div className="mt-1 text-xs text-white/50">Same revision · source job {version.sourceJobId ?? '—'}</div>
+                              </div>
+                              {detailShot.selectionVersionId === version.id ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">Selected</div> : null}
+                            </div>
+                            <div className="text-xs text-white/60">This is a version change inside the same pose revision.</div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="min-h-0 overflow-y-auto border-l border-white/10 bg-black/10 p-5">
+                <div className="text-xs uppercase tracking-[0.16em] text-white/45">Revision history</div>
+                <div className="mt-3 space-y-3">
+                  {detailHistoricalRevisions.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">No older revisions yet.</div> : detailHistoricalRevisions.map(({ revision, versions }) => (
+                    <div key={revision.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="font-medium text-white">Revision {revision.revisionNumber}</div>
+                      <div className="mt-1 text-sm text-white/70">{revision.poseSnapshot.name}</div>
+                      <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · {revision.sourceKind}</div>
+                      <div className="mt-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65">
+                        <div>Revision change: different pose snapshot/history branch.</div>
+                        <div className="mt-1">Versions under this revision: {versions.length}</div>
+                      </div>
+                      {versions[0]?.previewUrl ? <img src={versions[0].previewUrl} alt={`${revision.poseSnapshot.name} latest version`} className="mt-3 aspect-[4/5] w-full rounded-lg object-cover" /> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-4xl border-white/10 bg-[#0b1020] text-white">
