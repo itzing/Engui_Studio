@@ -9,6 +9,7 @@ import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 import { maybeAutoSaveUpscaleResult } from '@/lib/upscaleAutoSave';
+import { materializeStudioSessionCompletedJob } from '@/lib/studio-sessions/server';
 
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
@@ -615,6 +616,12 @@ async function markJobCompleted(params: {
     await maybeAutoSaveUpscaleResult(completedJob);
   } catch (error: any) {
     console.error('Upscale autosave failed after job completion:', error);
+  }
+
+  try {
+    await materializeStudioSessionCompletedJob(completedJob.id);
+  } catch (error: any) {
+    console.error('Studio Session materialization failed after job completion:', error);
   }
 }
 

@@ -14,6 +14,7 @@ import type {
   StudioSessionRunSummary,
   StudioSessionShotRevisionSummary,
   StudioSessionShotSummary,
+  StudioSessionShotVersionSummary,
   StudioSessionTemplateDraftState,
   StudioSessionTemplateSummary,
 } from '@/lib/studio-sessions/types';
@@ -394,6 +395,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [selectedRun, setSelectedRun] = useState<StudioSessionRunDetailSummary | null>(null);
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
   const [revisions, setRevisions] = useState<StudioSessionShotRevisionSummary[]>([]);
+  const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [assemblingRunId, setAssemblingRunId] = useState<string | null>(null);
@@ -425,6 +427,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setSelectedRun(null);
       setShots([]);
       setRevisions([]);
+      setVersions([]);
       setError(toErrorMessage(error, 'Failed to fetch runs'));
     } finally {
       setLoadingRuns(false);
@@ -441,9 +444,11 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setSelectedRun(data.run as StudioSessionRunDetailSummary);
       setShots(Array.isArray(data.shots) ? data.shots as StudioSessionShotSummary[] : []);
       setRevisions(Array.isArray(data.revisions) ? data.revisions as StudioSessionShotRevisionSummary[] : []);
+      setVersions(Array.isArray(data.versions) ? data.versions as StudioSessionShotVersionSummary[] : []);
     } catch (error) {
       setShots([]);
       setRevisions([]);
+      setVersions([]);
       setError(toErrorMessage(error, 'Failed to fetch run detail'));
     } finally {
       setLoadingDetail(false);
@@ -619,6 +624,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
 
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
   const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
+  const selectedVersionMap = useMemo(() => {
+    const map = new Map<string, StudioSessionShotVersionSummary>();
+    for (const shot of shots) {
+      const match = versions.find((version) => version.id === shot.selectionVersionId) ?? versions.find((version) => version.shotId === shot.id);
+      if (match) map.set(shot.id, match);
+    }
+    return map;
+  }, [shots, versions]);
 
   return (
     <>
@@ -694,6 +707,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                       {group.shots.map((shot) => {
                         const revision = revisionMap.get(shot.id);
+                        const selectedVersion = selectedVersionMap.get(shot.id);
                         const promptPreview = revision?.assembledPromptSnapshot?.positivePrompt?.slice(0, 220) ?? '';
                         const exhaustedForShot = selectedRun.exhaustedCategories?.includes(shot.category) && !shot.currentRevisionId;
                         return (
@@ -707,12 +721,18 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                     <div className="mt-3 text-sm font-medium text-emerald-200">{revision.poseSnapshot.name}</div>
                                     <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · rev {revision.revisionNumber}</div>
                                     {shot.activeJobId ? <div className="mt-2 text-xs text-sky-300">Active job: {shot.activeJobStatus} · {shot.activeJobId}</div> : null}
+                                    {selectedVersion ? <div className="mt-2 text-xs text-emerald-300">Selected version v{selectedVersion.versionNumber}</div> : null}
                                   </>
                                 ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
                               </div>
                               <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
                             </div>
-                            {revision ? (
+                            {selectedVersion?.previewUrl ? (
+                              <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
+                                <img src={selectedVersion.previewUrl} alt={`${shot.label} version ${selectedVersion.versionNumber}`} className="aspect-[4/5] w-full object-cover" />
+                                <div className="border-t border-white/10 px-3 py-2 text-xs text-white/55">Version-first preview · v{selectedVersion.versionNumber}</div>
+                              </div>
+                            ) : revision ? (
                               <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                                 <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">Prompt preview</div>
                                 <div className="mt-2 text-sm text-white/75">{promptPreview || revision.poseSnapshot.prompt}</div>
@@ -721,7 +741,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                             <div className="mt-4 flex flex-wrap gap-2">
                               <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
                               {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
-                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={!revision || runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : 'Run shot'}</Button>
+                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
                             </div>
                           </div>
                         );

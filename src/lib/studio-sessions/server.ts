@@ -1,3 +1,6 @@
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import {
   assembleStudioSessionPrompt,
@@ -12,12 +15,75 @@ import {
   toStudioSessionRunSummary,
   toStudioSessionShotRevisionSummary,
   toStudioSessionShotSummary,
+  toStudioSessionShotVersionSummary,
   toStudioSessionTemplateSummary,
 } from './utils';
 import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
 import { getModelById } from '@/lib/models/modelConfig';
 import { RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
 import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
+
+function parseJsonObject(value: unknown): Record<string, any> {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === 'object' ? value as Record<string, any> : {};
+}
+
+function normalizeUrlCandidate(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function buildJobOutputUrls(job: { options?: unknown; resultUrl?: string | null; thumbnailUrl?: string | null; type?: string | null }) {
+  const options = parseJsonObject(job.options);
+  const directCandidates = [
+    normalizeUrlCandidate(job.resultUrl),
+    normalizeUrlCandidate(options.url),
+    normalizeUrlCandidate(options.resultUrl),
+    normalizeUrlCandidate(options.image),
+    normalizeUrlCandidate(options.image_url),
+    normalizeUrlCandidate(options.image_path),
+    normalizeUrlCandidate(options.video),
+    normalizeUrlCandidate(options.video_url),
+    normalizeUrlCandidate(options.video_path),
+    normalizeUrlCandidate(options.audioUrl),
+    normalizeUrlCandidate(options.output_path),
+    normalizeUrlCandidate(options.s3_path),
+  ].filter(Boolean) as string[];
+
+  const listCandidates: string[] = [];
+  for (const key of ['images', 'videos', 'outputs', 'resultUrls'] as const) {
+    const value = options[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const normalized = normalizeUrlCandidate(item);
+        if (normalized) listCandidates.push(normalized);
+      }
+    }
+  }
+
+  return Array.from(new Set([...directCandidates, ...listCandidates]));
+}
+
+function resolveLocalPathFromUrl(url: string): string | null {
+  if (!url.startsWith('/')) return null;
+  const normalized = url.split('?')[0];
+  if (normalized.startsWith('/generations/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
+  if (normalized.startsWith('/results/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
+  return null;
+}
+
+function getExtensionFromUrl(url: string): string {
+  const pathname = url.split('?')[0];
+  const ext = path.extname(pathname);
+  return ext || '.png';
+}
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -380,6 +446,10 @@ export async function getStudioSessionRun(runId: string) {
   const revisions = currentRevisionIds.length > 0
     ? await prisma.studioSessionShotRevision.findMany({ where: { id: { in: currentRevisionIds } } })
     : [];
+  const versions = await prisma.studioSessionShotVersion.findMany({
+    where: { shotId: { in: shots.map((shot) => shot.id) } },
+    orderBy: [{ shotId: 'asc' }, { createdAt: 'desc' }],
+  });
   const exhaustedCategories = await collectRunExhaustedCategories(run, shots);
   const activeJobs = await collectStudioSessionActiveJobs(runId);
 
@@ -399,6 +469,7 @@ export async function getStudioSessionRun(runId: string) {
       };
     }),
     revisions: revisions.map(toStudioSessionShotRevisionSummary),
+    versions: versions.map(toStudioSessionShotVersionSummary),
   };
 }
 
@@ -593,14 +664,23 @@ function normalizeJobStatusToShotStatus(status: string): 'queued' | 'running' {
   return status === 'queueing_up' || status === 'queued' || status === 'in_queue' ? 'queued' : 'running';
 }
 
-async function launchStudioSessionShotJob(shotId: string) {
+async function ensureStudioSessionShotRevision(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: shotId } });
+  if (!shot) return null;
+  if (shot.currentRevisionId) return shot.currentRevisionId;
+  const autoPick = await autoPickStudioSessionShot(shotId);
+  return autoPick?.revision?.id ?? null;
+}
+
+async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_run' | 'run_all' = 'shot_run') {
+  const ensuredRevisionId = await ensureStudioSessionShotRevision(shotId);
   const shot = await prisma.studioSessionShot.findUnique({
     where: { id: shotId },
     include: { run: true },
   });
-  if (!shot || !shot.currentRevisionId) return null;
+  if (!shot || !ensuredRevisionId) return null;
 
-  const revision = await prisma.studioSessionShotRevision.findUnique({ where: { id: shot.currentRevisionId } });
+  const revision = await prisma.studioSessionShotRevision.findUnique({ where: { id: ensuredRevisionId } });
   if (!revision) return null;
 
   const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
@@ -627,6 +707,7 @@ async function launchStudioSessionShotJob(shotId: string) {
     revisionId: revision.id,
     templateId: shot.run.templateId,
     label: shot.label,
+    executionMode,
   };
   formData.append('studioSessionContext', JSON.stringify(studioSessionContext));
 
@@ -664,7 +745,7 @@ async function launchStudioSessionShotJob(shotId: string) {
 }
 
 export async function runStudioSessionShot(shotId: string) {
-  return launchStudioSessionShotJob(shotId);
+  return launchStudioSessionShotJob(shotId, 'shot_run');
 }
 
 export async function runAllStudioSessionShots(runId: string) {
@@ -676,15 +757,92 @@ export async function runAllStudioSessionShots(runId: string) {
   const launched: Array<{ shotId: string; jobId: string }> = [];
   const skippedShotIds: string[] = [];
   for (const shot of shots) {
-    if (!shot.currentRevisionId || shot.status === 'queued' || shot.status === 'running') {
+    if (shot.status === 'queued' || shot.status === 'running') {
       skippedShotIds.push(shot.id);
       continue;
     }
-    const result = await launchStudioSessionShotJob(shot.id);
-    if (result) launched.push(result);
+    const result = await launchStudioSessionShotJob(shot.id, 'run_all');
+    if (result) {
+      launched.push(result);
+    } else {
+      skippedShotIds.push(shot.id);
+    }
   }
 
   return { launched, skippedShotIds };
+}
+
+export async function materializeStudioSessionCompletedJob(jobId: string) {
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job || job.status !== 'completed') return null;
+
+  const options = parseJsonObject(job.options);
+  const context = options.studioSessionContext && typeof options.studioSessionContext === 'object'
+    ? options.studioSessionContext as Record<string, any>
+    : null;
+  if (!context?.shotId || !context?.revisionId || !context?.workspaceId) return null;
+
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: String(context.shotId) } });
+  if (!shot) return null;
+
+  const existing = await prisma.studioSessionShotVersion.findFirst({ where: { sourceJobId: job.id } });
+  if (existing) return existing;
+
+  const outputUrl = buildJobOutputUrls(job)[0] ?? normalizeUrlCandidate(job.resultUrl);
+  if (!outputUrl) return null;
+
+  let contentHash: string | null = null;
+  let originalUrl = outputUrl;
+  const localPath = resolveLocalPathFromUrl(outputUrl);
+  if (localPath && fs.existsSync(localPath)) {
+    const bytes = fs.readFileSync(localPath);
+    contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const ext = getExtensionFromUrl(outputUrl);
+    const dir = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', String(context.workspaceId), String(context.runId), String(context.shotId));
+    fs.mkdirSync(dir, { recursive: true });
+    const fileName = `${contentHash}${ext}`;
+    const dest = path.join(dir, fileName);
+    if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+    originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
+  }
+
+  const latest = await prisma.studioSessionShotVersion.findFirst({
+    where: { revisionId: String(context.revisionId) },
+    orderBy: { versionNumber: 'desc' },
+  });
+  const version = await prisma.studioSessionShotVersion.create({
+    data: {
+      workspaceId: String(context.workspaceId),
+      shotId: String(context.shotId),
+      revisionId: String(context.revisionId),
+      sourceJobId: job.id,
+      versionNumber: (latest?.versionNumber ?? 0) + 1,
+      status: 'completed',
+      originKind: 'job_output',
+      contentHash,
+      originalUrl,
+      previewUrl: originalUrl,
+      thumbnailUrl: job.thumbnailUrl,
+      generationSnapshotJson: JSON.stringify({
+        ...options,
+        prompt: job.prompt || null,
+        modelId: job.modelId || null,
+        endpointId: job.endpointId || null,
+        sourceJobId: job.id,
+      }),
+    },
+  });
+
+  const shouldAutoSelect = !shot.selectionVersionId;
+  await prisma.studioSessionShot.update({
+    where: { id: shot.id },
+    data: {
+      status: shouldAutoSelect ? 'completed' : 'needs_review',
+      selectionVersionId: shouldAutoSelect ? version.id : shot.selectionVersionId,
+    },
+  });
+  await syncStudioSessionRunStatus(shot.runId);
+  return version;
 }
 
 export async function manualPickStudioSessionShot(input: { shotId: string; poseId: string }) {
