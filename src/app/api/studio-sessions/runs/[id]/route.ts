@@ -13,7 +13,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ success: false, error: 'Run not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, run: payload.run, shots: payload.shots }, {
+    return NextResponse.json({ success: true, run: payload.run, shots: payload.shots, revisions: payload.revisions }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         Pragma: 'no-cache',
