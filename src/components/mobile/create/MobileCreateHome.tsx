@@ -31,7 +31,7 @@ export default function MobileCreateHome({
   const [showPromptDraftSelector, setShowPromptDraftSelector] = useState(false);
   const {
     currentModel,
-    promptSummary,
+    prompt,
     previewUrl,
     previewUrl2,
     primaryImageVisible,
@@ -78,6 +78,7 @@ export default function MobileCreateHome({
   const resolutionLabel = Number.isFinite(currentWidth) && Number.isFinite(currentHeight)
     ? `${currentWidth}w × ${currentHeight}h`
     : '—';
+  const promptPreview = prompt.trim() ? prompt.trim().replace(/\s+/g, ' ') : 'empty';
 
   useEffect(() => {
     if (message?.type === 'success') {
@@ -159,18 +160,16 @@ export default function MobileCreateHome({
           </Card>
 
           {!isPromptDraftSelected ? (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardDescription>Prompt</CardDescription>
-                <CardTitle className="text-lg">Prompt editor</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <p className="line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{promptSummary}</p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/m/create/prompt">Edit prompt</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <Link href="/m/create/prompt" className="block" aria-label="Open prompt editor">
+              <Card className="transition-colors hover:bg-accent/40">
+                <CardContent className="pt-6">
+                  <p className="truncate text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">Prompt:</span>{' '}
+                    {promptPreview}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ) : null}
 
           {(primaryImageVisible || secondaryImageVisible) && (
@@ -348,15 +347,6 @@ export default function MobileCreateHome({
               </>
             )}
           </Button>
-
-          {!isPromptDraftSelected ? (
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/m/create/prompt">
-                <WandSparkles className="mr-2 h-4 w-4" />
-                Open focused prompt editor
-              </Link>
-            </Button>
-          ) : null}
         </div>
       </div>
     </MobileScreen>
