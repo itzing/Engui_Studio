@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveStudioSessionResolution, deriveStudioSessionRunStatus, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
+import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import { getStudioSessionPosesByCategory } from '@/lib/studio-sessions/poseLibrary';
 
 describe('studio session utils', () => {
@@ -47,5 +48,18 @@ describe('studio session utils', () => {
 
     expect(result.pose?.id).toBe(target.id);
     expect(result.exhausted).toBe(false);
+  });
+
+  it('sorts and selects primary versions from reviewable history only', () => {
+    const versions = [
+      { id: 'v1', shotId: 'shot-1', versionNumber: 1, createdAt: '2026-05-06T20:00:00.000Z', hidden: false, rejected: false },
+      { id: 'v3', shotId: 'shot-1', versionNumber: 3, createdAt: '2026-05-06T22:00:00.000Z', hidden: true, rejected: false },
+      { id: 'v2', shotId: 'shot-1', versionNumber: 2, createdAt: '2026-05-06T21:00:00.000Z', hidden: false, rejected: false },
+    ] as any;
+
+    expect(sortStudioSessionVersions(versions).map((version) => version.id)).toEqual(['v3', 'v2', 'v1']);
+    expect(listPrimaryStudioSessionVersions(versions).map((version) => version.id)).toEqual(['v2', 'v1']);
+    expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v1' }, versions })?.id).toBe('v1');
+    expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v3' }, versions })?.id).toBe('v2');
   });
 });

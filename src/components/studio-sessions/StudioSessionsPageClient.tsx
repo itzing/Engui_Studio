@@ -18,6 +18,7 @@ import type {
   StudioSessionTemplateDraftState,
   StudioSessionTemplateSummary,
 } from '@/lib/studio-sessions/types';
+import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import type { CharacterSummary } from '@/lib/characters/types';
 
 function EmptyWorkspaceState() {
@@ -711,28 +712,23 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const versionsByShot = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary[]>();
-    for (const version of versions.filter((item) => !item.hidden && !item.rejected)) {
+    for (const version of listPrimaryStudioSessionVersions(versions)) {
       const current = map.get(version.shotId) ?? [];
       current.push(version);
       map.set(version.shotId, current);
-    }
-    for (const [shotId, items] of map.entries()) {
-      items.sort((left, right) => right.versionNumber - left.versionNumber || right.createdAt.localeCompare(left.createdAt));
-      map.set(shotId, items);
     }
     return map;
   }, [versions]);
   const selectedVersionMap = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary>();
     for (const shot of shots) {
-      const shotVersions = versionsByShot.get(shot.id) ?? [];
-      const match = shotVersions.find((version) => version.id === shot.selectionVersionId) ?? shotVersions[0];
+      const match = selectPrimaryStudioSessionVersion({ shot, versions: versions.filter((version) => version.shotId === shot.id) });
       if (match) map.set(shot.id, match);
     }
     return map;
-  }, [shots, versionsByShot]);
+  }, [shots, versions]);
   const detailShot = useMemo(() => shots.find((shot) => shot.id === detailShotId) ?? null, [detailShotId, shots]);
-  const detailShotVersions = useMemo(() => detailShot ? versions.filter((version) => version.shotId === detailShot.id).sort((left, right) => right.versionNumber - left.versionNumber || right.createdAt.localeCompare(left.createdAt)) : [], [detailShot, versions]);
+  const detailShotVersions = useMemo(() => detailShot ? sortStudioSessionVersions(versions.filter((version) => version.shotId === detailShot.id)) : [], [detailShot, versions]);
   const detailSelectedVersion = useMemo(() => detailShot ? selectedVersionMap.get(detailShot.id) ?? null : null, [detailShot, selectedVersionMap]);
   const detailCurrentRevision = useMemo(() => detailShot?.currentRevisionId ? revisions.find((revision) => revision.id === detailShot.currentRevisionId) ?? null : null, [detailShot, revisions]);
   const detailCurrentRevisionVersions = useMemo(() => detailCurrentRevision ? detailShotVersions.filter((version) => version.revisionId === detailCurrentRevision.id) : [], [detailCurrentRevision, detailShotVersions]);
