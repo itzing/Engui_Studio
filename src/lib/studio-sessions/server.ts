@@ -1,12 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import {
+  buildStudioSessionShotSlotsFromRules,
   createDefaultStudioSessionTemplateDraftState,
   createStudioSessionSavedStateFromDraft,
+  deriveStudioSessionRunStatus,
   normalizeStudioSessionTemplateDraftState,
   serializeStudioSessionCategoryRule,
+  toStudioSessionRunSummary,
   toStudioSessionTemplateSummary,
 } from './utils';
-import type { StudioSessionTemplateDraftState } from './types';
+import type { StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -172,4 +175,121 @@ export async function cloneStudioSessionTemplate(templateId: string) {
   });
 
   return toStudioSessionTemplateSummary(created);
+}
+
+async function syncStudioSessionRunStatus(runId: string): Promise<StudioSessionRunSummary | null> {
+  const run = await prisma.studioSessionRun.findUnique({
+    where: { id: runId },
+    include: {
+      shots: {
+        orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+      },
+    },
+  });
+  if (!run) return null;
+
+  const derivedStatus = deriveStudioSessionRunStatus({
+    shots: run.shots.map((shot) => ({
+      skipped: shot.skipped,
+      status: shot.status as any,
+      selectionVersionId: shot.selectionVersionId,
+    })),
+  });
+
+  const updated = run.status === derivedStatus
+    ? run
+    : await prisma.studioSessionRun.update({
+        where: { id: runId },
+        data: { status: derivedStatus },
+        include: {
+          shots: {
+            orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+          },
+        },
+      });
+
+  return toStudioSessionRunSummary(updated);
+}
+
+export async function createStudioSessionRun(input: { workspaceId: string; templateId: string }) {
+  const template = await prisma.studioSessionTemplate.findUnique({
+    where: { id: input.templateId },
+    include: { categoryRules: { orderBy: [{ category: 'asc' }] } },
+  });
+  if (!template || template.workspaceId !== input.workspaceId) return null;
+
+  const canonicalState = createStudioSessionSavedStateFromDraft(JSON.parse(template.canonicalStateJson || '{}'));
+  const slots = buildStudioSessionShotSlotsFromRules(canonicalState.categoryRules);
+
+  const created = await prisma.$transaction(async (tx) => {
+    const run = await tx.studioSessionRun.create({
+      data: {
+        workspaceId: input.workspaceId,
+        templateId: template.id,
+        templateNameSnapshot: template.name,
+        templateSnapshotJson: JSON.stringify({
+          ...canonicalState,
+          templateId: template.id,
+          templateName: template.name,
+        }),
+        poseLibraryVersion: canonicalState.poseLibraryVersion,
+        poseLibraryHash: canonicalState.poseLibraryHash,
+        status: slots.length > 0 ? 'draft' : 'completed',
+      },
+    });
+
+    if (slots.length > 0) {
+      await tx.studioSessionShot.createMany({
+        data: slots.map((slot) => ({
+          workspaceId: input.workspaceId,
+          runId: run.id,
+          category: slot.category,
+          slotIndex: slot.slotIndex,
+          label: slot.label,
+          status: 'unassigned',
+          skipped: false,
+          autoAssignmentHistoryJson: '[]',
+        })),
+      });
+    }
+
+    return run;
+  });
+
+  return syncStudioSessionRunStatus(created.id);
+}
+
+export async function listStudioSessionRuns(workspaceId: string, status?: string) {
+  const runs = await prisma.studioSessionRun.findMany({
+    where: {
+      workspaceId,
+      ...(status && status !== 'all' ? { status } : {}),
+    },
+    include: {
+      shots: {
+        orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+      },
+    },
+    orderBy: [{ updatedAt: 'desc' }],
+  });
+
+  const summaries = await Promise.all(runs.map(async (run) => {
+    const derivedStatus = deriveStudioSessionRunStatus({
+      shots: run.shots.map((shot) => ({
+        skipped: shot.skipped,
+        status: shot.status as any,
+        selectionVersionId: shot.selectionVersionId,
+      })),
+    });
+    const effective = run.status === derivedStatus
+      ? run
+      : await prisma.studioSessionRun.update({ where: { id: run.id }, data: { status: derivedStatus } });
+    return toStudioSessionRunSummary(effective);
+  }));
+
+  return status && status !== 'all' ? summaries.filter((run) => run.status === status) : summaries;
+}
+
+export async function getStudioSessionRun(runId: string) {
+  return syncStudioSessionRunStatus(runId);
 }
