@@ -729,7 +729,7 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
 
   const parameterMap = new Map((model.parameters || []).map((parameter) => [parameter.name, parameter]));
   const requestedSeed = typeof generationSettings.seed === 'number' ? Math.floor(generationSettings.seed) : -1;
-  const resolvedSeed = requestedSeed < 0 ? crypto.randomInt(1, Number.MAX_SAFE_INTEGER) : requestedSeed;
+  const resolvedSeed = requestedSeed < 0 ? crypto.randomInt(1, 2 ** 31) : requestedSeed;
   const mergedSettings = {
     ...generationSettings,
     width: typeof generationSettings.width === 'number' ? generationSettings.width : resolvedSize.width,
