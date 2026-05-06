@@ -518,6 +518,7 @@ async function createStudioSessionShotRevision(params: {
     : null;
   const assembledPrompt = assembleStudioSessionPrompt({
     characterPrompt: '',
+    characterAge: typeof snapshot.characterAge === 'string' ? snapshot.characterAge : '',
     environmentText: typeof snapshot.environmentText === 'string' ? snapshot.environmentText : '',
     outfitText: typeof snapshot.outfitText === 'string' ? snapshot.outfitText : '',
     hairstyleText: typeof snapshot.hairstyleText === 'string' ? snapshot.hairstyleText : '',

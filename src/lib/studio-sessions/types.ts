@@ -41,6 +41,7 @@ export interface StudioSessionGenerationSettingsSnapshot {
 export interface StudioSessionTemplateDraftState {
   name: string;
   characterId: string | null;
+  characterAge: string;
   environmentText: string;
   outfitText: string;
   hairstyleText: string;

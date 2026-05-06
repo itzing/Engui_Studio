@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultStudioSessionTemplateDraftState, deriveStudioSessionResolution, deriveStudioSessionRunStatus, normalizeStudioSessionTemplateDraftState, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
+import { assembleStudioSessionPrompt, createDefaultStudioSessionTemplateDraftState, deriveStudioSessionResolution, deriveStudioSessionRunStatus, normalizeStudioSessionTemplateDraftState, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
 import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import { getStudioSessionPosesByCategory } from '@/lib/studio-sessions/poseLibrary';
 
@@ -12,11 +12,29 @@ describe('studio session utils', () => {
 
   it('uses constrained Studio Session generation defaults', () => {
     const draft = createDefaultStudioSessionTemplateDraftState();
+    expect(draft.characterAge).toBe('');
     expect(draft.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1 });
     expect(draft.resolutionPolicy).toEqual({ shortSidePx: 1024, longSidePx: 1536, squareSideSource: 'short' });
 
-    const normalized = normalizeStudioSessionTemplateDraftState({ generationSettings: { modelId: '', sampler: 'euler' } });
+    const normalized = normalizeStudioSessionTemplateDraftState({ characterAge: ' 23 years ', generationSettings: { modelId: '', sampler: 'euler' } });
+    expect(normalized.characterAge).toBe('23 years');
     expect(normalized.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null });
+  });
+
+  it('formats character age in assembled Studio Session prompts like Prompt Constructor', () => {
+    const result = assembleStudioSessionPrompt({
+      characterPrompt: '',
+      characterAge: '23 years old',
+      environmentText: 'studio background',
+      outfitText: '',
+      hairstyleText: '',
+      positivePrompt: 'soft light',
+      negativePrompt: 'blurry',
+      pose: { prompt: 'standing pose' },
+    });
+
+    expect(result.positivePrompt).toContain('23yo');
+    expect(result.positivePrompt).toBe('23yo, studio background, soft light, standing pose');
   });
 
   it('treats skipped shots as non-blocking for completed status', () => {

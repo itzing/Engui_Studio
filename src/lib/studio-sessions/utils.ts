@@ -212,6 +212,7 @@ export function createDefaultStudioSessionTemplateDraftState(): StudioSessionTem
   return {
     name: '',
     characterId: null,
+    characterAge: '',
     environmentText: '',
     outfitText: '',
     hairstyleText: '',
@@ -252,6 +253,7 @@ export function normalizeStudioSessionTemplateDraftState(input: unknown): Studio
   return {
     name: typeof value.name === 'string' ? value.name.trim() : fallback.name,
     characterId: typeof value.characterId === 'string' && value.characterId.trim() ? value.characterId.trim() : null,
+    characterAge: typeof value.characterAge === 'string' ? value.characterAge.trim() : fallback.characterAge,
     environmentText: typeof value.environmentText === 'string' ? value.environmentText.trim() : fallback.environmentText,
     outfitText: typeof value.outfitText === 'string' ? value.outfitText.trim() : fallback.outfitText,
     hairstyleText: typeof value.hairstyleText === 'string' ? value.hairstyleText.trim() : fallback.hairstyleText,
@@ -423,8 +425,17 @@ export function deriveStudioSessionResolution(policy: { shortSidePx: number; lon
   return { width: policy.shortSidePx, height: policy.longSidePx, orientation };
 }
 
+function formatStudioSessionCharacterAge(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const match = trimmed.match(/\d+/);
+  if (!match) return trimmed;
+  return `${match[0]}yo`;
+}
+
 export function assembleStudioSessionPrompt(input: {
   characterPrompt: string;
+  characterAge: string;
   environmentText: string;
   outfitText: string;
   hairstyleText: string;
@@ -434,6 +445,7 @@ export function assembleStudioSessionPrompt(input: {
 }): StudioSessionPromptSnapshot {
   const pieces = {
     character: input.characterPrompt.trim(),
+    characterAge: formatStudioSessionCharacterAge(input.characterAge),
     environment: input.environmentText.trim(),
     outfit: input.outfitText.trim(),
     hairstyle: input.hairstyleText.trim(),
@@ -442,7 +454,7 @@ export function assembleStudioSessionPrompt(input: {
   };
 
   return {
-    positivePrompt: [pieces.character, pieces.environment, pieces.outfit, pieces.hairstyle, pieces.masterPositive, pieces.pose].filter(Boolean).join(', '),
+    positivePrompt: [pieces.character, pieces.characterAge, pieces.environment, pieces.outfit, pieces.hairstyle, pieces.masterPositive, pieces.pose].filter(Boolean).join(', '),
     negativePrompt: input.negativePrompt.trim(),
     pieces,
   };
