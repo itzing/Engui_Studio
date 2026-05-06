@@ -1,15 +1,19 @@
 import { prisma } from '@/lib/prisma';
 import {
+  assembleStudioSessionPrompt,
   buildStudioSessionShotSlotsFromRules,
   createDefaultStudioSessionTemplateDraftState,
   createStudioSessionSavedStateFromDraft,
   deriveStudioSessionRunStatus,
+  pickUniqueStudioSessionPose,
   normalizeStudioSessionTemplateDraftState,
   serializeStudioSessionCategoryRule,
   toStudioSessionRunSummary,
+  toStudioSessionShotRevisionSummary,
   toStudioSessionShotSummary,
   toStudioSessionTemplateSummary,
 } from './utils';
+import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
 import type { StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
 function cleanString(value: unknown): string {
@@ -304,4 +308,110 @@ export async function getStudioSessionRun(runId: string) {
     run,
     shots: shots.map(toStudioSessionShotSummary),
   };
+}
+
+export async function listStudioSessionShotPoses(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: shotId } });
+  if (!shot) return null;
+  return {
+    shot: toStudioSessionShotSummary(shot),
+    poses: getStudioSessionPosesByCategory(shot.category),
+  };
+}
+
+async function createStudioSessionShotRevision(params: {
+  shotId: string;
+  poseId: string;
+  sourceKind: 'auto_pick' | 'manual_pick';
+  appendAutoHistory?: boolean;
+}) {
+  const shot = await prisma.studioSessionShot.findUnique({
+    where: { id: params.shotId },
+    include: { run: true },
+  });
+  if (!shot) return null;
+
+  const pose = getStudioSessionPoseById(params.poseId);
+  if (!pose || pose.category !== shot.category) return null;
+
+  const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
+  const categoryRule = Array.isArray(snapshot.categoryRules)
+    ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
+    : null;
+  const assembledPrompt = assembleStudioSessionPrompt({
+    characterPrompt: '',
+    environmentText: typeof snapshot.environmentText === 'string' ? snapshot.environmentText : '',
+    outfitText: typeof snapshot.outfitText === 'string' ? snapshot.outfitText : '',
+    hairstyleText: typeof snapshot.hairstyleText === 'string' ? snapshot.hairstyleText : '',
+    positivePrompt: typeof snapshot.positivePrompt === 'string' ? snapshot.positivePrompt : '',
+    negativePrompt: typeof snapshot.negativePrompt === 'string' ? snapshot.negativePrompt : '',
+    pose,
+  });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const revisionCount = await tx.studioSessionShotRevision.count({ where: { shotId: shot.id } });
+    const revision = await tx.studioSessionShotRevision.create({
+      data: {
+        workspaceId: shot.workspaceId,
+        shotId: shot.id,
+        revisionNumber: revisionCount + 1,
+        poseId: pose.id,
+        poseSnapshotJson: JSON.stringify(pose),
+        derivedOrientation: pose.orientation,
+        derivedFraming: pose.framing,
+        assembledPromptSnapshotJson: JSON.stringify(assembledPrompt),
+        overrideFieldsJson: categoryRule?.futureOverrideConfig ? JSON.stringify(categoryRule.futureOverrideConfig) : null,
+        sourceKind: params.sourceKind,
+      },
+    });
+
+    const nextHistory = params.appendAutoHistory ? Array.from(new Set([...(JSON.parse(shot.autoAssignmentHistoryJson || '[]')), pose.id])) : JSON.parse(shot.autoAssignmentHistoryJson || '[]');
+    await tx.studioSessionShot.update({
+      where: { id: shot.id },
+      data: {
+        currentRevisionId: revision.id,
+        status: 'assigned',
+        autoAssignmentHistoryJson: JSON.stringify(nextHistory),
+      },
+    });
+
+    return revision;
+  });
+
+  await syncStudioSessionRunStatus(shot.runId);
+  return toStudioSessionShotRevisionSummary(result);
+}
+
+export async function autoPickStudioSessionShot(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({
+    where: { id: shotId },
+    include: { run: true },
+  });
+  if (!shot) return null;
+
+  const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
+  const categoryRule = Array.isArray(snapshot.categoryRules)
+    ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
+    : null;
+
+  const pick = pickUniqueStudioSessionPose({
+    category: shot.category,
+    autoAssignmentHistory: JSON.parse(shot.autoAssignmentHistoryJson || '[]'),
+    excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
+    includedPoseIds: Array.isArray(categoryRule?.includedPoseIds) ? categoryRule.includedPoseIds : [],
+    preferredOrientation: categoryRule?.preferredOrientation ?? null,
+    preferredFraming: categoryRule?.preferredFraming ?? null,
+  });
+
+  if (!pick.pose) {
+    return { exhausted: true, revision: null };
+  }
+
+  const revision = await createStudioSessionShotRevision({ shotId, poseId: pick.pose.id, sourceKind: 'auto_pick', appendAutoHistory: true });
+  return { exhausted: false, revision };
+}
+
+export async function manualPickStudioSessionShot(input: { shotId: string; poseId: string }) {
+  const revision = await createStudioSessionShotRevision({ shotId: input.shotId, poseId: input.poseId, sourceKind: 'manual_pick', appendAutoHistory: false });
+  return revision;
 }

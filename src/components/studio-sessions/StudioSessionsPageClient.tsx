@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useStudio } from '@/lib/context/StudioContext';
 import type {
+  StudioSessionPoseSnapshot,
   StudioSessionRunSummary,
   StudioSessionShotSummary,
   StudioSessionTemplateDraftState,
@@ -391,6 +393,11 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
+  const [pickerPoses, setPickerPoses] = useState<StudioSessionPoseSnapshot[]>([]);
+  const [loadingPicker, setLoadingPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRuns = useCallback(async () => {
@@ -421,9 +428,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       const response = await fetch(`/api/studio-sessions/runs/${runId}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok || !data?.success || !data.run) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch run');
-      const run = data.run as StudioSessionRunSummary & { shots?: StudioSessionShotSummary[] };
-      setSelectedRun(run);
-      setShots(Array.isArray((data as any).shots) ? (data as any).shots as StudioSessionShotSummary[] : []);
+      setSelectedRun(data.run as StudioSessionRunSummary);
+      setShots(Array.isArray(data.shots) ? data.shots as StudioSessionShotSummary[] : []);
     } catch (error) {
       setShots([]);
       setError(toErrorMessage(error, 'Failed to fetch run detail'));
@@ -431,6 +437,67 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setLoadingDetail(false);
     }
   }, []);
+
+  const refreshSelectedRun = useCallback(async () => {
+    if (selectedRun?.id) await fetchRunDetail(selectedRun.id);
+    await fetchRuns();
+  }, [fetchRunDetail, fetchRuns, selectedRun?.id]);
+
+  const handleAutoPick = useCallback(async (shotId: string) => {
+    setAssigningShotId(shotId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/auto-pick`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to auto-pick pose');
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to auto-pick pose'));
+    } finally {
+      setAssigningShotId(null);
+    }
+  }, [refreshSelectedRun]);
+
+  const openManualPicker = useCallback(async (shot: StudioSessionShotSummary) => {
+    setPickerShot(shot);
+    setPickerOpen(true);
+    setLoadingPicker(true);
+    setPickerPoses([]);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shot.id}/poses`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to load poses');
+      setPickerPoses(Array.isArray(data.poses) ? data.poses as StudioSessionPoseSnapshot[] : []);
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to load poses'));
+    } finally {
+      setLoadingPicker(false);
+    }
+  }, []);
+
+  const handleManualPick = useCallback(async (poseId: string) => {
+    if (!pickerShot) return;
+    setAssigningShotId(pickerShot.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${pickerShot.id}/manual-pick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poseId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to assign manual pose');
+      setPickerOpen(false);
+      setPickerShot(null);
+      setPickerPoses([]);
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to assign manual pose'));
+    } finally {
+      setAssigningShotId(null);
+    }
+  }, [pickerShot, refreshSelectedRun]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -450,95 +517,126 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <Card className="flex min-h-[720px] flex-col border-white/10 bg-white/5">
-        <CardHeader className="border-b border-white/10 pb-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardDescription>Runs</CardDescription>
-              <CardTitle className="text-lg">Studio Session runs</CardTitle>
+    <>
+      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <Card className="flex min-h-[720px] flex-col border-white/10 bg-white/5">
+          <CardHeader className="border-b border-white/10 pb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardDescription>Runs</CardDescription>
+                <CardTitle className="text-lg">Studio Session runs</CardTitle>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void fetchRuns()} disabled={loadingRuns}>{loadingRuns ? 'Refreshing…' : 'Refresh'}</Button>
             </div>
-            <Button size="sm" variant="outline" onClick={() => void fetchRuns()} disabled={loadingRuns}>{loadingRuns ? 'Refreshing…' : 'Refresh'}</Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4 text-sm text-white/70">
-          {!workspaceId ? <EmptyWorkspaceState /> : error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : loadingRuns ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading runs…</div> : runs.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">No runs yet. Create the first run from a saved template.</div> : (
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-              {runs.map((run) => {
-                const isSelected = selectedRun?.id === run.id;
-                const totalSlots = run.templateSnapshot.categoryRules.reduce((sum, rule) => sum + rule.count, 0);
-                return (
-                  <div key={run.id} className={`rounded-lg border p-3 transition ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : 'border-white/10 bg-black/10 hover:bg-white/[0.04]'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-white">{run.templateNameSnapshot || run.templateSnapshot.templateName}</div>
-                        <div className="mt-1 text-xs text-white/50">Created {new Date(run.createdAt).toLocaleString()}</div>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4 text-sm text-white/70">
+            {!workspaceId ? <EmptyWorkspaceState /> : error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : loadingRuns ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading runs…</div> : runs.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">No runs yet. Create the first run from a saved template.</div> : (
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {runs.map((run) => {
+                  const isSelected = selectedRun?.id === run.id;
+                  const totalSlots = run.templateSnapshot.categoryRules.reduce((sum, rule) => sum + rule.count, 0);
+                  return (
+                    <div key={run.id} className={`rounded-lg border p-3 transition ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : 'border-white/10 bg-black/10 hover:bg-white/[0.04]'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-white">{run.templateNameSnapshot || run.templateSnapshot.templateName}</div>
+                          <div className="mt-1 text-xs text-white/50">Created {new Date(run.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{run.status}</div>
                       </div>
-                      <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{run.status}</div>
+                      <div className="mt-3 grid gap-2 text-xs text-white/55 sm:grid-cols-2">
+                        <div>Snapshot: <span className="text-white/75">{run.poseLibraryVersion}</span></div>
+                        <div>Slots: <span className="text-white/75">{totalSlots}</span></div>
+                      </div>
+                      <div className="mt-3"><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run)}>{isSelected ? 'Opened' : 'Open run'}</Button></div>
                     </div>
-                    <div className="mt-3 grid gap-2 text-xs text-white/55 sm:grid-cols-2">
-                      <div>Snapshot: <span className="text-white/75">{run.poseLibraryVersion}</span></div>
-                      <div>Slots: <span className="text-white/75">{totalSlots}</span></div>
-                    </div>
-                    <div className="mt-3"><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run)}>{isSelected ? 'Opened' : 'Open run'}</Button></div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <Card className="flex min-h-[720px] flex-col border-white/10 bg-white/5">
-        <CardHeader className="border-b border-white/10 pb-4">
-          <CardDescription>Run detail</CardDescription>
-          <CardTitle className="text-lg">Grouped unassigned shot shell</CardTitle>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 text-sm text-white/70">
-          {!selectedRun ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">Select a run to inspect its stable shot groups.</div> : loadingDetail ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading run detail…</div> : (
-            <div className="space-y-5">
-              <div className="rounded-lg border border-white/10 bg-black/10 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-medium text-white">{selectedRun.templateNameSnapshot || selectedRun.templateSnapshot.templateName}</div>
-                    <div className="mt-1 text-xs text-white/50">Run {selectedRun.id}</div>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                    <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Status {selectedRun.status}</div>
-                    <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
+        <Card className="flex min-h-[720px] flex-col border-white/10 bg-white/5">
+          <CardHeader className="border-b border-white/10 pb-4">
+            <CardDescription>Run detail</CardDescription>
+            <CardTitle className="text-lg">Grouped unassigned shot shell</CardTitle>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 text-sm text-white/70">
+            {!selectedRun ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">Select a run to inspect its stable shot groups.</div> : loadingDetail ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading run detail…</div> : (
+              <div className="space-y-5">
+                <div className="rounded-lg border border-white/10 bg-black/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-medium text-white">{selectedRun.templateNameSnapshot || selectedRun.templateSnapshot.templateName}</div>
+                      <div className="mt-1 text-xs text-white/50">Run {selectedRun.id}</div>
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                      <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Status {selectedRun.status}</div>
+                      <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              {groupedShots.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">This run has no materialized shots yet.</div> : groupedShots.map((group) => (
-                <div key={group.category} className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-white/60">{humanizeCategory(group.category)}</div>
-                    <div className="text-xs text-white/45">{group.shots.length} slots</div>
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                    {group.shots.map((shot) => (
-                      <div key={shot.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-medium text-white">{shot.label}</div>
-                            <div className="mt-1 text-xs text-white/50">{humanizeCategory(shot.category)} · slot {shot.slotIndex + 1}</div>
+                {groupedShots.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">This run has no materialized shots yet.</div> : groupedShots.map((group) => (
+                  <div key={group.category} className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold uppercase tracking-[0.16em] text-white/60">{humanizeCategory(group.category)}</div>
+                      <div className="text-xs text-white/45">{group.shots.length} slots</div>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                      {group.shots.map((shot) => (
+                        <div key={shot.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-medium text-white">{shot.label}</div>
+                              <div className="mt-1 text-xs text-white/50">{humanizeCategory(shot.category)} · slot {shot.slotIndex + 1}</div>
+                              {shot.currentRevisionId ? <div className="mt-2 text-xs text-emerald-300">Revision ready</div> : null}
+                            </div>
+                            <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
                           </div>
-                          <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Pick pose'}</Button>
+                            <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>
+                            <Button size="sm" disabled>Run shot</Button>
+                          </div>
                         </div>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" disabled>Pick pose</Button>
-                          <Button size="sm" disabled>Run shot</Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-4xl border-white/10 bg-[#0b1020] text-white">
+          <DialogHeader>
+            <DialogTitle>Pick pose</DialogTitle>
+            <DialogDescription>
+              {pickerShot ? `Manual pose picker for ${pickerShot.label}. Poses stay limited to ${humanizeCategory(pickerShot.category)}.` : 'Choose a pose.'}
+            </DialogDescription>
+          </DialogHeader>
+          {loadingPicker ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading poses…</div> : (
+            <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3">
+              {pickerPoses.map((pose) => (
+                <div key={pose.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-white">{pose.name}</div>
+                      <div className="mt-1 text-xs text-white/50">{pose.orientation} · {pose.framing}</div>
+                    </div>
+                    <Button size="sm" onClick={() => void handleManualPick(pose.id)} disabled={assigningShotId === pickerShot?.id}>{assigningShotId === pickerShot?.id ? 'Assigning…' : 'Use pose'}</Button>
+                  </div>
+                  <div className="mt-3 text-sm text-white/70">{pose.prompt}</div>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
