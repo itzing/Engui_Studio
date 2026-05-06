@@ -727,13 +727,15 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
   formData.append('studioSessionContext', JSON.stringify(studioSessionContext));
 
   const parameterMap = new Map((model.parameters || []).map((parameter) => [parameter.name, parameter]));
+  const requestedSeed = typeof generationSettings.seed === 'number' ? Math.floor(generationSettings.seed) : -1;
+  const resolvedSeed = requestedSeed < 0 ? crypto.randomInt(1, Number.MAX_SAFE_INTEGER) : requestedSeed;
   const mergedSettings = {
     ...generationSettings,
     width: typeof generationSettings.width === 'number' ? generationSettings.width : resolvedSize.width,
     height: typeof generationSettings.height === 'number' ? generationSettings.height : resolvedSize.height,
     steps: typeof generationSettings.steps === 'number' ? generationSettings.steps : 9,
     cfg: typeof generationSettings.cfg === 'number' ? generationSettings.cfg : 1,
-    seed: typeof generationSettings.seed === 'number' ? generationSettings.seed : -1,
+    seed: resolvedSeed,
     negativePrompt: typeof promptSnapshot?.negativePrompt === 'string' ? promptSnapshot.negativePrompt : (typeof generationSettings.negativePrompt === 'string' ? generationSettings.negativePrompt : ''),
   } as Record<string, unknown>;
 
