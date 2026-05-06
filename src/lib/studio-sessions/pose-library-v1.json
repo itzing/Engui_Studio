@@ -1,0 +1,21 @@
+{
+  "version": "v1",
+  "poses": [
+    { "id": "standing-front-full-01", "category": "standing", "orientation": "portrait", "framing": "full_body", "name": "Standing Front Full 01", "prompt": "standing upright, facing camera, balanced weight, arms relaxed by sides" },
+    { "id": "standing-contrapposto-01", "category": "standing", "orientation": "portrait", "framing": "full_body", "name": "Standing Contrapposto 01", "prompt": "standing contrapposto, one hip dropped, relaxed shoulders, soft arm bend" },
+    { "id": "standing-profile-01", "category": "standing", "orientation": "portrait", "framing": "three_quarter", "name": "Standing Profile 01", "prompt": "standing in profile, torso slightly turned, chin angled toward camera" },
+    { "id": "portrait-neutral-01", "category": "portrait", "orientation": "portrait", "framing": "portrait", "name": "Portrait Neutral 01", "prompt": "head and shoulders portrait, neutral expression, direct camera gaze" },
+    { "id": "portrait-over-shoulder-01", "category": "portrait", "orientation": "portrait", "framing": "portrait", "name": "Portrait Over Shoulder 01", "prompt": "portrait over shoulder, torso turned away, face back toward camera" },
+    { "id": "portrait-closeup-01", "category": "portrait", "orientation": "square", "framing": "closeup", "name": "Portrait Closeup 01", "prompt": "tight closeup portrait, face filling frame, calm expression" },
+    { "id": "sitting-chair-front-01", "category": "sitting", "orientation": "portrait", "framing": "three_quarter", "name": "Sitting Chair Front 01", "prompt": "sitting on chair, knees forward, back upright, hands resting on thighs" },
+    { "id": "sitting-side-01", "category": "sitting", "orientation": "landscape", "framing": "half_body", "name": "Sitting Side 01", "prompt": "sitting sideways on chair, torso turned to camera, legs together" },
+    { "id": "sitting-floor-01", "category": "sitting", "orientation": "portrait", "framing": "full_body", "name": "Sitting Floor 01", "prompt": "sitting on floor, one knee bent, one leg extended, hands braced lightly" },
+    { "id": "kneeling-upright-01", "category": "kneeling", "orientation": "portrait", "framing": "three_quarter", "name": "Kneeling Upright 01", "prompt": "kneeling upright, torso tall, hands resting softly near lap" },
+    { "id": "kneeling-turn-01", "category": "kneeling", "orientation": "portrait", "framing": "full_body", "name": "Kneeling Turn 01", "prompt": "kneeling with torso turned, one hand on hip, other hand relaxed" },
+    { "id": "floor-recline-01", "category": "floor", "orientation": "landscape", "framing": "full_body", "name": "Floor Recline 01", "prompt": "reclining on floor, upper body lifted on forearm, legs angled diagonally" },
+    { "id": "floor-side-01", "category": "floor", "orientation": "landscape", "framing": "three_quarter", "name": "Floor Side 01", "prompt": "lying on side, elbow supporting upper body, gaze toward camera" },
+    { "id": "floor-curled-01", "category": "floor", "orientation": "square", "framing": "full_body", "name": "Floor Curled 01", "prompt": "curled seated floor pose, knees drawn in, arms wrapped loosely" },
+    { "id": "walking-stride-01", "category": "movement", "orientation": "portrait", "framing": "full_body", "name": "Walking Stride 01", "prompt": "captured mid-stride, one leg forward, natural arm swing, forward energy" },
+    { "id": "turning-motion-01", "category": "movement", "orientation": "portrait", "framing": "three_quarter", "name": "Turning Motion 01", "prompt": "turning through frame, torso twisting, hair and clothing showing motion" }
+  ]
+}
