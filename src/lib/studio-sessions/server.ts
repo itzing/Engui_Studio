@@ -366,6 +366,19 @@ export async function listStudioSessionRuns(workspaceId: string, status?: string
   return status && status !== 'all' ? summaries.filter((run) => run.status === status) : summaries;
 }
 
+export async function deleteStudioSessionRun(runId: string) {
+  const run = await prisma.studioSessionRun.findUnique({ where: { id: runId } });
+  if (!run) return null;
+
+  const activeJobs = await collectStudioSessionActiveJobs(runId);
+  if (activeJobs.size > 0) {
+    throw new Error('Cannot delete a run while shot jobs are still active');
+  }
+
+  await prisma.studioSessionRun.delete({ where: { id: runId } });
+  return { id: runId };
+}
+
 async function collectRunAutoAssignmentHistory(runId: string, category?: string) {
   const shots = await prisma.studioSessionShot.findMany({
     where: {

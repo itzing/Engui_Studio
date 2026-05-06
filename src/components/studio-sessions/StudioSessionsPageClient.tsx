@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
+import { type LoRAFile } from '@/components/lora/LoRASelector';
 import { useStudio } from '@/lib/context/StudioContext';
 import type {
   StudioSessionPoseSnapshot,
@@ -20,7 +23,8 @@ import type {
 } from '@/lib/studio-sessions/types';
 import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import type { CharacterSummary } from '@/lib/characters/types';
-import { getModelsByType } from '@/lib/models/modelConfig';
+import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
+import { getModelById, getModelsByType } from '@/lib/models/modelConfig';
 
 function EmptyWorkspaceState() {
   return (
@@ -88,6 +92,10 @@ function validateTemplateDraft(draft: StudioSessionTemplateDraftState): string |
   return null;
 }
 
+function getStudioSessionLoraWeightParamName(loraParamName: string) {
+  return loraParamName === 'lora' ? 'loraWeight' : loraParamName.replace(/^lora/, 'loraWeight');
+}
+
 function groupShotsByCategory(shots: StudioSessionShotSummary[]) {
   const groups = new Map<string, StudioSessionShotSummary[]>();
   for (const shot of shots) {
@@ -118,12 +126,58 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
+  const [showLoRADialog, setShowLoRADialog] = useState(false);
+  const [showDesktopLoraSelector, setShowDesktopLoraSelector] = useState(false);
+  const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
+  const [isLoadingLoras, setIsLoadingLoras] = useState(false);
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressAutoSaveRef = useRef(false);
 
   const studioImageModels = useMemo(() => getModelsByType('image').filter((model) => model.inputs.includes('text') && model.id !== 'upscale'), []);
   const selectedTemplate = useMemo(() => templates.find((template) => template.id === selectedTemplateId) ?? null, [templates, selectedTemplateId]);
   const selectedCharacter = useMemo(() => characters.find((character) => character.id === draft?.characterId) ?? null, [characters, draft?.characterId]);
+  const currentStudioModel = useMemo(() => getModelById(typeof draft?.generationSettings.modelId === 'string' ? draft.generationSettings.modelId : 'z-image') ?? getModelById('z-image') ?? studioImageModels[0], [draft?.generationSettings.modelId, studioImageModels]);
+  const studioLoraParamNames = useMemo(() => (currentStudioModel?.parameters || []).filter((param) => param.type === 'lora-selector').map((param) => param.name), [currentStudioModel]);
+  const isZImageStudioModel = currentStudioModel?.id === 'z-image';
+  const zImageAddCap = 8;
+  const zImageDynamicLoraParamNames = useMemo(() => {
+    if (!isZImageStudioModel) return [];
+    const names = new Set<string>(studioLoraParamNames);
+    Object.keys(draft?.generationSettings || {})
+      .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
+      .forEach((key) => names.add(key));
+    return Array.from(names).sort((a, b) => {
+      const getIndex = (value: string) => value === 'lora' ? 1 : Number.parseInt(value.slice(4), 10);
+      return getIndex(a) - getIndex(b);
+    });
+  }, [draft?.generationSettings, isZImageStudioModel, studioLoraParamNames]);
+  const selectedZImageLoraSlots = useMemo(() => zImageDynamicLoraParamNames
+    .map((paramName) => {
+      const path = String(draft?.generationSettings[paramName] ?? '').trim();
+      if (!path) return null;
+      const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
+      const weightParamName = getStudioSessionLoraWeightParamName(paramName);
+      const rawWeight = draft?.generationSettings[weightParamName];
+      const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+      return {
+        paramName,
+        path,
+        matchedLoRA,
+        weightParamName,
+        weight: Number.isFinite(weight) ? weight : 1,
+      };
+    })
+    .filter((slot): slot is NonNullable<typeof slot> => slot !== null), [availableLoras, draft?.generationSettings, zImageDynamicLoraParamNames]);
+  const nextEmptyZImageLoraParam = useMemo(() => {
+    if (!isZImageStudioModel) return null;
+    for (let i = 1; i <= zImageAddCap; i += 1) {
+      const name = i === 1 ? 'lora' : `lora${i}`;
+      if (!String(draft?.generationSettings[name] ?? '').trim()) {
+        return name;
+      }
+    }
+    return null;
+  }, [draft?.generationSettings, isZImageStudioModel]);
   const normalizedCanonicalState = useMemo(() => normalizeCanonicalState(selectedTemplate), [selectedTemplate]);
   const hasUnsavedDraftChanges = useMemo(() => !!selectedTemplate && !!draft && JSON.stringify(selectedTemplate.draftState) !== JSON.stringify(draft), [draft, selectedTemplate]);
   const hasUnsavedCanonicalChanges = useMemo(() => !!normalizedCanonicalState && !!draft && JSON.stringify(normalizedCanonicalState) !== JSON.stringify(draft), [draft, normalizedCanonicalState]);
@@ -165,6 +219,38 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
     }
   }, []);
 
+  const fetchAvailableLoras = useCallback(async () => {
+    if (!workspaceId || !currentStudioModel?.parameters.some((param) => param.type === 'lora-selector')) {
+      setAvailableLoras([]);
+      return;
+    }
+
+    setIsLoadingLoras(true);
+    try {
+      const response = await fetch(`/api/lora?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data?.success || !Array.isArray(data.loras)) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch LoRAs');
+      }
+      setAvailableLoras(data.loras as LoRAFile[]);
+      setDraft((current) => {
+        if (!current) return current;
+        const sanitized = sanitizeHydratedLoraParameterValues(
+          currentStudioModel.id,
+          current.generationSettings as Record<string, any>,
+          (data.loras as LoRAFile[]).map((lora) => lora.s3Path),
+        );
+        if (!sanitized.changed) return current;
+        return { ...current, generationSettings: sanitized.parameterValues || current.generationSettings };
+      });
+    } catch (error) {
+      setAvailableLoras([]);
+      setEditorMessage(toErrorMessage(error, 'Failed to fetch LoRAs'));
+    } finally {
+      setIsLoadingLoras(false);
+    }
+  }, [currentStudioModel, workspaceId]);
+
   useEffect(() => {
     if (!workspaceId) {
       setTemplates([]);
@@ -174,6 +260,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
       setTemplatesError(null);
       setEditorMessage(null);
       setAutoSaveState('idle');
+      setAvailableLoras([]);
       return;
     }
     void fetchTemplates(workspaceId);
@@ -181,11 +268,23 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   }, [fetchCharacters, fetchTemplates, workspaceId]);
 
   useEffect(() => {
+    if (currentStudioModel?.parameters.some((param) => param.type === 'lora-selector')) {
+      void fetchAvailableLoras();
+    } else {
+      setAvailableLoras([]);
+    }
+  }, [currentStudioModel, fetchAvailableLoras, showLoRADialog]);
+
+  useEffect(() => {
     suppressAutoSaveRef.current = true;
     setDraft(normalizeDraft(selectedTemplate));
     setEditorMessage(null);
     setAutoSaveState('idle');
   }, [selectedTemplateId, selectedTemplate]);
+
+  const updateDraftGenerationSettings = useCallback((patch: Record<string, unknown>) => {
+    setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, ...patch } } : current);
+  }, []);
 
   const persistDraft = useCallback(async (nextDraft: StudioSessionTemplateDraftState, templateId: string, mode: 'draft' | 'save') => {
     const response = await fetch(`/api/studio-sessions/templates/${templateId}`, {
@@ -397,13 +496,56 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                             <Label>Model</Label>
                             <select
                               value={typeof draft.generationSettings.modelId === 'string' ? draft.generationSettings.modelId : 'z-image'}
-                              onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, modelId: event.target.value || 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null } } : current)}
+                              onChange={(event) => updateDraftGenerationSettings({ modelId: event.target.value || 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null, lora: '', loraWeight: 1, lora2: '', loraWeight2: 1, lora3: '', loraWeight3: 1, lora4: '', loraWeight4: 1, lora5: '', loraWeight5: 1, lora6: '', loraWeight6: 1, lora7: '', loraWeight7: 1, lora8: '', loraWeight8: 1 })}
                               className="h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
                             >
                               {studioImageModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                             </select>
                           </label>
                         </div>
+                        {isZImageStudioModel ? (
+                          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white">LoRAs</div>
+                                <div className="text-xs text-white/50">Same template-level LoRA slots used for Create Image on Z-Image.</div>
+                              </div>
+                              <div className="text-xs text-white/50">{selectedZImageLoraSlots.length}/{zImageAddCap}</div>
+                            </div>
+                            {selectedZImageLoraSlots.length > 0 ? (
+                              <div className="space-y-3">
+                                {selectedZImageLoraSlots.map((slot) => (
+                                  <div key={slot.paramName} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                                    <div className="mb-3 flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="truncate text-sm font-medium text-white">{slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}</div>
+                                        <div className="mt-1 text-xs text-white/50">Weight {slot.weight.toFixed(2)}</div>
+                                      </div>
+                                      <Button size="sm" variant="outline" onClick={() => updateDraftGenerationSettings({ [slot.paramName]: '', [slot.weightParamName]: 1 })}>Remove</Button>
+                                    </div>
+                                    <label className="block">
+                                      <Label>Weight</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.1"
+                                        min={-10}
+                                        max={10}
+                                        value={draft.generationSettings[slot.weightParamName] ?? 1}
+                                        onChange={(event) => updateDraftGenerationSettings({ [slot.weightParamName]: Number(event.target.value) || 1 })}
+                                      />
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">No LoRAs selected yet.</div>
+                            )}
+                            <div className="flex gap-2">
+                              {nextEmptyZImageLoraParam ? <Button type="button" variant="outline" className="flex-1" onClick={() => setShowDesktopLoraSelector(true)}><Plus className="mr-2 h-4 w-4" />Add LoRA</Button> : null}
+                              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowLoRADialog(true)}>Manage LoRAs</Button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="rounded-lg border border-white/10 bg-black/10 p-4"><Label>Resolution policy</Label><div className="grid gap-4 md:grid-cols-3"><label className="block"><Label>Short side</Label><Input type="number" min={64} value={draft.resolutionPolicy.shortSidePx} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, shortSidePx: Math.max(64, Number(event.target.value) || 64) } } : current)} /></label><label className="block"><Label>Long side</Label><Input type="number" min={64} value={draft.resolutionPolicy.longSidePx} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, longSidePx: Math.max(64, Number(event.target.value) || 64) } } : current)} /></label><label className="block"><Label>Square source</Label><select value={draft.resolutionPolicy.squareSideSource} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, squareSideSource: event.target.value === 'long' ? 'long' : 'short' } } : current)} className="h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"><option value="short">Short side</option><option value="long">Long side</option></select></label></div></div>
                     </div>
@@ -415,6 +557,44 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
           </Card>
         </div>
       )}
+      <Dialog open={showDesktopLoraSelector} onOpenChange={setShowDesktopLoraSelector}>
+        <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#0b1020] p-0 text-white">
+          <DialogHeader className="border-b border-white/10 px-6 py-4">
+            <DialogTitle>Select LoRA</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[65vh] overflow-y-auto px-6 py-4">
+            <div className="space-y-2">
+              {isLoadingLoras ? (
+                <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/50">Loading LoRAs…</div>
+              ) : availableLoras.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/50">No LoRAs available yet.</div>
+              ) : (
+                availableLoras.map((lora) => (
+                  <button
+                    key={lora.id}
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-black/10 px-3 py-3 text-left hover:border-blue-500/40 hover:bg-blue-500/5"
+                    onClick={() => {
+                      if (!nextEmptyZImageLoraParam) return;
+                      updateDraftGenerationSettings({
+                        [nextEmptyZImageLoraParam]: lora.s3Path,
+                        [getStudioSessionLoraWeightParamName(nextEmptyZImageLoraParam)]: 1,
+                      });
+                      setShowDesktopLoraSelector(false);
+                    }}
+                  >
+                    <div className="min-w-0 pr-3">
+                      <div className="truncate text-sm font-medium text-white">{lora.fileName}</div>
+                      <div className="mt-1 truncate text-xs text-white/50">{lora.fileSize}</div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {showLoRADialog ? <LoRAManagementDialog open={showLoRADialog} onOpenChange={setShowLoRADialog} workspaceId={workspaceId || undefined} onLoRAUploaded={fetchAvailableLoras} /> : null}
     </div>
   );
 }
@@ -429,6 +609,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [assemblingRunId, setAssemblingRunId] = useState<string | null>(null);
   const [runningRunId, setRunningRunId] = useState<string | null>(null);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
   const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
   const [runningShotId, setRunningShotId] = useState<string | null>(null);
   const [selectingVersionShotId, setSelectingVersionShotId] = useState<string | null>(null);
@@ -677,6 +858,25 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [refreshSelectedRun, selectedRun]);
 
+  const handleDeleteRun = useCallback(async (runId: string) => {
+    setDeletingRunId(runId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/runs/${runId}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to delete run');
+      setInfoMessage('Run deleted.');
+      setVersionCursorByShot({});
+      setDetailShotId(null);
+      await fetchRuns();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to delete run'));
+    } finally {
+      setDeletingRunId(null);
+    }
+  }, [fetchRuns]);
+
   const openManualPicker = useCallback(async (shot: StudioSessionShotSummary) => {
     setPickerShot(shot);
     setPickerOpen(true);
@@ -803,7 +1003,10 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         <div>Snapshot: <span className="text-white/75">{run.poseLibraryVersion}</span></div>
                         <div>Slots: <span className="text-white/75">{totalSlots}</span></div>
                       </div>
-                      <div className="mt-3"><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run as StudioSessionRunDetailSummary)}>{isSelected ? 'Opened' : 'Open run'}</Button></div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run as StudioSessionRunDetailSummary)}>{isSelected ? 'Opened' : 'Open run'}</Button>
+                        <Button size="sm" variant="outline" onClick={() => void handleDeleteRun(run.id)} disabled={deletingRunId === run.id || (isSelected && (selectedRun?.activeJobCount ?? 0) > 0)}>{deletingRunId === run.id ? 'Deleting…' : 'Delete run'}</Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -831,6 +1034,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
                       <Button size="sm" onClick={() => void handleAssembleAll()} disabled={assemblingRunId === selectedRun.id || runningRunId === selectedRun.id}>{assemblingRunId === selectedRun.id ? 'Assembling…' : 'Assemble all'}</Button>
                       <Button size="sm" variant="outline" onClick={() => void handleRunAll()} disabled={runningRunId === selectedRun.id || assemblingRunId === selectedRun.id}>{runningRunId === selectedRun.id ? 'Launching…' : 'Run all'}</Button>
+                      <Button size="sm" variant="outline" onClick={() => void handleDeleteRun(selectedRun.id)} disabled={deletingRunId === selectedRun.id || (selectedRun.activeJobCount ?? 0) > 0}>{deletingRunId === selectedRun.id ? 'Deleting…' : 'Delete run'}</Button>
                     </div>
                   </div>
                   {infoMessage ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">{infoMessage}</div> : null}
@@ -901,7 +1105,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { hidden: !activeVersion.hidden })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.hidden ? 'Unhide' : 'Hide'}</Button> : null}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { rejected: !activeVersion.rejected })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.rejected ? 'Unreject' : 'Reject'}</Button> : null}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleAddVersionToGallery(shot.id, activeVersion.id)} disabled={addingVersionToGalleryId === activeVersion.id || shot.skipped}>{addingVersionToGalleryId === activeVersion.id ? 'Adding…' : 'Add to Gallery'}</Button> : null}
-                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId || shot.skipped}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
+                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId || shot.skipped}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Launch shot job' : 'Launch shot job (auto-pick)'}</Button>
                             </div>
                           </div>
                         );
@@ -943,6 +1147,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     <div className="flex flex-wrap gap-2">
                       {detailShot.skipped ? <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">Shot skipped</div> : null}
                       {detailSelectedVersion ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Selected version v{detailSelectedVersion.versionNumber}</div> : null}
+                      <Button size="sm" onClick={() => void handleRunShot(detailShot.id)} disabled={runningShotId === detailShot.id || !!detailShot.activeJobId || detailShot.skipped}>{detailShot.activeJobId ? 'Running…' : runningShotId === detailShot.id ? 'Launching…' : detailCurrentRevision ? 'Launch shot job' : 'Launch shot job (auto-pick)'}</Button>
                     </div>
                   </div>
                 </div>
