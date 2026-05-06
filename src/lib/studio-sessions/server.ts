@@ -687,7 +687,7 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
 
   const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
   const generationSettings = snapshot.generationSettings && typeof snapshot.generationSettings === 'object' ? snapshot.generationSettings as Record<string, unknown> : {};
-  const modelId = typeof generationSettings.modelId === 'string' && generationSettings.modelId.trim() ? generationSettings.modelId.trim() : 'flux-krea';
+  const modelId = typeof generationSettings.modelId === 'string' && generationSettings.modelId.trim() ? generationSettings.modelId.trim() : 'z-image';
   const model = getModelById(modelId);
   if (!model || model.type !== 'image') {
     throw new Error(`Unsupported Studio Session model: ${modelId}`);
@@ -718,6 +718,9 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
     ...generationSettings,
     width: typeof generationSettings.width === 'number' ? generationSettings.width : resolvedSize.width,
     height: typeof generationSettings.height === 'number' ? generationSettings.height : resolvedSize.height,
+    steps: typeof generationSettings.steps === 'number' ? generationSettings.steps : 9,
+    cfg: typeof generationSettings.cfg === 'number' ? generationSettings.cfg : 1,
+    seed: typeof generationSettings.seed === 'number' ? generationSettings.seed : -1,
     negativePrompt: typeof promptSnapshot?.negativePrompt === 'string' ? promptSnapshot.negativePrompt : (typeof generationSettings.negativePrompt === 'string' ? generationSettings.negativePrompt : ''),
   } as Record<string, unknown>;
 

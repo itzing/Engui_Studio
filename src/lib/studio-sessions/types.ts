@@ -31,6 +31,7 @@ export interface StudioSessionGenerationSettingsSnapshot {
   sampler?: string | null;
   steps?: number | null;
   cfgScale?: number | null;
+  cfg?: number | null;
   seed?: number | null;
   width?: number | null;
   height?: number | null;

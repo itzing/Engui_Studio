@@ -217,10 +217,15 @@ export function createDefaultStudioSessionTemplateDraftState(): StudioSessionTem
     hairstyleText: '',
     positivePrompt: '',
     negativePrompt: '',
-    generationSettings: {},
+    generationSettings: {
+      modelId: 'z-image',
+      steps: 9,
+      cfg: 1,
+      seed: -1,
+    },
     resolutionPolicy: {
-      shortSidePx: 832,
-      longSidePx: 1216,
+      shortSidePx: 1024,
+      longSidePx: 1536,
       squareSideSource: 'short',
     },
     categoryRules: getStudioSessionPoseCategories().map((category) => normalizeStudioSessionCategoryRule({ category, count: 5 })),
@@ -252,7 +257,26 @@ export function normalizeStudioSessionTemplateDraftState(input: unknown): Studio
     hairstyleText: typeof value.hairstyleText === 'string' ? value.hairstyleText.trim() : fallback.hairstyleText,
     positivePrompt: typeof value.positivePrompt === 'string' ? value.positivePrompt.trim() : fallback.positivePrompt,
     negativePrompt: typeof value.negativePrompt === 'string' ? value.negativePrompt.trim() : fallback.negativePrompt,
-    generationSettings: value.generationSettings && typeof value.generationSettings === 'object' ? value.generationSettings as Record<string, unknown> : fallback.generationSettings,
+    generationSettings: value.generationSettings && typeof value.generationSettings === 'object'
+      ? {
+          ...fallback.generationSettings,
+          ...(value.generationSettings as Record<string, unknown>),
+          modelId: typeof (value.generationSettings as Record<string, unknown>).modelId === 'string' && ((value.generationSettings as Record<string, unknown>).modelId as string).trim()
+            ? ((value.generationSettings as Record<string, unknown>).modelId as string).trim()
+            : fallback.generationSettings.modelId,
+          steps: typeof (value.generationSettings as Record<string, unknown>).steps === 'number'
+            ? Math.max(1, Math.floor((value.generationSettings as Record<string, unknown>).steps as number))
+            : fallback.generationSettings.steps,
+          cfg: typeof (value.generationSettings as Record<string, unknown>).cfg === 'number'
+            ? (value.generationSettings as Record<string, unknown>).cfg as number
+            : fallback.generationSettings.cfg,
+          seed: typeof (value.generationSettings as Record<string, unknown>).seed === 'number'
+            ? Math.floor((value.generationSettings as Record<string, unknown>).seed as number)
+            : fallback.generationSettings.seed,
+          sampler: null,
+          cfgScale: null,
+        }
+      : fallback.generationSettings,
     resolutionPolicy: {
       shortSidePx: typeof value.resolutionPolicy === 'object' && value.resolutionPolicy && typeof (value.resolutionPolicy as Record<string, unknown>).shortSidePx === 'number'
         ? Math.max(64, Math.floor((value.resolutionPolicy as Record<string, unknown>).shortSidePx as number))

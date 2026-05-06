@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStudioSessionResolution, deriveStudioSessionRunStatus, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
+import { createDefaultStudioSessionTemplateDraftState, deriveStudioSessionResolution, deriveStudioSessionRunStatus, normalizeStudioSessionTemplateDraftState, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
 import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import { getStudioSessionPosesByCategory } from '@/lib/studio-sessions/poseLibrary';
 
@@ -8,6 +8,15 @@ describe('studio session utils', () => {
     expect(deriveStudioSessionResolution({ shortSidePx: 832, longSidePx: 1216, squareSideSource: 'short' }, 'portrait')).toEqual({ width: 832, height: 1216, orientation: 'portrait' });
     expect(deriveStudioSessionResolution({ shortSidePx: 832, longSidePx: 1216, squareSideSource: 'short' }, 'landscape')).toEqual({ width: 1216, height: 832, orientation: 'landscape' });
     expect(deriveStudioSessionResolution({ shortSidePx: 832, longSidePx: 1216, squareSideSource: 'long' }, 'square')).toEqual({ width: 1216, height: 1216, orientation: 'square' });
+  });
+
+  it('uses constrained Studio Session generation defaults', () => {
+    const draft = createDefaultStudioSessionTemplateDraftState();
+    expect(draft.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1 });
+    expect(draft.resolutionPolicy).toEqual({ shortSidePx: 1024, longSidePx: 1536, squareSideSource: 'short' });
+
+    const normalized = normalizeStudioSessionTemplateDraftState({ generationSettings: { modelId: '', sampler: 'euler' } });
+    expect(normalized.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null });
   });
 
   it('treats skipped shots as non-blocking for completed status', () => {

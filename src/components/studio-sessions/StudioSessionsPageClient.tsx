@@ -20,6 +20,7 @@ import type {
 } from '@/lib/studio-sessions/types';
 import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import type { CharacterSummary } from '@/lib/characters/types';
+import { getModelsByType } from '@/lib/models/modelConfig';
 
 function EmptyWorkspaceState() {
   return (
@@ -100,6 +101,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressAutoSaveRef = useRef(false);
 
+  const studioImageModels = useMemo(() => getModelsByType('image').filter((model) => model.inputs.includes('text') && model.id !== 'upscale'), []);
   const selectedTemplate = useMemo(() => templates.find((template) => template.id === selectedTemplateId) ?? null, [templates, selectedTemplateId]);
   const selectedCharacter = useMemo(() => characters.find((character) => character.id === draft?.characterId) ?? null, [characters, draft?.characterId]);
   const hasUnsavedDraftChanges = useMemo(() => !!selectedTemplate && !!draft && JSON.stringify(selectedTemplate.draftState) !== JSON.stringify(draft), [draft, selectedTemplate]);
@@ -370,11 +372,16 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                       <div className="rounded-lg border border-white/10 bg-black/10 p-4">
                         <div className="mb-3 flex items-center justify-between gap-3"><div><Label>Generation settings</Label><div className="text-xs text-white/50">Template-level defaults only. Draft autosave keeps them separate from canonical Save.</div></div></div>
                         <div className="grid gap-4 md:grid-cols-2">
-                          <label className="block"><Label>Model ID</Label><Input value={typeof draft.generationSettings.modelId === 'string' ? draft.generationSettings.modelId : ''} onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, modelId: event.target.value || null } } : current)} placeholder="e.g. flux-dev" /></label>
-                          <label className="block"><Label>Sampler</Label><Input value={typeof draft.generationSettings.sampler === 'string' ? draft.generationSettings.sampler : ''} onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, sampler: event.target.value || null } } : current)} placeholder="e.g. euler" /></label>
-                          <label className="block"><Label>Steps</Label><Input type="number" min={1} value={typeof draft.generationSettings.steps === 'number' ? draft.generationSettings.steps : ''} onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, steps: event.target.value ? Number(event.target.value) : null } } : current)} placeholder="28" /></label>
-                          <label className="block"><Label>CFG scale</Label><Input type="number" step="0.1" min={0} value={typeof draft.generationSettings.cfgScale === 'number' ? draft.generationSettings.cfgScale : ''} onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, cfgScale: event.target.value ? Number(event.target.value) : null } } : current)} placeholder="4.5" /></label>
-                          <label className="block"><Label>Seed</Label><Input type="number" value={typeof draft.generationSettings.seed === 'number' ? draft.generationSettings.seed : ''} onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, seed: event.target.value ? Number(event.target.value) : null } } : current)} placeholder="Optional" /></label>
+                          <label className="block">
+                            <Label>Model</Label>
+                            <select
+                              value={typeof draft.generationSettings.modelId === 'string' ? draft.generationSettings.modelId : 'z-image'}
+                              onChange={(event) => setDraft((current) => current ? { ...current, generationSettings: { ...current.generationSettings, modelId: event.target.value || 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null } } : current)}
+                              className="h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {studioImageModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                            </select>
+                          </label>
                         </div>
                       </div>
                       <div className="rounded-lg border border-white/10 bg-black/10 p-4"><Label>Resolution policy</Label><div className="grid gap-4 md:grid-cols-3"><label className="block"><Label>Short side</Label><Input type="number" min={64} value={draft.resolutionPolicy.shortSidePx} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, shortSidePx: Math.max(64, Number(event.target.value) || 64) } } : current)} /></label><label className="block"><Label>Long side</Label><Input type="number" min={64} value={draft.resolutionPolicy.longSidePx} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, longSidePx: Math.max(64, Number(event.target.value) || 64) } } : current)} /></label><label className="block"><Label>Square source</Label><select value={draft.resolutionPolicy.squareSideSource} onChange={(event) => setDraft((current) => current ? { ...current, resolutionPolicy: { ...current.resolutionPolicy, squareSideSource: event.target.value === 'long' ? 'long' : 'short' } } : current)} className="h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"><option value="short">Short side</option><option value="long">Long side</option></select></label></div></div>
