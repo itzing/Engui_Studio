@@ -378,6 +378,7 @@ export function toStudioSessionShotRevisionSummary(record: PersistedShotRevision
       negativePrompt: '',
       pieces: {
         character: '',
+        characterAge: '',
         environment: '',
         outfit: '',
         hairstyle: '',

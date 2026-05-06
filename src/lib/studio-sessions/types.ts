@@ -115,6 +115,11 @@ export interface StudioSessionShotSummary {
   autoAssignmentHistory: string[];
   activeJobId?: string | null;
   activeJobStatus?: string | null;
+  latestJobId?: string | null;
+  latestJobStatus?: string | null;
+  latestJobExecutionMs?: number | null;
+  latestJobCreatedAt?: string | null;
+  latestJobCompletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -171,6 +176,7 @@ export interface StudioSessionRunSummary {
 export interface StudioSessionRunDetailSummary extends StudioSessionRunSummary {
   exhaustedCategories?: string[];
   activeJobCount?: number;
+  totalExecutionMs?: number;
 }
 
 export interface StudioSessionRunAssembleResult {

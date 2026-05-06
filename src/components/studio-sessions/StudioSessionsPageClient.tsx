@@ -113,6 +113,22 @@ function humanizeCategory(category: string) {
   return category.split(/[_\s-]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
+function humanizeJobStatus(status: string | null | undefined) {
+  if (!status) return '—';
+  return status.replace(/_/g, ' ');
+}
+
+function formatDuration(ms: number | null | undefined) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '—';
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: string | null; onRunCreated: () => void; onOpenRuns: () => void; }) {
   const [templates, setTemplates] = useState<StudioSessionTemplateSummary[]>([]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
@@ -652,9 +668,9 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [workspaceId]);
 
-  const fetchRunDetail = useCallback(async (runId: string) => {
-    setLoadingDetail(true);
-    setError(null);
+  const fetchRunDetail = useCallback(async (runId: string, options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoadingDetail(true);
+    if (!options.silent) setError(null);
     try {
       const response = await fetch(`/api/studio-sessions/runs/${runId}`, { cache: 'no-store' });
       const data = await response.json();
@@ -664,12 +680,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setRevisions(Array.isArray(data.revisions) ? data.revisions as StudioSessionShotRevisionSummary[] : []);
       setVersions(Array.isArray(data.versions) ? data.versions as StudioSessionShotVersionSummary[] : []);
     } catch (error) {
-      setShots([]);
-      setRevisions([]);
-      setVersions([]);
-      setError(toErrorMessage(error, 'Failed to fetch run detail'));
+      if (!options.silent) {
+        setShots([]);
+        setRevisions([]);
+        setVersions([]);
+        setError(toErrorMessage(error, 'Failed to fetch run detail'));
+      }
     } finally {
-      setLoadingDetail(false);
+      if (!options.silent) setLoadingDetail(false);
     }
   }, []);
 
@@ -938,6 +956,18 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     if (selectedRun?.id) void fetchRunDetail(selectedRun.id);
   }, [fetchRunDetail, selectedRun?.id]);
 
+  useEffect(() => {
+    if (!selectedRun?.id) return;
+    const hasActiveJobs = (selectedRun.activeJobCount ?? 0) > 0 || shots.some((shot) => !!shot.activeJobId);
+    if (!hasActiveJobs) return;
+
+    const timer = window.setInterval(() => {
+      void fetchRunDetail(selectedRun.id, { silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [fetchRunDetail, selectedRun?.activeJobCount, selectedRun?.id, shots]);
+
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
   const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const versionsByShot = useMemo(() => {
@@ -1034,6 +1064,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     <div className="flex flex-wrap gap-2 text-xs">
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Status {selectedRun.status}</div>
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
+                      <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Run time {formatDuration(selectedRun.totalExecutionMs)}</div>
                       <Button size="sm" onClick={() => void handleAssembleAll()} disabled={assemblingRunId === selectedRun.id || runningRunId === selectedRun.id}>{assemblingRunId === selectedRun.id ? 'Assembling…' : 'Assemble all'}</Button>
                       <Button size="sm" variant="outline" onClick={() => void handleRunAll()} disabled={runningRunId === selectedRun.id || assemblingRunId === selectedRun.id}>{runningRunId === selectedRun.id ? 'Launching…' : 'Run all'}</Button>
                       <Button size="sm" variant="outline" onClick={() => void handleDeleteRun(selectedRun.id)} disabled={deletingRunId === selectedRun.id || (selectedRun.activeJobCount ?? 0) > 0}>{deletingRunId === selectedRun.id ? 'Deleting…' : 'Delete run'}</Button>
@@ -1069,13 +1100,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                   <>
                                     <div className="mt-3 text-sm font-medium text-emerald-200">{revision.poseSnapshot.name}</div>
                                     <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · rev {revision.revisionNumber}</div>
-                                    {shot.activeJobId ? <div className="mt-2 text-xs text-sky-300">Active job: {shot.activeJobStatus} · {shot.activeJobId}</div> : null}
+                                    {shot.latestJobId ? <div className={`mt-2 text-xs ${shot.activeJobId ? 'text-sky-300' : shot.latestJobStatus === 'failed' ? 'text-red-300' : shot.latestJobStatus === 'completed' ? 'text-emerald-300' : 'text-white/60'}`}>Job: {humanizeJobStatus(shot.latestJobStatus)} · {shot.latestJobId}</div> : null}
+                                    {typeof shot.latestJobExecutionMs === 'number' ? <div className="mt-1 text-xs text-white/55">Shot time: {formatDuration(shot.latestJobExecutionMs)}</div> : null}
                                     {selectedVersion ? <div className="mt-2 text-xs text-emerald-300">Selected version v{selectedVersion.versionNumber}</div> : null}
                                     {activeVersion && activeVersion.id !== selectedVersion?.id ? <div className="mt-1 text-xs text-sky-300">Browsing version v{activeVersion.versionNumber}</div> : null}
                                   </>
                                 ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
                               </div>
-                              <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.skipped ? 'skipped' : shot.status}</div>
+                              <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.skipped ? 'skipped' : shot.activeJobStatus ? humanizeJobStatus(shot.activeJobStatus) : shot.latestJobStatus === 'failed' ? 'job failed' : shot.status}</div>
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-white/55">
                               <div>{shotVersions.length > 0 ? `Version ${Math.min((versionCursorByShot[shot.id] ?? 0) + 1, shotVersions.length)} of ${shotVersions.length}` : 'No visible versions yet'}</div>
@@ -1148,6 +1180,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {detailShot.skipped ? <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">Shot skipped</div> : null}
+                      {detailShot.latestJobStatus ? <div className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs text-sky-200">Job {humanizeJobStatus(detailShot.latestJobStatus)}</div> : null}
+                      {typeof detailShot.latestJobExecutionMs === 'number' ? <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/70">Time {formatDuration(detailShot.latestJobExecutionMs)}</div> : null}
                       {detailSelectedVersion ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Selected version v{detailSelectedVersion.versionNumber}</div> : null}
                       <Button size="sm" onClick={() => void handleRunShot(detailShot.id)} disabled={runningShotId === detailShot.id || !!detailShot.activeJobId || detailShot.skipped}>{detailShot.activeJobId ? 'Running…' : runningShotId === detailShot.id ? 'Launching…' : detailCurrentRevision ? 'Launch shot job' : 'Launch shot job (auto-pick)'}</Button>
                     </div>

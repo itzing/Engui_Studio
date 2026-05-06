@@ -448,26 +448,28 @@ async function collectRunExhaustedCategories(run: StudioSessionRunSummary, shots
   return Array.from(exhausted).sort();
 }
 
-async function collectStudioSessionActiveJobs(runId: string) {
+async function collectStudioSessionLatestJobs(runId: string) {
   const jobs = await prisma.job.findMany({
     where: {
-      OR: [
-        { status: { in: Array.from(RUNNING_JOB_STATUSES) } },
-        { status: 'queueing_up' },
-      ],
       options: { contains: `"runId":"${runId}"` },
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  const byShotId = new Map<string, { id: string; status: string }>();
+  const byShotId = new Map<string, { id: string; status: string; executionMs: number | null; createdAt: string; completedAt: string | null }>();
   for (const job of jobs) {
     if (typeof job.options !== 'string') continue;
     try {
       const parsed = JSON.parse(job.options);
       const shotId = parsed?.studioSessionContext?.shotId;
       if (typeof shotId === 'string' && !byShotId.has(shotId)) {
-        byShotId.set(shotId, { id: job.id, status: job.status });
+        byShotId.set(shotId, {
+          id: job.id,
+          status: job.status,
+          executionMs: typeof job.executionMs === 'number' && Number.isFinite(job.executionMs) ? job.executionMs : null,
+          createdAt: job.createdAt.toISOString(),
+          completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+        });
       }
     } catch {
       continue;
@@ -535,21 +537,34 @@ export async function getStudioSessionRun(runId: string) {
     orderBy: [{ shotId: 'asc' }, { createdAt: 'desc' }],
   });
   const exhaustedCategories = await collectRunExhaustedCategories(run, shots);
-  const activeJobs = await collectStudioSessionActiveJobs(runId);
+  const latestJobs = await collectStudioSessionLatestJobs(runId);
+  const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
+  const activeJobCount = Array.from(latestJobs.values()).filter((job) => activeStatuses.has(job.status)).length;
+  const totalExecutionMs = versions.reduce((sum, version) => {
+    const value = parseJsonObject(version.generationSnapshotJson).executionMs;
+    return sum + (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  }, 0);
 
   return {
     run: {
       ...run,
       exhaustedCategories,
-      activeJobCount: activeJobs.size,
+      activeJobCount,
+      totalExecutionMs,
     } satisfies StudioSessionRunDetailSummary,
     shots: shots.map((shot) => {
       const summary = toStudioSessionShotSummary(shot);
-      const activeJob = activeJobs.get(shot.id);
+      const latestJob = latestJobs.get(shot.id);
+      const isActive = latestJob ? activeStatuses.has(latestJob.status) : false;
       return {
         ...summary,
-        activeJobId: activeJob?.id ?? null,
-        activeJobStatus: activeJob?.status ?? null,
+        activeJobId: isActive ? latestJob?.id ?? null : null,
+        activeJobStatus: isActive ? latestJob?.status ?? null : null,
+        latestJobId: latestJob?.id ?? null,
+        latestJobStatus: latestJob?.status ?? null,
+        latestJobExecutionMs: latestJob?.executionMs ?? null,
+        latestJobCreatedAt: latestJob?.createdAt ?? null,
+        latestJobCompletedAt: latestJob?.completedAt ?? null,
       };
     }),
     revisions: revisions.map(toStudioSessionShotRevisionSummary),
@@ -1058,6 +1073,8 @@ export async function materializeStudioSessionCompletedJob(jobId: string) {
         modelId: job.modelId || null,
         endpointId: job.endpointId || null,
         sourceJobId: job.id,
+        executionMs: typeof job.executionMs === 'number' && Number.isFinite(job.executionMs) ? job.executionMs : null,
+        completedAt: job.completedAt ? job.completedAt.toISOString() : null,
       }),
     },
   });
