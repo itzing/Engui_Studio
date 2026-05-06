@@ -476,7 +476,49 @@ async function collectStudioSessionActiveJobs(runId: string) {
   return byShotId;
 }
 
+async function reconcileStudioSessionRunCompletedJobs(runId: string) {
+  const jobs = await prisma.job.findMany({
+    where: {
+      options: { contains: `"runId":"${runId}"` },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const latestByShotId = new Map<string, { id: string; status: string }>();
+  for (const job of jobs) {
+    if (typeof job.options !== 'string') continue;
+    try {
+      const parsed = JSON.parse(job.options);
+      const shotId = parsed?.studioSessionContext?.shotId;
+      if (typeof shotId === 'string' && !latestByShotId.has(shotId)) {
+        latestByShotId.set(shotId, { id: job.id, status: job.status });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  for (const [shotId, job] of latestByShotId) {
+    if (job.status === 'completed') {
+      await materializeStudioSessionCompletedJob(job.id);
+      continue;
+    }
+
+    if (job.status === 'failed') {
+      const shot = await prisma.studioSessionShot.findUnique({ where: { id: shotId } });
+      if (!shot) continue;
+      await prisma.studioSessionShot.update({
+        where: { id: shotId },
+        data: {
+          status: shot.currentRevisionId ? 'needs_review' : 'unassigned',
+        },
+      });
+    }
+  }
+}
+
 export async function getStudioSessionRun(runId: string) {
+  await reconcileStudioSessionRunCompletedJobs(runId);
   const run = await syncStudioSessionRunStatus(runId);
   if (!run) return null;
 
@@ -980,13 +1022,17 @@ export async function materializeStudioSessionCompletedJob(jobId: string) {
   if (localPath && fs.existsSync(localPath)) {
     const bytes = fs.readFileSync(localPath);
     contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
-    const ext = getExtensionFromUrl(outputUrl);
-    const dir = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', String(context.workspaceId), String(context.runId), String(context.shotId));
-    fs.mkdirSync(dir, { recursive: true });
-    const fileName = `${contentHash}${ext}`;
-    const dest = path.join(dir, fileName);
-    if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
-    originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
+    try {
+      const ext = getExtensionFromUrl(outputUrl);
+      const dir = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', String(context.workspaceId), String(context.runId), String(context.shotId));
+      fs.mkdirSync(dir, { recursive: true });
+      const fileName = `${contentHash}${ext}`;
+      const dest = path.join(dir, fileName);
+      if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+      originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
+    } catch (error) {
+      console.warn('Studio Session materialization fallback: unable to copy output into namespaced directory, using original output URL instead.', error);
+    }
   }
 
   const latest = await prisma.studioSessionShotVersion.findFirst({
