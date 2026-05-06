@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon, HandRaisedIcon, RectangleGroupIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { useRouter } from 'next/navigation';
+import { CogIcon, FolderOpenIcon, UserGroupIcon, SparklesIcon, XMarkIcon, SwatchIcon, HandRaisedIcon, RectangleGroupIcon, PencilSquareIcon, RectangleStackIcon } from '@heroicons/react/24/outline';
 import VideoGenerationForm from '../forms/VideoGenerationForm';
 import ImageGenerationForm from '../forms/ImageGenerationForm';
 import AudioGenerationForm from '../forms/AudioGenerationForm';
@@ -39,6 +40,7 @@ const YoutubeIcon = ({ className }: { className?: string }) => (
 );
 
 export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
+    const router = useRouter();
     const [generationMode, setGenerationMode] = useState<GenerationMode>('image');
     const [formRenderKey, setFormRenderKey] = useState(0);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -144,7 +146,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                 </div>
 
                 <div className={mobile ? 'flex-1 overflow-y-auto p-3 pb-24 custom-scrollbar' : 'flex-1 overflow-y-auto p-4 custom-scrollbar'}>
-                    <div className={`grid ${mobile ? 'grid-cols-3' : 'grid-cols-5'} gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
+                    <div className={`grid ${mobile ? 'grid-cols-3' : 'grid-cols-6'} gap-1 p-1 bg-muted/20 rounded-lg mb-4 ${mobile ? 'sticky top-0 z-10 backdrop-blur-sm bg-background/95' : ''}`}>
                         <button
                             type="button"
                             className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200 bg-muted text-foreground shadow-sm"
@@ -208,6 +210,14 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                                 >
                                     <PencilSquareIcon className="w-4 h-4" />
                                     Prompts
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => router.push('/studio-sessions')}
+                                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium text-muted-foreground transition-all duration-200 hover:bg-muted/50 hover:text-foreground"
+                                >
+                                    <RectangleStackIcon className="w-4 h-4" />
+                                    Studio
                                 </button>
                             </>
                         )}
