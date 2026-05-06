@@ -34,8 +34,8 @@ interface LoRAPair {
 export interface LoRAPairSelectorProps {
   highValue: string; // S3 path of selected high LoRA
   lowValue: string; // S3 path of selected low LoRA
-  highWeight: number; // Weight for high LoRA (0-1)
-  lowWeight: number; // Weight for low LoRA (0-1)
+  highWeight: number; // Weight for high LoRA (-5 to 5)
+  lowWeight: number; // Weight for low LoRA (-5 to 5)
   onHighChange: (value: string) => void;
   onLowChange: (value: string) => void;
   onHighWeightChange: (weight: number) => void;
@@ -216,13 +216,13 @@ export function LoRAPairSelector({
                     <Input
                       id="high-weight"
                       type="number"
-                      min="0"
-                      max="1"
-                      step="0.1"
+                      min="-5"
+                      max="5"
+                      step="0.05"
                       value={highWeight}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= 0 && val <= 1) {
+                        if (!isNaN(val) && val >= -5 && val <= 5) {
                           onHighWeightChange(val);
                         }
                       }}
@@ -253,13 +253,13 @@ export function LoRAPairSelector({
                     <Input
                       id="low-weight"
                       type="number"
-                      min="0"
-                      max="1"
-                      step="0.1"
+                      min="-5"
+                      max="5"
+                      step="0.05"
                       value={lowWeight}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= 0 && val <= 1) {
+                        if (!isNaN(val) && val >= -5 && val <= 5) {
                           onLowWeightChange(val);
                         }
                       }}
