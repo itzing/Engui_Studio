@@ -403,6 +403,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
   const [runningShotId, setRunningShotId] = useState<string | null>(null);
   const [selectingVersionShotId, setSelectingVersionShotId] = useState<string | null>(null);
+  const [reviewStateVersionId, setReviewStateVersionId] = useState<string | null>(null);
   const [versionCursorByShot, setVersionCursorByShot] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
@@ -548,6 +549,27 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [refreshSelectedRun]);
 
+  const handleUpdateVersionReviewState = useCallback(async (shotId: string, versionId: string, patch: { hidden?: boolean; rejected?: boolean }) => {
+    setReviewStateVersionId(versionId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/versions/${versionId}/review-state`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to update version state');
+      setInfoMessage('Version review state updated.');
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to update version state'));
+    } finally {
+      setReviewStateVersionId(null);
+    }
+  }, [refreshSelectedRun]);
+
   const handleRunShot = useCallback(async (shotId: string) => {
     setRunningShotId(shotId);
     setError(null);
@@ -646,7 +668,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const versionsByShot = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary[]>();
-    for (const version of versions) {
+    for (const version of versions.filter((item) => !item.hidden && !item.rejected)) {
       const current = map.get(version.shotId) ?? [];
       current.push(version);
       map.set(version.shotId, current);
@@ -667,7 +689,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     return map;
   }, [shots, versionsByShot]);
   const detailShot = useMemo(() => shots.find((shot) => shot.id === detailShotId) ?? null, [detailShotId, shots]);
-  const detailShotVersions = useMemo(() => detailShot ? (versionsByShot.get(detailShot.id) ?? []) : [], [detailShot, versionsByShot]);
+  const detailShotVersions = useMemo(() => detailShot ? versions.filter((version) => version.shotId === detailShot.id).sort((left, right) => right.versionNumber - left.versionNumber || right.createdAt.localeCompare(left.createdAt)) : [], [detailShot, versions]);
   const detailSelectedVersion = useMemo(() => detailShot ? selectedVersionMap.get(detailShot.id) ?? null : null, [detailShot, selectedVersionMap]);
   const detailCurrentRevision = useMemo(() => detailShot?.currentRevisionId ? revisions.find((revision) => revision.id === detailShot.currentRevisionId) ?? null : null, [detailShot, revisions]);
   const detailCurrentRevisionVersions = useMemo(() => detailCurrentRevision ? detailShotVersions.filter((version) => version.revisionId === detailCurrentRevision.id) : [], [detailCurrentRevision, detailShotVersions]);
@@ -757,6 +779,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                       {group.shots.map((shot) => {
                         const revision = revisionMap.get(shot.id);
                         const shotVersions = versionsByShot.get(shot.id) ?? [];
+                        const allShotVersions = versions.filter((version) => version.shotId === shot.id);
                         const selectedVersion = selectedVersionMap.get(shot.id);
                         const activeVersion = shotVersions.length > 0
                           ? shotVersions[Math.min(versionCursorByShot[shot.id] ?? 0, shotVersions.length - 1)]
@@ -782,7 +805,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-white/55">
-                              <div>{shotVersions.length > 0 ? `Version ${Math.min((versionCursorByShot[shot.id] ?? 0) + 1, shotVersions.length)} of ${shotVersions.length}` : 'No versions yet'}</div>
+                              <div>{shotVersions.length > 0 ? `Version ${Math.min((versionCursorByShot[shot.id] ?? 0) + 1, shotVersions.length)} of ${shotVersions.length}` : 'No visible versions yet'}</div>
+                              {allShotVersions.some((version) => version.hidden || version.rejected) ? <div className="text-amber-300">{allShotVersions.filter((version) => version.hidden || version.rejected).length} hidden/rejected in history</div> : null}
                               {shotVersions.length > 1 ? (
                                 <div className="flex gap-2">
                                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setVersionCursorByShot((current) => ({ ...current, [shot.id]: Math.max((current[shot.id] ?? 0) - 1, 0) }))}>Prev</Button>
@@ -806,6 +830,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
                               {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
                               {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { hidden: !activeVersion.hidden })} disabled={reviewStateVersionId === activeVersion.id}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.hidden ? 'Unhide' : 'Hide'}</Button> : null}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { rejected: !activeVersion.rejected })} disabled={reviewStateVersionId === activeVersion.id}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.rejected ? 'Unreject' : 'Reject'}</Button> : null}
                               <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
                             </div>
                           </div>
@@ -854,7 +880,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                   {detailCurrentRevisionVersions.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">No versions have been materialized for the current revision yet.</div> : (
                     <div className="grid gap-4 xl:grid-cols-2">
                       {detailCurrentRevisionVersions.map((version) => (
-                        <div key={version.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+                        <div key={version.id} className={`overflow-hidden rounded-xl border ${version.hidden || version.rejected ? 'border-amber-500/30 bg-amber-500/5 opacity-80' : 'border-white/10 bg-white/[0.03]'}`}>
                           {version.previewUrl ? <img src={version.previewUrl} alt={`${detailShot.label} version ${version.versionNumber}`} className="aspect-[4/5] w-full object-cover" /> : <div className="aspect-[4/5] bg-black/20" />}
                           <div className="space-y-3 p-4">
                             <div className="flex items-start justify-between gap-3">
@@ -862,11 +888,17 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                 <div className="font-medium text-white">Version {version.versionNumber}</div>
                                 <div className="mt-1 text-xs text-white/50">Same revision · source job {version.sourceJobId ?? '—'}</div>
                               </div>
-                              {detailShot.selectionVersionId === version.id ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">Selected</div> : null}
+                              <div className="flex flex-wrap gap-2">
+                                {detailShot.selectionVersionId === version.id ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">Selected</div> : null}
+                                {version.hidden ? <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200">Hidden</div> : null}
+                                {version.rejected ? <div className="rounded-full border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-200">Rejected</div> : null}
+                              </div>
                             </div>
                             <div className="text-xs text-white/60">This is a version change inside the same pose revision.</div>
                             <div className="flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id || version.hidden || version.rejected}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { hidden: !version.hidden })} disabled={reviewStateVersionId === version.id}>{reviewStateVersionId === version.id ? 'Saving…' : version.hidden ? 'Unhide' : 'Hide'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { rejected: !version.rejected })} disabled={reviewStateVersionId === version.id}>{reviewStateVersionId === version.id ? 'Saving…' : version.rejected ? 'Unreject' : 'Reject'}</Button>
                             </div>
                           </div>
                         </div>
@@ -887,6 +919,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                       <div className="mt-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65">
                         <div>Revision change: different pose snapshot/history branch.</div>
                         <div className="mt-1">Versions under this revision: {versions.length}</div>
+                        {versions.some((version) => version.hidden || version.rejected) ? <div className="mt-1 text-amber-300">Contains hidden/rejected results in history.</div> : null}
                       </div>
                       {versions[0]?.previewUrl ? <img src={versions[0].previewUrl} alt={`${revision.poseSnapshot.name} latest version`} className="mt-3 aspect-[4/5] w-full rounded-lg object-cover" /> : null}
                     </div>

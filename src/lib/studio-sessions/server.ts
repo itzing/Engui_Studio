@@ -772,6 +772,46 @@ export async function runAllStudioSessionShots(runId: string) {
   return { launched, skippedShotIds };
 }
 
+async function syncStudioSessionShotSelectionAfterVersionReviewState(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: shotId } });
+  if (!shot) return null;
+
+  const selectedVersion = shot.selectionVersionId
+    ? await prisma.studioSessionShotVersion.findUnique({ where: { id: shot.selectionVersionId } })
+    : null;
+
+  const shouldClearSelection = !selectedVersion || selectedVersion.hidden || selectedVersion.rejected || selectedVersion.status !== 'completed';
+  await prisma.studioSessionShot.update({
+    where: { id: shotId },
+    data: {
+      selectionVersionId: shouldClearSelection ? null : shot.selectionVersionId,
+      status: shouldClearSelection ? 'needs_review' : 'completed',
+    },
+  });
+  await syncStudioSessionRunStatus(shot.runId);
+  return shouldClearSelection;
+}
+
+export async function updateStudioSessionShotVersionReviewState(input: { shotId: string; versionId: string; hidden?: boolean; rejected?: boolean }) {
+  const version = await prisma.studioSessionShotVersion.findFirst({
+    where: {
+      id: input.versionId,
+      shotId: input.shotId,
+    },
+  });
+  if (!version) return null;
+
+  const updated = await prisma.studioSessionShotVersion.update({
+    where: { id: version.id },
+    data: {
+      ...(input.hidden !== undefined ? { hidden: input.hidden } : {}),
+      ...(input.rejected !== undefined ? { rejected: input.rejected } : {}),
+    },
+  });
+  await syncStudioSessionShotSelectionAfterVersionReviewState(input.shotId);
+  return updated;
+}
+
 export async function selectStudioSessionShotVersion(input: { shotId: string; versionId: string }) {
   const shot = await prisma.studioSessionShot.findUnique({ where: { id: input.shotId } });
   if (!shot) return null;
