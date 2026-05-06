@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mockPrisma, queueGalleryEnrichmentMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
   mockPrisma: {
     job: { findUnique: vi.fn() },
-    galleryAsset: { findUnique: vi.fn(), create: vi.fn() },
+    galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
   },
   queueGalleryEnrichmentMock: vi.fn(),
   queueGalleryDerivativesMock: vi.fn(),
@@ -32,7 +32,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'job-1', workspaceId: 'ws-1', type: 'image', resultUrl: '/generations/test.png', options: null, thumbnailUrl: null,
     });
-    mockPrisma.galleryAsset.findUnique.mockResolvedValue({ id: 'asset-existing', workspaceId: 'ws-1' });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue({ id: 'asset-existing', workspaceId: 'ws-1' });
 
     const response = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
       method: 'POST',
@@ -51,7 +51,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
       id: 'job-1', workspaceId: 'ws-1', type: 'image', resultUrl: '/generations/test.png', options: JSON.stringify({ stylePreset: 'studio' }), thumbnailUrl: '/thumb.png',
       prompt: 'portrait client-a', modelId: 'flux-dev', endpointId: 'endpoint-1',
     });
-    mockPrisma.galleryAsset.findUnique.mockResolvedValue(null);
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
     mockPrisma.galleryAsset.create.mockResolvedValue({ id: 'asset-new', enrichmentStatus: 'pending' });
 
     const response = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {

@@ -42,7 +42,7 @@ function buildState(overrides: Record<string, any> = {}) {
         { name: 'height', default: 1536 },
       ],
     },
-    promptSummary: 'A cinematic portrait prompt',
+    prompt: 'A cinematic portrait prompt',
     previewUrl: '',
     previewUrl2: '',
     primaryImageVisible: false,
@@ -97,8 +97,8 @@ describe('MobileCreateHome prompt draft tile', () => {
     }));
 
     expect(screen.getByTestId('mobile-prompt-draft-title').textContent).toBe('Not selected');
-    expect(screen.getByText('Prompt editor')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /open focused prompt editor/i })).toBeTruthy();
+    expect(screen.getByText(/Prompt:/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /open prompt editor/i })).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('mobile-prompt-draft-tile'));
 
@@ -120,7 +120,7 @@ describe('MobileCreateHome prompt draft tile', () => {
     }));
 
     expect(screen.getByTestId('mobile-prompt-draft-title').textContent).toBe('Scene Draft');
-    expect(screen.queryByText('Prompt editor')).toBeNull();
-    expect(screen.queryByRole('link', { name: /open focused prompt editor/i })).toBeNull();
+    expect(screen.queryByText(/Prompt:/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: /open prompt editor/i })).toBeNull();
   });
 });

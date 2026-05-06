@@ -20,6 +20,9 @@ const {
       create: vi.fn(),
       update: vi.fn(),
     },
+    workspace: {
+      findFirst: vi.fn(),
+    },
   },
   mockSubmitJob: vi.fn(),
   mockGetSettings: vi.fn(),
@@ -39,6 +42,10 @@ vi.mock('@prisma/client', () => ({
   PrismaClient: function PrismaClient() {
     return mockPrisma as any;
   },
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: mockPrisma,
 }));
 
 vi.mock('@/lib/runpodService', () => ({
@@ -118,6 +125,8 @@ describe('POST /api/generate secure RunPod flow', () => {
       ],
     });
 
+    mockPrisma.workspace.findFirst.mockResolvedValue({ id: 'workspace-default' });
+
     mockPrisma.job.create.mockImplementation(async ({ data }: any) => ({
       id: data.id,
       ...data,
@@ -151,6 +160,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     }));
     mockBuildOutputFileName.mockReturnValue('result.bin');
     mockSubmitJob.mockResolvedValue('rp-job-1');
+    mockUuid.mockReset();
     mockUuid
       .mockReturnValueOnce('file-uuid')
       .mockReturnValueOnce('job-1')
@@ -171,6 +181,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     const formData = new FormData();
     formData.set('modelId', 'wan22');
     formData.set('prompt', 'test prompt');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
 
     const response = await POST(buildRequest(formData) as any);
     const json = await response.json();
@@ -204,6 +215,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     const formData = new FormData();
     formData.set('modelId', 'wan22');
     formData.set('prompt', 'test prompt');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
 
     const response = await POST(buildRequest(formData) as any);
     const json = await response.json();
