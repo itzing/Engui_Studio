@@ -772,6 +772,32 @@ export async function runAllStudioSessionShots(runId: string) {
   return { launched, skippedShotIds };
 }
 
+export async function selectStudioSessionShotVersion(input: { shotId: string; versionId: string }) {
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: input.shotId } });
+  if (!shot) return null;
+
+  const version = await prisma.studioSessionShotVersion.findFirst({
+    where: {
+      id: input.versionId,
+      shotId: input.shotId,
+      hidden: false,
+      rejected: false,
+      status: 'completed',
+    },
+  });
+  if (!version) return null;
+
+  await prisma.studioSessionShot.update({
+    where: { id: shot.id },
+    data: {
+      selectionVersionId: version.id,
+      status: 'completed',
+    },
+  });
+  await syncStudioSessionRunStatus(shot.runId);
+  return version;
+}
+
 export async function materializeStudioSessionCompletedJob(jobId: string) {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job || job.status !== 'completed') return null;

@@ -402,6 +402,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [runningRunId, setRunningRunId] = useState<string | null>(null);
   const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
   const [runningShotId, setRunningShotId] = useState<string | null>(null);
+  const [selectingVersionShotId, setSelectingVersionShotId] = useState<string | null>(null);
+  const [versionCursorByShot, setVersionCursorByShot] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
   const [pickerPoses, setPickerPoses] = useState<StudioSessionPoseSnapshot[]>([]);
@@ -528,6 +530,23 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [applyExhaustionFeedback, refreshSelectedRun]);
 
+  const handleSelectVersion = useCallback(async (shotId: string, versionId: string) => {
+    setSelectingVersionShotId(shotId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/versions/${versionId}/select`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to select version');
+      setInfoMessage('Selected version updated.');
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to select version'));
+    } finally {
+      setSelectingVersionShotId(null);
+    }
+  }, [refreshSelectedRun]);
+
   const handleRunShot = useCallback(async (shotId: string) => {
     setRunningShotId(shotId);
     setError(null);
@@ -624,14 +643,28 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
 
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
   const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
+  const versionsByShot = useMemo(() => {
+    const map = new Map<string, StudioSessionShotVersionSummary[]>();
+    for (const version of versions) {
+      const current = map.get(version.shotId) ?? [];
+      current.push(version);
+      map.set(version.shotId, current);
+    }
+    for (const [shotId, items] of map.entries()) {
+      items.sort((left, right) => right.versionNumber - left.versionNumber || right.createdAt.localeCompare(left.createdAt));
+      map.set(shotId, items);
+    }
+    return map;
+  }, [versions]);
   const selectedVersionMap = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary>();
     for (const shot of shots) {
-      const match = versions.find((version) => version.id === shot.selectionVersionId) ?? versions.find((version) => version.shotId === shot.id);
+      const shotVersions = versionsByShot.get(shot.id) ?? [];
+      const match = shotVersions.find((version) => version.id === shot.selectionVersionId) ?? shotVersions[0];
       if (match) map.set(shot.id, match);
     }
     return map;
-  }, [shots, versions]);
+  }, [shots, versionsByShot]);
 
   return (
     <>
@@ -707,7 +740,11 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                       {group.shots.map((shot) => {
                         const revision = revisionMap.get(shot.id);
+                        const shotVersions = versionsByShot.get(shot.id) ?? [];
                         const selectedVersion = selectedVersionMap.get(shot.id);
+                        const activeVersion = shotVersions.length > 0
+                          ? shotVersions[Math.min(versionCursorByShot[shot.id] ?? 0, shotVersions.length - 1)]
+                          : selectedVersion;
                         const promptPreview = revision?.assembledPromptSnapshot?.positivePrompt?.slice(0, 220) ?? '';
                         const exhaustedForShot = selectedRun.exhaustedCategories?.includes(shot.category) && !shot.currentRevisionId;
                         return (
@@ -722,15 +759,25 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                     <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · rev {revision.revisionNumber}</div>
                                     {shot.activeJobId ? <div className="mt-2 text-xs text-sky-300">Active job: {shot.activeJobStatus} · {shot.activeJobId}</div> : null}
                                     {selectedVersion ? <div className="mt-2 text-xs text-emerald-300">Selected version v{selectedVersion.versionNumber}</div> : null}
+                                    {activeVersion && activeVersion.id !== selectedVersion?.id ? <div className="mt-1 text-xs text-sky-300">Browsing version v{activeVersion.versionNumber}</div> : null}
                                   </>
                                 ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
                               </div>
                               <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
                             </div>
-                            {selectedVersion?.previewUrl ? (
+                            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-white/55">
+                              <div>{shotVersions.length > 0 ? `Version ${Math.min((versionCursorByShot[shot.id] ?? 0) + 1, shotVersions.length)} of ${shotVersions.length}` : 'No versions yet'}</div>
+                              {shotVersions.length > 1 ? (
+                                <div className="flex gap-2">
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setVersionCursorByShot((current) => ({ ...current, [shot.id]: Math.max((current[shot.id] ?? 0) - 1, 0) }))}>Prev</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setVersionCursorByShot((current) => ({ ...current, [shot.id]: Math.min((current[shot.id] ?? 0) + 1, Math.max(shotVersions.length - 1, 0)) }))}>Next</Button>
+                                </div>
+                              ) : null}
+                            </div>
+                            {activeVersion?.previewUrl ? (
                               <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
-                                <img src={selectedVersion.previewUrl} alt={`${shot.label} version ${selectedVersion.versionNumber}`} className="aspect-[4/5] w-full object-cover" />
-                                <div className="border-t border-white/10 px-3 py-2 text-xs text-white/55">Version-first preview · v{selectedVersion.versionNumber}</div>
+                                <img src={activeVersion.previewUrl} alt={`${shot.label} version ${activeVersion.versionNumber}`} className="aspect-[4/5] w-full object-cover" />
+                                <div className="border-t border-white/10 px-3 py-2 text-xs text-white/55">Version preview · v{activeVersion.versionNumber}</div>
                               </div>
                             ) : revision ? (
                               <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -741,6 +788,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                             <div className="mt-4 flex flex-wrap gap-2">
                               <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
                               {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
                               <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
                             </div>
                           </div>
