@@ -404,6 +404,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [runningShotId, setRunningShotId] = useState<string | null>(null);
   const [selectingVersionShotId, setSelectingVersionShotId] = useState<string | null>(null);
   const [reviewStateVersionId, setReviewStateVersionId] = useState<string | null>(null);
+  const [skipShotId, setSkipShotId] = useState<string | null>(null);
   const [versionCursorByShot, setVersionCursorByShot] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
@@ -567,6 +568,27 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setError(toErrorMessage(error, 'Failed to update version state'));
     } finally {
       setReviewStateVersionId(null);
+    }
+  }, [refreshSelectedRun]);
+
+  const handleSkipShot = useCallback(async (shotId: string, skipped: boolean) => {
+    setSkipShotId(shotId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/skip`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skipped }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to update skip state');
+      setInfoMessage(skipped ? 'Shot skipped.' : 'Shot restored.');
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to update skip state'));
+    } finally {
+      setSkipShotId(null);
     }
   }, [refreshSelectedRun]);
 
@@ -787,7 +809,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         const promptPreview = revision?.assembledPromptSnapshot?.positivePrompt?.slice(0, 220) ?? '';
                         const exhaustedForShot = selectedRun.exhaustedCategories?.includes(shot.category) && !shot.currentRevisionId;
                         return (
-                          <div key={shot.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
+                          <div key={shot.id} className={`rounded-lg border p-4 ${shot.skipped ? 'border-amber-500/30 bg-amber-500/5' : 'border-white/10 bg-black/10'}`}>
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <div className="font-medium text-white">{shot.label}</div>
@@ -802,7 +824,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                   </>
                                 ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
                               </div>
-                              <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
+                              <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.skipped ? 'skipped' : shot.status}</div>
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-white/55">
                               <div>{shotVersions.length > 0 ? `Version ${Math.min((versionCursorByShot[shot.id] ?? 0) + 1, shotVersions.length)} of ${shotVersions.length}` : 'No visible versions yet'}</div>
@@ -826,13 +848,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                               </div>
                             ) : null}
                             <div className="mt-4 flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" onClick={() => setDetailShotId(shot.id)}>Open detail</Button>
-                              <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
-                              {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
-                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
-                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { hidden: !activeVersion.hidden })} disabled={reviewStateVersionId === activeVersion.id}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.hidden ? 'Unhide' : 'Hide'}</Button> : null}
-                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { rejected: !activeVersion.rejected })} disabled={reviewStateVersionId === activeVersion.id}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.rejected ? 'Unreject' : 'Reject'}</Button> : null}
-                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleSkipShot(shot.id, !shot.skipped)} disabled={skipShotId === shot.id}>{skipShotId === shot.id ? 'Saving…' : shot.skipped ? 'Restore shot' : 'Skip shot'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => setDetailShotId(shot.id)} disabled={shot.skipped}>Open detail</Button>
+                              <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id || shot.skipped}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
+                              {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId || shot.skipped}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || shot.skipped}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(shot.id, activeVersion.id)} disabled={selectingVersionShotId === shot.id || activeVersion.id === shot.selectionVersionId || shot.skipped}>{activeVersion.id === shot.selectionVersionId ? 'Selected' : selectingVersionShotId === shot.id ? 'Saving…' : 'Select version'}</Button> : null}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { hidden: !activeVersion.hidden })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.hidden ? 'Unhide' : 'Hide'}</Button> : null}
+                              {activeVersion ? <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(shot.id, activeVersion.id, { rejected: !activeVersion.rejected })} disabled={reviewStateVersionId === activeVersion.id || shot.skipped}>{reviewStateVersionId === activeVersion.id ? 'Saving…' : activeVersion.rejected ? 'Unreject' : 'Reject'}</Button> : null}
+                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={runningShotId === shot.id || !!shot.activeJobId || shot.skipped}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : revision ? 'Run shot' : 'Run shot (auto-pick)'}</Button>
                             </div>
                           </div>
                         );
@@ -871,7 +894,10 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         </>
                       ) : <div className="mt-2 text-sm text-white/55">No current revision yet.</div>}
                     </div>
-                    {detailSelectedVersion ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Selected version v{detailSelectedVersion.versionNumber}</div> : null}
+                    <div className="flex flex-wrap gap-2">
+                      {detailShot.skipped ? <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">Shot skipped</div> : null}
+                      {detailSelectedVersion ? <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Selected version v{detailSelectedVersion.versionNumber}</div> : null}
+                    </div>
                   </div>
                 </div>
 
@@ -896,9 +922,9 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                             </div>
                             <div className="text-xs text-white/60">This is a version change inside the same pose revision.</div>
                             <div className="flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id || version.hidden || version.rejected}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
-                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { hidden: !version.hidden })} disabled={reviewStateVersionId === version.id}>{reviewStateVersionId === version.id ? 'Saving…' : version.hidden ? 'Unhide' : 'Hide'}</Button>
-                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { rejected: !version.rejected })} disabled={reviewStateVersionId === version.id}>{reviewStateVersionId === version.id ? 'Saving…' : version.rejected ? 'Unreject' : 'Reject'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleSelectVersion(detailShot.id, version.id)} disabled={selectingVersionShotId === detailShot.id || detailShot.selectionVersionId === version.id || version.hidden || version.rejected || detailShot.skipped}>{detailShot.selectionVersionId === version.id ? 'Selected' : selectingVersionShotId === detailShot.id ? 'Saving…' : 'Select version'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { hidden: !version.hidden })} disabled={reviewStateVersionId === version.id || detailShot.skipped}>{reviewStateVersionId === version.id ? 'Saving…' : version.hidden ? 'Unhide' : 'Hide'}</Button>
+                              <Button size="sm" variant="outline" onClick={() => void handleUpdateVersionReviewState(detailShot.id, version.id, { rejected: !version.rejected })} disabled={reviewStateVersionId === version.id || detailShot.skipped}>{reviewStateVersionId === version.id ? 'Saving…' : version.rejected ? 'Unreject' : 'Reject'}</Button>
                             </div>
                           </div>
                         </div>

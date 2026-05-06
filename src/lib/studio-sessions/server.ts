@@ -792,6 +792,21 @@ async function syncStudioSessionShotSelectionAfterVersionReviewState(shotId: str
   return shouldClearSelection;
 }
 
+export async function updateStudioSessionShotSkipState(input: { shotId: string; skipped: boolean }) {
+  const shot = await prisma.studioSessionShot.findUnique({ where: { id: input.shotId } });
+  if (!shot) return null;
+
+  const updated = await prisma.studioSessionShot.update({
+    where: { id: input.shotId },
+    data: {
+      skipped: input.skipped,
+      status: input.skipped ? 'completed' : (shot.selectionVersionId ? 'completed' : (shot.currentRevisionId ? 'needs_review' : 'unassigned')),
+    },
+  });
+  await syncStudioSessionRunStatus(shot.runId);
+  return updated;
+}
+
 export async function updateStudioSessionShotVersionReviewState(input: { shotId: string; versionId: string; hidden?: boolean; rejected?: boolean }) {
   const version = await prisma.studioSessionShotVersion.findFirst({
     where: {
