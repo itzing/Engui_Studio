@@ -4,6 +4,7 @@ import {
   buildStudioSessionShotSlotsFromRules,
   createDefaultStudioSessionTemplateDraftState,
   createStudioSessionSavedStateFromDraft,
+  deriveStudioSessionResolution,
   deriveStudioSessionRunStatus,
   pickUniqueStudioSessionPose,
   normalizeStudioSessionTemplateDraftState,
@@ -14,6 +15,8 @@ import {
   toStudioSessionTemplateSummary,
 } from './utils';
 import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
+import { getModelById } from '@/lib/models/modelConfig';
+import { RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
 import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
 function cleanString(value: unknown): string {
@@ -337,6 +340,34 @@ async function collectRunExhaustedCategories(run: StudioSessionRunSummary, shots
   return Array.from(exhausted).sort();
 }
 
+async function collectStudioSessionActiveJobs(runId: string) {
+  const jobs = await prisma.job.findMany({
+    where: {
+      OR: [
+        { status: { in: Array.from(RUNNING_JOB_STATUSES) } },
+        { status: 'queueing_up' },
+      ],
+      options: { contains: `"runId":"${runId}"` },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const byShotId = new Map<string, { id: string; status: string }>();
+  for (const job of jobs) {
+    if (typeof job.options !== 'string') continue;
+    try {
+      const parsed = JSON.parse(job.options);
+      const shotId = parsed?.studioSessionContext?.shotId;
+      if (typeof shotId === 'string' && !byShotId.has(shotId)) {
+        byShotId.set(shotId, { id: job.id, status: job.status });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return byShotId;
+}
+
 export async function getStudioSessionRun(runId: string) {
   const run = await syncStudioSessionRunStatus(runId);
   if (!run) return null;
@@ -350,13 +381,23 @@ export async function getStudioSessionRun(runId: string) {
     ? await prisma.studioSessionShotRevision.findMany({ where: { id: { in: currentRevisionIds } } })
     : [];
   const exhaustedCategories = await collectRunExhaustedCategories(run, shots);
+  const activeJobs = await collectStudioSessionActiveJobs(runId);
 
   return {
     run: {
       ...run,
       exhaustedCategories,
+      activeJobCount: activeJobs.size,
     } satisfies StudioSessionRunDetailSummary,
-    shots: shots.map(toStudioSessionShotSummary),
+    shots: shots.map((shot) => {
+      const summary = toStudioSessionShotSummary(shot);
+      const activeJob = activeJobs.get(shot.id);
+      return {
+        ...summary,
+        activeJobId: activeJob?.id ?? null,
+        activeJobStatus: activeJob?.status ?? null,
+      };
+    }),
     revisions: revisions.map(toStudioSessionShotRevisionSummary),
   };
 }
@@ -546,6 +587,104 @@ export async function reshuffleStudioSessionShot(shotId: string) {
 
   const revision = await createStudioSessionShotRevision({ shotId, poseId: pick.pose.id, sourceKind: 'reshuffle', appendAutoHistory: true });
   return { exhausted: false, exhaustedCategories: [], revision };
+}
+
+function normalizeJobStatusToShotStatus(status: string): 'queued' | 'running' {
+  return status === 'queueing_up' || status === 'queued' || status === 'in_queue' ? 'queued' : 'running';
+}
+
+async function launchStudioSessionShotJob(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({
+    where: { id: shotId },
+    include: { run: true },
+  });
+  if (!shot || !shot.currentRevisionId) return null;
+
+  const revision = await prisma.studioSessionShotRevision.findUnique({ where: { id: shot.currentRevisionId } });
+  if (!revision) return null;
+
+  const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
+  const generationSettings = snapshot.generationSettings && typeof snapshot.generationSettings === 'object' ? snapshot.generationSettings as Record<string, unknown> : {};
+  const modelId = typeof generationSettings.modelId === 'string' && generationSettings.modelId.trim() ? generationSettings.modelId.trim() : 'flux-krea';
+  const model = getModelById(modelId);
+  if (!model || model.type !== 'image') {
+    throw new Error(`Unsupported Studio Session model: ${modelId}`);
+  }
+
+  const promptSnapshot = JSON.parse(revision.assembledPromptSnapshotJson || '{}');
+  const resolvedSize = deriveStudioSessionResolution(snapshot.resolutionPolicy ?? { shortSidePx: 832, longSidePx: 1216, squareSideSource: 'short' }, revision.derivedOrientation as any);
+  const formData = new FormData();
+  formData.append('userId', 'user-with-settings');
+  formData.append('workspaceId', shot.workspaceId);
+  formData.append('modelId', modelId);
+  formData.append('jobId', `${shot.id}-${Date.now()}`);
+  formData.append('prompt', typeof promptSnapshot?.positivePrompt === 'string' ? promptSnapshot.positivePrompt : '');
+
+  const studioSessionContext = {
+    workspaceId: shot.workspaceId,
+    runId: shot.runId,
+    shotId: shot.id,
+    revisionId: revision.id,
+    templateId: shot.run.templateId,
+    label: shot.label,
+  };
+  formData.append('studioSessionContext', JSON.stringify(studioSessionContext));
+
+  const parameterMap = new Map((model.parameters || []).map((parameter) => [parameter.name, parameter]));
+  const mergedSettings = {
+    ...generationSettings,
+    width: typeof generationSettings.width === 'number' ? generationSettings.width : resolvedSize.width,
+    height: typeof generationSettings.height === 'number' ? generationSettings.height : resolvedSize.height,
+    negativePrompt: typeof promptSnapshot?.negativePrompt === 'string' ? promptSnapshot.negativePrompt : (typeof generationSettings.negativePrompt === 'string' ? generationSettings.negativePrompt : ''),
+  } as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(mergedSettings)) {
+    if (key === 'modelId' || value === undefined || value === null) continue;
+    if (!parameterMap.has(key)) continue;
+    formData.append(key, String(value));
+  }
+
+  const response = await fetch('http://127.0.0.1:3010/api/generate', {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok || !data?.success || !data?.jobId) {
+    throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch Studio Session job');
+  }
+
+  await prisma.studioSessionShot.update({
+    where: { id: shot.id },
+    data: {
+      status: normalizeJobStatusToShotStatus(data.status || 'queueing_up'),
+    },
+  });
+  await syncStudioSessionRunStatus(shot.runId);
+  return { jobId: data.jobId as string, shotId: shot.id };
+}
+
+export async function runStudioSessionShot(shotId: string) {
+  return launchStudioSessionShotJob(shotId);
+}
+
+export async function runAllStudioSessionShots(runId: string) {
+  const shots = await prisma.studioSessionShot.findMany({
+    where: { runId, skipped: false },
+    orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+  });
+
+  const launched: Array<{ shotId: string; jobId: string }> = [];
+  const skippedShotIds: string[] = [];
+  for (const shot of shots) {
+    if (!shot.currentRevisionId || shot.status === 'queued' || shot.status === 'running') {
+      skippedShotIds.push(shot.id);
+      continue;
+    }
+    const result = await launchStudioSessionShotJob(shot.id);
+    if (result) launched.push(result);
+  }
+
+  return { launched, skippedShotIds };
 }
 
 export async function manualPickStudioSessionShot(input: { shotId: string; poseId: string }) {

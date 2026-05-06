@@ -397,7 +397,9 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [assemblingRunId, setAssemblingRunId] = useState<string | null>(null);
+  const [runningRunId, setRunningRunId] = useState<string | null>(null);
   const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
+  const [runningShotId, setRunningShotId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
   const [pickerPoses, setPickerPoses] = useState<StudioSessionPoseSnapshot[]>([]);
@@ -521,6 +523,41 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [applyExhaustionFeedback, refreshSelectedRun]);
 
+  const handleRunShot = useCallback(async (shotId: string) => {
+    setRunningShotId(shotId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/run`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to run shot');
+      setInfoMessage(`Shot queued: ${data.jobId}`);
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to run shot'));
+    } finally {
+      setRunningShotId(null);
+    }
+  }, [refreshSelectedRun]);
+
+  const handleRunAll = useCallback(async () => {
+    if (!selectedRun) return;
+    setRunningRunId(selectedRun.id);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/runs/${selectedRun.id}/run`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to run all shots');
+      setInfoMessage(`Launched ${Array.isArray(data.launched) ? data.launched.length : 0} shot jobs.`);
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to run all shots'));
+    } finally {
+      setRunningRunId(null);
+    }
+  }, [refreshSelectedRun, selectedRun]);
+
   const openManualPicker = useCallback(async (shot: StudioSessionShotSummary) => {
     setPickerShot(shot);
     setPickerOpen(true);
@@ -641,7 +678,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     <div className="flex flex-wrap gap-2 text-xs">
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Status {selectedRun.status}</div>
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
-                      <Button size="sm" onClick={() => void handleAssembleAll()} disabled={assemblingRunId === selectedRun.id}>{assemblingRunId === selectedRun.id ? 'Assembling…' : 'Assemble all'}</Button>
+                      <Button size="sm" onClick={() => void handleAssembleAll()} disabled={assemblingRunId === selectedRun.id || runningRunId === selectedRun.id}>{assemblingRunId === selectedRun.id ? 'Assembling…' : 'Assemble all'}</Button>
+                      <Button size="sm" variant="outline" onClick={() => void handleRunAll()} disabled={runningRunId === selectedRun.id || assemblingRunId === selectedRun.id}>{runningRunId === selectedRun.id ? 'Launching…' : 'Run all'}</Button>
                     </div>
                   </div>
                   {infoMessage ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">{infoMessage}</div> : null}
@@ -668,6 +706,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                                   <>
                                     <div className="mt-3 text-sm font-medium text-emerald-200">{revision.poseSnapshot.name}</div>
                                     <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · rev {revision.revisionNumber}</div>
+                                    {shot.activeJobId ? <div className="mt-2 text-xs text-sky-300">Active job: {shot.activeJobStatus} · {shot.activeJobId}</div> : null}
                                   </>
                                 ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
                               </div>
@@ -681,8 +720,8 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                             ) : null}
                             <div className="mt-4 flex flex-wrap gap-2">
                               <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
-                              {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
-                              <Button size="sm" disabled>Run shot</Button>
+                              {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id || !!shot.activeJobId}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id || runningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
+                              <Button size="sm" onClick={() => void handleRunShot(shot.id)} disabled={!revision || runningShotId === shot.id || !!shot.activeJobId}>{shot.activeJobId ? 'Running…' : runningShotId === shot.id ? 'Launching…' : 'Run shot'}</Button>
                             </div>
                           </div>
                         );

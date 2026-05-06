@@ -103,6 +103,15 @@ export async function POST(request: NextRequest) {
         const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
         const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
         const sourcePromptDocumentTitle = typeof formData.get('sourcePromptDocumentTitle') === 'string' ? (formData.get('sourcePromptDocumentTitle') as string).trim() : '';
+        const studioSessionContext = typeof formData.get('studioSessionContext') === 'string'
+            ? (() => {
+                try {
+                    return JSON.parse(formData.get('studioSessionContext') as string);
+                } catch {
+                    return null;
+                }
+            })()
+            : null;
 
         // Process input files based on model.inputs
         const inputData: Record<string, any> = {};
@@ -430,6 +439,7 @@ export async function POST(request: NextRequest) {
                 sourcePromptDocumentTitle: sourcePromptDocumentTitle || sceneSnapshot?.sourceDocumentTitle || null,
                 options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                     randomizeSeed,
+                    studioSessionContext,
                 })),
                 imageInputPath: imageInputPath || null,
                 videoInputPath: videoInputPath || null,
@@ -646,6 +656,7 @@ export async function POST(request: NextRequest) {
                             endpointId,
                             attemptId: requiresSecureKey ? attemptId : undefined,
                             secureMode: requiresSecureKey || undefined,
+                            studioSessionContext,
                         })),
                         secureState: secureState ? JSON.stringify({
                             ...secureState,
@@ -678,6 +689,7 @@ export async function POST(request: NextRequest) {
                             randomizeSeed,
                             error: error.message,
                             secureMode: requiresSecureKey || undefined,
+                            studioSessionContext,
                         }))
                     },
                 });
@@ -765,6 +777,7 @@ export async function POST(request: NextRequest) {
                             options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                                 randomizeSeed,
                                 duration: audioBlob.size, // Approximate
+                                studioSessionContext,
                             }))
                         }
                     });
@@ -788,7 +801,8 @@ export async function POST(request: NextRequest) {
                             status: 'failed',
                             options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                                 randomizeSeed,
-                                error: error instanceof Error ? error.message : 'Unknown error'
+                                error: error instanceof Error ? error.message : 'Unknown error',
+                                studioSessionContext,
                             }))
                         },
                     });

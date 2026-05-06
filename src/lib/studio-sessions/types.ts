@@ -109,6 +109,8 @@ export interface StudioSessionShotSummary {
   selectionVersionId: string | null;
   currentRevisionId: string | null;
   autoAssignmentHistory: string[];
+  activeJobId?: string | null;
+  activeJobStatus?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -164,6 +166,7 @@ export interface StudioSessionRunSummary {
 
 export interface StudioSessionRunDetailSummary extends StudioSessionRunSummary {
   exhaustedCategories?: string[];
+  activeJobCount?: number;
 }
 
 export interface StudioSessionRunAssembleResult {
