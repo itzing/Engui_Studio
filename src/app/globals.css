@@ -29,6 +29,10 @@ body {
   overscroll-behavior-y: none;
 }
 
+body.engui-mobile-shell {
+  overscroll-behavior-y: auto;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
