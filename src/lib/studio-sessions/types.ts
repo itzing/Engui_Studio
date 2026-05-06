@@ -86,6 +86,7 @@ export interface StudioSessionPromptSnapshot {
   negativePrompt: string;
   pieces: {
     character: string;
+    characterAge: string;
     environment: string;
     outfit: string;
     hairstyle: string;
@@ -97,6 +98,7 @@ export interface StudioSessionPromptSnapshot {
 export interface StudioSessionRunSnapshot extends StudioSessionTemplateSavedState {
   templateId: string | null;
   templateName: string;
+  characterPrompt?: string;
 }
 
 export interface StudioSessionShotSummary {

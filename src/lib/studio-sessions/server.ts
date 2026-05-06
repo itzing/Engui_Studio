@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
+import { toCharacterSummary } from '@/lib/characters/utils';
+import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
 import {
   assembleStudioSessionPrompt,
   buildStudioSessionShotSlotsFromRules,
@@ -109,6 +111,29 @@ function buildTemplateStorageFields(draft: StudioSessionTemplateDraftState) {
     longSidePx: draft.resolutionPolicy.longSidePx,
     squareSideSource: draft.resolutionPolicy.squareSideSource,
   };
+}
+
+async function resolveStudioSessionCharacterPrompt(snapshot: Record<string, any>): Promise<string> {
+  if (typeof snapshot.characterPrompt === 'string' && snapshot.characterPrompt.trim()) {
+    return snapshot.characterPrompt.trim();
+  }
+
+  const characterId = typeof snapshot.characterId === 'string' && snapshot.characterId.trim() ? snapshot.characterId.trim() : null;
+  if (!characterId) return '';
+
+  const character = await prisma.character.findUnique({
+    where: { id: characterId },
+    include: {
+      _count: {
+        select: {
+          versions: true,
+        },
+      },
+    },
+  });
+
+  if (!character || character.deletedAt) return '';
+  return buildCharacterPromptFromSummary(toCharacterSummary(character), { includeName: false, includeGender: false });
 }
 
 export async function listStudioSessionTemplates(workspaceId: string, status: 'active' | 'archived' = 'active') {
@@ -295,6 +320,7 @@ export async function createStudioSessionRun(input: { workspaceId: string; templ
   if (!template || template.workspaceId !== input.workspaceId) return null;
 
   const canonicalState = createStudioSessionSavedStateFromDraft(JSON.parse(template.canonicalStateJson || '{}'));
+  const characterPrompt = await resolveStudioSessionCharacterPrompt(canonicalState as Record<string, any>);
   const slots = buildStudioSessionShotSlotsFromRules(canonicalState.categoryRules);
 
   const created = await prisma.$transaction(async (tx) => {
@@ -305,6 +331,7 @@ export async function createStudioSessionRun(input: { workspaceId: string; templ
         templateNameSnapshot: template.name,
         templateSnapshotJson: JSON.stringify({
           ...canonicalState,
+          characterPrompt,
           templateId: template.id,
           templateName: template.name,
         }),
@@ -513,11 +540,12 @@ async function createStudioSessionShotRevision(params: {
   if (!pose || pose.category !== shot.category) return null;
 
   const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
+  const characterPrompt = await resolveStudioSessionCharacterPrompt(snapshot);
   const categoryRule = Array.isArray(snapshot.categoryRules)
     ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
     : null;
   const assembledPrompt = assembleStudioSessionPrompt({
-    characterPrompt: '',
+    characterPrompt,
     characterAge: typeof snapshot.characterAge === 'string' ? snapshot.characterAge : '',
     environmentText: typeof snapshot.environmentText === 'string' ? snapshot.environmentText : '',
     outfitText: typeof snapshot.outfitText === 'string' ? snapshot.outfitText : '',
