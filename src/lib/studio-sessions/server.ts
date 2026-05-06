@@ -7,6 +7,7 @@ import {
   normalizeStudioSessionTemplateDraftState,
   serializeStudioSessionCategoryRule,
   toStudioSessionRunSummary,
+  toStudioSessionShotSummary,
   toStudioSessionTemplateSummary,
 } from './utils';
 import type { StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
@@ -291,5 +292,16 @@ export async function listStudioSessionRuns(workspaceId: string, status?: string
 }
 
 export async function getStudioSessionRun(runId: string) {
-  return syncStudioSessionRunStatus(runId);
+  const run = await syncStudioSessionRunStatus(runId);
+  if (!run) return null;
+
+  const shots = await prisma.studioSessionShot.findMany({
+    where: { runId },
+    orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+  });
+
+  return {
+    run,
+    shots: shots.map(toStudioSessionShotSummary),
+  };
 }
