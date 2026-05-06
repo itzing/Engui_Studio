@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useStudio } from '@/lib/context/StudioContext';
 import type {
   StudioSessionPoseSnapshot,
+  StudioSessionRunDetailSummary,
   StudioSessionRunSummary,
+  StudioSessionShotRevisionSummary,
   StudioSessionShotSummary,
   StudioSessionTemplateDraftState,
   StudioSessionTemplateSummary,
@@ -389,16 +391,19 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
 
 function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   const [runs, setRuns] = useState<StudioSessionRunSummary[]>([]);
-  const [selectedRun, setSelectedRun] = useState<StudioSessionRunSummary | null>(null);
+  const [selectedRun, setSelectedRun] = useState<StudioSessionRunDetailSummary | null>(null);
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
+  const [revisions, setRevisions] = useState<StudioSessionShotRevisionSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [assemblingRunId, setAssemblingRunId] = useState<string | null>(null);
   const [assigningShotId, setAssigningShotId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerShot, setPickerShot] = useState<StudioSessionShotSummary | null>(null);
   const [pickerPoses, setPickerPoses] = useState<StudioSessionPoseSnapshot[]>([]);
   const [loadingPicker, setLoadingPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const fetchRuns = useCallback(async () => {
     if (!workspaceId) return;
@@ -410,11 +415,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch runs');
       const nextRuns = Array.isArray(data.runs) ? data.runs as StudioSessionRunSummary[] : [];
       setRuns(nextRuns);
-      setSelectedRun((current) => current && nextRuns.some((run) => run.id === current.id) ? nextRuns.find((run) => run.id === current.id) ?? null : nextRuns[0] ?? null);
+      setSelectedRun((current) => current && nextRuns.some((run) => run.id === current.id)
+        ? { ...current, ...nextRuns.find((run) => run.id === current.id)! }
+        : (nextRuns[0] ? nextRuns[0] as StudioSessionRunDetailSummary : null));
     } catch (error) {
       setRuns([]);
       setSelectedRun(null);
       setShots([]);
+      setRevisions([]);
       setError(toErrorMessage(error, 'Failed to fetch runs'));
     } finally {
       setLoadingRuns(false);
@@ -428,10 +436,12 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       const response = await fetch(`/api/studio-sessions/runs/${runId}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok || !data?.success || !data.run) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch run');
-      setSelectedRun(data.run as StudioSessionRunSummary);
+      setSelectedRun(data.run as StudioSessionRunDetailSummary);
       setShots(Array.isArray(data.shots) ? data.shots as StudioSessionShotSummary[] : []);
+      setRevisions(Array.isArray(data.revisions) ? data.revisions as StudioSessionShotRevisionSummary[] : []);
     } catch (error) {
       setShots([]);
+      setRevisions([]);
       setError(toErrorMessage(error, 'Failed to fetch run detail'));
     } finally {
       setLoadingDetail(false);
@@ -443,20 +453,73 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     await fetchRuns();
   }, [fetchRunDetail, fetchRuns, selectedRun?.id]);
 
+  const applyExhaustionFeedback = useCallback((categories: unknown) => {
+    const values = Array.isArray(categories) ? categories.filter((value): value is string => typeof value === 'string' && value.trim().length > 0) : [];
+    if (values.length > 0) {
+      setInfoMessage(`Unique auto-pick pool exhausted for: ${values.map(humanizeCategory).join(', ')}.`);
+    }
+  }, []);
+
   const handleAutoPick = useCallback(async (shotId: string) => {
     setAssigningShotId(shotId);
     setError(null);
+    setInfoMessage(null);
     try {
       const response = await fetch(`/api/studio-sessions/shots/${shotId}/auto-pick`, { method: 'POST' });
       const data = await response.json();
-      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to auto-pick pose');
+      if (!response.ok || !data?.success) {
+        applyExhaustionFeedback(data?.exhaustedCategories);
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to auto-pick pose');
+      }
+      applyExhaustionFeedback(data?.exhaustedCategories);
       await refreshSelectedRun();
     } catch (error) {
       setError(toErrorMessage(error, 'Failed to auto-pick pose'));
     } finally {
       setAssigningShotId(null);
     }
-  }, [refreshSelectedRun]);
+  }, [applyExhaustionFeedback, refreshSelectedRun]);
+
+  const handleAssembleAll = useCallback(async () => {
+    if (!selectedRun) return;
+    setAssemblingRunId(selectedRun.id);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/runs/${selectedRun.id}/assemble`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to assemble run');
+      if (Array.isArray(data?.assignedShotIds) && data.assignedShotIds.length > 0) {
+        setInfoMessage(`Assigned ${data.assignedShotIds.length} slots.${Array.isArray(data?.exhaustedCategories) && data.exhaustedCategories.length ? ` Exhausted: ${data.exhaustedCategories.map(humanizeCategory).join(', ')}.` : ''}`);
+      } else {
+        applyExhaustionFeedback(data?.exhaustedCategories);
+      }
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to assemble run'));
+    } finally {
+      setAssemblingRunId(null);
+    }
+  }, [applyExhaustionFeedback, refreshSelectedRun, selectedRun]);
+
+  const handleReshuffle = useCallback(async (shotId: string) => {
+    setAssigningShotId(shotId);
+    setError(null);
+    setInfoMessage(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/shots/${shotId}/reshuffle`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        applyExhaustionFeedback(data?.exhaustedCategories);
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to reshuffle pose');
+      }
+      await refreshSelectedRun();
+    } catch (error) {
+      setError(toErrorMessage(error, 'Failed to reshuffle pose'));
+    } finally {
+      setAssigningShotId(null);
+    }
+  }, [applyExhaustionFeedback, refreshSelectedRun]);
 
   const openManualPicker = useCallback(async (shot: StudioSessionShotSummary) => {
     setPickerShot(shot);
@@ -480,6 +543,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     if (!pickerShot) return;
     setAssigningShotId(pickerShot.id);
     setError(null);
+    setInfoMessage(null);
     try {
       const response = await fetch(`/api/studio-sessions/shots/${pickerShot.id}/manual-pick`, {
         method: 'POST',
@@ -504,7 +568,9 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       setRuns([]);
       setSelectedRun(null);
       setShots([]);
+      setRevisions([]);
       setError(null);
+      setInfoMessage(null);
       return;
     }
     void fetchRuns();
@@ -515,6 +581,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   }, [fetchRunDetail, selectedRun?.id]);
 
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
+  const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
 
   return (
     <>
@@ -548,7 +615,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         <div>Snapshot: <span className="text-white/75">{run.poseLibraryVersion}</span></div>
                         <div>Slots: <span className="text-white/75">{totalSlots}</span></div>
                       </div>
-                      <div className="mt-3"><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run)}>{isSelected ? 'Opened' : 'Open run'}</Button></div>
+                      <div className="mt-3"><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedRun(run as StudioSessionRunDetailSummary)}>{isSelected ? 'Opened' : 'Open run'}</Button></div>
                     </div>
                   );
                 })}
@@ -560,7 +627,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
         <Card className="flex min-h-[720px] flex-col border-white/10 bg-white/5">
           <CardHeader className="border-b border-white/10 pb-4">
             <CardDescription>Run detail</CardDescription>
-            <CardTitle className="text-lg">Grouped unassigned shot shell</CardTitle>
+            <CardTitle className="text-lg">Assigned shot review and pose prep</CardTitle>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-y-auto p-4 text-sm text-white/70">
             {!selectedRun ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">Select a run to inspect its stable shot groups.</div> : loadingDetail ? <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-8 text-center text-white/50">Loading run detail…</div> : (
@@ -571,11 +638,14 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                       <div className="text-lg font-medium text-white">{selectedRun.templateNameSnapshot || selectedRun.templateSnapshot.templateName}</div>
                       <div className="mt-1 text-xs text-white/50">Run {selectedRun.id}</div>
                     </div>
-                    <div className="flex gap-2 text-xs">
+                    <div className="flex flex-wrap gap-2 text-xs">
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Status {selectedRun.status}</div>
                       <div className="rounded-full border border-white/10 px-2.5 py-1 text-white/65">Pose library {selectedRun.poseLibraryVersion}</div>
+                      <Button size="sm" onClick={() => void handleAssembleAll()} disabled={assemblingRunId === selectedRun.id}>{assemblingRunId === selectedRun.id ? 'Assembling…' : 'Assemble all'}</Button>
                     </div>
                   </div>
+                  {infoMessage ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">{infoMessage}</div> : null}
+                  {selectedRun.exhaustedCategories?.length ? <div className="mt-3 text-xs text-amber-300">Exhausted categories: {selectedRun.exhaustedCategories.map(humanizeCategory).join(', ')}.</div> : null}
                 </div>
                 {groupedShots.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-white/50">This run has no materialized shots yet.</div> : groupedShots.map((group) => (
                   <div key={group.category} className="space-y-3">
@@ -584,23 +654,39 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                       <div className="text-xs text-white/45">{group.shots.length} slots</div>
                     </div>
                     <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                      {group.shots.map((shot) => (
-                        <div key={shot.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="font-medium text-white">{shot.label}</div>
-                              <div className="mt-1 text-xs text-white/50">{humanizeCategory(shot.category)} · slot {shot.slotIndex + 1}</div>
-                              {shot.currentRevisionId ? <div className="mt-2 text-xs text-emerald-300">Revision ready</div> : null}
+                      {group.shots.map((shot) => {
+                        const revision = revisionMap.get(shot.id);
+                        const promptPreview = revision?.assembledPromptSnapshot?.positivePrompt?.slice(0, 220) ?? '';
+                        const exhaustedForShot = selectedRun.exhaustedCategories?.includes(shot.category) && !shot.currentRevisionId;
+                        return (
+                          <div key={shot.id} className="rounded-lg border border-white/10 bg-black/10 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-medium text-white">{shot.label}</div>
+                                <div className="mt-1 text-xs text-white/50">{humanizeCategory(shot.category)} · slot {shot.slotIndex + 1}</div>
+                                {revision ? (
+                                  <>
+                                    <div className="mt-3 text-sm font-medium text-emerald-200">{revision.poseSnapshot.name}</div>
+                                    <div className="mt-1 text-xs text-white/50">{revision.derivedOrientation} · {revision.derivedFraming} · rev {revision.revisionNumber}</div>
+                                  </>
+                                ) : exhaustedForShot ? <div className="mt-2 text-xs text-amber-300">Unique auto-pick pool exhausted for this category.</div> : null}
+                              </div>
+                              <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
                             </div>
-                            <div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-white/50">{shot.status}</div>
+                            {revision ? (
+                              <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">Prompt preview</div>
+                                <div className="mt-2 text-sm text-white/75">{promptPreview || revision.poseSnapshot.prompt}</div>
+                              </div>
+                            ) : null}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : revision ? 'Replace pose' : 'Pick pose'}</Button>
+                              {revision ? <Button size="sm" variant="outline" onClick={() => void handleReshuffle(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Reshuffle pose'}</Button> : <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>}
+                              <Button size="sm" disabled>Run shot</Button>
+                            </div>
                           </div>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => void openManualPicker(shot)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Pick pose'}</Button>
-                            <Button size="sm" onClick={() => void handleAutoPick(shot.id)} disabled={assigningShotId === shot.id}>{assigningShotId === shot.id ? 'Working…' : 'Auto pick'}</Button>
-                            <Button size="sm" disabled>Run shot</Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}

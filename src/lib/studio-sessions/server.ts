@@ -14,7 +14,7 @@ import {
   toStudioSessionTemplateSummary,
 } from './utils';
 import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
-import type { StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
+import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -295,6 +295,48 @@ export async function listStudioSessionRuns(workspaceId: string, status?: string
   return status && status !== 'all' ? summaries.filter((run) => run.status === status) : summaries;
 }
 
+async function collectRunAutoAssignmentHistory(runId: string, category?: string) {
+  const shots = await prisma.studioSessionShot.findMany({
+    where: {
+      runId,
+      ...(category ? { category } : {}),
+    },
+    select: {
+      autoAssignmentHistoryJson: true,
+    },
+  });
+
+  return Array.from(new Set(
+    shots.flatMap((shot) => {
+      try {
+        return JSON.parse(shot.autoAssignmentHistoryJson || '[]') as string[];
+      } catch {
+        return [];
+      }
+    }),
+  ));
+}
+
+async function collectRunExhaustedCategories(run: StudioSessionRunSummary, shots: Awaited<ReturnType<typeof prisma.studioSessionShot.findMany>>) {
+  const exhausted = new Set<string>();
+  for (const shot of shots) {
+    if (shot.status !== 'unassigned') continue;
+    const categoryRule = Array.isArray(run.templateSnapshot.categoryRules)
+      ? run.templateSnapshot.categoryRules.find((rule) => rule.category === shot.category) ?? null
+      : null;
+    const pick = pickUniqueStudioSessionPose({
+      category: shot.category,
+      autoAssignmentHistory: await collectRunAutoAssignmentHistory(run.id, shot.category),
+      excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
+      includedPoseIds: Array.isArray(categoryRule?.includedPoseIds) ? categoryRule.includedPoseIds : [],
+      preferredOrientation: categoryRule?.preferredOrientation ?? null,
+      preferredFraming: categoryRule?.preferredFraming ?? null,
+    });
+    if (!pick.pose) exhausted.add(shot.category);
+  }
+  return Array.from(exhausted).sort();
+}
+
 export async function getStudioSessionRun(runId: string) {
   const run = await syncStudioSessionRunStatus(runId);
   if (!run) return null;
@@ -303,10 +345,19 @@ export async function getStudioSessionRun(runId: string) {
     where: { runId },
     orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
   });
+  const currentRevisionIds = shots.map((shot) => shot.currentRevisionId).filter((value): value is string => Boolean(value));
+  const revisions = currentRevisionIds.length > 0
+    ? await prisma.studioSessionShotRevision.findMany({ where: { id: { in: currentRevisionIds } } })
+    : [];
+  const exhaustedCategories = await collectRunExhaustedCategories(run, shots);
 
   return {
-    run,
+    run: {
+      ...run,
+      exhaustedCategories,
+    } satisfies StudioSessionRunDetailSummary,
     shots: shots.map(toStudioSessionShotSummary),
+    revisions: revisions.map(toStudioSessionShotRevisionSummary),
   };
 }
 
@@ -322,7 +373,7 @@ export async function listStudioSessionShotPoses(shotId: string) {
 async function createStudioSessionShotRevision(params: {
   shotId: string;
   poseId: string;
-  sourceKind: 'auto_pick' | 'manual_pick';
+  sourceKind: 'auto_pick' | 'manual_pick' | 'reshuffle';
   appendAutoHistory?: boolean;
 }) {
   const shot = await prisma.studioSessionShot.findUnique({
@@ -350,6 +401,8 @@ async function createStudioSessionShotRevision(params: {
 
   const result = await prisma.$transaction(async (tx) => {
     const revisionCount = await tx.studioSessionShotRevision.count({ where: { shotId: shot.id } });
+    const previousRevision = shot.currentRevisionId ? await tx.studioSessionShotRevision.findUnique({ where: { id: shot.currentRevisionId } }) : null;
+    const inheritedOverrideFields = previousRevision?.overrideFieldsJson ?? null;
     const revision = await tx.studioSessionShotRevision.create({
       data: {
         workspaceId: shot.workspaceId,
@@ -360,7 +413,7 @@ async function createStudioSessionShotRevision(params: {
         derivedOrientation: pose.orientation,
         derivedFraming: pose.framing,
         assembledPromptSnapshotJson: JSON.stringify(assembledPrompt),
-        overrideFieldsJson: categoryRule?.futureOverrideConfig ? JSON.stringify(categoryRule.futureOverrideConfig) : null,
+        overrideFieldsJson: categoryRule?.futureOverrideConfig ? JSON.stringify(categoryRule.futureOverrideConfig) : inheritedOverrideFields,
         sourceKind: params.sourceKind,
       },
     });
@@ -396,7 +449,7 @@ export async function autoPickStudioSessionShot(shotId: string) {
 
   const pick = pickUniqueStudioSessionPose({
     category: shot.category,
-    autoAssignmentHistory: JSON.parse(shot.autoAssignmentHistoryJson || '[]'),
+    autoAssignmentHistory: await collectRunAutoAssignmentHistory(shot.runId, shot.category),
     excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
     includedPoseIds: Array.isArray(categoryRule?.includedPoseIds) ? categoryRule.includedPoseIds : [],
     preferredOrientation: categoryRule?.preferredOrientation ?? null,
@@ -404,11 +457,95 @@ export async function autoPickStudioSessionShot(shotId: string) {
   });
 
   if (!pick.pose) {
-    return { exhausted: true, revision: null };
+    return { exhausted: true, exhaustedCategories: [shot.category], revision: null };
   }
 
   const revision = await createStudioSessionShotRevision({ shotId, poseId: pick.pose.id, sourceKind: 'auto_pick', appendAutoHistory: true });
-  return { exhausted: false, revision };
+  return { exhausted: false, exhaustedCategories: [], revision };
+}
+
+export async function assembleStudioSessionRun(runId: string): Promise<StudioSessionRunAssembleResult | null> {
+  const run = await prisma.studioSessionRun.findUnique({ where: { id: runId } });
+  if (!run) return null;
+  const shots = await prisma.studioSessionShot.findMany({
+    where: { runId },
+    orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
+  });
+  const snapshot = run.templateSnapshotJson ? JSON.parse(run.templateSnapshotJson) : {};
+  const historyByCategory = new Map<string, Set<string>>();
+  for (const shot of shots) {
+    const current = historyByCategory.get(shot.category) ?? new Set<string>();
+    for (const poseId of (() => { try { return JSON.parse(shot.autoAssignmentHistoryJson || '[]') as string[]; } catch { return []; } })()) {
+      current.add(poseId);
+    }
+    historyByCategory.set(shot.category, current);
+  }
+
+  const assignedShotIds: string[] = [];
+  const skippedShotIds: string[] = [];
+  const exhaustedCategories = new Set<string>();
+
+  for (const shot of shots) {
+    if (shot.skipped || shot.status !== 'unassigned') {
+      skippedShotIds.push(shot.id);
+      continue;
+    }
+    const categoryRule = Array.isArray(snapshot.categoryRules)
+      ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
+      : null;
+    const categoryHistory = Array.from(historyByCategory.get(shot.category) ?? new Set<string>());
+    const pick = pickUniqueStudioSessionPose({
+      category: shot.category,
+      autoAssignmentHistory: categoryHistory,
+      excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
+      includedPoseIds: Array.isArray(categoryRule?.includedPoseIds) ? categoryRule.includedPoseIds : [],
+      preferredOrientation: categoryRule?.preferredOrientation ?? null,
+      preferredFraming: categoryRule?.preferredFraming ?? null,
+    });
+    if (!pick.pose) {
+      exhaustedCategories.add(shot.category);
+      continue;
+    }
+    await createStudioSessionShotRevision({ shotId: shot.id, poseId: pick.pose.id, sourceKind: 'auto_pick', appendAutoHistory: true });
+    (historyByCategory.get(shot.category) ?? new Set<string>()).add(pick.pose.id);
+    historyByCategory.set(shot.category, historyByCategory.get(shot.category) ?? new Set<string>([pick.pose.id]));
+    historyByCategory.get(shot.category)?.add(pick.pose.id);
+    assignedShotIds.push(shot.id);
+  }
+
+  return {
+    assignedShotIds,
+    skippedShotIds,
+    exhaustedCategories: Array.from(exhaustedCategories).sort(),
+  };
+}
+
+export async function reshuffleStudioSessionShot(shotId: string) {
+  const shot = await prisma.studioSessionShot.findUnique({
+    where: { id: shotId },
+    include: { run: true },
+  });
+  if (!shot) return null;
+
+  const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
+  const categoryRule = Array.isArray(snapshot.categoryRules)
+    ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
+    : null;
+  const pick = pickUniqueStudioSessionPose({
+    category: shot.category,
+    autoAssignmentHistory: await collectRunAutoAssignmentHistory(shot.runId, shot.category),
+    excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
+    includedPoseIds: Array.isArray(categoryRule?.includedPoseIds) ? categoryRule.includedPoseIds : [],
+    preferredOrientation: categoryRule?.preferredOrientation ?? null,
+    preferredFraming: categoryRule?.preferredFraming ?? null,
+  });
+
+  if (!pick.pose) {
+    return { exhausted: true, exhaustedCategories: [shot.category], revision: null };
+  }
+
+  const revision = await createStudioSessionShotRevision({ shotId, poseId: pick.pose.id, sourceKind: 'reshuffle', appendAutoHistory: true });
+  return { exhausted: false, exhaustedCategories: [], revision };
 }
 
 export async function manualPickStudioSessionShot(input: { shotId: string; poseId: string }) {

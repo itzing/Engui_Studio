@@ -162,6 +162,16 @@ export interface StudioSessionRunSummary {
   updatedAt: string;
 }
 
+export interface StudioSessionRunDetailSummary extends StudioSessionRunSummary {
+  exhaustedCategories?: string[];
+}
+
+export interface StudioSessionRunAssembleResult {
+  assignedShotIds: string[];
+  exhaustedCategories: string[];
+  skippedShotIds: string[];
+}
+
 export interface StudioSessionResolvedSize {
   width: number;
   height: number;
