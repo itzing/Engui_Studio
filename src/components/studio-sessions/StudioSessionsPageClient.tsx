@@ -39,13 +39,12 @@ function Label({ children }: { children: ReactNode }) {
   return <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">{children}</div>;
 }
 
-function normalizeDraft(input: StudioSessionTemplateSummary | null): StudioSessionTemplateDraftState | null {
-  if (!input) return null;
+function cloneTemplateDraftState(input: StudioSessionTemplateDraftState): StudioSessionTemplateDraftState {
   return {
-    ...input.draftState,
-    generationSettings: { ...input.draftState.generationSettings },
-    resolutionPolicy: { ...input.draftState.resolutionPolicy },
-    categoryRules: input.draftState.categoryRules.map((rule) => ({
+    ...input,
+    generationSettings: { ...input.generationSettings },
+    resolutionPolicy: { ...input.resolutionPolicy },
+    categoryRules: input.categoryRules.map((rule) => ({
       ...rule,
       includedPoseIds: [...rule.includedPoseIds],
       excludedPoseIds: [...rule.excludedPoseIds],
@@ -54,6 +53,27 @@ function normalizeDraft(input: StudioSessionTemplateSummary | null): StudioSessi
       futureOverrideConfig: rule.futureOverrideConfig ? { ...rule.futureOverrideConfig } : null,
     })),
   };
+}
+
+function normalizeDraft(input: StudioSessionTemplateSummary | null): StudioSessionTemplateDraftState | null {
+  if (!input) return null;
+  return cloneTemplateDraftState(input.draftState);
+}
+
+function normalizeCanonicalState(input: StudioSessionTemplateSummary | null): StudioSessionTemplateDraftState | null {
+  if (!input) return null;
+  return cloneTemplateDraftState({
+    name: input.canonicalState.name,
+    characterId: input.canonicalState.characterId,
+    environmentText: input.canonicalState.environmentText,
+    outfitText: input.canonicalState.outfitText,
+    hairstyleText: input.canonicalState.hairstyleText,
+    positivePrompt: input.canonicalState.positivePrompt,
+    negativePrompt: input.canonicalState.negativePrompt,
+    generationSettings: input.canonicalState.generationSettings,
+    resolutionPolicy: input.canonicalState.resolutionPolicy,
+    categoryRules: input.canonicalState.categoryRules,
+  });
 }
 
 function validateTemplateDraft(draft: StudioSessionTemplateDraftState): string | null {
@@ -104,8 +124,9 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   const studioImageModels = useMemo(() => getModelsByType('image').filter((model) => model.inputs.includes('text') && model.id !== 'upscale'), []);
   const selectedTemplate = useMemo(() => templates.find((template) => template.id === selectedTemplateId) ?? null, [templates, selectedTemplateId]);
   const selectedCharacter = useMemo(() => characters.find((character) => character.id === draft?.characterId) ?? null, [characters, draft?.characterId]);
+  const normalizedCanonicalState = useMemo(() => normalizeCanonicalState(selectedTemplate), [selectedTemplate]);
   const hasUnsavedDraftChanges = useMemo(() => !!selectedTemplate && !!draft && JSON.stringify(selectedTemplate.draftState) !== JSON.stringify(draft), [draft, selectedTemplate]);
-  const hasUnsavedCanonicalChanges = useMemo(() => !!selectedTemplate && !!draft && JSON.stringify(selectedTemplate.canonicalState) !== JSON.stringify(draft), [draft, selectedTemplate]);
+  const hasUnsavedCanonicalChanges = useMemo(() => !!normalizedCanonicalState && !!draft && JSON.stringify(normalizedCanonicalState) !== JSON.stringify(draft), [draft, normalizedCanonicalState]);
   const totalShotCount = useMemo(() => draft?.categoryRules.reduce((sum, rule) => sum + rule.count, 0) ?? 0, [draft]);
   const validationError = useMemo(() => draft ? validateTemplateDraft(draft) : null, [draft]);
 
