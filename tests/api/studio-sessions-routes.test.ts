@@ -4,6 +4,7 @@ const {
   mockCreateStudioSessionRun,
   mockListStudioSessionRuns,
   mockCreateStudioSessionTemplate,
+  mockDeleteStudioSessionTemplate,
   mockUpdateStudioSessionShotSkipState,
   mockUpdateStudioSessionShotVersionReviewState,
   mockAddStudioSessionShotVersionToGallery,
@@ -11,6 +12,7 @@ const {
   mockCreateStudioSessionRun: vi.fn(),
   mockListStudioSessionRuns: vi.fn(),
   mockCreateStudioSessionTemplate: vi.fn(),
+  mockDeleteStudioSessionTemplate: vi.fn(),
   mockUpdateStudioSessionShotSkipState: vi.fn(),
   mockUpdateStudioSessionShotVersionReviewState: vi.fn(),
   mockAddStudioSessionShotVersionToGallery: vi.fn(),
@@ -20,6 +22,7 @@ vi.mock('@/lib/studio-sessions/server', () => ({
   createStudioSessionRun: mockCreateStudioSessionRun,
   listStudioSessionRuns: mockListStudioSessionRuns,
   createStudioSessionTemplate: mockCreateStudioSessionTemplate,
+  deleteStudioSessionTemplate: mockDeleteStudioSessionTemplate,
   updateStudioSessionShotSkipState: mockUpdateStudioSessionShotSkipState,
   updateStudioSessionShotVersionReviewState: mockUpdateStudioSessionShotVersionReviewState,
   addStudioSessionShotVersionToGallery: mockAddStudioSessionShotVersionToGallery,
@@ -27,6 +30,7 @@ vi.mock('@/lib/studio-sessions/server', () => ({
 
 import { POST as createRun } from '@/app/api/studio-sessions/runs/route';
 import { POST as createTemplate } from '@/app/api/studio-sessions/templates/route';
+import { DELETE as deleteTemplate } from '@/app/api/studio-sessions/templates/[id]/route';
 import { PATCH as patchSkip } from '@/app/api/studio-sessions/shots/[id]/skip/route';
 import { PATCH as patchReviewState } from '@/app/api/studio-sessions/shots/[id]/versions/[versionId]/review-state/route';
 import { POST as addToGallery } from '@/app/api/studio-sessions/shots/[id]/versions/[versionId]/add-to-gallery/route';
@@ -86,6 +90,19 @@ describe('studio session API validation', () => {
     expect(response.status).toBe(400);
     expect(json.error).toBe('hidden or rejected boolean is required');
     expect(mockUpdateStudioSessionShotVersionReviewState).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when deleting a missing template', async () => {
+    mockDeleteStudioSessionTemplate.mockResolvedValue(null);
+
+    const response = await deleteTemplate(new Request('http://localhost/api/studio-sessions/templates/template-1', {
+      method: 'DELETE',
+    }) as any, { params: Promise.resolve({ id: 'template-1' }) });
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json.error).toBe('Template not found');
+    expect(mockDeleteStudioSessionTemplate).toHaveBeenCalledWith('template-1');
   });
 
   it('normalizes unsupported gallery buckets to common', async () => {

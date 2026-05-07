@@ -406,6 +406,14 @@ export async function cloneStudioSessionTemplate(templateId: string) {
   return toStudioSessionTemplateSummary(created);
 }
 
+export async function deleteStudioSessionTemplate(templateId: string) {
+  const existing = await prisma.studioSessionTemplate.findUnique({ where: { id: templateId } });
+  if (!existing) return null;
+
+  await prisma.studioSessionTemplate.delete({ where: { id: templateId } });
+  return { id: templateId };
+}
+
 async function syncStudioSessionRunStatus(runId: string): Promise<StudioSessionRunSummary | null> {
   const run = await prisma.studioSessionRun.findUnique({
     where: { id: runId },

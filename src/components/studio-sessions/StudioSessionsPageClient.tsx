@@ -177,6 +177,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   const [loadingCharacters, setLoadingCharacters] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [cloningTemplateId, setCloningTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [creatingRunTemplateId, setCreatingRunTemplateId] = useState<string | null>(null);
   const [savingCanonical, setSavingCanonical] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
@@ -426,6 +427,26 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
     }
   }, [onOpenRuns, onRunCreated, workspaceId]);
 
+  const handleDeleteTemplate = useCallback(async (templateId: string) => {
+    setDeletingTemplateId(templateId);
+    setTemplatesError(null);
+    try {
+      const response = await fetch(`/api/studio-sessions/templates/${templateId}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to delete template');
+      setTemplates((current) => {
+        const next = current.filter((template) => template.id !== templateId);
+        setSelectedTemplateId((selected) => selected === templateId ? next[0]?.id ?? null : selected);
+        return next;
+      });
+      setEditorMessage('Template deleted.');
+    } catch (error) {
+      setTemplatesError(toErrorMessage(error, 'Failed to delete template'));
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }, []);
+
   const handleExplicitSave = useCallback(async () => {
     if (!selectedTemplateId || !draft || validationError) return;
     setSavingCanonical(true);
@@ -499,7 +520,19 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                     const categoryCount = template.categoryRules.reduce((sum, rule) => sum + rule.count, 0);
                     const canCreateRun = template.id === selectedTemplateId ? !hasUnsavedCanonicalChanges && !validationError : true;
                     return (
-                      <div key={template.id} className={`rounded-lg border p-3 transition ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : 'border-white/10 bg-black/10 hover:bg-white/[0.04]'}`}>
+                      <div
+                        key={template.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedTemplateId(template.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedTemplateId(template.id);
+                          }
+                        }}
+                        className={`rounded-lg border p-3 transition ${isSelected ? 'border-blue-400/50 bg-blue-500/10' : 'border-white/10 bg-black/10 hover:bg-white/[0.04]'} cursor-pointer`}
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate font-medium text-white">{template.name || 'Untitled template'}</div>
@@ -512,9 +545,9 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                           <div>Shot plan: <span className="text-white/75">{categoryCount} slots</span></div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => setSelectedTemplateId(template.id)}>{isSelected ? 'Opened' : 'Open'}</Button>
-                          <Button size="sm" variant="outline" onClick={() => void handleCloneTemplate(template.id)} disabled={cloningTemplateId === template.id}>{cloningTemplateId === template.id ? 'Cloning…' : 'Clone'}</Button>
-                          <Button size="sm" onClick={() => void handleCreateRun(template.id)} disabled={creatingRunTemplateId === template.id || !canCreateRun}>{creatingRunTemplateId === template.id ? 'Creating run…' : 'Create run'}</Button>
+                          <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void handleCloneTemplate(template.id); }} disabled={cloningTemplateId === template.id}>{cloningTemplateId === template.id ? 'Cloning…' : 'Clone'}</Button>
+                          <Button size="sm" onClick={(event) => { event.stopPropagation(); void handleCreateRun(template.id); }} disabled={creatingRunTemplateId === template.id || !canCreateRun}>{creatingRunTemplateId === template.id ? 'Creating run…' : 'Create run'}</Button>
+                          <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); void handleDeleteTemplate(template.id); }} disabled={deletingTemplateId === template.id}>{deletingTemplateId === template.id ? 'Deleting…' : 'Delete'}</Button>
                         </div>
                         {isSelected && !canCreateRun ? <div className="mt-2 text-xs text-amber-300">Save the current template state before creating a run.</div> : null}
                       </div>
