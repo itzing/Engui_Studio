@@ -129,6 +129,22 @@ function formatDuration(ms: number | null | undefined) {
   return `${seconds}s`;
 }
 
+function buildShotPromptPreview(revision: StudioSessionShotRevisionSummary | undefined) {
+  if (!revision) return '';
+  const pieces = revision.assembledPromptSnapshot?.pieces;
+  const compact = [
+    pieces?.character,
+    pieces?.characterAge,
+    pieces?.outfit,
+    pieces?.hairstyle,
+    pieces?.masterPositive,
+    pieces?.pose,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' · ');
+  if (compact) return compact.slice(0, 220);
+  const rendered = revision.assembledPromptSnapshot?.positivePrompt ?? '';
+  return rendered.replace(/\s+/g, ' ').trim().slice(0, 220);
+}
+
 function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: string | null; onRunCreated: () => void; onOpenRuns: () => void; }) {
   const [templates, setTemplates] = useState<StudioSessionTemplateSummary[]>([]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
@@ -1088,7 +1104,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         const activeVersion = shotVersions.length > 0
                           ? shotVersions[Math.min(versionCursorByShot[shot.id] ?? 0, shotVersions.length - 1)]
                           : selectedVersion;
-                        const promptPreview = revision?.assembledPromptSnapshot?.positivePrompt?.slice(0, 220) ?? '';
+                        const promptPreview = buildShotPromptPreview(revision);
                         const exhaustedForShot = selectedRun.exhaustedCategories?.includes(shot.category) && !shot.currentRevisionId;
                         return (
                           <div key={shot.id} className={`rounded-lg border p-4 ${shot.skipped ? 'border-amber-500/30 bg-amber-500/5' : 'border-white/10 bg-black/10'}`}>
@@ -1127,7 +1143,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                             ) : revision ? (
                               <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                                 <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">Prompt preview</div>
-                                <div className="mt-2 text-sm text-white/75">{promptPreview || revision.poseSnapshot.prompt}</div>
+                                <div className="mt-2 line-clamp-4 text-sm text-white/75">{promptPreview || revision.poseSnapshot.prompt}</div>
                               </div>
                             ) : null}
                             <div className="mt-4 flex flex-wrap gap-2">
@@ -1174,7 +1190,10 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                         <>
                           <div className="mt-2 text-sm text-emerald-200">{detailCurrentRevision.poseSnapshot.name}</div>
                           <div className="mt-1 text-xs text-white/50">rev {detailCurrentRevision.revisionNumber} · {detailCurrentRevision.derivedOrientation} · {detailCurrentRevision.derivedFraming}</div>
-                          <div className="mt-2 text-sm text-white/70">{detailCurrentRevision.assembledPromptSnapshot.positivePrompt}</div>
+                          <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">Full prompt</div>
+                            <pre className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-white/70">{detailCurrentRevision.assembledPromptSnapshot.positivePrompt}</pre>
+                          </div>
                         </>
                       ) : <div className="mt-2 text-sm text-white/55">No current revision yet.</div>}
                     </div>
