@@ -153,14 +153,23 @@ function Header({ breadcrumbs, jobsPanelOpen, activeJobsCount, onToggleJobsPanel
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
-            <UserRound className="mr-2 h-4 w-4" />
-            Characters
-          </Button>
-          <Button type="button" variant="outline" onClick={onToggleJobsPanel} className={`border-white/10 text-white hover:bg-white/[0.08] ${jobsPanelOpen ? 'bg-blue-500/20' : 'bg-white/[0.04]'}`}>
-            <Rows3 className="mr-2 h-4 w-4" />
-            Jobs{activeJobsCount > 0 ? ` · ${activeJobsCount}` : ''}
-          </Button>
+          <div className="group relative">
+            <Button type="button" variant="outline" size="icon" onClick={onOpenCharacterManager} aria-label="Characters" title="Characters" className="h-10 w-10 border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
+              <UserRound className="h-4 w-4" />
+            </Button>
+            <div className="pointer-events-none absolute right-0 top-full z-30 mt-2 rounded-lg border border-white/10 bg-black/85 px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-xl backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100">
+              Characters
+            </div>
+          </div>
+          <div className="group relative">
+            <Button type="button" variant="outline" size="icon" onClick={onToggleJobsPanel} aria-label="Jobs" title="Jobs" className={`relative h-10 w-10 border-white/10 text-white hover:bg-white/[0.08] ${jobsPanelOpen ? 'bg-blue-500/20' : 'bg-white/[0.04]'}`}>
+              <Rows3 className="h-4 w-4" />
+              {activeJobsCount > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-4 text-white">{activeJobsCount}</span> : null}
+            </Button>
+            <div className="pointer-events-none absolute right-0 top-full z-30 mt-2 rounded-lg border border-white/10 bg-black/85 px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-xl backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100">
+              Jobs{activeJobsCount > 0 ? ` · ${activeJobsCount}` : ''}
+            </div>
+          </div>
         </div>
       </div>
     </header>
