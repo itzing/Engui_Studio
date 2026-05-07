@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, FolderOpen, Grid2X2, Image, Layers3, Plus, Rows3, UserRound } from 'lucide-react';
+import CharacterManagerPanel from '@/components/characters/CharacterManagerPanel';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -96,12 +97,20 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, onToggle }: { route
   );
 }
 
-function Header({ breadcrumbs }: { breadcrumbs: Array<{ label: string; href?: string }> }) {
+function Header({ breadcrumbs, onOpenCharacterManager }: { breadcrumbs: Array<{ label: string; href?: string }>; onOpenCharacterManager: () => void }) {
   return (
     <header className="border-b border-white/10 bg-[#0f0f11]/95 px-8 py-5">
-      <div className="text-3xl font-semibold tracking-tight text-white">F-Studio</div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/45">
-        {breadcrumbs.map((crumb, index) => <span key={`${crumb.label}-${index}`} className="flex items-center gap-2">{index > 0 ? <span className="text-white/25">→</span> : null}{crumb.href ? <Link href={crumb.href} className="text-white/65 hover:text-white">{crumb.label}</Link> : <span className="text-white">{crumb.label}</span>}</span>)}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-3xl font-semibold tracking-tight text-white">F-Studio</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/45">
+            {breadcrumbs.map((crumb, index) => <span key={`${crumb.label}-${index}`} className="flex items-center gap-2">{index > 0 ? <span className="text-white/25">→</span> : null}{crumb.href ? <Link href={crumb.href} className="text-white/65 hover:text-white">{crumb.label}</Link> : <span className="text-white">{crumb.label}</span>}</span>)}
+          </div>
+        </div>
+        <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="shrink-0 border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
+          <UserRound className="mr-2 h-4 w-4" />
+          Character Manager
+        </Button>
       </div>
     </header>
   );
@@ -119,6 +128,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [collectionDetail, setCollectionDetail] = useState<CollectionDetail>(null);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [poseSets, setPoseSets] = useState<StudioPoseSetSummary[]>([]);
+  const [showCharacterManager, setShowCharacterManager] = useState(false);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [showCreateRun, setShowCreateRun] = useState(false);
@@ -242,12 +252,23 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     <div className="flex min-h-screen bg-[#0b0b0d] text-white">
       <Sidebar route={route} portfolioId={portfolioId} sessionId={sessionId} collapsed={collapsed} onToggle={toggleCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header breadcrumbs={breadcrumbs} />
+        <Header breadcrumbs={breadcrumbs} onOpenCharacterManager={() => setShowCharacterManager(true)} />
         <main className="min-w-0 flex-1 overflow-auto p-8">
           {error ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div> : null}
           {renderCanvas()}
         </main>
       </div>
+      <Dialog open={showCharacterManager} onOpenChange={setShowCharacterManager}>
+        <DialogContent className="flex h-[94vh] w-[96vw] max-w-[1600px] flex-col gap-0 overflow-hidden border-white/10 bg-[#101014] p-0 text-white">
+          <DialogHeader className="border-b border-white/10 px-5 py-4 pr-14 text-left">
+            <DialogTitle>Character Manager</DialogTitle>
+            <DialogDescription className="text-white/50">Manage character canon without leaving F-Studio.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-5">
+            <CharacterManagerPanel />
+          </div>
+        </DialogContent>
+      </Dialog>
       <CharacterSelectModal open={showCreatePortfolio} characters={characters} loading={false} selectedCharacterId={null} onOpenChange={setShowCreatePortfolio} onSelect={createPortfolio} />
       <NameDialog open={showCreateSession} title="New session" value={newName} onChange={setNewName} onOpenChange={setShowCreateSession} onSubmit={createSession} />
       <NameDialog open={showCreateCollection} title="New collection" value={newName} onChange={setNewName} onOpenChange={setShowCreateCollection} onSubmit={createCollection} />
