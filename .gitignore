@@ -83,3 +83,5 @@ temp_status.txt
 /videos
 /generations/
 /src/app/generations/
+
+/prisma/db/backups/*.bak*

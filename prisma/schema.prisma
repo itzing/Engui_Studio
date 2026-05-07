@@ -43,6 +43,7 @@ model Job {
   workspace     Workspace? @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
   studioSessionShotVersions StudioSessionShotVersion[]
   studioSessionMaterializationTask StudioSessionJobMaterialization?
+  materializationTasks JobMaterializationTask[]
 
   @@index([userId, createdAt(sort: Desc)]) // 사용자별 최신 순 정렬을 위한 복합 인덱스
   @@index([userId, status]) // 사용자별 상태별 조회를 위한 인덱스
@@ -266,6 +267,7 @@ model Character {
   gender               String?
   traits               String             @default("{}")
   editorState          String             @default("{}")
+  previewStateJson     String             @default("{}")
   currentVersionId     String?
   previewStatusSummary String?
   createdAt            DateTime           @default(now())
@@ -598,4 +600,29 @@ model StudioSessionJobMaterialization {
   @@index([shotId, status, updatedAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
   @@map("studio_session_job_materializations")
+}
+
+model JobMaterializationTask {
+  id             String   @id @default(uuid())
+  jobId          String
+  workspaceId    String?
+  targetType     String
+  targetId       String
+  payloadJson    String   @default("{}")
+  status         String   @default("pending")
+  attemptCount   Int      @default(0)
+  lastAttemptAt  DateTime?
+  materializedAt DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([jobId, targetType, targetId])
+  @@index([targetType, status, updatedAt(sort: Desc)])
+  @@index([targetId, status, updatedAt(sort: Desc)])
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
+  @@map("job_materialization_tasks")
 }

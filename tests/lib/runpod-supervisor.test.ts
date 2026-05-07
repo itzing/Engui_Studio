@@ -7,8 +7,11 @@ const {
   mockDeleteFile,
   mockDownloadAndDecryptResultMedia,
   mockMaybeGenerateJobThumbnail,
+  mockMaybeAutoSaveUpscaleResult,
   mockMaterializeStudioSessionCompletedJob,
   mockRecoverStudioSessionMaterializationTasks,
+  mockSettleJobMaterializationTasks,
+  mockRecoverJobMaterializationTasks,
   mockExistsSync,
   mockMkdirSync,
   mockWriteFileSync,
@@ -24,8 +27,11 @@ const {
   mockDeleteFile: vi.fn(),
   mockDownloadAndDecryptResultMedia: vi.fn(),
   mockMaybeGenerateJobThumbnail: vi.fn(),
+  mockMaybeAutoSaveUpscaleResult: vi.fn(),
   mockMaterializeStudioSessionCompletedJob: vi.fn(),
   mockRecoverStudioSessionMaterializationTasks: vi.fn(),
+  mockSettleJobMaterializationTasks: vi.fn(),
+  mockRecoverJobMaterializationTasks: vi.fn(),
   mockExistsSync: vi.fn(() => true),
   mockMkdirSync: vi.fn(),
   mockWriteFileSync: vi.fn(),
@@ -73,9 +79,18 @@ vi.mock('@/lib/jobPreviewDerivatives', () => ({
   maybeGenerateJobThumbnail: mockMaybeGenerateJobThumbnail,
 }));
 
+vi.mock('@/lib/upscaleAutoSave', () => ({
+  maybeAutoSaveUpscaleResult: mockMaybeAutoSaveUpscaleResult,
+}));
+
 vi.mock('@/lib/studio-sessions/server', () => ({
   materializeStudioSessionCompletedJob: mockMaterializeStudioSessionCompletedJob,
   recoverStudioSessionMaterializationTasks: mockRecoverStudioSessionMaterializationTasks,
+}));
+
+vi.mock('@/lib/materialization/server', () => ({
+  settleJobMaterializationTasks: mockSettleJobMaterializationTasks,
+  recoverJobMaterializationTasks: mockRecoverJobMaterializationTasks,
 }));
 
 vi.mock('fs', () => ({
@@ -94,9 +109,13 @@ import { processRunPodJob } from '@/lib/runpodSupervisor';
 describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.job.update.mockImplementation(async ({ where, data }: any) => ({ id: where.id, ...data }));
     mockMaybeGenerateJobThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
+    mockMaybeAutoSaveUpscaleResult.mockResolvedValue(undefined);
     mockMaterializeStudioSessionCompletedJob.mockResolvedValue(null);
     mockRecoverStudioSessionMaterializationTasks.mockResolvedValue(undefined);
+    mockSettleJobMaterializationTasks.mockResolvedValue(undefined);
+    mockRecoverJobMaterializationTasks.mockResolvedValue(undefined);
     mockGetSettings.mockResolvedValue({
       settings: {
         runpod: {
@@ -174,6 +193,8 @@ describe('runpod supervisor', () => {
     expect(finalUpdate.data.status).toBe('completed');
     expect(finalUpdate.data.resultUrl).toBe('/generations/wan22-job-1.png');
     expect(finalUpdate.data.thumbnailUrl).toBe('/generations/job-previews/wan22-job-thumb.webp');
+    expect(mockSettleJobMaterializationTasks).toHaveBeenCalledWith('job-1');
+    expect(mockMaterializeStudioSessionCompletedJob).toHaveBeenCalledWith('job-1');
 
     const secureState = JSON.parse(finalUpdate.data.secureState);
     expect(secureState.activeAttempt.finalization.localThumbnailUrl).toBe('/generations/job-previews/wan22-job-thumb.webp');
@@ -220,6 +241,7 @@ describe('runpod supervisor', () => {
     expect(finalUpdate.data.error).toBe('GPU worker crashed');
 
     const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(mockSettleJobMaterializationTasks).toHaveBeenCalledWith('job-2');
     expect(secureState.failure.source).toBe('runpod.execution');
     expect(secureState.failure.error.code).toBe('Error');
     expect(secureState.cleanup.transportStatus).toBe('warning');

@@ -1,0 +1,839 @@
+import { NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import RunPodService from '@/lib/runpodService';
+import SettingsService from '@/lib/settingsService';
+import ElevenLabsService from '@/lib/elevenlabsService';
+import S3Service from '@/lib/s3Service';
+import { processFileUpload } from '@/lib/serverFileUtils';
+import { createSecureStateSkeleton, createStructuredEnvelope, decodeMasterKey, uploadEncryptedMediaInput, buildAttemptPaths, buildOutputFileName } from '@/lib/secureTransport';
+import { startRunPodSupervisor } from '@/lib/runpodSupervisor';
+import { mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
+import { getApiMessage } from '@/lib/apiMessages';
+import { getModelById } from '@/lib/models/modelConfig';
+import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
+import { v4 as uuidv4 } from 'uuid';
+import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
+import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
+
+const prisma = new PrismaClient();
+const settingsService = new SettingsService();
+
+function parseSceneSnapshot(value: FormDataEntryValue | null): SceneSnapshot | null {
+    if (typeof value !== 'string' || !value.trim()) return null;
+
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && parsed.templateId === 'scene_template_v2' && parsed.state && typeof parsed.renderedPrompt === 'string') {
+            return parsed as SceneSnapshot;
+        }
+    } catch (error) {
+        console.warn('Failed to parse scene snapshot from generation request:', error);
+    }
+
+    return null;
+}
+
+// Local storage directory
+const LOCAL_STORAGE_DIR = join(process.cwd(), 'public', 'results');
+
+// Ensure directory exists
+try {
+    mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
+} catch (error) {
+    // Directory already exists
+}
+
+// S3 upload helper - will be created per request with userId
+function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
+    return async (file: File, fileName: string): Promise<{ s3Url: string; filePath: string }> => {
+        console.log(`📤 Starting S3 upload for file: ${fileName}`);
+        const { settings } = await settingsService.getSettings(userId);
+
+        if (!settings.s3?.endpointUrl || !settings.s3?.accessKeyId || !settings.s3?.secretAccessKey) {
+            throw new Error(getApiMessage('S3', 'SETTINGS_NOT_CONFIGURED', language));
+        }
+
+        const s3Service = new S3Service({
+            endpointUrl: settings.s3.endpointUrl,
+            accessKeyId: settings.s3.accessKeyId,
+            secretAccessKey: settings.s3.secretAccessKey,
+            bucketName: settings.s3.bucketName || 'my-bucket',
+            region: settings.s3.region || 'us-east-1',
+        });
+
+        const fileBuffer = Buffer.from(await file.arrayBuffer());
+        console.log(`📦 File buffer size: ${fileBuffer.length} bytes`);
+        const result = await s3Service.uploadFile(fileBuffer, fileName, file.type);
+        console.log(`✅ S3 upload complete:`, result);
+
+        return result;
+    };
+}
+
+export async function submitGenerationFormData(formData: FormData) {
+    try {
+
+        // Extract basic info
+        const userId = formData.get('userId') as string || 'user-with-settings';
+        const modelId = formData.get('modelId') as string;
+        const language = formData.get('language') as 'ko' | 'en' || 'ko';
+        const workspaceId = formData.get('workspaceId') as string;
+        const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
+
+        if (!modelId) {
+            return NextResponse.json({
+                error: 'Missing required field: modelId',
+            }, { status: 400 });
+        }
+
+        // Get model config
+        const model = getModelById(modelId);
+        if (!model) {
+            return NextResponse.json({
+                error: `Unknown model: ${modelId}`,
+            }, { status: 400 });
+        }
+
+        console.log(`🎬 Processing ${model.name} generation request...`);
+
+        // Extract prompt
+        const prompt = formData.get('prompt') as string;
+        const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
+        const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
+        const sourcePromptDocumentTitle = typeof formData.get('sourcePromptDocumentTitle') === 'string' ? (formData.get('sourcePromptDocumentTitle') as string).trim() : '';
+        const studioSessionContext = typeof formData.get('studioSessionContext') === 'string'
+            ? (() => {
+                try {
+                    return JSON.parse(formData.get('studioSessionContext') as string);
+                } catch {
+                    return null;
+                }
+            })()
+            : null;
+
+        // Process input files based on model.inputs
+        const inputData: Record<string, any> = {};
+
+        // Track media input paths for job reuse
+        let imageInputPath: string | undefined;
+        let videoInputPath: string | undefined;
+        let audioInputPath: string | undefined;
+        let primaryImageFile: File | undefined;
+        let secondaryImageFile: File | undefined;
+        let primaryVideoFile: File | undefined;
+
+        // Handle image input
+        if (model.inputs.includes('image')) {
+            const imageKey = model.imageInputKey || 'image';
+            const imageFile = formData.get('image') as File; // Always get from 'image' field in formData
+            primaryImageFile = imageFile && imageFile.size > 0 ? imageFile : undefined;
+
+            console.log(`🔍 Checking for image input (key: ${imageKey})`);
+            console.log(`📁 Image file from formData:`, imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'null');
+
+            if (imageFile && imageFile.size > 0) {
+                const imageFileName = `image_${uuidv4()}_${imageFile.name}`;
+                console.log(`📤 Uploading image: ${imageFileName}`);
+                try {
+                    const uploadToS3 = createUploadToS3(userId, language);
+                    const uploadResult = await processFileUpload(
+                        imageFile,
+                        imageFileName,
+                        uploadToS3,
+                        LOCAL_STORAGE_DIR
+                    );
+                    inputData[imageKey] = uploadResult.s3Path; // Store with the model's expected key
+                    imageInputPath = uploadResult.webPath || uploadResult.s3Path; // Store for job reuse
+                    console.log(`✅ Image uploaded to ${imageKey}: ${uploadResult.s3Path}`);
+                    console.log(`📁 Image input path stored: ${imageInputPath}`);
+                } catch (error) {
+                    console.error(`❌ Failed to upload image:`, error);
+                    return NextResponse.json({
+                        error: getApiMessage('RUNPOD', 'S3_UPLOAD_FAILED', language),
+                        requiresSetup: true,
+                    }, { status: 400 });
+                }
+            } else {
+                console.log(`⚠️ No image file provided or file is empty`);
+            }
+
+            // Handle second image input (based on model config)
+            const image2Key = model.imageInput2Key;
+            const imageFile2 = formData.get('image2') as File;
+            secondaryImageFile = imageFile2 && imageFile2.size > 0 ? imageFile2 : undefined;
+
+            if (model.inputs.includes('image2') && image2Key && imageFile2 && imageFile2.size > 0) {
+                console.log(`🔍 Checking for second image input (key: ${image2Key})`);
+                console.log(`📁 Second image file from formData:`, `${imageFile2.name} (${imageFile2.size} bytes)`);
+
+                const imageFileName2 = `image2_${uuidv4()}_${imageFile2.name}`;
+                console.log(`📤 Uploading second image: ${imageFileName2}`);
+                try {
+                    const uploadToS3 = createUploadToS3(userId, language);
+                    const uploadResult = await processFileUpload(
+                        imageFile2,
+                        imageFileName2,
+                        uploadToS3,
+                        LOCAL_STORAGE_DIR
+                    );
+                    inputData[image2Key] = uploadResult.s3Path;
+                    console.log(`✅ Second image uploaded to ${image2Key}: ${uploadResult.s3Path}`);
+                } catch (error) {
+                    console.error(`❌ Failed to upload second image:`, error);
+                    return NextResponse.json({
+                        error: getApiMessage('RUNPOD', 'S3_UPLOAD_FAILED', language),
+                        requiresSetup: true,
+                    }, { status: 400 });
+                }
+            }
+        }
+
+        // Handle video input
+        if (model.inputs.includes('video')) {
+            const videoKey = model.videoInputKey || 'video';
+            const videoFile = formData.get('video') as File;
+            primaryVideoFile = videoFile && videoFile.size > 0 ? videoFile : undefined;
+
+            console.log(`🔍 Checking for video input (key: ${videoKey})`);
+            console.log(`📁 Video file from formData:`, videoFile ? `${videoFile.name} (${videoFile.size} bytes)` : 'null');
+
+            if (videoFile && videoFile.size > 0) {
+                const videoFileName = `video_${uuidv4()}_${videoFile.name}`;
+                console.log(`📤 Uploading video: ${videoFileName}`);
+                try {
+                    const uploadToS3 = createUploadToS3(userId, language);
+                    const uploadResult = await processFileUpload(
+                        videoFile,
+                        videoFileName,
+                        uploadToS3,
+                        LOCAL_STORAGE_DIR
+                    );
+                    inputData[videoKey] = uploadResult.s3Path;
+                    videoInputPath = uploadResult.webPath || uploadResult.s3Path; // Store for job reuse
+                    console.log(`✅ Video uploaded: ${uploadResult.s3Path}`);
+                    console.log(`📁 Video input path stored: ${videoInputPath}`);
+                } catch (error) {
+                    console.error(`❌ Failed to upload video:`, error);
+                    return NextResponse.json({
+                        error: getApiMessage('RUNPOD', 'S3_UPLOAD_FAILED', language),
+                        requiresSetup: true,
+                    }, { status: 400 });
+                }
+            } else {
+                console.log(`⚠️ No video file provided or file is empty`);
+            }
+        }
+
+        // Handle audio input
+        if (model.inputs.includes('audio')) {
+            const audioKey = model.audioInputKey || 'audio';
+            const audioFile = formData.get('audio') as File;
+
+            console.log(`🔍 Checking for audio input (key: ${audioKey})`);
+            console.log(`📁 Audio file from formData:`, audioFile ? `${audioFile.name} (${audioFile.size} bytes)` : 'null');
+
+            if (audioFile && audioFile.size > 0) {
+                const audioFileName = `audio_${uuidv4()}_${audioFile.name}`;
+                console.log(`📤 Uploading audio: ${audioFileName}`);
+                try {
+                    const uploadToS3 = createUploadToS3(userId, language);
+                    const uploadResult = await processFileUpload(
+                        audioFile,
+                        audioFileName,
+                        uploadToS3,
+                        LOCAL_STORAGE_DIR
+                    );
+                    inputData[audioKey] = uploadResult.s3Path;
+                    audioInputPath = uploadResult.webPath || uploadResult.s3Path; // Store for job reuse
+                    console.log(`✅ Audio uploaded: ${uploadResult.s3Path}`);
+                    console.log(`📁 Audio input path stored: ${audioInputPath}`);
+                } catch (error) {
+                    console.error(`❌ Failed to upload audio:`, error);
+                    return NextResponse.json({
+                        error: getApiMessage('RUNPOD', 'S3_UPLOAD_FAILED', language),
+                        requiresSetup: true,
+                    }, { status: 400 });
+                }
+            } else {
+                console.log(`⚠️ No audio file provided or file is empty`);
+            }
+
+            // Handle second audio file (for multi-person scenarios)
+            const audioFile2 = formData.get('audio2') as File;
+            if (audioFile2 && audioFile2.size > 0) {
+                const audioFileName2 = `audio2_${uuidv4()}_${audioFile2.name}`;
+                console.log(`📤 Uploading second audio: ${audioFileName2}`);
+                try {
+                    const uploadToS3 = createUploadToS3(userId, language);
+                    const uploadResult = await processFileUpload(
+                        audioFile2,
+                        audioFileName2,
+                        uploadToS3,
+                        LOCAL_STORAGE_DIR
+                    );
+                    inputData['wav_path_2'] = uploadResult.s3Path; // Infinite Talk uses wav_path_2
+                    console.log(`✅ Second audio uploaded: ${uploadResult.s3Path}`);
+                } catch (error) {
+                    console.error(`❌ Failed to upload second audio:`, error);
+                    return NextResponse.json({
+                        error: getApiMessage('RUNPOD', 'S3_UPLOAD_FAILED', language),
+                        requiresSetup: true,
+                    }, { status: 400 });
+                }
+            }
+        }
+
+        if (modelId === 'wan22' && !primaryImageFile) {
+            return NextResponse.json({
+                error: 'WAN 2.2 requires an uploaded source image file.',
+                code: 'WAN22_SOURCE_IMAGE_REQUIRED',
+            }, { status: 400 });
+        }
+
+        const randomizeSeed = formData.get('randomizeSeed') === 'true';
+
+        // Collect all parameters from formData
+        const parameters: Record<string, any> = {};
+        model.parameters.forEach(param => {
+            const value = formData.get(param.name);
+            if (value !== null) {
+                // Type conversion
+                if (param.type === 'number') {
+                    parameters[param.name] = parseFloat(value as string);
+                } else if (param.type === 'boolean') {
+                    parameters[param.name] = value === 'true';
+                } else {
+                    parameters[param.name] = value;
+                }
+            } else if (param.default !== undefined) {
+                parameters[param.name] = param.default;
+            }
+        });
+
+        // Collect LoRA weights for WAN 2.2 (4 pairs = 8 weights)
+        if (modelId === 'wan22') {
+            for (let i = 1; i <= 4; i++) {
+                const highWeightKey = `lora_high_${i}_weight`;
+                const lowWeightKey = `lora_low_${i}_weight`;
+
+                const highWeight = formData.get(highWeightKey);
+                const lowWeight = formData.get(lowWeightKey);
+
+                if (highWeight !== null) {
+                    parameters[highWeightKey] = parseFloat(highWeight as string);
+                }
+                if (lowWeight !== null) {
+                    parameters[lowWeightKey] = parseFloat(lowWeight as string);
+                }
+            }
+        }
+
+        // Collect LoRA parameters for z-image from any submitted slot keys.
+        // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
+        if (modelId === 'z-image') {
+            const zImageLoraSlots: Array<{ path: string; weight: number }> = [];
+            const loraIndexes = new Set<number>();
+
+            for (const key of formData.keys()) {
+                if (!/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key)) {
+                    continue;
+                }
+
+                const suffix = key.slice('lora'.length);
+                const slotIndex = suffix === '' ? 1 : Number.parseInt(suffix, 10);
+
+                if (Number.isInteger(slotIndex) && slotIndex > 0) {
+                    loraIndexes.add(slotIndex);
+                }
+            }
+
+            const orderedLoraIndexes = Array.from(loraIndexes).sort((a, b) => a - b);
+
+            for (const slotIndex of orderedLoraIndexes) {
+                const loraKey = slotIndex === 1 ? 'lora' : `lora${slotIndex}`;
+                const loraWeightKey = slotIndex === 1 ? 'loraWeight' : `loraWeight${slotIndex}`;
+                const lora = formData.get(loraKey) as string;
+                const rawWeight = formData.get(loraWeightKey) as string;
+
+                delete parameters[loraKey];
+                delete parameters[loraWeightKey];
+
+                if (!lora || lora.trim() === '') {
+                    continue;
+                }
+
+                const parsedWeight = rawWeight ? parseFloat(rawWeight) : 1.0;
+                const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1.0;
+                const loraFileName = lora.split('/').pop() || lora;
+
+                zImageLoraSlots.push({ path: lora, weight });
+
+                if (!Array.isArray(inputData['lora'])) {
+                    inputData['lora'] = [];
+                }
+                inputData['lora'].push([loraFileName, weight]);
+            }
+
+            if (zImageLoraSlots.length > 0) {
+                inputData['zImageLoraSlots'] = zImageLoraSlots;
+                inputData['zImageLora'] = zImageLoraSlots[0].path;
+                inputData['zImageLoraWeight'] = zImageLoraSlots[0].weight;
+
+                console.log('Z-Image LoRAs attached', {
+                    count: zImageLoraSlots.length,
+                    loras: zImageLoraSlots.map((slot) => ({
+                        fileName: slot.path.split('/').pop() || slot.path,
+                        weight: slot.weight,
+                    })),
+                });
+            }
+        }
+
+        // Add prompt if model accepts text
+        if (model.inputs.includes('text') && prompt) {
+            inputData.prompt = prompt;
+        }
+
+        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'];
+        const buildPersistedOptions = (params: Record<string, any>, input: Record<string, any>, extra: Record<string, any> = {}) => {
+            const merged = { ...params, ...input, ...extra } as Record<string, any>;
+
+            if (!secureModelIds.includes(modelId)) {
+                return merged;
+            }
+
+            delete merged.image_path;
+            delete merged.image_path_2;
+            delete merged.video_path;
+            delete merged.condition_image;
+            delete merged.output_path;
+            delete merged.s3_path;
+            delete merged.image_url;
+            delete merged.video_url;
+            delete merged.image_base64;
+            delete merged.video_base64;
+            delete merged._secure;
+            delete merged.media_inputs;
+            delete merged.transport_request;
+            delete merged.__encryptSensitiveZImage;
+            delete merged.__encryptSensitiveUpscale;
+
+            return merged;
+        };
+
+        // Create job in database with media input paths
+        const jobId = (formData.get('jobId') as string) || uuidv4();
+        const persistedOptions = JSON.stringify(buildPersistedOptions(parameters, inputData, {
+            randomizeSeed,
+            studioSessionContext,
+        }));
+        const job = await prisma.job.create({
+            data: {
+                id: jobId,
+                userId,
+                workspaceId: resolvedWorkspaceId,
+                status: model.api.type === 'runpod' ? 'queueing_up' : 'processing',
+                type: model.type,
+                modelId: model.id,
+                prompt: prompt || null,
+                sceneSnapshotJson: sceneSnapshot ? JSON.stringify(sceneSnapshot) : null,
+                sourcePromptDocumentId: sourcePromptDocumentId || sceneSnapshot?.sourceDocumentId || null,
+                sourcePromptDocumentTitle: sourcePromptDocumentTitle || sceneSnapshot?.sourceDocumentTitle || null,
+                options: persistedOptions,
+                imageInputPath: imageInputPath || null,
+                videoInputPath: videoInputPath || null,
+                audioInputPath: audioInputPath || null,
+                createdAt: new Date(),
+            } as any, // Prisma client type may be out of sync
+        });
+
+        if (studioSessionContext) {
+            await ensureStudioSessionMaterializationTaskForJob({
+                jobId: job.id,
+                options: persistedOptions,
+            });
+        }
+
+        console.log('Created job record', {
+            jobId: job.id,
+            hasImageInput: !!imageInputPath,
+            hasVideoInput: !!videoInputPath,
+            hasAudioInput: !!audioInputPath,
+        });
+
+        // Handle RunPod API
+        if (model.api.type === 'runpod') {
+            const { settings } = await settingsService.getSettings(userId);
+
+            if (!settings.runpod?.apiKey) {
+                return NextResponse.json({
+                    error: getApiMessage('RUNPOD', 'API_KEY_NOT_CONFIGURED', language),
+                    requiresSetup: true,
+                }, { status: 400 });
+            }
+
+            const endpoints = settings.runpod.endpoints as Record<string, string> | undefined;
+            const endpointId = endpoints?.[model.id] || model.api.endpoint;
+
+            if (!endpointId) {
+                return NextResponse.json({
+                    error: getApiMessage('RUNPOD', 'ENDPOINT_NOT_CONFIGURED', language),
+                    requiresSetup: true,
+                }, { status: 400 });
+            }
+
+            const requiresSecureKey = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'].includes(modelId);
+            if (requiresSecureKey && !settings.runpod.fieldEncKeyB64?.trim()) {
+                return NextResponse.json({
+                    error: 'RunPod field encryption key is not configured',
+                    requiresSetup: true,
+                }, { status: 400 });
+            }
+
+            const runpodService = new RunPodService(
+                settings.runpod.apiKey,
+                endpointId,
+                settings.runpod.generateTimeout,
+                settings.runpod.fieldEncKeyB64
+            );
+
+            const attemptId = uuidv4();
+            const runpodInput = {
+                ...inputData,
+                ...parameters,
+            } as Record<string, any>;
+
+            let secureState: any = null;
+            if (requiresSecureKey) {
+                const masterKey = decodeMasterKey(settings.runpod.fieldEncKeyB64);
+                const { settings: latestSettings } = await settingsService.getSettings(userId);
+                const s3Service = new S3Service({
+                    endpointUrl: latestSettings.s3?.endpointUrl,
+                    accessKeyId: latestSettings.s3?.accessKeyId,
+                    secretAccessKey: latestSettings.s3?.secretAccessKey,
+                    bucketName: latestSettings.s3?.bucketName,
+                    region: latestSettings.s3?.region,
+                });
+
+                const mediaInputs: any[] = [];
+                const imageRole = modelId === 'z-image' ? 'condition_image' : 'source_image';
+                if (primaryImageFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: imageRole,
+                        kind: 'image',
+                        mime: primaryImageFile.type || 'image/png',
+                        plaintext: Buffer.from(await primaryImageFile.arrayBuffer()),
+                        fileName: `${imageRole}.bin`,
+                        storagePath: modelId === 'wan22'
+                            ? `/runpod-volume/wan22-inputs/${job.id}__${attemptId}__input.bin`
+                            : undefined,
+                    }));
+                }
+                if (secondaryImageFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: 'secondary_image',
+                        kind: 'image',
+                        mime: secondaryImageFile.type || 'image/png',
+                        plaintext: Buffer.from(await secondaryImageFile.arrayBuffer()),
+                        fileName: 'secondary_image.bin',
+                    }));
+                }
+                if (primaryVideoFile) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service,
+                        masterKey,
+                        jobId: job.id,
+                        modelId,
+                        attemptId,
+                        role: 'source_video',
+                        kind: 'video',
+                        mime: primaryVideoFile.type || 'video/mp4',
+                        plaintext: Buffer.from(await primaryVideoFile.arrayBuffer()),
+                        fileName: 'source_video.bin',
+                    }));
+                }
+
+                const securePayload: Record<string, any> = {};
+                if (typeof runpodInput.prompt === 'string' && runpodInput.prompt.trim() !== '') {
+                    securePayload.prompt = runpodInput.prompt;
+                }
+                if (typeof runpodInput.positive_prompt === 'string' && runpodInput.positive_prompt.trim() !== '') {
+                    securePayload.positive_prompt = runpodInput.positive_prompt;
+                }
+                if (typeof runpodInput.negativePrompt === 'string' && runpodInput.negativePrompt.trim() !== '') {
+                    securePayload.negativePrompt = runpodInput.negativePrompt;
+                }
+                if (typeof runpodInput.negative_prompt === 'string' && runpodInput.negative_prompt.trim() !== '') {
+                    securePayload.negative_prompt = runpodInput.negative_prompt;
+                }
+                if (Array.isArray(runpodInput.lora) && runpodInput.lora.length > 0) {
+                    securePayload.lora = runpodInput.lora;
+                }
+
+                if (Object.keys(securePayload).length > 0) {
+                    runpodInput._secure = createStructuredEnvelope(masterKey, {
+                        job_id: job.id,
+                        model_id: modelId,
+                        attempt_id: attemptId,
+                        direction: 'engui_to_endpoint',
+                    }, securePayload);
+                }
+
+                runpodInput.media_inputs = mediaInputs;
+                runpodInput.transport_request = {
+                    output_dir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`,
+                    output_file_name: buildOutputFileName(job.id, attemptId, 'result.bin')
+                };
+
+                delete runpodInput.image_path;
+                delete runpodInput.image_path_2;
+                delete runpodInput.video_path;
+                delete runpodInput.condition_image;
+                delete runpodInput.image_url;
+                delete runpodInput.video_url;
+                delete runpodInput.image_base64;
+                delete runpodInput.video_base64;
+
+                if (runpodInput._secure) {
+                    delete runpodInput.prompt;
+                    delete runpodInput.positive_prompt;
+                    delete runpodInput.negativePrompt;
+                    delete runpodInput.negative_prompt;
+                }
+
+                secureState = createSecureStateSkeleton({
+                    attemptId,
+                    outputDir: `${buildAttemptPaths(job.id, attemptId).outputsDir}/`,
+                    secureBlockPresent: !!runpodInput._secure,
+                    mediaInputs: mediaInputs.map(media => ({
+                        role: media.role,
+                        kind: media.kind,
+                        mime: media.mime,
+                        storage_path: media.storage_path,
+                    })),
+                });
+            }
+
+            if (modelId === 'z-image') {
+                runpodInput.__encryptSensitiveZImage = true;
+            }
+
+            if (modelId === 'upscale' || modelId === 'video-upscale') {
+                runpodInput.__encryptSensitiveUpscale = true;
+            }
+
+            console.log('Sending job to RunPod', {
+                jobId: job.id,
+                modelId,
+                endpointId,
+                secureMode: requiresSecureKey,
+                hasSecureEnvelope: !!runpodInput._secure,
+                mediaInputsCount: Array.isArray(runpodInput.media_inputs) ? runpodInput.media_inputs.length : 0,
+                hasTransportRequest: !!runpodInput.transport_request,
+                hasPrompt: typeof runpodInput.prompt === 'string' && runpodInput.prompt.trim() !== '',
+                hasNegativePrompt: typeof runpodInput.negativePrompt === 'string' && runpodInput.negativePrompt.trim() !== '',
+                loraCount: Array.isArray(runpodInput.lora) ? runpodInput.lora.length : 0,
+            });
+
+            try {
+                const runpodJobId = await runpodService.submitJob(runpodInput, modelId);
+
+                console.log('✅ RunPod job started:', runpodJobId);
+
+                // Update job with runpodJobId
+                await prisma.job.update({
+                    where: { id: job.id },
+                    data: {
+                        runpodJobId,
+                        endpointId,
+                        options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            randomizeSeed,
+                            runpodJobId,
+                            endpointId,
+                            attemptId: requiresSecureKey ? attemptId : undefined,
+                            secureMode: requiresSecureKey || undefined,
+                            studioSessionContext,
+                        })),
+                        secureState: secureState ? JSON.stringify({
+                            ...secureState,
+                            phase: 'runpod_queued',
+                            activeAttempt: {
+                                ...secureState.activeAttempt,
+                                runpodJobId,
+                            },
+                        }) : null,
+                    }
+                });
+
+                startRunPodSupervisor();
+
+                return NextResponse.json({
+                    success: true,
+                    jobId: job.id,
+                    runpodJobId: runpodJobId,
+                    status: 'IN_QUEUE',
+                    message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
+                });
+            } catch (error: any) {
+                console.error('❌ RunPod API error:', error);
+
+                await prisma.job.update({
+                    where: { id: job.id },
+                    data: {
+                        status: 'failed',
+                        options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            randomizeSeed,
+                            error: error.message,
+                            secureMode: requiresSecureKey || undefined,
+                            studioSessionContext,
+                        }))
+                    },
+                });
+
+                return NextResponse.json({
+                    error: error.message || getApiMessage('RUNPOD', 'API_ERROR', language),
+                    requiresSetup: false,
+                }, { status: 500 });
+            }
+        }
+
+        // Handle external APIs (Eleven Labs)
+        if (model.api.type === 'external') {
+            // Eleven Labs models
+            if (model.id.startsWith('elevenlabs-')) {
+
+                try {
+                    // Get settings again to ensure we have the API key
+                    const { settings } = await settingsService.getSettings(userId);
+
+                    if (!settings.elevenlabs?.apiKey) {
+                        throw new Error('Eleven Labs API key not configured');
+                    }
+
+                    // Initialize service
+                    const elevenlabsService = new ElevenLabsService({
+                        apiKey: settings.elevenlabs.apiKey,
+                        voiceId: settings.elevenlabs.voiceId,
+                        model: settings.elevenlabs.model,
+                        stability: settings.elevenlabs.stability,
+                        similarity: settings.elevenlabs.similarity,
+                        style: settings.elevenlabs.style,
+                        useStreaming: settings.elevenlabs.useStreaming,
+                    });
+
+                    let audioBlob: Blob;
+                    const modelName = model.id === 'elevenlabs-tts' ? 'TTS' : 'Music';
+
+                    // Generate audio based on model type
+                    if (model.id === 'elevenlabs-tts') {
+                        // Extract TTS specific parameters from parameters object or inputData
+                        const voiceId = parameters.voiceId || inputData.voiceId || settings.elevenlabs.voiceId || 'EXAVITQu4vr4xnSDxMaL';
+
+                        audioBlob = await elevenlabsService.generateSpeech({
+                            text: prompt,
+                            voice_id: voiceId,
+                            model_id: parameters.eleven_model_id || settings.elevenlabs.model || 'eleven_multilingual_v2',
+                            voice_settings: {
+                                stability: parameters.stability ?? settings.elevenlabs.stability ?? 0.8,
+                                similarity_boost: parameters.similarity ?? settings.elevenlabs.similarity ?? 0.8,
+                                style: parameters.style ?? settings.elevenlabs.style ?? 0.0,
+                                use_speaker_boost: true,
+                            },
+                        });
+                    } else if (model.id === 'elevenlabs-music') {
+                        audioBlob = await elevenlabsService.generateMusic({
+                            text: prompt,
+                            model_id: parameters.eleven_model_id || 'music_generator_v2',
+                            prompt_genre: parameters.prompt_genre,
+                            prompt_tempo: parameters.prompt_tempo,
+                            prompt_instrumentation: parameters.prompt_instrumentation,
+                            prompt_structure: parameters.prompt_structure,
+                            duration_seconds: parameters.duration_seconds,
+                        });
+                    } else {
+                        throw new Error(`Unknown external model: ${model.id}`);
+                    }
+
+                    // Save to local storage
+                    const audioFileName = `${model.id}_${uuidv4()}.mp3`;
+                    // Ensure subdirectories exist if needed, processFileUpload handles this but we are doing manual save here
+                    // LOCAL_STORAGE_DIR is 'public/results'
+                    const localPath = join(LOCAL_STORAGE_DIR, audioFileName);
+                    const audioBuffer = Buffer.from(await audioBlob.arrayBuffer());
+                    await writeFile(localPath, audioBuffer);
+
+                    const resultUrl = `/results/${audioFileName}`;
+
+                    // Update job status to completed
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: {
+                            status: 'completed',
+                            resultUrl: resultUrl,
+                            options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                                randomizeSeed,
+                                duration: audioBlob.size, // Approximate
+                                studioSessionContext,
+                            }))
+                        }
+                    });
+
+                    return NextResponse.json({
+                        success: true,
+                        jobId: job.id,
+                        audioUrl: resultUrl,
+                        localPath: `/results/${audioFileName}`,
+                        duration: audioBlob.size,
+                        model: modelName,
+                        message: `${modelName} generation completed successfully`,
+                    });
+
+                } catch (error) {
+                    console.error('❌ Eleven Labs API error:', error);
+
+                    await prisma.job.update({
+                        where: { id: job.id },
+                        data: {
+                            status: 'failed',
+                            options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                                randomizeSeed,
+                                error: error instanceof Error ? error.message : 'Unknown error',
+                                studioSessionContext,
+                            }))
+                        },
+                    });
+
+                    return NextResponse.json({
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    }, { status: 500 });
+                }
+            }
+
+            return NextResponse.json({
+                error: 'External API not implemented for this model',
+            }, { status: 501 });
+        }
+
+        return NextResponse.json({
+            error: 'Unknown API type',
+        }, { status: 500 });
+
+    } catch (error: any) {
+        console.error('❌ Generation API error:', error);
+        return NextResponse.json({
+            error: error.message || 'Internal server error',
+        }, { status: 500 });
+    }
+}

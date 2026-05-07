@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
+import { settleJobMaterializationTasks, recoverJobMaterializationTasks } from '@/lib/materialization/server';
 import { maybeAutoSaveUpscaleResult } from '@/lib/upscaleAutoSave';
 import { materializeStudioSessionCompletedJob, recoverStudioSessionMaterializationTasks } from '@/lib/studio-sessions/server';
 
@@ -555,7 +556,7 @@ async function markJobFailed(params: {
       }
     : null;
 
-  await persistJobUpdate(job.id, {
+  const failedJob = await persistJobUpdate(job.id, {
     status: 'failed',
     error: failure.error.message,
     completedAt: new Date(),
@@ -563,6 +564,12 @@ async function markJobFailed(params: {
     options: JSON.stringify(nextOptions),
     secureState: nextSecureState ? JSON.stringify(nextSecureState) : job.secureState,
   });
+
+  try {
+    await settleJobMaterializationTasks(failedJob.id);
+  } catch (error: any) {
+    console.error('Job materialization failed after job failure:', error);
+  }
 }
 
 async function markJobCompleted(params: {
@@ -616,6 +623,12 @@ async function markJobCompleted(params: {
     await maybeAutoSaveUpscaleResult(completedJob);
   } catch (error: any) {
     console.error('Upscale autosave failed after job completion:', error);
+  }
+
+  try {
+    await settleJobMaterializationTasks(completedJob.id);
+  } catch (error: any) {
+    console.error('Job materialization failed after job completion:', error);
   }
 
   try {
@@ -1051,6 +1064,12 @@ export async function processRunPodJobsOnce() {
         error,
       });
     }
+  }
+
+  try {
+    await recoverJobMaterializationTasks({ limit: 200 });
+  } catch (error) {
+    console.error('RunPod supervisor failed job materialization recovery sweep', error);
   }
 
   try {

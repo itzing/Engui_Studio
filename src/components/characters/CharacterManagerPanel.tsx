@@ -14,7 +14,16 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { characterTraitDefinitionMap, characterTraitDefinitionsByGroup } from '@/lib/characters/schema';
-import type { CharacterExtractResult, CharacterSummary, CharacterTraitMap, CharacterVersionSummary } from '@/lib/characters/types';
+import { CHARACTER_PREVIEW_SLOT_META } from '@/lib/characters/previews';
+import type {
+  CharacterExtractResult,
+  CharacterPreviewSlot,
+  CharacterPreviewSlotState,
+  CharacterSummary,
+  CharacterTraitMap,
+  CharacterVersionSummary,
+} from '@/lib/characters/types';
+import { CHARACTER_PREVIEW_SLOTS } from '@/lib/characters/types';
 import { normalizeCharacterGender } from '@/lib/characters/utils';
 
 type DraftCharacter = {
@@ -117,6 +126,51 @@ function formatDateTime(value: string) {
   } catch {
     return value;
   }
+}
+
+function formatPreviewStatus(status: CharacterPreviewSlotState['status'] | null | undefined) {
+  switch (status) {
+    case 'queued':
+      return 'Queued';
+    case 'running':
+      return 'Running';
+    case 'ready':
+      return 'Ready';
+    case 'failed':
+      return 'Failed';
+    default:
+      return 'Idle';
+  }
+}
+
+function previewStatusClassName(status: CharacterPreviewSlotState['status'] | null | undefined) {
+  switch (status) {
+    case 'queued':
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-200';
+    case 'running':
+      return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
+    case 'ready':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+    case 'failed':
+      return 'border-red-500/30 bg-red-500/10 text-red-200';
+    default:
+      return 'border-border bg-background/70 text-muted-foreground';
+  }
+}
+
+function previewAspectClassName(slot: CharacterPreviewSlot) {
+  if (slot === 'portrait') return 'aspect-square w-full max-w-[156px]';
+  if (slot === 'upper_body') return 'aspect-[832/1216] w-full max-w-[108px]';
+  return 'aspect-[896/1408] w-full max-w-[96px]';
+}
+
+function hasActivePreviewGeneration(character: CharacterSummary | null) {
+  if (!character?.previewState) return false;
+
+  return CHARACTER_PREVIEW_SLOTS.some((slot) => {
+    const status = character.previewState?.[slot]?.status;
+    return status === 'queued' || status === 'running';
+  });
 }
 
 function normalizeImportKey(rawKey: string) {
@@ -439,6 +493,7 @@ export default function CharacterManagerPanel() {
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
+  const [generatingPreviewSlot, setGeneratingPreviewSlot] = useState<CharacterPreviewSlot | null>(null);
   const [listMode, setListMode] = useState<CharacterListMode>('active');
   const [sortMode, setSortMode] = useState<CharacterSortMode>('updated_desc');
   const [isTrashMutating, setIsTrashMutating] = useState(false);
@@ -449,9 +504,13 @@ export default function CharacterManagerPanel() {
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
   const effectiveExtractName = extractOverrideName.trim() || extractPreview?.name?.trim() || '';
 
-  const fetchCharacters = async (preferredCharacterId?: string | null) => {
-    setIsLoading(true);
-    setError(null);
+  const fetchCharacters = async (preferredCharacterId?: string | null, options?: { syncDraft?: boolean; silent?: boolean }) => {
+    const syncDraft = options?.syncDraft ?? true;
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setIsLoading(true);
+      setError(null);
+    }
 
     try {
       const response = await fetch(`/api/characters?includeDeleted=true`, { cache: 'no-store' });
@@ -474,20 +533,24 @@ export default function CharacterManagerPanel() {
 
       if (nextSelectedId) {
         const selected = nextCharacters.find((item: CharacterSummary) => item.id === nextSelectedId);
-        if (selected) {
+        if (selected && syncDraft) {
           setDraft(buildDraft(selected));
           return;
         }
       }
 
-      if (!nextSelectedId) {
+      if (!nextSelectedId && syncDraft) {
         setDraft(createEmptyDraft());
       }
     } catch (nextError: any) {
       console.error('Failed to load characters:', nextError);
-      setError(nextError?.message || 'Failed to load characters');
+      if (!silent) {
+        setError(nextError?.message || 'Failed to load characters');
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -554,6 +617,29 @@ export default function CharacterManagerPanel() {
     () => characters.find((character) => character.id === selectedCharacterId) || null,
     [characters, selectedCharacterId]
   );
+
+  useEffect(() => {
+    if (!selectedCharacter?.id || !hasActivePreviewGeneration(selectedCharacter)) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void fetchCharacters(selectedCharacter.id, { syncDraft: false, silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [selectedCharacter]);
+
+  const applyCharacterSummaryUpdate = (nextCharacter: CharacterSummary) => {
+    setCharacters((current) => {
+      const hasExisting = current.some((character) => character.id === nextCharacter.id);
+      if (!hasExisting) {
+        return [nextCharacter, ...current];
+      }
+
+      return current.map((character) => character.id === nextCharacter.id ? nextCharacter : character);
+    });
+  };
 
   const focusCharacterButton = (characterId: string) => {
     window.requestAnimationFrame(() => {
@@ -1087,40 +1173,40 @@ export default function CharacterManagerPanel() {
     : versions[0] || null;
 
   const previewCards = useMemo(() => {
-    const buildCard = (title: string, subtitle: string, groupIds: string[]) => {
+    return CHARACTER_PREVIEW_SLOTS.map((slot) => {
+      const meta = CHARACTER_PREVIEW_SLOT_META[slot];
       if (!draft) {
         return {
-          title,
-          subtitle,
+          slot,
+          ...meta,
           traitCount: 0,
           chips: [] as string[],
           summary: 'Select a character to preview this region.',
+          state: null as CharacterPreviewSlotState | null,
+          imageUrl: null as string | null,
         };
       }
 
       const chips = characterTraitDefinitionsByGroup
-        .filter(({ group }) => groupIds.includes(group.id))
+        .filter(({ group }) => meta.groupIds.includes(group.id))
         .flatMap(({ traits }) => traits)
         .filter((trait) => draft.traits[trait.key])
         .map((trait) => `${trait.label}: ${draft.traits[trait.key]}`);
 
+      const state = selectedCharacter?.previewState?.[slot] || null;
       return {
-        title,
-        subtitle,
+        slot,
+        ...meta,
         traitCount: chips.length,
         chips: chips.slice(0, 6),
         summary: chips.length > 0
           ? chips.slice(0, 2).join(' • ')
           : 'No preview-driving traits captured yet.',
+        state,
+        imageUrl: state?.previewUrl || state?.thumbnailUrl || state?.imageUrl || null,
       };
-    };
-
-    return [
-      buildCard('Portrait preview', 'Identity, face, and hair', ['identity', 'face', 'hair']),
-      buildCard('Upper-body preview', 'Hair, body, and posture', ['hair', 'body', 'posture']),
-      buildCard('Full-body preview', 'Body, lower body, and posture', ['body', 'lower-body', 'posture']),
-    ];
-  }, [draft]);
+    });
+  }, [draft, selectedCharacter]);
 
   const moveCharacterToTrash = async () => {
     if (!selectedCharacter || selectedCharacter.deletedAt) return;
@@ -1173,6 +1259,45 @@ export default function CharacterManagerPanel() {
       showToast(nextError?.message || 'Failed to restore character', 'error');
     } finally {
       setIsTrashMutating(false);
+    }
+  };
+
+  const handleGeneratePreview = async (slot: CharacterPreviewSlot) => {
+    if (!selectedCharacter?.id) {
+      showToast('Save the character once before generating previews', 'error');
+      return;
+    }
+
+    if (selectedCharacter.deletedAt) {
+      showToast('Restore the character before generating previews', 'error');
+      return;
+    }
+
+    if (canSave) {
+      showToast('Save the character before generating previews so the server uses the latest traits', 'error');
+      return;
+    }
+
+    setGeneratingPreviewSlot(slot);
+    try {
+      const response = await fetch(`/api/characters/${selectedCharacter.id}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.character) {
+        throw new Error(data.error || 'Failed to start character preview generation');
+      }
+
+      applyCharacterSummaryUpdate(data.character as CharacterSummary);
+      const hadExistingPreview = !!selectedCharacter.previewState?.[slot]?.imageUrl;
+      showToast(hadExistingPreview ? 'Character preview regeneration started' : 'Character preview generation started', 'success');
+    } catch (nextError: any) {
+      console.error('Failed to generate character preview:', nextError);
+      showToast(nextError?.message || 'Failed to generate character preview', 'error');
+    } finally {
+      setGeneratingPreviewSlot(null);
     }
   };
 
@@ -1278,11 +1403,29 @@ export default function CharacterManagerPanel() {
                     : 'border-l-transparent hover:bg-muted/20'
                     }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
-                      <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
-                        {renderGenderLabel(character.gender)} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background/60">
+                        {character.primaryPreviewThumbnailUrl ? (
+                          <img
+                            src={character.primaryPreviewThumbnailUrl}
+                            alt={`${character.name} portrait preview`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-sm font-semibold text-muted-foreground">
+                            {character.name.trim().charAt(0).toUpperCase() || 'C'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
+                        <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
+                          {renderGenderLabel(character.gender)} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                        </div>
+                        <div className={`mt-1 text-[10px] ${isSelected ? 'text-blue-100/70' : 'text-muted-foreground'}`}>
+                          Portrait {formatPreviewStatus(character.previewState?.portrait?.status)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -1587,22 +1730,85 @@ export default function CharacterManagerPanel() {
       </main>
 
       <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5">
-        {previewCards.map((card, index) => (
-          <div key={card.title} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-2.5">
-            <div className="text-xs font-medium">{card.title}</div>
-            <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
-            <div className="mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-1 text-center">
-              <div className={`flex items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/80 bg-background/40 px-3 ${index === 0 ? 'aspect-square w-full max-w-[132px]' : index === 1 ? 'aspect-[832/1216] w-full max-w-[92px]' : 'aspect-[896/1408] w-full max-w-[84px]'}`}>
+        {previewCards.map((card) => {
+          const slotState = card.state;
+          const isSubmitting = generatingPreviewSlot === card.slot;
+          const isActive = slotState?.status === 'queued' || slotState?.status === 'running';
+          const canGenerate = !!selectedCharacter?.id && !selectedCharacter.deletedAt && !canSave && card.traitCount > 0 && !isSubmitting && !isActive;
+          const actionLabel = slotState?.imageUrl || slotState?.previewUrl || slotState?.thumbnailUrl ? 'Regenerate' : 'Generate';
+          const helperText = !selectedCharacter?.id
+            ? 'Save the character once before generating previews.'
+            : selectedCharacter.deletedAt
+              ? 'Restore the character before generating previews.'
+              : canSave
+                ? 'Save the latest draft changes before generating previews.'
+                : card.traitCount > 0
+                  ? card.summary
+                  : 'No mapped traits yet for this preview.';
+
+          return (
+            <div key={card.slot} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-2.5">
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Preview scaffold ready' : 'Empty preview state'}</div>
-                  <div className="mt-1.5 text-[11px] text-muted-foreground">
-                    {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
-                  </div>
+                  <div className="text-xs font-medium">{card.title}</div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
+                </div>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] ${previewStatusClassName(slotState?.status)}`}>
+                  {formatPreviewStatus(slotState?.status)}
+                </span>
+              </div>
+
+              <div className="mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-2 text-center">
+                <div className={`relative flex items-center justify-center overflow-hidden rounded-lg border ${card.imageUrl ? 'border-border bg-background/70' : 'border-dashed border-border/80 bg-background/40'} px-3 ${previewAspectClassName(card.slot)}`}>
+                  {card.imageUrl ? (
+                    <img
+                      src={card.imageUrl}
+                      alt={`${card.title} for ${draft?.name || 'character'}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div>
+                      <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Ready to generate' : 'Empty preview state'}</div>
+                      <div className="mt-1.5 text-[11px] text-muted-foreground">
+                        {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
+                      </div>
+                    </div>
+                  )}
+                  {isActive && (
+                    <div className="absolute inset-x-2 bottom-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-blue-100 backdrop-blur-sm">
+                      {slotState?.status === 'running' ? 'Generation running…' : 'Generation queued…'}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              <div className="mt-2 text-[11px] text-muted-foreground">{helperText}</div>
+              {slotState?.error && (
+                <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200">
+                  {slotState.error}
+                </div>
+              )}
+
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 text-xs"
+                  onClick={() => void handleGeneratePreview(card.slot)}
+                  disabled={!canGenerate}
+                >
+                  <Sparkles className="mr-1 h-3.5 w-3.5" />
+                  {isSubmitting ? 'Starting...' : actionLabel}
+                </Button>
+                {slotState?.updatedAt && (
+                  <div className="text-[10px] text-muted-foreground">
+                    {formatDateTime(slotState.updatedAt)}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </aside>
 
       <Dialog open={modalState.kind !== 'closed'} onOpenChange={(open) => !open && closeModal()}>

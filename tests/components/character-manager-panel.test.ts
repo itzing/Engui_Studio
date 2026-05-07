@@ -15,6 +15,47 @@ vi.mock('@/components/ui/toast', () => ({
 
 import CharacterManagerPanel, { parseImportText } from '@/components/characters/CharacterManagerPanel';
 
+function buildPreviewState(overrides: Record<string, any> = {}) {
+  return {
+    portrait: {
+      slot: 'portrait',
+      status: 'idle',
+      jobId: null,
+      imageUrl: null,
+      previewUrl: null,
+      thumbnailUrl: null,
+      error: null,
+      promptSnapshot: null,
+      updatedAt: null,
+      ...(overrides.portrait || {}),
+    },
+    upper_body: {
+      slot: 'upper_body',
+      status: 'idle',
+      jobId: null,
+      imageUrl: null,
+      previewUrl: null,
+      thumbnailUrl: null,
+      error: null,
+      promptSnapshot: null,
+      updatedAt: null,
+      ...(overrides.upper_body || {}),
+    },
+    full_body: {
+      slot: 'full_body',
+      status: 'idle',
+      jobId: null,
+      imageUrl: null,
+      previewUrl: null,
+      thumbnailUrl: null,
+      error: null,
+      promptSnapshot: null,
+      updatedAt: null,
+      ...(overrides.full_body || {}),
+    },
+  };
+}
+
 function jsonResponse(body: unknown, ok = true, status = 200) {
   return Promise.resolve({
     ok,
@@ -59,6 +100,9 @@ describe('CharacterManagerPanel gender behavior', () => {
       gender: 'male',
       traits: { hair_color: 'silver' },
       editorState: {},
+      previewState: buildPreviewState(),
+      primaryPreviewImageUrl: null,
+      primaryPreviewThumbnailUrl: null,
       currentVersionId: 'version-1',
       previewStatusSummary: null,
       createdAt: '2026-04-26T00:00:00.000Z',
@@ -100,5 +144,69 @@ describe('CharacterManagerPanel gender behavior', () => {
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith('Character version saved', 'success');
     });
+  });
+
+  it('queues a portrait preview from the saved character record', async () => {
+    const character = {
+      id: 'character-1',
+      name: 'Mira',
+      gender: 'female',
+      traits: { hair_color: 'silver' },
+      editorState: {},
+      previewState: buildPreviewState(),
+      primaryPreviewImageUrl: null,
+      primaryPreviewThumbnailUrl: null,
+      currentVersionId: 'version-1',
+      previewStatusSummary: null,
+      createdAt: '2026-04-26T00:00:00.000Z',
+      updatedAt: '2026-04-26T00:00:00.000Z',
+      deletedAt: null,
+      versionCount: 1,
+    };
+
+    const queuedCharacter = {
+      ...character,
+      previewState: buildPreviewState({
+        portrait: {
+          status: 'queued',
+          jobId: 'job-preview-1',
+          promptSnapshot: 'portrait prompt',
+          updatedAt: '2026-05-07T10:00:00.000Z',
+        },
+      }),
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (method === 'GET' && url.includes('/api/characters?includeDeleted=true')) {
+        return jsonResponse({ success: true, characters: [character] });
+      }
+      if (method === 'GET' && url.endsWith('/api/characters/character-1/versions')) {
+        return jsonResponse({ success: true, versions: [] });
+      }
+      if (method === 'POST' && url.endsWith('/api/characters/character-1/preview')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body.slot).toBe('portrait');
+        return jsonResponse({ success: true, jobId: 'job-preview-1', character: queuedCharacter });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(CharacterManagerPanel));
+
+    await waitFor(() => {
+      expect(screen.getByText('Portrait preview')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Generate' })[0]);
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('Character preview generation started', 'success');
+    });
+
+    expect(screen.getAllByText('Queued').length).toBeGreaterThan(0);
   });
 });
