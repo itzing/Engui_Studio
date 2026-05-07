@@ -270,10 +270,12 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
       </div>
       <div className={`fixed inset-y-0 right-0 z-40 flex transition-transform duration-300 ease-out ${jobsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="relative h-full w-[340px] max-w-[88vw] border-l border-white/10 bg-[#101014] shadow-2xl shadow-black/50">
-          <Button type="button" variant="outline" size="sm" onClick={toggleJobsPanel} className="absolute right-full top-5 mr-3 border-white/10 bg-[#101014] text-white hover:bg-white/[0.08]">
-            <ChevronRight className="mr-1 h-4 w-4" />
-            Hide
-          </Button>
+          {jobsPanelOpen ? (
+            <Button type="button" variant="outline" size="sm" onClick={toggleJobsPanel} className="absolute right-full top-5 mr-3 border-white/10 bg-[#101014] text-white hover:bg-white/[0.08]">
+              <ChevronRight className="mr-1 h-4 w-4" />
+              Hide
+            </Button>
+          ) : null}
           <RightPanel />
         </div>
       </div>
