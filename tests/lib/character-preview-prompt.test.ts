@@ -73,10 +73,11 @@ describe('character preview prompt', () => {
     expect(prompt).toContain('Nose shape: small straight nose');
     expect(prompt).toContain('Lip shape: bow-shaped lips');
     expect(prompt).toContain('Body build: slim athletic');
-    expect(prompt).toContain('not a different person');
+    expect(prompt).toContain('studio character reference photo');
+    expect(prompt).toContain('visible face');
   });
 
-  it('makes full-body prompts photorealistic and rejects mannequin-like previews', () => {
+  it('makes full-body prompts photo-based without negative prompt fragments', () => {
     const prompt = buildCharacterPreviewPrompt(buildCharacter({
       traits: {
         age: '25',
@@ -88,17 +89,18 @@ describe('character preview prompt', () => {
       },
     }), 'full_body');
 
-    expect(prompt).toContain('photorealistic studio character reference photo');
+    expect(prompt).toContain('studio character reference photo');
     expect(prompt).toContain('face visible');
     expect(prompt).toContain('Face shape: oval');
     expect(prompt).toContain('Eye color: brown');
     expect(prompt).toContain('Hair color: black');
     expect(prompt).toContain('Body build: athletic');
     expect(prompt).toContain('Leg structure: long toned legs');
-    expect(prompt).toContain('not a 3d render');
-    expect(prompt).toContain('not a mannequin');
-    expect(prompt).toContain('not a faceless body');
-    expect(prompt).toContain('not a black silhouette');
+    expect(prompt).not.toContain('photorealistic');
+    expect(prompt).not.toContain('not a 3d render');
+    expect(prompt).not.toContain('not a mannequin');
+    expect(prompt).not.toContain('not a faceless body');
+    expect(prompt).not.toContain('not a black silhouette');
   });
 
   it('renders underage gender terms like Prompt Constructor', () => {
