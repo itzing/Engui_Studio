@@ -139,12 +139,14 @@ type PersistedPortfolioRecord = {
   id: string;
   workspaceId: string;
   characterId: string;
+  coverCollectionItemId?: string | null;
   name: string;
   description: string;
   status: string;
   createdAt: Date;
   updatedAt: Date;
   character?: { name?: string | null; gender?: string | null; traits?: string | null; previewStateJson?: string | null } | null;
+  coverCollectionItem?: { version?: { originalUrl?: string | null; previewUrl?: string | null; thumbnailUrl?: string | null } | null } | null;
   _count?: { sessions?: number; collections?: number };
   selectedImageCount?: number;
 };
@@ -475,6 +477,8 @@ export function toStudioPortfolioSummary(record: PersistedPortfolioRecord): Stud
     characterGender: record.character?.gender ?? null,
     characterAge: parseJson<Record<string, unknown>>(record.character?.traits, {}).age?.toString() ?? null,
     characterPreviewUrl: extractCharacterPreviewUrl(record.character?.previewStateJson),
+    coverCollectionItemId: record.coverCollectionItemId ?? null,
+    coverImageUrl: record.coverCollectionItem?.version?.previewUrl ?? record.coverCollectionItem?.version?.thumbnailUrl ?? record.coverCollectionItem?.version?.originalUrl ?? null,
     name: record.name,
     description: record.description,
     status: normalizeStudioPortfolioStatus(record.status),

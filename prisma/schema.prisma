@@ -474,24 +474,27 @@ model StudioSessionTemplateCategoryRule {
 }
 
 model StudioPortfolio {
-  id          String   @id @default(uuid())
-  workspaceId String
-  characterId String
-  name        String
-  description String   @default("")
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  workspaceId           String
+  characterId           String
+  coverCollectionItemId String?
+  name                  String
+  description           String   @default("")
+  status                String   @default("active")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  character       Character              @relation(fields: [characterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  sessions        StudioPhotoSession[]
-  collections     StudioCollection[]
-  collectionItems StudioCollectionItem[]
-  runs            StudioSessionRun[]
+  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character           Character             @relation(fields: [characterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  coverCollectionItem StudioCollectionItem? @relation("StudioPortfolioCoverItem", fields: [coverCollectionItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  sessions            StudioPhotoSession[]
+  collections         StudioCollection[]
+  collectionItems     StudioCollectionItem[]
+  runs                StudioSessionRun[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, characterId, status, updatedAt(sort: Desc)])
+  @@index([coverCollectionItemId])
   @@map("studio_portfolios")
 }
 
@@ -578,7 +581,8 @@ model StudioCollectionItem {
   photoSession StudioPhotoSession?      @relation(fields: [photoSessionId], references: [id], onDelete: SetNull)
   run          StudioSessionRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
   shot         StudioSessionShot?       @relation(fields: [shotId], references: [id], onDelete: SetNull)
-  version      StudioSessionShotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  version            StudioSessionShotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  coverForPortfolios StudioPortfolio[]        @relation("StudioPortfolioCoverItem")
 
   @@unique([collectionId, versionId])
   @@index([workspaceId, portfolioId, collectionId, sortOrder])

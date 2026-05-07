@@ -81,6 +81,7 @@ async function assertWorkspace(workspaceId: string) {
 function makePortfolioInclude() {
   return {
     character: { select: { name: true, gender: true, traits: true, previewStateJson: true } },
+    coverCollectionItem: { include: { version: { select: { originalUrl: true, previewUrl: true, thumbnailUrl: true } } } },
     _count: { select: { sessions: true, collections: true } },
   } as const;
 }
@@ -133,15 +134,25 @@ export async function getStudioPortfolio(portfolioId: string) {
   return { portfolio: toStudioPortfolioSummary(portfolio), sessions, collections };
 }
 
-export async function updateStudioPortfolio(portfolioId: string, input: { name?: unknown; description?: unknown; status?: unknown }) {
+export async function updateStudioPortfolio(portfolioId: string, input: { name?: unknown; description?: unknown; status?: unknown; coverCollectionItemId?: unknown }) {
   const existing = await prisma.studioPortfolio.findUnique({ where: { id: portfolioId }, select: { id: true } });
   if (!existing) return null;
-  const data: { name?: string; description?: string; status?: StudioPortfolioStatus } = {};
+  const data: { name?: string; description?: string; status?: StudioPortfolioStatus; coverCollectionItemId?: string | null } = {};
   const name = readOptionalString(input.name);
   const description = readOptionalString(input.description);
   if (name) data.name = name;
   if (description !== undefined) data.description = description;
   if (input.status !== undefined) data.status = normalizeStudioPortfolioStatus(input.status);
+  if (input.coverCollectionItemId !== undefined) {
+    const coverCollectionItemId = readNullableString(input.coverCollectionItemId);
+    if (!coverCollectionItemId) {
+      data.coverCollectionItemId = null;
+    } else {
+      const item = await prisma.studioCollectionItem.findFirst({ where: { id: coverCollectionItemId, portfolioId }, select: { id: true } });
+      if (!item) return { error: 'Cover item not found in this portfolio' as const };
+      data.coverCollectionItemId = item.id;
+    }
+  }
 
   const portfolio = await prisma.studioPortfolio.update({ where: { id: portfolioId }, data, include: makePortfolioInclude() });
   return toStudioPortfolioSummary(portfolio);

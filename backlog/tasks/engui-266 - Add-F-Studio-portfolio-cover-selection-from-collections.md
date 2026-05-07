@@ -1,7 +1,7 @@
 ---
 id: ENGUI-266
 title: Add F-Studio portfolio cover selection from collections
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 20:15'
 labels: [studio, f-studio, ui]

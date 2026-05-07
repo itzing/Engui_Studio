@@ -22,6 +22,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const body = await readStudioSessionJsonBody(request);
     const portfolio = await updateStudioPortfolio(id, body ?? {});
     if (!portfolio) return studioSessionJson({ success: false, error: 'Portfolio not found' }, { status: 404 });
+    if ('error' in portfolio) return studioSessionJson({ success: false, error: portfolio.error }, { status: 400 });
     return studioSessionJson({ success: true, portfolio });
   } catch (error) {
     return handleStudioSessionApiError(error, 'Failed to update Studio portfolio:');

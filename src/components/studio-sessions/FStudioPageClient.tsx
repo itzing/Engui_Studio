@@ -51,7 +51,7 @@ function PortfolioTile({ portfolio }: { portfolio: StudioPortfolioSummary }) {
   return (
     <Link href={`/studio-sessions/portfolios/${portfolio.id}`} className="group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] transition hover:border-white/25 hover:bg-white/[0.06]">
       <div className="relative aspect-[4/3] bg-black/30">
-        {portfolio.characterPreviewUrl ? <img src={portfolio.characterPreviewUrl} alt={portfolio.characterName} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <div className="flex h-full items-center justify-center text-white/30"><UserRound className="h-12 w-12" /></div>}
+        {portfolio.coverImageUrl || portfolio.characterPreviewUrl ? <img src={portfolio.coverImageUrl || portfolio.characterPreviewUrl || ''} alt={portfolio.characterName} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <div className="flex h-full items-center justify-center text-white/30"><UserRound className="h-12 w-12" /></div>}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4">
           <div className="truncate text-base font-semibold text-white">{portfolio.characterName}</div>
           <div className="truncate text-xs text-white/60">{[portfolio.characterAge ? `${portfolio.characterAge.replace(/yo$/i, '')}yo` : '', portfolio.characterGender].filter(Boolean).join(' / ')}</div>
@@ -234,7 +234,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'session') return <Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-6"><div className="text-xl font-semibold">{selectedSession?.name || 'Session'}</div><div className="grid gap-4 md:grid-cols-2"><Info label="Setting" value={selectedSession?.settingText} /><Info label="Lighting" value={selectedSession?.lightingText} /><Info label="Vibe" value={selectedSession?.vibeText} /><Info label="Outfit" value={selectedSession?.outfitText} /></div><Button onClick={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} className="bg-blue-500 text-white hover:bg-blue-400">Open runs</Button></CardContent></Card>;
     if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setShowCreateRun(true); }} />{runs.map((run) => <SimpleTile key={run.id} title={run.name || run.poseSetId || 'Run'} subtitle={`${run.count} shots · ${run.status}`} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} icon={<Layers3 className="h-5 w-5" />} />)}</TileGrid>;
     if (route.level === 'run') return <RunWorkspace detail={runDetail} />;
-    if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} />;
+    if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
     return null;
   }
 
@@ -259,4 +259,23 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
 function Info({ label, value }: { label: string; value?: string | null }) { return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-xs uppercase tracking-[0.16em] text-white/35">{label}</div><div className="mt-2 text-sm text-white/75">{value || 'Not set'}</div></div>; }
 function NameDialog({ open, title, value, onChange, onOpenChange, onSubmit }: { open: boolean; title: string; value: string; onChange: (value: string) => void; onOpenChange: (open: boolean) => void; onSubmit: () => void }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><Input value={value} onChange={(event) => onChange(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Name" /><Button onClick={onSubmit} className="bg-blue-500 text-white hover:bg-blue-400">Create</Button></DialogContent></Dialog>; }
 function RunWorkspace({ detail }: { detail: RunDetail | null }) { const versions = detail?.versions || []; return <div className="space-y-5"><div className="text-xl font-semibold">{detail?.run?.name || 'Run'}</div><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : null}</div><div className="p-4 text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div></div>; })}{versions.length === 0 ? <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-white/45">No generated versions yet.</div> : null}</TileGrid></div>; }
-function CollectionWorkspace({ detail }: { detail: CollectionDetail }) { return <div className="space-y-5"><div className="text-xl font-semibold">{detail?.collection.name || 'Collection'}</div><TileGrid>{(detail?.items || []).map((item) => { const url = item.previewUrl || item.thumbnailUrl || item.originalUrl; return <div key={item.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt={item.caption || 'Collection item'} className="h-full w-full object-cover" /> : null}</div><div className="flex items-center justify-between p-4 text-xs text-white/55"><span>#{item.sortOrder + 1}</span><Button size="sm" variant="outline" className="border-white/10 bg-white/[0.04] text-white/70">Set as cover</Button></div></div>; })}</TileGrid></div>; }
+function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
+  const [settingCoverItemId, setSettingCoverItemId] = useState<string | null>(null);
+  const setAsCover = async (itemId: string) => {
+    if (!portfolioId) return;
+    setSettingCoverItemId(itemId);
+    try {
+      const response = await fetch(`/api/studio/portfolios/${encodeURIComponent(portfolioId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coverCollectionItemId: itemId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to set portfolio cover');
+      onCoverSet();
+    } finally {
+      setSettingCoverItemId(null);
+    }
+  };
+  return <div className="space-y-5"><div className="text-xl font-semibold">{detail?.collection.name || 'Collection'}</div><TileGrid>{(detail?.items || []).map((item) => { const url = item.previewUrl || item.thumbnailUrl || item.originalUrl; return <div key={item.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt={item.caption || 'Collection item'} className="h-full w-full object-cover" /> : null}</div><div className="flex items-center justify-between p-4 text-xs text-white/55"><span>#{item.sortOrder + 1}</span><Button size="sm" variant="outline" disabled={settingCoverItemId === item.id} onClick={() => setAsCover(item.id)} className="border-white/10 bg-white/[0.04] text-white/70">{settingCoverItemId === item.id ? 'Setting…' : 'Set as cover'}</Button></div></div>; })}</TileGrid></div>;
+}

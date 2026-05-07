@@ -70,6 +70,8 @@ export interface StudioPortfolioSummary {
   characterGender: string | null;
   characterAge: string | null;
   characterPreviewUrl: string | null;
+  coverCollectionItemId: string | null;
+  coverImageUrl: string | null;
   name: string;
   description: string;
   status: StudioPortfolioStatus;
