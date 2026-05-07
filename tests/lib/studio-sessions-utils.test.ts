@@ -21,20 +21,25 @@ describe('studio session utils', () => {
     expect(normalized.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null });
   });
 
-  it('formats character age in assembled Studio Session prompts like Prompt Constructor', () => {
+  it('renders Studio Session prompts through the Prompt Constructor scene template style', () => {
     const result = assembleStudioSessionPrompt({
-      characterPrompt: '',
+      characterPrompt: 'Appearance: athletic woman, sharp jawline',
       characterAge: '23 years old',
       environmentText: 'studio background',
-      outfitText: '',
-      hairstyleText: '',
+      outfitText: 'black bodysuit',
+      hairstyleText: 'short silver bob',
       positivePrompt: 'soft light',
       negativePrompt: 'blurry',
       pose: { prompt: 'standing pose' },
     });
 
-    expect(result.positivePrompt).toContain('23yo');
-    expect(result.positivePrompt).toBe('23yo, studio background, soft light, standing pose');
+    expect(result.positivePrompt).toContain('Scene: studio photo session.');
+    expect(result.positivePrompt).toContain('Character 1: 23yo');
+    expect(result.positivePrompt).toContain('black bodysuit');
+    expect(result.positivePrompt).toContain('standing pose');
+    expect(result.positivePrompt).toContain('Appearance: athletic woman, sharp jawline, Hair: short silver bob');
+    expect(result.positivePrompt).toContain('Environment: studio background.');
+    expect(result.positivePrompt).toContain('Style: soft light.');
   });
 
   it('treats skipped shots as non-blocking for completed status', () => {
