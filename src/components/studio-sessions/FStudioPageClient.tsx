@@ -105,30 +105,51 @@ function SimpleTile({ title, subtitle, href, icon }: { title: string; subtitle?:
   );
 }
 
+function TileDeleteButton({ confirming, deleting, label, onDeleteClick, onConfirmDelete }: { confirming: boolean; deleting: boolean; label: string; onDeleteClick: () => void; onConfirmDelete: () => void }) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      disabled={deleting}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        confirming ? onConfirmDelete() : onDeleteClick();
+      }}
+      className={`h-8 px-2 text-xs opacity-0 transition group-hover:opacity-100 focus:opacity-100 ${confirming ? 'text-red-300 opacity-100 hover:bg-red-500/10 hover:text-red-200' : 'text-white/45 hover:bg-white/[0.06] hover:text-red-300'}`}
+      title={confirming ? `Confirm delete ${label}` : `Delete ${label}`}
+    >
+      {confirming ? (deleting ? 'Deleting…' : 'Confirm?') : <Trash2 className="h-4 w-4" />}
+    </Button>
+  );
+}
+
 function SessionTile({ session, href, confirming, deleting, onDeleteClick, onConfirmDelete }: { session: StudioPhotoSessionSummary; href: string; confirming: boolean; deleting: boolean; onDeleteClick: () => void; onConfirmDelete: () => void }) {
   return (
     <Link href={href} className="group relative flex min-h-[180px] flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-white/25 hover:bg-white/[0.06]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-white/55"><Rows3 className="h-5 w-5" /></div>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={deleting}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            confirming ? onConfirmDelete() : onDeleteClick();
-          }}
-          className={`h-8 px-2 text-xs opacity-0 transition group-hover:opacity-100 focus:opacity-100 ${confirming ? 'text-red-300 opacity-100 hover:bg-red-500/10 hover:text-red-200' : 'text-white/45 hover:bg-white/[0.06] hover:text-red-300'}`}
-          title={confirming ? 'Confirm delete session' : 'Delete session'}
-        >
-          {confirming ? (deleting ? 'Deleting…' : 'Confirm?') : <Trash2 className="h-4 w-4" />}
-        </Button>
+        <TileDeleteButton confirming={confirming} deleting={deleting} label="session" onDeleteClick={onDeleteClick} onConfirmDelete={onConfirmDelete} />
       </div>
       <div>
         <div className="truncate text-base font-semibold text-white">{session.name}</div>
         <div className="mt-1 line-clamp-2 text-xs text-white/50">{[session.settingText, session.vibeText, `${session.runCount} runs`].filter(Boolean).join(' · ')}</div>
+      </div>
+    </Link>
+  );
+}
+
+function RunTile({ run, href, confirming, deleting, onDeleteClick, onConfirmDelete }: { run: StudioSessionRunSummary; href: string; confirming: boolean; deleting: boolean; onDeleteClick: () => void; onConfirmDelete: () => void }) {
+  return (
+    <Link href={href} className="group relative flex min-h-[180px] flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-white/25 hover:bg-white/[0.06]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-white/55"><Layers3 className="h-5 w-5" /></div>
+        <TileDeleteButton confirming={confirming} deleting={deleting} label="run" onDeleteClick={onDeleteClick} onConfirmDelete={onConfirmDelete} />
+      </div>
+      <div>
+        <div className="truncate text-base font-semibold text-white">{run.name || run.poseSetId || 'Run'}</div>
+        <div className="mt-1 line-clamp-2 text-xs text-white/50">{`${run.count} shots · ${run.status}`}</div>
       </div>
     </Link>
   );
@@ -295,6 +316,8 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [deletingPortfolioId, setDeletingPortfolioId] = useState<string | null>(null);
   const [confirmingDeleteSessionId, setConfirmingDeleteSessionId] = useState<string | null>(null);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [confirmingDeleteRunId, setConfirmingDeleteRunId] = useState<string | null>(null);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -446,6 +469,21 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     }
   }
 
+  async function deleteRun(id: string) {
+    setDeletingRunId(id); setError(null);
+    try {
+      const response = await fetch(`/api/studio/runs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to delete run');
+      setRuns((current) => current.filter((run) => run.id !== id));
+      setConfirmingDeleteRunId(null);
+    } catch (err) {
+      setError(toErrorMessage(err, 'Failed to delete run'));
+    } finally {
+      setDeletingRunId(null);
+    }
+  }
+
   function renderCanvas() {
     if (!activeWorkspaceId) return <EmptyState title="No workspace selected" description="Select or create a workspace before using F-Studio." />;
     if (loading) return <LoadingGrid />;
@@ -453,7 +491,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
     if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SessionTile key={session.id} session={session} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} confirming={confirmingDeleteSessionId === session.id} deleting={deletingSessionId === session.id} onDeleteClick={() => setConfirmingDeleteSessionId(session.id)} onConfirmDelete={() => void deleteSession(session.id)} />)}{sessions.length === 0 ? <EmptyTile title="No sessions yet" description="Create a photo session to define setting, vibe, outfit, and runs." /> : null}</TileGrid>;
     if (route.level === 'session') return <SessionBriefEditor session={selectedSession} onSave={saveSessionBrief} onOpenRuns={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} />;
-    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setNewRunCount(5); setShowCreateRun(true); }} />{runs.map((run) => <SimpleTile key={run.id} title={run.name || run.poseSetId || 'Run'} subtitle={`${run.count} shots · ${run.status}`} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} icon={<Layers3 className="h-5 w-5" />} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
+    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setNewRunCount(5); setShowCreateRun(true); }} />{runs.map((run) => <RunTile key={run.id} run={run} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} confirming={confirmingDeleteRunId === run.id} deleting={deletingRunId === run.id} onDeleteClick={() => setConfirmingDeleteRunId(run.id)} onConfirmDelete={() => void deleteRun(run.id)} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
     if (route.level === 'run') return <RunWorkspace detail={runDetail} />;
     if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
     return null;

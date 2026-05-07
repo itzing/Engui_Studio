@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getStudioSessionRun } from '@/lib/studio-sessions/server';
+import { deleteStudioSessionRun, getStudioSessionRun } from '@/lib/studio-sessions/server';
 import { updateStudioRun } from '@/lib/studio-sessions/portfolioServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJson, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
 
@@ -26,5 +26,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return studioSessionJson({ success: true, run: result.run });
   } catch (error) {
     return handleStudioSessionApiError(error, 'Failed to update Studio run:');
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    const deleted = await deleteStudioSessionRun(id);
+    if (!deleted) return studioSessionJson({ success: false, error: 'Run not found' }, { status: 404 });
+    return studioSessionJson({ success: true, deleted });
+  } catch (error) {
+    return handleStudioSessionApiError(error, 'Failed to delete Studio run:');
   }
 }
