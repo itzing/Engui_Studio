@@ -51,6 +51,7 @@ import {
   createStudioSessionRun,
   deleteStudioSessionRun,
   getStudioSessionRun,
+  listStudioSessionShotPoses,
   materializeStudioSessionCompletedJob,
   recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
@@ -232,6 +233,39 @@ describe('studio session server', () => {
 
     expect(mockPrisma.studioSessionJobMaterialization.upsert).toHaveBeenCalled();
     expect(mockPrisma.studioSessionShotVersion.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists only free poses for manual replacement inside the same run category', async () => {
+    mockPrisma.studioSessionShot.findUnique.mockResolvedValue({
+      id: 'shot-1',
+      runId: 'run-1',
+      workspaceId: 'workspace-1',
+      category: 'standing',
+      slotIndex: 0,
+      label: 'Standing 1',
+      status: 'assigned',
+      skipped: false,
+      selectionVersionId: null,
+      currentRevisionId: 'revision-1',
+      autoAssignmentHistoryJson: '[]',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    mockPrisma.studioSessionShot.findMany.mockResolvedValue([
+      { currentRevisionId: 'revision-1' },
+      { currentRevisionId: 'revision-2' },
+    ]);
+    mockPrisma.studioSessionShotRevision.findMany.mockResolvedValue([
+      { poseId: 'standing-front-full-01' },
+      { poseId: 'standing-contrapposto-01' },
+    ]);
+
+    const result = await listStudioSessionShotPoses('shot-1');
+
+    expect(result?.poses.length).toBeGreaterThan(0);
+    expect(result?.poses.some((pose) => pose.id === 'standing-front-full-01')).toBe(false);
+    expect(result?.poses.some((pose) => pose.id === 'standing-contrapposto-01')).toBe(false);
+    expect(result?.poses.some((pose) => pose.id === 'standing-profile-01')).toBe(true);
   });
 
   it('loads run detail when a shot has a reshuffled latest revision and no active job', async () => {

@@ -733,9 +733,34 @@ export async function getStudioSessionRun(runId: string) {
 export async function listStudioSessionShotPoses(shotId: string) {
   const shot = await prisma.studioSessionShot.findUnique({ where: { id: shotId } });
   if (!shot) return null;
+
+  const siblingShots = await prisma.studioSessionShot.findMany({
+    where: {
+      runId: shot.runId,
+      category: shot.category,
+      currentRevisionId: { not: null },
+    },
+    select: {
+      currentRevisionId: true,
+    },
+  });
+
+  const revisionIds = siblingShots
+    .map((item) => item.currentRevisionId)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  const usedPoseIds = revisionIds.length > 0
+    ? new Set(
+      (await prisma.studioSessionShotRevision.findMany({
+        where: { id: { in: revisionIds } },
+        select: { poseId: true },
+      })).map((revision) => revision.poseId),
+    )
+    : new Set<string>();
+
   return {
     shot: toStudioSessionShotSummary(shot),
-    poses: getStudioSessionPosesByCategory(shot.category),
+    poses: getStudioSessionPosesByCategory(shot.category).filter((pose) => !usedPoseIds.has(pose.id)),
   };
 }
 
