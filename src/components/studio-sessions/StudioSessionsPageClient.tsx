@@ -985,20 +985,32 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
   }, [fetchRunDetail, selectedRun?.activeJobCount, selectedRun?.id, shots]);
 
   const groupedShots = useMemo(() => groupShotsByCategory(shots), [shots]);
-  const revisionMap = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
+  const revisionById = useMemo(() => new Map(revisions.map((revision) => [revision.id, revision])), [revisions]);
+  const currentRevisionMap = useMemo(() => new Map(
+    shots
+      .map((shot) => {
+        const revision = shot.currentRevisionId ? revisionById.get(shot.currentRevisionId) ?? null : null;
+        return revision ? [shot.id, revision] as const : null;
+      })
+      .filter((entry): entry is readonly [string, StudioSessionShotRevisionSummary] => Boolean(entry)),
+  ), [revisionById, shots]);
   const versionsByShot = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary[]>();
-    for (const version of listPrimaryStudioSessionVersions(versions)) {
-      const current = map.get(version.shotId) ?? [];
-      current.push(version);
-      map.set(version.shotId, current);
+    for (const shot of shots) {
+      const primaryVersions = listPrimaryStudioSessionVersions(
+        versions.filter((version) => version.shotId === shot.id && (!shot.currentRevisionId || version.revisionId === shot.currentRevisionId)),
+      );
+      map.set(shot.id, primaryVersions);
     }
     return map;
-  }, [versions]);
+  }, [shots, versions]);
   const selectedVersionMap = useMemo(() => {
     const map = new Map<string, StudioSessionShotVersionSummary>();
     for (const shot of shots) {
-      const match = selectPrimaryStudioSessionVersion({ shot, versions: versions.filter((version) => version.shotId === shot.id) });
+      const match = selectPrimaryStudioSessionVersion({
+        shot,
+        versions: versions.filter((version) => version.shotId === shot.id && (!shot.currentRevisionId || version.revisionId === shot.currentRevisionId)),
+      });
       if (match) map.set(shot.id, match);
     }
     return map;
@@ -1097,7 +1109,7 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
                     </div>
                     <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                       {group.shots.map((shot) => {
-                        const revision = revisionMap.get(shot.id);
+                        const revision = currentRevisionMap.get(shot.id);
                         const shotVersions = versionsByShot.get(shot.id) ?? [];
                         const allShotVersions = versions.filter((version) => version.shotId === shot.id);
                         const selectedVersion = selectedVersionMap.get(shot.id);
