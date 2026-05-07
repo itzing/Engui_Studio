@@ -763,21 +763,14 @@ export function pickUniqueStudioSessionPose(params: {
   includedPoseIds?: string[];
   preferredOrientation?: StudioSessionPoseOrientation | null;
   preferredFraming?: StudioSessionPoseFraming | null;
+  rng?: () => number;
 }): StudioSessionAutoPickResult {
   const available = getStudioSessionPosesByCategory(params.category)
     .filter((pose) => !params.excludedPoseIds?.includes(pose.id))
     .filter((pose) => !params.autoAssignmentHistory.includes(pose.id))
     .filter((pose) => !params.includedPoseIds || params.includedPoseIds.length === 0 || params.includedPoseIds.includes(pose.id));
 
-  const prioritized = available.sort((left, right) => {
-    const leftScore = (params.preferredOrientation && left.orientation === params.preferredOrientation ? 2 : 0)
-      + (params.preferredFraming && left.framing === params.preferredFraming ? 1 : 0);
-    const rightScore = (params.preferredOrientation && right.orientation === params.preferredOrientation ? 2 : 0)
-      + (params.preferredFraming && right.framing === params.preferredFraming ? 1 : 0);
-    return rightScore - leftScore || left.id.localeCompare(right.id);
-  });
-
-  if (prioritized.length === 0) {
+  if (available.length === 0) {
     return {
       pose: null,
       exhausted: true,
@@ -785,8 +778,15 @@ export function pickUniqueStudioSessionPose(params: {
     };
   }
 
+  const scorePose = (pose: (typeof available)[number]) => (params.preferredOrientation && pose.orientation === params.preferredOrientation ? 2 : 0)
+    + (params.preferredFraming && pose.framing === params.preferredFraming ? 1 : 0);
+  const bestScore = Math.max(...available.map(scorePose));
+  const eligible = available.filter((pose) => scorePose(pose) === bestScore);
+  const rng = params.rng ?? Math.random;
+  const index = Math.min(eligible.length - 1, Math.max(0, Math.floor(rng() * eligible.length)));
+
   return {
-    pose: prioritized[0],
+    pose: eligible[index],
     exhausted: false,
     exhaustedCategories: [],
   };

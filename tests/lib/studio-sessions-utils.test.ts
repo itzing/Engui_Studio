@@ -90,6 +90,27 @@ describe('studio session utils', () => {
     expect(result.exhausted).toBe(false);
   });
 
+  it('randomizes pose selection within the eligible pool', () => {
+    const poses = getStudioSessionPosesByCategory('standing').slice(0, 3);
+    expect(poses.length).toBe(3);
+
+    const first = pickUniqueStudioSessionPose({
+      category: 'standing',
+      autoAssignmentHistory: [],
+      includedPoseIds: poses.map((pose) => pose.id),
+      rng: () => 0,
+    });
+    const last = pickUniqueStudioSessionPose({
+      category: 'standing',
+      autoAssignmentHistory: [],
+      includedPoseIds: poses.map((pose) => pose.id),
+      rng: () => 0.999,
+    });
+
+    expect(first.pose?.id).toBe(poses[0].id);
+    expect(last.pose?.id).toBe(poses[2].id);
+  });
+
   it('sorts and selects primary versions from reviewable history only', () => {
     const versions = [
       { id: 'v1', shotId: 'shot-1', versionNumber: 1, createdAt: '2026-05-06T20:00:00.000Z', hidden: false, rejected: false },
