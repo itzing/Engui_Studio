@@ -22,11 +22,14 @@ describe('studio session utils', () => {
     expect(normalized.generationSettings).toMatchObject({ modelId: 'z-image', steps: 9, cfg: 1, seed: -1, sampler: null, cfgScale: null });
   });
 
-  it('renders Studio Session prompts through the Prompt Constructor scene template style', () => {
+  it('renders Studio Session prompts as readable ordered lines', () => {
     const result = assembleStudioSessionPrompt({
       characterPrompt: 'Appearance: athletic woman, sharp jawline',
       characterAge: '23 years old',
+      settingText: 'studio background',
       environmentText: 'studio background',
+      lightingText: 'soft daylight',
+      vibeText: 'calm editorial mood',
       outfitText: 'black bodysuit',
       hairstyleText: 'short silver bob',
       positivePrompt: 'soft light',
@@ -34,13 +37,17 @@ describe('studio session utils', () => {
       pose: { prompt: 'standing pose' },
     });
 
-    expect(result.positivePrompt).toContain('Scene: studio photo session.');
-    expect(result.positivePrompt).toContain('Character 1: 23yo');
-    expect(result.positivePrompt).toContain('black bodysuit');
-    expect(result.positivePrompt).toContain('standing pose');
-    expect(result.positivePrompt).toContain('Appearance: athletic woman, sharp jawline, Hair: short silver bob');
-    expect(result.positivePrompt).toContain('Environment: studio background.');
-    expect(result.positivePrompt).toContain('Style: soft light.');
+    const lines = result.positivePrompt.split('\n');
+    expect(lines[0]).toBe('Environment: studio background');
+    expect(lines[1]).toBe('Vibe: calm editorial mood');
+    expect(lines[2]).toBe('Lighting: soft daylight');
+    expect(lines[3]).toBe('Outfit: black bodysuit');
+    expect(result.positivePrompt).toContain('Scene: studio photo session');
+    expect(result.positivePrompt).toContain('Age: 23yo');
+    expect(result.positivePrompt).toContain('Character 1: Appearance: athletic woman, sharp jawline');
+    expect(result.positivePrompt).toContain('Hair: short silver bob');
+    expect(result.positivePrompt).toContain('Pose: standing pose');
+    expect(result.positivePrompt).toContain('Style: soft light');
   });
 
   it('treats skipped shots as non-blocking for completed status', () => {

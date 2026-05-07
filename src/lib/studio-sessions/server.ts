@@ -795,7 +795,10 @@ async function createStudioSessionShotRevision(params: {
   const assembledPrompt = assembleStudioSessionPrompt({
     characterPrompt,
     characterAge: typeof snapshot.characterAge === 'string' ? snapshot.characterAge : '',
+    settingText: typeof snapshot.settingText === 'string' ? snapshot.settingText : '',
     environmentText: typeof snapshot.environmentText === 'string' ? snapshot.environmentText : '',
+    lightingText: typeof snapshot.lightingText === 'string' ? snapshot.lightingText : '',
+    vibeText: typeof snapshot.vibeText === 'string' ? snapshot.vibeText : '',
     outfitText: typeof snapshot.outfitText === 'string' ? snapshot.outfitText : '',
     hairstyleText: typeof snapshot.hairstyleText === 'string' ? snapshot.hairstyleText : '',
     positivePrompt: typeof snapshot.positivePrompt === 'string' ? snapshot.positivePrompt : '',

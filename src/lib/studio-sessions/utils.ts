@@ -1,5 +1,4 @@
 import { joinPromptFragments } from '@/lib/prompt-constructor/normalization';
-import { createInitialSceneTemplateState, renderSceneTemplateV2 } from '@/lib/prompt-constructor/templates/sceneTemplateV2';
 import type {
   StudioSessionAutoPickResult,
   StudioSessionPoseFraming,
@@ -671,40 +670,42 @@ function formatStudioSessionCharacterAge(value: string): string {
   return `${match[0]}yo`;
 }
 
-function buildStudioSessionPromptState(input: {
+function renderStudioSessionPrompt(input: {
   characterPrompt: string;
   characterAge: string;
+  settingText?: string;
   environmentText: string;
+  lightingText?: string;
+  vibeText?: string;
   outfitText: string;
   hairstyleText: string;
   positivePrompt: string;
   pose: Pick<StudioSessionPoseSnapshot, 'prompt'>;
 }) {
-  const state = createInitialSceneTemplateState();
-  const slot = state.characterSlots[0];
   const formattedAge = formatStudioSessionCharacterAge(input.characterAge);
-  const trimmedHairstyle = input.hairstyleText.trim();
-
-  slot.fields.nameOrRole = '';
-  slot.fields.ageBand = formattedAge;
-  slot.fields.appearance = joinPromptFragments([
-    input.characterPrompt.trim(),
-    trimmedHairstyle ? `Hair: ${trimmedHairstyle}` : '',
-  ]);
-  slot.fields.outfit = input.outfitText.trim();
-  slot.fields.pose = input.pose.prompt.trim();
-
-  state.sceneSummary.sceneType = 'studio photo session';
-  state.environment.background = input.environmentText.trim();
-  state.style.visualStyle = input.positivePrompt.trim();
-
-  return state;
+  const environment = (input.settingText ?? input.environmentText).trim();
+  const lines = [
+    environment ? `Environment: ${environment}` : '',
+    input.vibeText?.trim() ? `Vibe: ${input.vibeText.trim()}` : '',
+    input.lightingText?.trim() ? `Lighting: ${input.lightingText.trim()}` : '',
+    input.outfitText.trim() ? `Outfit: ${input.outfitText.trim()}` : '',
+    'Scene: studio photo session',
+    formattedAge ? `Age: ${formattedAge}` : '',
+    input.characterPrompt.trim() ? `Character 1: ${input.characterPrompt.trim()}` : '',
+    input.hairstyleText.trim() ? `Hair: ${input.hairstyleText.trim()}` : '',
+    input.pose.prompt.trim() ? `Pose: ${input.pose.prompt.trim()}` : '',
+    input.positivePrompt.trim() ? `Style: ${input.positivePrompt.trim()}` : '',
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 export function assembleStudioSessionPrompt(input: {
   characterPrompt: string;
   characterAge: string;
+  settingText?: string;
   environmentText: string;
+  lightingText?: string;
+  vibeText?: string;
   outfitText: string;
   hairstyleText: string;
   positivePrompt: string;
@@ -722,7 +723,7 @@ export function assembleStudioSessionPrompt(input: {
   };
 
   return {
-    positivePrompt: renderSceneTemplateV2(buildStudioSessionPromptState(input), []),
+    positivePrompt: renderStudioSessionPrompt(input),
     negativePrompt: input.negativePrompt.trim(),
     pieces,
   };
