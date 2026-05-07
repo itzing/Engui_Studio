@@ -51,6 +51,56 @@ describe('character preview prompt', () => {
     expect(prompt).not.toContain('Glute shape');
   });
 
+  it('includes face and identity traits in upper-body prompts to preserve character identity', () => {
+    const prompt = buildCharacterPreviewPrompt(buildCharacter({
+      traits: {
+        age: '25',
+        ethnicity: 'Japanese',
+        skin_tone: 'warm beige',
+        face_shape: 'heart-shaped',
+        eye_color: 'green',
+        nose_shape: 'small straight nose',
+        lip_shape: 'bow-shaped lips',
+        hair_color: 'silver',
+        body_build: 'slim athletic',
+      },
+    }), 'upper_body');
+
+    expect(prompt).toContain('Ethnicity: Japanese');
+    expect(prompt).toContain('Skin tone: warm beige');
+    expect(prompt).toContain('Face shape: heart-shaped');
+    expect(prompt).toContain('Eye color: green');
+    expect(prompt).toContain('Nose shape: small straight nose');
+    expect(prompt).toContain('Lip shape: bow-shaped lips');
+    expect(prompt).toContain('Body build: slim athletic');
+    expect(prompt).toContain('not a different person');
+  });
+
+  it('makes full-body prompts photorealistic and rejects mannequin-like previews', () => {
+    const prompt = buildCharacterPreviewPrompt(buildCharacter({
+      traits: {
+        age: '25',
+        face_shape: 'oval',
+        eye_color: 'brown',
+        hair_color: 'black',
+        body_build: 'athletic',
+        leg_structure: 'long toned legs',
+      },
+    }), 'full_body');
+
+    expect(prompt).toContain('photorealistic studio character reference photo');
+    expect(prompt).toContain('face visible');
+    expect(prompt).toContain('Face shape: oval');
+    expect(prompt).toContain('Eye color: brown');
+    expect(prompt).toContain('Hair color: black');
+    expect(prompt).toContain('Body build: athletic');
+    expect(prompt).toContain('Leg structure: long toned legs');
+    expect(prompt).toContain('not a 3d render');
+    expect(prompt).toContain('not a mannequin');
+    expect(prompt).toContain('not a faceless body');
+    expect(prompt).toContain('not a black silhouette');
+  });
+
   it('renders underage gender terms like Prompt Constructor', () => {
     const prompt = buildCharacterPreviewPrompt(buildCharacter({
       gender: 'male',

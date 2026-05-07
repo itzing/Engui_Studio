@@ -21,30 +21,30 @@ export const CHARACTER_PREVIEW_SLOT_META: Record<CharacterPreviewSlot, {
   },
   upper_body: {
     title: 'Upper-body preview',
-    subtitle: 'Hair, body, and posture',
-    groupIds: ['hair', 'body', 'posture'],
+    subtitle: 'Identity, face, hair, body, and posture',
+    groupIds: ['identity', 'face', 'hair', 'body', 'posture'],
     width: 832,
     height: 1216,
   },
   full_body: {
     title: 'Full-body preview',
-    subtitle: 'Body, lower body, and posture',
-    groupIds: ['body', 'lower-body', 'posture'],
+    subtitle: 'Identity, face, hair, body, lower body, and posture',
+    groupIds: ['identity', 'face', 'hair', 'body', 'lower-body', 'posture'],
     width: 896,
     height: 1408,
   },
 };
 
 const SLOT_PROMPT_PREFIX: Record<CharacterPreviewSlot, string> = {
-  portrait: 'studio character portrait, head and shoulders framing, direct readable facial features, clean lighting, single subject',
-  upper_body: 'studio character reference, upper body framing, visible torso and arms, clear posture, single subject',
-  full_body: 'studio character reference, full body framing, standing pose, complete silhouette visible, single subject',
+  portrait: 'photorealistic studio character portrait, head and shoulders framing, direct readable facial features, clean lighting, single real person',
+  upper_body: 'photorealistic studio character reference, upper body framing, visible face, torso and arms, clear posture, single real person',
+  full_body: 'photorealistic studio character reference photo, full body framing, standing natural pose, face visible, complete clothed human figure visible, single real person',
 };
 
 const SLOT_PROMPT_SUFFIX: Record<CharacterPreviewSlot, string> = {
-  portrait: 'high clarity identity reference, neutral background, no extra people, no cropped face',
-  upper_body: 'clear anatomy reference, neutral background, no extra people, no cut off hands when possible',
-  full_body: 'clear full figure reference, neutral background, no extra people, feet visible when possible',
+  portrait: 'high clarity identity reference, neutral background, no extra people, no cropped face, not a 3d render, not a mannequin, not a doll, not a model sheet',
+  upper_body: 'clear identity and anatomy reference, neutral background, no extra people, no cut off hands when possible, not a different person, not a 3d render, not a mannequin, not a doll',
+  full_body: 'normal character preview photo, clear identity and full figure reference, neutral background, no extra people, feet visible when possible, natural skin texture, normal face, normal clothing or neutral fitted outfit, not a 3d render, not a mannequin, not a doll, not a faceless body, not a black silhouette, not a model sheet, not a statue',
 };
 
 export function normalizeCharacterPreviewSlot(input: unknown): CharacterPreviewSlot | null {
