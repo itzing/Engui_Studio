@@ -5,7 +5,7 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { Download, Trash2, Copy, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Trash2, Copy, Sparkles, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -122,6 +122,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
     const isFinished = job ? (job.status === 'completed' || job.status === 'failed') : false;
     const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
+    const canNavigateLeft = Boolean(onNavigate && totalCount > 1 && currentIndex > 1);
+    const canNavigateRight = Boolean(onNavigate && totalCount > 1 && currentIndex > 0 && currentIndex < totalCount);
 
     const handleDownload = async () => {
         if (!job || !selectedOutput?.url) return;
@@ -310,10 +312,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
         if (event.key === 'ArrowRight') {
             event.preventDefault();
-            onNavigate?.('previous');
+            if (canNavigateRight) onNavigate?.('previous');
         } else if (event.key === 'ArrowLeft') {
             event.preventDefault();
-            onNavigate?.('next');
+            if (canNavigateLeft) onNavigate?.('next');
         }
     };
 
@@ -372,8 +374,26 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             <DialogDescription className="text-xs text-muted-foreground font-mono flex items-center justify-between gap-2">
                                 <span className="truncate">ID: {job.id}</span>
                                 {totalCount > 0 && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded bg-muted/40 border border-border whitespace-nowrap">
-                                        {currentIndex} / {totalCount}
+                                    <span className="inline-flex items-center overflow-hidden rounded border border-border bg-muted/40 text-[11px] whitespace-nowrap">
+                                        <button
+                                            type="button"
+                                            onClick={() => canNavigateLeft && onNavigate?.('next')}
+                                            disabled={!canNavigateLeft}
+                                            className="flex h-6 w-6 items-center justify-center border-r border-border text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+                                            aria-label="Previous job"
+                                        >
+                                            <ChevronLeft className="h-3.5 w-3.5" />
+                                        </button>
+                                        <span className="px-2 py-0.5">{currentIndex} / {totalCount}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => canNavigateRight && onNavigate?.('previous')}
+                                            disabled={!canNavigateRight}
+                                            className="flex h-6 w-6 items-center justify-center border-l border-border text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+                                            aria-label="Next job"
+                                        >
+                                            <ChevronRight className="h-3.5 w-3.5" />
+                                        </button>
                                     </span>
                                 )}
                             </DialogDescription>
