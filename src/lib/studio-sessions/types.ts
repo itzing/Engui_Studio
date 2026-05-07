@@ -1,10 +1,15 @@
 export type StudioSessionTemplateStatus = 'active' | 'archived';
+export type StudioPortfolioStatus = 'active' | 'archived';
+export type StudioPhotoSessionStatus = 'draft' | 'active' | 'review' | 'completed' | 'archived';
+export type StudioCollectionStatus = 'draft' | 'final' | 'archived';
+export type StudioSessionRunPresetStatus = 'active' | 'archived';
 export type StudioSessionRunStatus = 'draft' | 'ready' | 'in_progress' | 'needs_review' | 'completed';
 export type StudioSessionShotStatus = 'unassigned' | 'assigned' | 'queued' | 'running' | 'needs_review' | 'completed';
 export type StudioSessionSquareSideSource = 'short' | 'long';
 export type StudioSessionShotRevisionSourceKind = 'auto_pick' | 'manual_pick' | 'reshuffle';
 export type StudioSessionAssetOriginKind = 'job_output' | 'reshoot' | 'variant';
 export type StudioSessionVersionStatus = 'completed' | 'failed' | 'canceled';
+export type StudioSessionVersionReviewState = 'unreviewed' | 'pick' | 'maybe' | 'reject' | 'hero' | 'needs_retry';
 export type StudioSessionPoseOrientation = 'portrait' | 'landscape' | 'square';
 export type StudioSessionPoseFraming = 'closeup' | 'portrait' | 'half_body' | 'three_quarter' | 'full_body';
 
@@ -36,6 +41,94 @@ export interface StudioSessionGenerationSettingsSnapshot {
   width?: number | null;
   height?: number | null;
   [key: string]: unknown;
+}
+
+export interface StudioPoseSetSummary {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  poseIds: string[];
+  tags: string[];
+}
+
+export interface StudioRunSettingsDraft {
+  name: string;
+  poseSetId: string | null;
+  count: number;
+  positivePromptOverride: string;
+  negativePromptOverride: string;
+  generationSettings: StudioSessionGenerationSettingsSnapshot;
+  resolutionPolicy: StudioSessionResolutionPolicy;
+}
+
+export interface StudioPortfolioSummary {
+  id: string;
+  workspaceId: string;
+  characterId: string;
+  characterName: string;
+  characterPreviewUrl: string | null;
+  name: string;
+  description: string;
+  status: StudioPortfolioStatus;
+  sessionCount: number;
+  collectionCount: number;
+  selectedImageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioPhotoSessionSummary {
+  id: string;
+  workspaceId: string;
+  portfolioId: string;
+  name: string;
+  settingText: string;
+  lightingText: string;
+  vibeText: string;
+  outfitText: string;
+  hairstyleText: string;
+  negativePrompt: string;
+  notes: string;
+  status: StudioPhotoSessionStatus;
+  runCount: number;
+  pickCount: number;
+  maybeCount: number;
+  rejectCount: number;
+  heroVersionUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioCollectionSummary {
+  id: string;
+  workspaceId: string;
+  portfolioId: string;
+  name: string;
+  description: string;
+  status: StudioCollectionStatus;
+  itemCount: number;
+  coverUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioCollectionItemSummary {
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  portfolioId: string;
+  photoSessionId: string | null;
+  runId: string | null;
+  shotId: string | null;
+  versionId: string;
+  sortOrder: number;
+  caption: string;
+  originalUrl: string | null;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StudioSessionTemplateDraftState {
@@ -159,6 +252,9 @@ export interface StudioSessionShotVersionSummary {
   generationSnapshot: Record<string, unknown> | null;
   hidden: boolean;
   rejected: boolean;
+  reviewState: StudioSessionVersionReviewState;
+  reviewNote: string;
+  reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +263,14 @@ export interface StudioSessionRunSummary {
   id: string;
   workspaceId: string;
   templateId: string | null;
+  portfolioId: string | null;
+  photoSessionId: string | null;
+  poseSetId: string | null;
+  name: string;
+  runSettings: Record<string, unknown>;
+  promptOverride: Record<string, unknown>;
+  resolutionPolicy: Record<string, unknown>;
+  count: number;
   templateNameSnapshot: string;
   templateSnapshot: StudioSessionRunSnapshot;
   poseLibraryVersion: string;

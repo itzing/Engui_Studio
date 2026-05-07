@@ -1,7 +1,7 @@
 ---
 id: ENGUI-238
 title: Add studio portfolio and session Prisma models
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

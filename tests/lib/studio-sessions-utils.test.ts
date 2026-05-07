@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { assembleStudioSessionPrompt, createDefaultStudioSessionTemplateDraftState, deriveStudioSessionResolution, deriveStudioSessionRunStatus, normalizeStudioSessionTemplateDraftState, pickUniqueStudioSessionPose } from '@/lib/studio-sessions/utils';
+import { assembleStudioSessionPrompt, createDefaultStudioSessionTemplateDraftState, deriveStudioSessionResolution, deriveStudioSessionRunStatus, normalizeStudioSessionTemplateDraftState, pickUniqueStudioSessionPose, toStudioCollectionItemSummary, toStudioCollectionSummary, toStudioPhotoSessionSummary, toStudioPortfolioSummary, toStudioSessionRunSummary, toStudioSessionShotVersionSummary } from '@/lib/studio-sessions/utils';
 import { listPrimaryStudioSessionVersions, selectPrimaryStudioSessionVersion, sortStudioSessionVersions } from '@/lib/studio-sessions/view';
 import { getStudioSessionPosesByCategory } from '@/lib/studio-sessions/poseLibrary';
+import { buildStudioRunShotSlotsFromPoseSet, createStudioPoseSetIdFromCategory, getStudioPoseSetById, getStudioPoseSets, getStudioSessionPosesByPoseSetId } from '@/lib/studio-sessions/poseSets';
 
 describe('studio session utils', () => {
   it('derives resolution from orientation policy', () => {
@@ -93,5 +94,63 @@ describe('studio session utils', () => {
     expect(listPrimaryStudioSessionVersions(versions).map((version) => version.id)).toEqual(['v2', 'v1']);
     expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v1' }, versions })?.id).toBe('v1');
     expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v3' }, versions })?.id).toBe('v2');
+  });
+
+  it('serializes portfolio-first Studio records with safe defaults', () => {
+    const now = new Date('2026-05-07T17:00:00.000Z');
+
+    expect(toStudioPortfolioSummary({
+      id: 'portfolio-1', workspaceId: 'workspace-1', characterId: 'character-1', name: 'Mira', description: '', status: 'active', createdAt: now, updatedAt: now,
+      character: { name: 'Mira', previewStateJson: JSON.stringify({ full_body: { thumbnailUrl: '/full.jpg' } }) },
+      _count: { sessions: 2, collections: 1 },
+      selectedImageCount: 7,
+    })).toMatchObject({ characterName: 'Mira', characterPreviewUrl: '/full.jpg', sessionCount: 2, collectionCount: 1, selectedImageCount: 7 });
+
+    expect(toStudioPhotoSessionSummary({
+      id: 'session-1', workspaceId: 'workspace-1', portfolioId: 'portfolio-1', name: 'Morning room', settingText: 'room', lightingText: 'window light', vibeText: 'quiet', outfitText: 'dress', hairstyleText: 'bun', negativePrompt: '', notes: '', status: 'review', createdAt: now, updatedAt: now,
+      _count: { runs: 3 },
+      reviewCounts: { pick: 4, maybe: 2, reject: 1 },
+      heroVersionUrl: '/hero.jpg',
+    })).toMatchObject({ status: 'review', runCount: 3, pickCount: 4, maybeCount: 2, rejectCount: 1, heroVersionUrl: '/hero.jpg' });
+
+    expect(toStudioCollectionSummary({
+      id: 'collection-1', workspaceId: 'workspace-1', portfolioId: 'portfolio-1', name: 'Finals', description: '', status: 'final', createdAt: now, updatedAt: now,
+      _count: { items: 5 },
+      coverUrl: '/cover.jpg',
+    })).toMatchObject({ status: 'final', itemCount: 5, coverUrl: '/cover.jpg' });
+
+    expect(toStudioCollectionItemSummary({
+      id: 'item-1', workspaceId: 'workspace-1', collectionId: 'collection-1', portfolioId: 'portfolio-1', photoSessionId: 'session-1', runId: 'run-1', shotId: 'shot-1', versionId: 'version-1', sortOrder: 1, caption: 'Hero', createdAt: now, updatedAt: now,
+      version: { originalUrl: '/original.jpg', previewUrl: '/preview.jpg', thumbnailUrl: '/thumb.jpg' },
+    })).toMatchObject({ versionId: 'version-1', sortOrder: 1, thumbnailUrl: '/thumb.jpg' });
+  });
+
+  it('serializes portfolio run fields and version review state without breaking legacy snapshots', () => {
+    const now = new Date('2026-05-07T17:00:00.000Z');
+
+    expect(toStudioSessionRunSummary({
+      id: 'run-1', workspaceId: 'workspace-1', templateId: null, portfolioId: 'portfolio-1', photoSessionId: 'session-1', poseSetId: 'category:sitting', name: 'Sitting 01', runSettingsJson: '{"modelId":"z-image"}', promptOverrideJson: '{"positive":"soft"}', resolutionPolicyJson: '{"shortSidePx":1024}', count: 8, templateNameSnapshot: '', templateSnapshotJson: '{}', poseLibraryVersion: 'v1', poseLibraryHash: 'hash', status: 'draft', createdAt: now, updatedAt: now,
+    })).toMatchObject({ portfolioId: 'portfolio-1', photoSessionId: 'session-1', poseSetId: 'category:sitting', name: 'Sitting 01', count: 8, runSettings: { modelId: 'z-image' } });
+
+    expect(toStudioSessionShotVersionSummary({
+      id: 'version-1', workspaceId: 'workspace-1', shotId: 'shot-1', revisionId: 'revision-1', sourceJobId: null, versionNumber: 1, status: 'completed', originKind: 'job_output', contentHash: null, originalUrl: null, previewUrl: null, thumbnailUrl: null, generationSnapshotJson: null, hidden: false, rejected: false, reviewState: 'hero', reviewNote: 'best', reviewedAt: now, createdAt: now, updatedAt: now,
+    })).toMatchObject({ reviewState: 'hero', reviewNote: 'best', reviewedAt: now.toISOString() });
+  });
+
+  it('builds virtual pose sets from current pose categories', () => {
+    const poseSets = getStudioPoseSets();
+    expect(poseSets.length).toBeGreaterThan(0);
+
+    const sittingId = createStudioPoseSetIdFromCategory('sitting');
+    const sittingSet = getStudioPoseSetById(sittingId);
+    expect(sittingSet?.category).toBe('sitting');
+    expect(sittingSet?.poseIds.length).toBe(getStudioSessionPosesByCategory('sitting').length);
+    expect(getStudioSessionPosesByPoseSetId(sittingId).length).toBe(sittingSet?.poseIds.length);
+
+    expect(buildStudioRunShotSlotsFromPoseSet({ poseSetId: sittingId, count: 3 })).toEqual([
+      { category: 'sitting', slotIndex: 0, label: 'Sitting 1' },
+      { category: 'sitting', slotIndex: 1, label: 'Sitting 2' },
+      { category: 'sitting', slotIndex: 2, label: 'Sitting 3' },
+    ]);
   });
 });

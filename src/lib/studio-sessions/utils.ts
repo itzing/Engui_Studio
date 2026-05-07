@@ -7,6 +7,13 @@ import type {
   StudioSessionPoseSnapshot,
   StudioSessionPromptSnapshot,
   StudioSessionResolvedSize,
+  StudioCollectionItemSummary,
+  StudioCollectionStatus,
+  StudioCollectionSummary,
+  StudioPhotoSessionStatus,
+  StudioPhotoSessionSummary,
+  StudioPortfolioStatus,
+  StudioPortfolioSummary,
   StudioSessionRunStatus,
   StudioSessionShotRevisionSummary,
   StudioSessionShotStatus,
@@ -16,6 +23,7 @@ import type {
   StudioSessionTemplateSavedState,
   StudioSessionTemplateStatus,
   StudioSessionTemplateSummary,
+  StudioSessionVersionReviewState,
   StudioSessionVersionStatus,
   StudioSessionShotVersionSummary,
   StudioSessionRunSummary,
@@ -55,6 +63,14 @@ type PersistedRunRecord = {
   id: string;
   workspaceId: string;
   templateId: string | null;
+  portfolioId?: string | null;
+  photoSessionId?: string | null;
+  poseSetId?: string | null;
+  name?: string | null;
+  runSettingsJson?: string | null;
+  promptOverrideJson?: string | null;
+  resolutionPolicyJson?: string | null;
+  count?: number | null;
   templateNameSnapshot: string;
   templateSnapshotJson: string;
   poseLibraryVersion: string;
@@ -112,8 +128,78 @@ type PersistedShotVersionRecord = {
   generationSnapshotJson: string | null;
   hidden: boolean;
   rejected: boolean;
+  reviewState?: string | null;
+  reviewNote?: string | null;
+  reviewedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type PersistedPortfolioRecord = {
+  id: string;
+  workspaceId: string;
+  characterId: string;
+  name: string;
+  description: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  character?: { name?: string | null; previewStateJson?: string | null } | null;
+  _count?: { sessions?: number; collections?: number };
+  selectedImageCount?: number;
+};
+
+type PersistedPhotoSessionRecord = {
+  id: string;
+  workspaceId: string;
+  portfolioId: string;
+  name: string;
+  settingText: string;
+  lightingText: string;
+  vibeText: string;
+  outfitText: string;
+  hairstyleText: string;
+  negativePrompt: string;
+  notes: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  _count?: { runs?: number };
+  reviewCounts?: Partial<Record<StudioSessionVersionReviewState, number>>;
+  heroVersionUrl?: string | null;
+};
+
+type PersistedCollectionRecord = {
+  id: string;
+  workspaceId: string;
+  portfolioId: string;
+  name: string;
+  description: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  _count?: { items?: number };
+  coverUrl?: string | null;
+};
+
+type PersistedCollectionItemRecord = {
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  portfolioId: string;
+  photoSessionId: string | null;
+  runId: string | null;
+  shotId: string | null;
+  versionId: string;
+  sortOrder: number;
+  caption: string;
+  createdAt: Date;
+  updatedAt: Date;
+  version?: {
+    originalUrl?: string | null;
+    previewUrl?: string | null;
+    thumbnailUrl?: string | null;
+  } | null;
 };
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -130,8 +216,63 @@ function toStringArray(input: unknown): string[] {
   return Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
 }
 
+function extractPreviewSlotUrl(slot: unknown): string | null {
+  const value = slot && typeof slot === 'object' ? slot as Record<string, unknown> : {};
+  for (const key of ['thumbnailUrl', 'previewUrl', 'imageUrl']) {
+    const candidate = value[key];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
+}
+
+function extractCharacterPreviewUrl(previewStateJson: string | null | undefined): string | null {
+  const previewState = parseJson<Record<string, unknown>>(previewStateJson, {});
+  return extractPreviewSlotUrl(previewState.full_body)
+    ?? extractPreviewSlotUrl(previewState.portrait)
+    ?? extractPreviewSlotUrl(previewState.upper_body);
+}
+
 export function normalizeStudioSessionTemplateStatus(input: unknown): StudioSessionTemplateStatus {
   return input === 'archived' ? 'archived' : 'active';
+}
+
+export function normalizeStudioPortfolioStatus(input: unknown): StudioPortfolioStatus {
+  return input === 'archived' ? 'archived' : 'active';
+}
+
+export function normalizeStudioPhotoSessionStatus(input: unknown): StudioPhotoSessionStatus {
+  switch (input) {
+    case 'active':
+    case 'review':
+    case 'completed':
+    case 'archived':
+      return input;
+    default:
+      return 'draft';
+  }
+}
+
+export function normalizeStudioCollectionStatus(input: unknown): StudioCollectionStatus {
+  switch (input) {
+    case 'final':
+    case 'archived':
+      return input;
+    default:
+      return 'draft';
+  }
+}
+
+export function normalizeStudioSessionVersionReviewState(input: unknown): StudioSessionVersionReviewState {
+  switch (input) {
+    case 'pick':
+    case 'maybe':
+    case 'reject':
+    case 'hero':
+    case 'needs_retry':
+      return input;
+    default:
+      return 'unreviewed';
+  }
 }
 
 export function normalizeStudioSessionRunStatus(input: unknown): StudioSessionRunStatus {
@@ -325,11 +466,96 @@ export function toStudioSessionTemplateSummary(record: PersistedTemplateRecord):
   };
 }
 
+export function toStudioPortfolioSummary(record: PersistedPortfolioRecord): StudioPortfolioSummary {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    characterId: record.characterId,
+    characterName: record.character?.name ?? 'Untitled character',
+    characterPreviewUrl: extractCharacterPreviewUrl(record.character?.previewStateJson),
+    name: record.name,
+    description: record.description,
+    status: normalizeStudioPortfolioStatus(record.status),
+    sessionCount: record._count?.sessions ?? 0,
+    collectionCount: record._count?.collections ?? 0,
+    selectedImageCount: record.selectedImageCount ?? 0,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export function toStudioPhotoSessionSummary(record: PersistedPhotoSessionRecord): StudioPhotoSessionSummary {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    portfolioId: record.portfolioId,
+    name: record.name,
+    settingText: record.settingText,
+    lightingText: record.lightingText,
+    vibeText: record.vibeText,
+    outfitText: record.outfitText,
+    hairstyleText: record.hairstyleText,
+    negativePrompt: record.negativePrompt,
+    notes: record.notes,
+    status: normalizeStudioPhotoSessionStatus(record.status),
+    runCount: record._count?.runs ?? 0,
+    pickCount: record.reviewCounts?.pick ?? 0,
+    maybeCount: record.reviewCounts?.maybe ?? 0,
+    rejectCount: record.reviewCounts?.reject ?? 0,
+    heroVersionUrl: record.heroVersionUrl ?? null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export function toStudioCollectionSummary(record: PersistedCollectionRecord): StudioCollectionSummary {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    portfolioId: record.portfolioId,
+    name: record.name,
+    description: record.description,
+    status: normalizeStudioCollectionStatus(record.status),
+    itemCount: record._count?.items ?? 0,
+    coverUrl: record.coverUrl ?? null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export function toStudioCollectionItemSummary(record: PersistedCollectionItemRecord): StudioCollectionItemSummary {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    collectionId: record.collectionId,
+    portfolioId: record.portfolioId,
+    photoSessionId: record.photoSessionId,
+    runId: record.runId,
+    shotId: record.shotId,
+    versionId: record.versionId,
+    sortOrder: record.sortOrder,
+    caption: record.caption,
+    originalUrl: record.version?.originalUrl ?? null,
+    previewUrl: record.version?.previewUrl ?? null,
+    thumbnailUrl: record.version?.thumbnailUrl ?? null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
 export function toStudioSessionRunSummary(record: PersistedRunRecord): StudioSessionRunSummary {
   return {
     id: record.id,
     workspaceId: record.workspaceId,
     templateId: record.templateId,
+    portfolioId: record.portfolioId ?? null,
+    photoSessionId: record.photoSessionId ?? null,
+    poseSetId: record.poseSetId ?? null,
+    name: record.name ?? '',
+    runSettings: parseJson(record.runSettingsJson, {}),
+    promptOverride: parseJson(record.promptOverrideJson, {}),
+    resolutionPolicy: parseJson(record.resolutionPolicyJson, {}),
+    count: record.count ?? 0,
     templateNameSnapshot: record.templateNameSnapshot,
     templateSnapshot: parseJson(record.templateSnapshotJson, {}) as StudioSessionRunSummary['templateSnapshot'],
     poseLibraryVersion: record.poseLibraryVersion,
@@ -412,6 +638,9 @@ export function toStudioSessionShotVersionSummary(record: PersistedShotVersionRe
     generationSnapshot: parseJson(record.generationSnapshotJson, null),
     hidden: record.hidden,
     rejected: record.rejected,
+    reviewState: normalizeStudioSessionVersionReviewState(record.reviewState),
+    reviewNote: record.reviewNote ?? '',
+    reviewedAt: record.reviewedAt ? record.reviewedAt.toISOString() : null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   };

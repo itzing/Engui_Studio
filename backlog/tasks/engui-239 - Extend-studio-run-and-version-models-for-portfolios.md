@@ -1,7 +1,7 @@
 ---
 id: ENGUI-239
 title: Extend studio run and version models for portfolios
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

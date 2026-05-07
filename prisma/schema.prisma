@@ -11,39 +11,39 @@ datasource db {
 }
 
 model Job {
-  id            String    @id @default(uuid())
-  userId        String
-  workspaceId   String?   // 워크스페이스 ID (선택적)
-  status        String
-  type          String
-  prompt        String?
-  sceneSnapshotJson String?
-  sourcePromptDocumentId String?
+  id                        String    @id @default(uuid())
+  userId                    String
+  workspaceId               String? // 워크스페이스 ID (선택적)
+  status                    String
+  type                      String
+  prompt                    String?
+  sceneSnapshotJson         String?
+  sourcePromptDocumentId    String?
   sourcePromptDocumentTitle String?
-  runpodJobId   String?   // RunPod job ID 추가
-  options       String?
-  secureState   String?
-  resultUrl     String?
-  thumbnailUrl  String?    // 썸네일 URL 추가
-  isFavorite    Boolean   @default(false) // 즐겨찾기 상태
-  createdAt     DateTime  @default(now())
-  modelId       String    @default("unknown") // 모델 ID 추가
-  endpointId    String?   // RunPod Endpoint ID 추가
-  error         String?   // 에러 메시지 추가
-  cost          Float?    // 비용 추가
-  completedAt   DateTime?
-  executionMs   Int?
-  
+  runpodJobId               String? // RunPod job ID 추가
+  options                   String?
+  secureState               String?
+  resultUrl                 String?
+  thumbnailUrl              String? // 썸네일 URL 추가
+  isFavorite                Boolean   @default(false) // 즐겨찾기 상태
+  createdAt                 DateTime  @default(now())
+  modelId                   String    @default("unknown") // 모델 ID 추가
+  endpointId                String? // RunPod Endpoint ID 추가
+  error                     String? // 에러 메시지 추가
+  cost                      Float? // 비용 추가
+  completedAt               DateTime?
+  executionMs               Int?
+
   // Media input paths for job input reuse
-  imageInputPath String?  // Path to input image file
-  videoInputPath String?  // Path to input video file
-  audioInputPath String?  // Path to input audio file
+  imageInputPath String? // Path to input image file
+  videoInputPath String? // Path to input video file
+  audioInputPath String? // Path to input audio file
 
   // 관계 설정
-  workspace     Workspace? @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
-  studioSessionShotVersions StudioSessionShotVersion[]
+  workspace                        Workspace?                       @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
+  studioSessionShotVersions        StudioSessionShotVersion[]
   studioSessionMaterializationTask StudioSessionJobMaterialization?
-  materializationTasks JobMaterializationTask[]
+  materializationTasks             JobMaterializationTask[]
 
   @@index([userId, createdAt(sort: Desc)]) // 사용자별 최신 순 정렬을 위한 복합 인덱스
   @@index([userId, status]) // 사용자별 상태별 조회를 위한 인덱스
@@ -74,14 +74,14 @@ model CreditActivity {
 }
 
 model UserSetting {
-  id           String   @id @default(uuid())
-  userId       String
-  serviceName  String
-  configKey    String
-  configValue  String
-  isEncrypted  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  userId      String
+  serviceName String
+  configKey   String
+  configValue String
+  isEncrypted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([userId, serviceName, configKey])
   @@map("user_settings")
@@ -120,56 +120,61 @@ model UsageStats {
 }
 
 model Workspace {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   userId      String
   name        String
   description String?
-  color       String?   // 워크스페이스 색상 테마
-  isDefault   Boolean   @default(false) // 기본 워크스페이스 여부
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  color       String? // 워크스페이스 색상 테마
+  isDefault   Boolean  @default(false) // 기본 워크스페이스 여부
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // 관계 설정
-  jobs        Job[]     @relation("WorkspaceJobs")
-  galleryAssets GalleryAsset[]
-  posePresets PosePreset[]
-  scenePresets ScenePreset[]
-  promptDocuments PromptDocument[]
-  loras       LoRA[]
-  studioSessionTemplates StudioSessionTemplate[]
-  studioSessionRuns StudioSessionRun[]
-  studioSessionShots StudioSessionShot[]
+  jobs                       Job[]                       @relation("WorkspaceJobs")
+  galleryAssets              GalleryAsset[]
+  posePresets                PosePreset[]
+  scenePresets               ScenePreset[]
+  promptDocuments            PromptDocument[]
+  loras                      LoRA[]
+  studioSessionTemplates     StudioSessionTemplate[]
+  studioSessionRuns          StudioSessionRun[]
+  studioSessionShots         StudioSessionShot[]
   studioSessionShotRevisions StudioSessionShotRevision[]
-  studioSessionShotVersions StudioSessionShotVersion[]
-  
+  studioSessionShotVersions  StudioSessionShotVersion[]
+  studioPortfolios           StudioPortfolio[]
+  studioPhotoSessions        StudioPhotoSession[]
+  studioSessionRunPresets    StudioSessionRunPreset[]
+  studioCollections          StudioCollection[]
+  studioCollectionItems      StudioCollectionItem[]
+
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
   @@map("workspaces")
 }
 
 model GalleryAsset {
-  id                   String    @id @default(uuid())
-  workspaceId          String
-  type                 String
-  bucket               String    @default("common")
-  originKind           String    @default("job_output")
-  sourceJobId          String?
-  sourceOutputId       String?
-  contentHash          String
-  originalUrl          String
-  previewUrl           String?
-  thumbnailUrl         String?
-  favorited            Boolean   @default(false)
-  trashed              Boolean   @default(false)
-  userTags             String?
-  autoTags             String?
-  generationSnapshot   String?
-  derivativeStatus     String    @default("pending")
-  enrichmentStatus     String    @default("pending")
-  addedToGalleryAt     DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  type               String
+  bucket             String   @default("common")
+  originKind         String   @default("job_output")
+  sourceJobId        String?
+  sourceOutputId     String?
+  contentHash        String
+  originalUrl        String
+  previewUrl         String?
+  thumbnailUrl       String?
+  favorited          Boolean  @default(false)
+  trashed            Boolean  @default(false)
+  userTags           String?
+  autoTags           String?
+  generationSnapshot String?
+  derivativeStatus   String   @default("pending")
+  enrichmentStatus   String   @default("pending")
+  addedToGalleryAt   DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, addedToGalleryAt(sort: Desc)])
   @@index([workspaceId, trashed, addedToGalleryAt(sort: Desc)])
@@ -181,80 +186,80 @@ model GalleryAsset {
 }
 
 model VideoProject {
-  id            String   @id @default(uuid())
-  title         String
-  description   String   @default("")
-  
+  id          String @id @default(uuid())
+  title       String
+  description String @default("")
+
   // Resolution settings
-  aspectRatio   String   @default("16:9")
-  qualityPreset String   @default("720p")
-  width         Int      @default(1280)
-  height        Int      @default(720)
-  
-  duration      Int      @default(30000)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  tracks        VideoTrack[]
-  
+  aspectRatio   String @default("16:9")
+  qualityPreset String @default("720p")
+  width         Int    @default(1280)
+  height        Int    @default(720)
+
+  duration  Int      @default(30000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks VideoTrack[]
+
   @@map("video_projects")
 }
 
 model VideoTrack {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   projectId String
-  type      String   // 'video' | 'music' | 'voiceover'
+  type      String // 'video' | 'music' | 'voiceover'
   label     String
-  locked    Boolean  @default(true)
-  order     Int      @default(0)
-  
+  locked    Boolean @default(true)
+  order     Int     @default(0)
+
   // Audio settings
-  volume    Int      @default(100) // 0-200
-  muted     Boolean  @default(false)
-  
+  volume Int     @default(100) // 0-200
+  muted  Boolean @default(false)
+
   createdAt DateTime @default(now())
-  
-  project   VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  project   VideoProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   keyframes VideoKeyFrame[]
-  
+
   @@map("video_tracks")
 }
 
 model VideoKeyFrame {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   trackId   String
-  timestamp Int      // milliseconds
-  duration  Int      // milliseconds
-  dataType  String   // 'image' | 'video' | 'music' | 'voiceover'
+  timestamp Int // milliseconds
+  duration  Int // milliseconds
+  dataType  String // 'image' | 'video' | 'music' | 'voiceover'
   mediaId   String
   url       String
   prompt    String?
-  
+
   // Media fitting (for image/video)
-  fitMode   String?  @default("contain") // 'contain' | 'cover' | 'fill'
-  
+  fitMode String? @default("contain") // 'contain' | 'cover' | 'fill'
+
   // Audio settings (for music/voiceover)
-  volume    Int?     // 0-200, null means use track volume
-  
+  volume Int? // 0-200, null means use track volume
+
   createdAt DateTime @default(now())
-  
-  track     VideoTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  
+
+  track VideoTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
   @@map("video_keyframes")
 }
 
 model LoRA {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   fileName    String
-  s3Path      String    // Path in S3 bucket
-  s3Url       String    // Full S3 URL
-  fileSize    BigInt    // File size in bytes
-  extension   String    // .safetensors or .ckpt
+  s3Path      String // Path in S3 bucket
+  s3Url       String // Full S3 URL
+  fileSize    BigInt // File size in bytes
+  extension   String // .safetensors or .ckpt
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  uploadedAt  DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  uploadedAt  DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([workspaceId])
   @@index([uploadedAt])
@@ -262,22 +267,23 @@ model LoRA {
 }
 
 model Character {
-  id                   String             @id @default(uuid())
+  id                   String    @id @default(uuid())
   name                 String
   gender               String?
-  traits               String             @default("{}")
-  editorState          String             @default("{}")
-  previewStateJson     String             @default("{}")
+  traits               String    @default("{}")
+  editorState          String    @default("{}")
+  previewStateJson     String    @default("{}")
   currentVersionId     String?
   previewStatusSummary String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
 
-  versions             CharacterVersion[]    @relation("CharacterVersions")
-  currentVersion       CharacterVersion?     @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  sceneBindings        SceneCharacterBinding[]
+  versions               CharacterVersion[]      @relation("CharacterVersions")
+  currentVersion         CharacterVersion?       @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  sceneBindings          SceneCharacterBinding[]
   studioSessionTemplates StudioSessionTemplate[]
+  studioPortfolios       StudioPortfolio[]
 
   @@index([updatedAt(sort: Desc)])
   @@index([deletedAt, updatedAt(sort: Desc)])
@@ -285,13 +291,13 @@ model Character {
 }
 
 model CharacterVersion {
-  id                  String      @id @default(uuid())
+  id                  String   @id @default(uuid())
   characterId         String
-  traitsSnapshot      String      @default("{}")
-  editorStateSnapshot String      @default("{}")
+  traitsSnapshot      String   @default("{}")
+  editorStateSnapshot String   @default("{}")
   versionNumber       Int
   changeSummary       String
-  createdAt           DateTime    @default(now())
+  createdAt           DateTime @default(now())
 
   character           Character   @relation("CharacterVersions", fields: [characterId], references: [id], onDelete: Cascade)
   currentForCharacter Character[] @relation("CharacterCurrentVersion")
@@ -318,24 +324,24 @@ model VibePreset {
 }
 
 model PosePreset {
-  id               String        @id @default(uuid())
+  id               String   @id @default(uuid())
   workspaceId      String
   name             String
   characterCount   Int
   summary          String
   posePrompt       String
-  tags             String        @default("[]")
-  source           String        @default("manual")
+  tags             String   @default("[]")
+  source           String   @default("manual")
   sourceImageUrl   String?
   modelHint        String?
   charactersJson   String
   relationshipJson String?
-  status           String        @default("active")
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  status           String   @default("active")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  scenePresets     ScenePreset[]
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scenePresets ScenePreset[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, characterCount, status, updatedAt(sort: Desc)])
@@ -344,27 +350,27 @@ model PosePreset {
 }
 
 model ScenePreset {
-  id                    String                  @id @default(uuid())
+  id                    String   @id @default(uuid())
   workspaceId           String
   name                  String
   summary               String
   characterCount        Int
-  tags                  String                  @default("[]")
+  tags                  String   @default("[]")
   posePresetId          String?
   vibePresetId          String?
-  sceneInstructions     String                  @default("")
-  assemblyMode          String                  @default("template")
+  sceneInstructions     String   @default("")
+  assemblyMode          String   @default("template")
   generatedScenePrompt  String
   latestPreviewImageUrl String?
   latestPreviewJobId    String?
-  status                String                  @default("active")
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  status                String   @default("active")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  posePreset            PosePreset?             @relation(fields: [posePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  vibePreset            VibePreset?             @relation(fields: [vibePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  characterBindings     SceneCharacterBinding[]
+  workspace         Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posePreset        PosePreset?             @relation(fields: [posePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vibePreset        VibePreset?             @relation(fields: [vibePresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  characterBindings SceneCharacterBinding[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, characterCount, status, updatedAt(sort: Desc)])
@@ -375,17 +381,17 @@ model ScenePreset {
 }
 
 model SceneCharacterBinding {
-  id                   String      @id @default(uuid())
+  id                   String   @id @default(uuid())
   scenePresetId        String
   slot                 Int
   roleLabel            String?
   characterPresetId    String?
   overrideInstructions String?
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  scenePreset          ScenePreset @relation(fields: [scenePresetId], references: [id], onDelete: Cascade)
-  characterPreset      Character?  @relation(fields: [characterPresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  scenePreset     ScenePreset @relation(fields: [scenePresetId], references: [id], onDelete: Cascade)
+  characterPreset Character?  @relation(fields: [characterPresetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@unique([scenePresetId, slot])
   @@index([scenePresetId, slot])
@@ -394,18 +400,18 @@ model SceneCharacterBinding {
 }
 
 model PromptDocument {
-  id                   String    @id @default(uuid())
+  id                   String   @id @default(uuid())
   workspaceId          String
   title                String
   templateId           String
   templateVersion      Int
   stateJson            String
-  enabledConstraintIds String    @default("[]")
-  status               String    @default("active")
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  enabledConstraintIds String   @default("[]")
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, templateId, status, updatedAt(sort: Desc)])
@@ -414,29 +420,29 @@ model PromptDocument {
 }
 
 model StudioSessionTemplate {
-  id                          String                             @id @default(uuid())
-  workspaceId                 String
-  name                        String
-  characterId                 String?
-  environmentText             String                             @default("")
-  outfitText                  String                             @default("")
-  hairstyleText               String                             @default("")
-  positivePrompt              String                             @default("")
-  negativePrompt              String                             @default("")
-  generationSettingsJson      String                             @default("{}")
-  shortSidePx                 Int                                @default(832)
-  longSidePx                  Int                                @default(1216)
-  squareSideSource            String                             @default("short")
-  canonicalStateJson          String                             @default("{}")
-  draftStateJson              String                             @default("{}")
-  status                      String                             @default("active")
-  createdAt                   DateTime                           @default(now())
-  updatedAt                   DateTime                           @updatedAt
+  id                     String   @id @default(uuid())
+  workspaceId            String
+  name                   String
+  characterId            String?
+  environmentText        String   @default("")
+  outfitText             String   @default("")
+  hairstyleText          String   @default("")
+  positivePrompt         String   @default("")
+  negativePrompt         String   @default("")
+  generationSettingsJson String   @default("{}")
+  shortSidePx            Int      @default(832)
+  longSidePx             Int      @default(1216)
+  squareSideSource       String   @default("short")
+  canonicalStateJson     String   @default("{}")
+  draftStateJson         String   @default("{}")
+  status                 String   @default("active")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  workspace                   Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  character                   Character?                         @relation(fields: [characterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  categoryRules               StudioSessionTemplateCategoryRule[]
-  runs                        StudioSessionRun[]
+  workspace     Workspace                           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character     Character?                          @relation(fields: [characterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  categoryRules StudioSessionTemplateCategoryRule[]
+  runs          StudioSessionRun[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, characterId, status, updatedAt(sort: Desc)])
@@ -445,21 +451,21 @@ model StudioSessionTemplate {
 }
 
 model StudioSessionTemplateCategoryRule {
-  id                         String                 @id @default(uuid())
-  templateId                 String
-  category                   String
-  count                      Int                    @default(0)
-  includedPoseIdsJson        String?
-  excludedPoseIdsJson        String?
-  preferredOrientation       String?
-  preferredFraming           String?
-  fixedPoseIdsJson           String?
-  weightingJson              String?
-  futureOverrideConfigJson   String?
-  createdAt                  DateTime               @default(now())
-  updatedAt                  DateTime               @updatedAt
+  id                       String   @id @default(uuid())
+  templateId               String
+  category                 String
+  count                    Int      @default(0)
+  includedPoseIdsJson      String?
+  excludedPoseIdsJson      String?
+  preferredOrientation     String?
+  preferredFraming         String?
+  fixedPoseIdsJson         String?
+  weightingJson            String?
+  futureOverrideConfigJson String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  template                   StudioSessionTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template StudioSessionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, category])
   @@index([templateId])
@@ -467,50 +473,178 @@ model StudioSessionTemplateCategoryRule {
   @@map("studio_session_template_category_rules")
 }
 
-model StudioSessionRun {
-  id                          String                   @id @default(uuid())
-  workspaceId                 String
-  templateId                  String?
-  templateNameSnapshot        String                   @default("")
-  templateSnapshotJson        String                   @default("{}")
-  poseLibraryVersion          String                   @default("v1")
-  poseLibraryHash             String                   @default("")
-  status                      String                   @default("draft")
-  createdAt                   DateTime                 @default(now())
-  updatedAt                   DateTime                 @updatedAt
+model StudioPortfolio {
+  id          String   @id @default(uuid())
+  workspaceId String
+  characterId String
+  name        String
+  description String   @default("")
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  workspace                   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  template                    StudioSessionTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  shots                       StudioSessionShot[]
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character       Character              @relation(fields: [characterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  sessions        StudioPhotoSession[]
+  collections     StudioCollection[]
+  collectionItems StudioCollectionItem[]
+  runs            StudioSessionRun[]
+
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@index([workspaceId, characterId, status, updatedAt(sort: Desc)])
+  @@map("studio_portfolios")
+}
+
+model StudioPhotoSession {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  portfolioId    String
+  name           String
+  settingText    String   @default("")
+  lightingText   String   @default("")
+  vibeText       String   @default("")
+  outfitText     String   @default("")
+  hairstyleText  String   @default("")
+  negativePrompt String   @default("")
+  notes          String   @default("")
+  status         String   @default("draft")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  portfolio       StudioPortfolio        @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  runs            StudioSessionRun[]
+  collectionItems StudioCollectionItem[]
+
+  @@index([workspaceId, portfolioId, status, updatedAt(sort: Desc)])
+  @@index([portfolioId, updatedAt(sort: Desc)])
+  @@map("studio_photo_sessions")
+}
+
+model StudioSessionRunPreset {
+  id                     String   @id @default(uuid())
+  workspaceId            String
+  name                   String
+  description            String   @default("")
+  generationSettingsJson String   @default("{}")
+  resolutionPolicyJson   String   @default("{}")
+  promptDefaultsJson     String   @default("{}")
+  status                 String   @default("active")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@map("studio_session_run_presets")
+}
+
+model StudioCollection {
+  id          String   @id @default(uuid())
+  workspaceId String
+  portfolioId String
+  name        String
+  description String   @default("")
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  portfolio StudioPortfolio        @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  items     StudioCollectionItem[]
+
+  @@index([workspaceId, portfolioId, status, updatedAt(sort: Desc)])
+  @@index([portfolioId, updatedAt(sort: Desc)])
+  @@map("studio_collections")
+}
+
+model StudioCollectionItem {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  collectionId   String
+  portfolioId    String
+  photoSessionId String?
+  runId          String?
+  shotId         String?
+  versionId      String
+  sortOrder      Int      @default(0)
+  caption        String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  collection   StudioCollection         @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  portfolio    StudioPortfolio          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  photoSession StudioPhotoSession?      @relation(fields: [photoSessionId], references: [id], onDelete: SetNull)
+  run          StudioSessionRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
+  shot         StudioSessionShot?       @relation(fields: [shotId], references: [id], onDelete: SetNull)
+  version      StudioSessionShotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, versionId])
+  @@index([workspaceId, portfolioId, collectionId, sortOrder])
+  @@index([versionId])
+  @@map("studio_collection_items")
+}
+
+model StudioSessionRun {
+  id                   String   @id @default(uuid())
+  workspaceId          String
+  templateId           String?
+  portfolioId          String?
+  photoSessionId       String?
+  poseSetId            String?
+  name                 String   @default("")
+  runSettingsJson      String   @default("{}")
+  promptOverrideJson   String   @default("{}")
+  resolutionPolicyJson String   @default("{}")
+  count                Int      @default(0)
+  templateNameSnapshot String   @default("")
+  templateSnapshotJson String   @default("{}")
+  poseLibraryVersion   String   @default("v1")
+  poseLibraryHash      String   @default("")
+  status               String   @default("draft")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template        StudioSessionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  portfolio       StudioPortfolio?       @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  photoSession    StudioPhotoSession?    @relation(fields: [photoSessionId], references: [id], onDelete: SetNull)
+  shots           StudioSessionShot[]
+  collectionItems StudioCollectionItem[]
 
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([workspaceId, templateId, createdAt(sort: Desc)])
+  @@index([workspaceId, portfolioId, updatedAt(sort: Desc)])
+  @@index([workspaceId, photoSessionId, updatedAt(sort: Desc)])
+  @@index([workspaceId, poseSetId, updatedAt(sort: Desc)])
   @@index([updatedAt(sort: Desc)])
   @@map("studio_session_runs")
 }
 
 model StudioSessionShot {
-  id                           String                      @id @default(uuid())
-  workspaceId                  String
-  runId                        String
-  category                     String
-  slotIndex                    Int
-  label                        String
-  status                       String                      @default("unassigned")
-  skipped                      Boolean                     @default(false)
-  selectionVersionId           String?
-  currentRevisionId            String?
-  autoAssignmentHistoryJson    String                      @default("[]")
-  futureOverrideConfigJson     String?
-  createdAt                    DateTime                    @default(now())
-  updatedAt                    DateTime                    @updatedAt
+  id                        String   @id @default(uuid())
+  workspaceId               String
+  runId                     String
+  category                  String
+  slotIndex                 Int
+  label                     String
+  status                    String   @default("unassigned")
+  skipped                   Boolean  @default(false)
+  selectionVersionId        String?
+  currentRevisionId         String?
+  autoAssignmentHistoryJson String   @default("[]")
+  futureOverrideConfigJson  String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
-  workspace                    Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  run                          StudioSessionRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
-  selectedVersion              StudioSessionShotVersion?   @relation("StudioSessionShotSelectedVersion", fields: [selectionVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  currentRevision              StudioSessionShotRevision?  @relation("StudioSessionShotCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  revisions                    StudioSessionShotRevision[] @relation("StudioSessionShotRevisions")
-  versions                     StudioSessionShotVersion[]  @relation("StudioSessionShotVersions")
+  workspace       Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  run             StudioSessionRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  selectedVersion StudioSessionShotVersion?   @relation("StudioSessionShotSelectedVersion", fields: [selectionVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currentRevision StudioSessionShotRevision?  @relation("StudioSessionShotCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  revisions       StudioSessionShotRevision[] @relation("StudioSessionShotRevisions")
+  versions        StudioSessionShotVersion[]  @relation("StudioSessionShotVersions")
+  collectionItems StudioCollectionItem[]
 
   @@unique([runId, category, slotIndex])
   @@index([workspaceId, runId, category, slotIndex])
@@ -521,24 +655,24 @@ model StudioSessionShot {
 }
 
 model StudioSessionShotRevision {
-  id                           String                      @id @default(uuid())
-  workspaceId                  String
-  shotId                       String
-  revisionNumber               Int
-  poseId                       String
-  poseSnapshotJson             String                      @default("{}")
-  derivedOrientation           String
-  derivedFraming               String
-  assembledPromptSnapshotJson  String                      @default("{}")
-  overrideFieldsJson           String?
-  sourceKind                   String                      @default("auto_pick")
-  createdAt                    DateTime                    @default(now())
-  updatedAt                    DateTime                    @updatedAt
+  id                          String   @id @default(uuid())
+  workspaceId                 String
+  shotId                      String
+  revisionNumber              Int
+  poseId                      String
+  poseSnapshotJson            String   @default("{}")
+  derivedOrientation          String
+  derivedFraming              String
+  assembledPromptSnapshotJson String   @default("{}")
+  overrideFieldsJson          String?
+  sourceKind                  String   @default("auto_pick")
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
-  workspace                    Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  shot                         StudioSessionShot           @relation("StudioSessionShotRevisions", fields: [shotId], references: [id], onDelete: Cascade)
-  currentForShot               StudioSessionShot[]         @relation("StudioSessionShotCurrentRevision")
-  versions                     StudioSessionShotVersion[]
+  workspace      Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shot           StudioSessionShot          @relation("StudioSessionShotRevisions", fields: [shotId], references: [id], onDelete: Cascade)
+  currentForShot StudioSessionShot[]        @relation("StudioSessionShotCurrentRevision")
+  versions       StudioSessionShotVersion[]
 
   @@unique([shotId, revisionNumber])
   @@index([workspaceId, shotId, createdAt(sort: Desc)])
@@ -547,54 +681,59 @@ model StudioSessionShotRevision {
 }
 
 model StudioSessionShotVersion {
-  id                           String                    @id @default(uuid())
-  workspaceId                  String
-  shotId                       String
-  revisionId                   String
-  sourceJobId                  String?
-  versionNumber                Int
-  status                       String                    @default("completed")
-  originKind                   String                    @default("job_output")
-  contentHash                  String?
-  originalUrl                  String?
-  previewUrl                   String?
-  thumbnailUrl                 String?
-  generationSnapshotJson       String?
-  hidden                       Boolean                   @default(false)
-  rejected                     Boolean                   @default(false)
-  createdAt                    DateTime                  @default(now())
-  updatedAt                    DateTime                  @updatedAt
+  id                     String    @id @default(uuid())
+  workspaceId            String
+  shotId                 String
+  revisionId             String
+  sourceJobId            String?
+  versionNumber          Int
+  status                 String    @default("completed")
+  originKind             String    @default("job_output")
+  contentHash            String?
+  originalUrl            String?
+  previewUrl             String?
+  thumbnailUrl           String?
+  generationSnapshotJson String?
+  hidden                 Boolean   @default(false)
+  rejected               Boolean   @default(false)
+  reviewState            String    @default("unreviewed")
+  reviewNote             String    @default("")
+  reviewedAt             DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  workspace                    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  shot                         StudioSessionShot         @relation("StudioSessionShotVersions", fields: [shotId], references: [id], onDelete: Cascade)
-  revision                     StudioSessionShotRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  sourceJob                    Job?                      @relation(fields: [sourceJobId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  selectedForShot              StudioSessionShot[]       @relation("StudioSessionShotSelectedVersion")
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shot            StudioSessionShot         @relation("StudioSessionShotVersions", fields: [shotId], references: [id], onDelete: Cascade)
+  revision        StudioSessionShotRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  sourceJob       Job?                      @relation(fields: [sourceJobId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  selectedForShot StudioSessionShot[]       @relation("StudioSessionShotSelectedVersion")
+  collectionItems StudioCollectionItem[]
 
   @@unique([revisionId, versionNumber])
   @@unique([sourceJobId])
   @@index([workspaceId, shotId, createdAt(sort: Desc)])
   @@index([workspaceId, hidden, rejected, createdAt(sort: Desc)])
+  @@index([workspaceId, reviewState, createdAt(sort: Desc)])
   @@index([sourceJobId])
   @@map("studio_session_shot_versions")
 }
 
 model StudioSessionJobMaterialization {
-  id               String   @id @default(uuid())
-  jobId            String   @unique
-  workspaceId      String
-  runId            String
-  shotId           String
-  revisionId       String
-  status           String   @default("pending")
-  attemptCount     Int      @default(0)
-  lastAttemptAt    DateTime?
-  materializedAt   DateTime?
-  lastError        String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id             String    @id @default(uuid())
+  jobId          String    @unique
+  workspaceId    String
+  runId          String
+  shotId         String
+  revisionId     String
+  status         String    @default("pending")
+  attemptCount   Int       @default(0)
+  lastAttemptAt  DateTime?
+  materializedAt DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([runId, status, updatedAt(sort: Desc)])
   @@index([shotId, status, updatedAt(sort: Desc)])
@@ -603,21 +742,21 @@ model StudioSessionJobMaterialization {
 }
 
 model JobMaterializationTask {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   jobId          String
   workspaceId    String?
   targetType     String
   targetId       String
-  payloadJson    String   @default("{}")
-  status         String   @default("pending")
-  attemptCount   Int      @default(0)
+  payloadJson    String    @default("{}")
+  status         String    @default("pending")
+  attemptCount   Int       @default(0)
   lastAttemptAt  DateTime?
   materializedAt DateTime?
   lastError      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@unique([jobId, targetType, targetId])
   @@index([targetType, status, updatedAt(sort: Desc)])
