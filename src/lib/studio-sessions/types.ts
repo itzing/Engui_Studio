@@ -67,6 +67,8 @@ export interface StudioPortfolioSummary {
   workspaceId: string;
   characterId: string;
   characterName: string;
+  characterGender: string | null;
+  characterAge: string | null;
   characterPreviewUrl: string | null;
   name: string;
   description: string;

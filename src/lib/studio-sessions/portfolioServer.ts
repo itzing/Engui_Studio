@@ -80,7 +80,7 @@ async function assertWorkspace(workspaceId: string) {
 
 function makePortfolioInclude() {
   return {
-    character: { select: { name: true, previewStateJson: true } },
+    character: { select: { name: true, gender: true, traits: true, previewStateJson: true } },
     _count: { select: { sessions: true, collections: true } },
   } as const;
 }
