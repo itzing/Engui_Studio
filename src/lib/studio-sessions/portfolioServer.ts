@@ -158,6 +158,16 @@ export async function updateStudioPortfolio(portfolioId: string, input: { name?:
   return toStudioPortfolioSummary(portfolio);
 }
 
+export async function deleteStudioPortfolio(portfolioId: string) {
+  const existing = await prisma.studioPortfolio.findUnique({ where: { id: portfolioId }, select: { id: true } });
+  if (!existing) return null;
+  await prisma.$transaction(async (tx) => {
+    await tx.studioSessionRun.deleteMany({ where: { portfolioId } });
+    await tx.studioPortfolio.delete({ where: { id: portfolioId } });
+  });
+  return { id: portfolioId };
+}
+
 function makePhotoSessionInclude() {
   return { _count: { select: { runs: true } } } as const;
 }

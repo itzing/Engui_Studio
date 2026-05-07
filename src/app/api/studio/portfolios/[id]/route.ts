@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getStudioPortfolio, updateStudioPortfolio } from '@/lib/studio-sessions/portfolioServer';
+import { deleteStudioPortfolio, getStudioPortfolio, updateStudioPortfolio } from '@/lib/studio-sessions/portfolioServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJson, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
 
 export const dynamic = 'force-dynamic';
@@ -26,5 +26,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return studioSessionJson({ success: true, portfolio });
   } catch (error) {
     return handleStudioSessionApiError(error, 'Failed to update Studio portfolio:');
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    const deleted = await deleteStudioPortfolio(id);
+    if (!deleted) return studioSessionJson({ success: false, error: 'Portfolio not found' }, { status: 404 });
+    return studioSessionJson({ success: true, deleted });
+  } catch (error) {
+    return handleStudioSessionApiError(error, 'Failed to delete Studio portfolio:');
   }
 }
