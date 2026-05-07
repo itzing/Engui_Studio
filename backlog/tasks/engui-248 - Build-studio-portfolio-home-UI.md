@@ -1,7 +1,7 @@
 ---
 id: ENGUI-248
 title: Build studio portfolio home UI
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

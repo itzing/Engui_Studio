@@ -1,7 +1,7 @@
 ---
 id: ENGUI-251
 title: Build session list and brief editor
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

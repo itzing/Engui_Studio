@@ -1,7 +1,7 @@
 ---
 id: ENGUI-249
 title: Add create portfolio dialog with character selector
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]
