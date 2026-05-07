@@ -25,6 +25,18 @@ type FStudioRoute =
 
 type RunDetail = { run?: StudioSessionRunSummary; shots?: Array<{ id: string; label: string; category: string }>; versions?: StudioSessionShotVersionSummary[] };
 type CollectionDetail = { collection: StudioCollectionSummary; items: StudioCollectionItemSummary[] } | null;
+type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
+
+const SESSION_BRIEF_FIELDS: Array<{ key: keyof SessionBriefDraft; label: string; multiline?: boolean; placeholder: string }> = [
+  { key: 'name', label: 'Session name', placeholder: 'New photo session' },
+  { key: 'settingText', label: 'Setting', multiline: true, placeholder: 'Location, scene, background, props…' },
+  { key: 'lightingText', label: 'Lighting', multiline: true, placeholder: 'Studio lighting, mood, contrast, key/fill/rim…' },
+  { key: 'vibeText', label: 'Vibe', multiline: true, placeholder: 'Mood, energy, expression direction…' },
+  { key: 'outfitText', label: 'Outfit', multiline: true, placeholder: 'Wardrobe for this session…' },
+  { key: 'hairstyleText', label: 'Hairstyle', multiline: true, placeholder: 'Hair styling for this session…' },
+  { key: 'negativePrompt', label: 'Negative prompt', multiline: true, placeholder: 'Things to avoid for this session…' },
+  { key: 'notes', label: 'Notes', multiline: true, placeholder: 'Internal notes…' },
+];
 
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -139,6 +151,87 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, hydrated, onToggle 
         })}
       </nav>
     </aside>
+  );
+}
+
+function createSessionBriefDraft(session: StudioPhotoSessionSummary): SessionBriefDraft {
+  return {
+    name: session.name || '',
+    settingText: session.settingText || '',
+    lightingText: session.lightingText || '',
+    vibeText: session.vibeText || '',
+    outfitText: session.outfitText || '',
+    hairstyleText: session.hairstyleText || '',
+    negativePrompt: session.negativePrompt || '',
+    notes: session.notes || '',
+  };
+}
+
+function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPhotoSessionSummary | null; onSave: (sessionId: string, draft: SessionBriefDraft) => Promise<void>; onOpenRuns: () => void }) {
+  const [draft, setDraft] = useState<SessionBriefDraft | null>(session ? createSessionBriefDraft(session) : null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(session ? createSessionBriefDraft(session) : null);
+  }, [session]);
+
+  const cleanDraft = session ? createSessionBriefDraft(session) : null;
+  const dirty = Boolean(draft && cleanDraft && JSON.stringify(draft) !== JSON.stringify(cleanDraft));
+
+  if (!session || !draft) return <EmptyState title="Session not found" description="This session could not be loaded." />;
+
+  async function save() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    try {
+      await onSave(session.id, draft);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border-white/10 bg-white/[0.035] text-white">
+      <CardContent className="space-y-5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xl font-semibold">Session brief</div>
+            <div className="mt-1 text-sm text-white/45">Editable until dedicated libraries/pickers are added for these fields.</div>
+          </div>
+          <Button type="button" onClick={() => void save()} disabled={!dirty || saving} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+          </Button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {SESSION_BRIEF_FIELDS.map((field) => (
+            <label key={field.key} className={`${field.key === 'notes' || field.key === 'negativePrompt' ? 'md:col-span-2' : ''} block rounded-2xl border border-white/10 bg-black/20 p-4`}>
+              <div className="text-xs uppercase tracking-[0.16em] text-white/35">{field.label}</div>
+              {field.multiline ? (
+                <textarea
+                  value={draft[field.key]}
+                  onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
+                  placeholder={field.placeholder}
+                  rows={field.key === 'notes' || field.key === 'negativePrompt' ? 4 : 3}
+                  className="mt-2 min-h-24 w-full resize-y rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-blue-400/60 focus:bg-white/[0.06]"
+                />
+              ) : (
+                <Input
+                  value={draft[field.key]}
+                  onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
+                  placeholder={field.placeholder}
+                  className="mt-2 border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 focus:border-blue-400/60"
+                />
+              )}
+            </label>
+          ))}
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={onOpenRuns} className="bg-blue-500 text-white hover:bg-blue-400">Open runs</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -307,6 +400,21 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (data?.success) router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${data.run.id}`); else setError(data?.error || 'Failed to create run');
   }
 
+  async function saveSessionBrief(id: string, draft: SessionBriefDraft) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to save session brief');
+      if (data.session) {
+        setSessions((current) => current.map((session) => session.id === id ? data.session : session));
+      }
+    } catch (err) {
+      setError(toErrorMessage(err, 'Failed to save session brief'));
+      throw err;
+    }
+  }
+
   async function deletePortfolio(id: string) {
     setDeletingPortfolioId(id); setError(null);
     try {
@@ -343,7 +451,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'portfolios') return <TileGrid><AddTile label="New portfolio" onClick={() => setShowCreatePortfolio(true)} />{portfolios.map((portfolio) => <PortfolioTile key={portfolio.id} portfolio={portfolio} confirming={confirmingDeletePortfolioId === portfolio.id} deleting={deletingPortfolioId === portfolio.id} onDeleteClick={() => setConfirmingDeletePortfolioId(portfolio.id)} onConfirmDelete={() => void deletePortfolio(portfolio.id)} />)}{portfolios.length === 0 ? <EmptyTile title="No portfolios yet" description="Create the first character portfolio to start building sessions and collections." /> : null}</TileGrid>;
     if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
     if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SessionTile key={session.id} session={session} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} confirming={confirmingDeleteSessionId === session.id} deleting={deletingSessionId === session.id} onDeleteClick={() => setConfirmingDeleteSessionId(session.id)} onConfirmDelete={() => void deleteSession(session.id)} />)}{sessions.length === 0 ? <EmptyTile title="No sessions yet" description="Create a photo session to define setting, vibe, outfit, and runs." /> : null}</TileGrid>;
-    if (route.level === 'session') return <Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-6"><div className="text-xl font-semibold">{selectedSession?.name || 'Session'}</div><div className="grid gap-4 md:grid-cols-2"><Info label="Setting" value={selectedSession?.settingText} /><Info label="Lighting" value={selectedSession?.lightingText} /><Info label="Vibe" value={selectedSession?.vibeText} /><Info label="Outfit" value={selectedSession?.outfitText} /></div><Button onClick={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} className="bg-blue-500 text-white hover:bg-blue-400">Open runs</Button></CardContent></Card>;
+    if (route.level === 'session') return <SessionBriefEditor session={selectedSession} onSave={saveSessionBrief} onOpenRuns={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} />;
     if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setShowCreateRun(true); }} />{runs.map((run) => <SimpleTile key={run.id} title={run.name || run.poseSetId || 'Run'} subtitle={`${run.count} shots · ${run.status}`} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} icon={<Layers3 className="h-5 w-5" />} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
     if (route.level === 'run') return <RunWorkspace detail={runDetail} />;
     if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
