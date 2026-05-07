@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import CharacterSelectModal, { CharacterPreviewTriptych } from '@/components/characters/CharacterSelectModal';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { type LoRAFile } from '@/components/lora/LoRASelector';
 import { useStudio } from '@/lib/context/StudioContext';
@@ -185,6 +186,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
   const [showLoRADialog, setShowLoRADialog] = useState(false);
   const [showDesktopLoraSelector, setShowDesktopLoraSelector] = useState(false);
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [isLoadingLoras, setIsLoadingLoras] = useState(false);
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -578,8 +580,20 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                   {validationError ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{validationError}</div> : null}
                   <div className="grid gap-4 lg:grid-cols-2">
                     <label className="block rounded-lg border border-white/10 bg-black/10 p-4 lg:col-span-2"><Label>Template name</Label><Input value={draft.name} onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)} placeholder="Session template name" /></label>
-                    <label className="block rounded-lg border border-white/10 bg-black/10 p-4"><Label>Character</Label><select value={draft.characterId ?? ''} onChange={(event) => setDraft((current) => current ? { ...current, characterId: event.target.value || null } : current)} className="h-10 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"><option value="">No character selected</option>{characters.map((character) => <option key={character.id} value={character.id}>{character.name}</option>)}</select><div className="mt-2 text-xs text-white/50">{loadingCharacters ? 'Loading characters…' : selectedCharacter ? `${selectedCharacter.name}${selectedCharacter.previewStatusSummary ? ` — ${selectedCharacter.previewStatusSummary}` : ''}` : 'Uses existing Character Manager records.'}</div></label>
-                    <div className="rounded-lg border border-white/10 bg-black/10 p-4"><Label>Character snapshot note</Label><div className="text-sm text-white/70">{selectedCharacter ? <><div className="font-medium text-white">{selectedCharacter.name}</div><div className="mt-1 text-white/55">Gender: {selectedCharacter.gender || 'not set'}</div></> : 'Character link is optional at template stage.'}</div></div>
+                    <div className="rounded-lg border border-white/10 bg-black/10 p-4 lg:col-span-2">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <Label>Character</Label>
+                          <div className="text-sm font-medium text-white">{selectedCharacter ? selectedCharacter.name : 'No character selected'}</div>
+                          <div className="mt-0.5 text-xs text-white/50">{loadingCharacters ? 'Loading characters…' : selectedCharacter ? (selectedCharacter.traits?.body_build || 'Body type not set') : 'Uses existing Character Manager records.'}</div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {selectedCharacter ? <Button size="sm" variant="outline" onClick={() => setDraft((current) => current ? { ...current, characterId: null } : current)}>Clear</Button> : null}
+                          <Button size="sm" onClick={() => setShowCharacterSelector(true)} disabled={loadingCharacters}>{selectedCharacter ? 'Change character' : 'Select character'}</Button>
+                        </div>
+                      </div>
+                      {selectedCharacter ? <CharacterPreviewTriptych character={selectedCharacter} compact /> : <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/45">Select a character to show portrait, upper-body, and full-body previews here.</div>}
+                    </div>
                     <label className="block rounded-lg border border-white/10 bg-black/10 p-4"><Label>Character age</Label><Input value={draft.characterAge} onChange={(event) => setDraft((current) => current ? { ...current, characterAge: event.target.value } : current)} placeholder="e.g. 23" /></label>
                     <label className="block rounded-lg border border-white/10 bg-black/10 p-4"><Label>Environment</Label><textarea value={draft.environmentText} onChange={(event) => setDraft((current) => current ? { ...current, environmentText: event.target.value } : current)} placeholder="Environment direction for the whole session" className="min-h-[110px] w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500" /></label>
                     <label className="block rounded-lg border border-white/10 bg-black/10 p-4"><Label>Outfit</Label><textarea value={draft.outfitText} onChange={(event) => setDraft((current) => current ? { ...current, outfitText: event.target.value } : current)} placeholder="Reusable outfit direction" className="min-h-[110px] w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500" /></label>
@@ -630,7 +644,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
                                         step="0.1"
                                         min={-10}
                                         max={10}
-                                        value={draft.generationSettings[slot.weightParamName] ?? 1}
+                                        value={String(draft.generationSettings[slot.weightParamName] ?? 1)}
                                         onChange={(event) => updateDraftGenerationSettings({ [slot.weightParamName]: Number(event.target.value) || 1 })}
                                       />
                                     </label>
@@ -657,6 +671,17 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
           </Card>
         </div>
       )}
+      <CharacterSelectModal
+        open={showCharacterSelector}
+        onOpenChange={setShowCharacterSelector}
+        characters={characters}
+        selectedCharacterId={draft?.characterId ?? null}
+        loading={loadingCharacters}
+        onSelect={(character) => {
+          setDraft((current) => current ? { ...current, characterId: character.id } : current);
+          setShowCharacterSelector(false);
+        }}
+      />
       <Dialog open={showDesktopLoraSelector} onOpenChange={setShowDesktopLoraSelector}>
         <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#0b1020] p-0 text-white">
           <DialogHeader className="border-b border-white/10 px-6 py-4">
