@@ -1,7 +1,7 @@
 ---
 id: ENGUI-267
 title: Polish F-Studio desktop UX states
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 20:15'
 labels: [studio, f-studio, ui]

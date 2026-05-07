@@ -79,7 +79,7 @@ function SimpleTile({ title, subtitle, href, icon }: { title: string; subtitle?:
 function Sidebar({ route, portfolioId, sessionId, collapsed, onToggle }: { route: FStudioRoute; portfolioId?: string | null; sessionId?: string | null; collapsed: boolean; onToggle: () => void }) {
   const items = [
     { key: 'portfolios', label: 'Portfolios', icon: Grid2X2, href: '/studio-sessions', visible: true, active: route.level === 'portfolios' },
-    { key: 'sessions', label: 'Sessions', icon: Rows3, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}` : '#', visible: Boolean(portfolioId), active: route.level === 'portfolio' || route.level === 'session' },
+    { key: 'sessions', label: 'Sessions', icon: Rows3, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}` : '#', visible: Boolean(portfolioId), active: (route.level === 'portfolio' && route.section !== 'collections') || route.level === 'session' },
     { key: 'runs', label: 'Runs', icon: Layers3, href: portfolioId && sessionId ? `/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs` : '#', visible: Boolean(portfolioId && sessionId), active: route.level === 'runs' || route.level === 'run' },
     { key: 'collections', label: 'Collections', icon: FolderOpen, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}/collections` : '#', visible: Boolean(portfolioId), active: route.level === 'collection' || (route.level === 'portfolio' && route.section === 'collections') },
   ];
@@ -226,13 +226,13 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   }
 
   function renderCanvas() {
-    if (!activeWorkspaceId) return <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">Select or create a workspace before using F-Studio.</div>;
-    if (loading) return <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-8 text-white/50">Loading…</div>;
-    if (route.level === 'portfolios') return <TileGrid><AddTile label="New portfolio" onClick={() => setShowCreatePortfolio(true)} />{portfolios.map((portfolio) => <PortfolioTile key={portfolio.id} portfolio={portfolio} />)}</TileGrid>;
-    if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}</TileGrid>;
-    if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SimpleTile key={session.id} title={session.name} subtitle={[session.settingText, session.vibeText, `${session.runCount} runs`].filter(Boolean).join(' · ')} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} icon={<Rows3 className="h-5 w-5" />} />)}</TileGrid>;
+    if (!activeWorkspaceId) return <EmptyState title="No workspace selected" description="Select or create a workspace before using F-Studio." />;
+    if (loading) return <LoadingGrid />;
+    if (route.level === 'portfolios') return <TileGrid><AddTile label="New portfolio" onClick={() => setShowCreatePortfolio(true)} />{portfolios.map((portfolio) => <PortfolioTile key={portfolio.id} portfolio={portfolio} />)}{portfolios.length === 0 ? <EmptyTile title="No portfolios yet" description="Create the first character portfolio to start building sessions and collections." /> : null}</TileGrid>;
+    if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
+    if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SimpleTile key={session.id} title={session.name} subtitle={[session.settingText, session.vibeText, `${session.runCount} runs`].filter(Boolean).join(' · ')} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} icon={<Rows3 className="h-5 w-5" />} />)}{sessions.length === 0 ? <EmptyTile title="No sessions yet" description="Create a photo session to define setting, vibe, outfit, and runs." /> : null}</TileGrid>;
     if (route.level === 'session') return <Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-6"><div className="text-xl font-semibold">{selectedSession?.name || 'Session'}</div><div className="grid gap-4 md:grid-cols-2"><Info label="Setting" value={selectedSession?.settingText} /><Info label="Lighting" value={selectedSession?.lightingText} /><Info label="Vibe" value={selectedSession?.vibeText} /><Info label="Outfit" value={selectedSession?.outfitText} /></div><Button onClick={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} className="bg-blue-500 text-white hover:bg-blue-400">Open runs</Button></CardContent></Card>;
-    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setShowCreateRun(true); }} />{runs.map((run) => <SimpleTile key={run.id} title={run.name || run.poseSetId || 'Run'} subtitle={`${run.count} shots · ${run.status}`} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} icon={<Layers3 className="h-5 w-5" />} />)}</TileGrid>;
+    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setShowCreateRun(true); }} />{runs.map((run) => <SimpleTile key={run.id} title={run.name || run.poseSetId || 'Run'} subtitle={`${run.count} shots · ${run.status}`} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} icon={<Layers3 className="h-5 w-5" />} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
     if (route.level === 'run') return <RunWorkspace detail={runDetail} />;
     if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
     return null;
@@ -257,8 +257,38 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
 }
 
 function Info({ label, value }: { label: string; value?: string | null }) { return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-xs uppercase tracking-[0.16em] text-white/35">{label}</div><div className="mt-2 text-sm text-white/75">{value || 'Not set'}</div></div>; }
+function EmptyState({ title, description }: { title: string; description: string }) { return <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-white"><div className="text-lg font-semibold">{title}</div><div className="mt-2 max-w-xl text-sm text-white/50">{description}</div></div>; }
+function EmptyTile({ title, description }: { title: string; description: string }) { return <div className="flex min-h-[220px] flex-col justify-center rounded-3xl border border-white/10 bg-white/[0.025] p-6 text-white"><div className="text-base font-semibold">{title}</div><div className="mt-2 text-sm text-white/45">{description}</div></div>; }
+function LoadingGrid() { return <TileGrid>{Array.from({ length: 6 }).map((_, index) => <div key={index} className="min-h-[220px] animate-pulse rounded-3xl border border-white/10 bg-white/[0.035]" />)}</TileGrid>; }
 function NameDialog({ open, title, value, onChange, onOpenChange, onSubmit }: { open: boolean; title: string; value: string; onChange: (value: string) => void; onOpenChange: (open: boolean) => void; onSubmit: () => void }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><Input value={value} onChange={(event) => onChange(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Name" /><Button onClick={onSubmit} className="bg-blue-500 text-white hover:bg-blue-400">Create</Button></DialogContent></Dialog>; }
-function RunWorkspace({ detail }: { detail: RunDetail | null }) { const versions = detail?.versions || []; return <div className="space-y-5"><div className="text-xl font-semibold">{detail?.run?.name || 'Run'}</div><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : null}</div><div className="p-4 text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div></div>; })}{versions.length === 0 ? <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-white/45">No generated versions yet.</div> : null}</TileGrid></div>; }
+function RunWorkspace({ detail }: { detail: RunDetail | null }) {
+  const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
+  const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
+  useEffect(() => { setVersions(detail?.versions || []); }, [detail?.versions]);
+  const reviewStates: Array<{ value: StudioSessionShotVersionSummary['reviewState']; label: string }> = [
+    { value: 'hero', label: 'Hero' },
+    { value: 'pick', label: 'Pick' },
+    { value: 'maybe', label: 'Maybe' },
+    { value: 'reject', label: 'Reject' },
+    { value: 'needs_retry', label: 'Retry' },
+  ];
+  const reviewVersion = async (versionId: string, reviewState: StudioSessionShotVersionSummary['reviewState']) => {
+    setReviewingVersionId(versionId);
+    try {
+      const response = await fetch(`/api/studio/versions/${encodeURIComponent(versionId)}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewState }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to review version');
+      setVersions((current) => current.map((version) => version.id === versionId ? data.version : version));
+    } finally {
+      setReviewingVersionId(null);
+    }
+  };
+  return <div className="space-y-5"><div><div className="text-xl font-semibold">{detail?.run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{detail?.run ? `${detail.run.count} shots · ${detail.run.status}` : 'Loading run details…'}</div></div><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}</div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Launch this run when you are ready; generated images will appear here for review." /> : null}</TileGrid></div>;
+}
 function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
   const [settingCoverItemId, setSettingCoverItemId] = useState<string | null>(null);
   const setAsCover = async (itemId: string) => {
@@ -277,5 +307,6 @@ function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: Coll
       setSettingCoverItemId(null);
     }
   };
-  return <div className="space-y-5"><div className="text-xl font-semibold">{detail?.collection.name || 'Collection'}</div><TileGrid>{(detail?.items || []).map((item) => { const url = item.previewUrl || item.thumbnailUrl || item.originalUrl; return <div key={item.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt={item.caption || 'Collection item'} className="h-full w-full object-cover" /> : null}</div><div className="flex items-center justify-between p-4 text-xs text-white/55"><span>#{item.sortOrder + 1}</span><Button size="sm" variant="outline" disabled={settingCoverItemId === item.id} onClick={() => setAsCover(item.id)} className="border-white/10 bg-white/[0.04] text-white/70">{settingCoverItemId === item.id ? 'Setting…' : 'Set as cover'}</Button></div></div>; })}</TileGrid></div>;
+  const items = detail?.items || [];
+  return <div className="space-y-5"><div><div className="text-xl font-semibold">{detail?.collection.name || 'Collection'}</div><div className="mt-1 text-sm text-white/45">{items.length} photos</div></div><TileGrid>{items.map((item) => { const url = item.previewUrl || item.thumbnailUrl || item.originalUrl; return <div key={item.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt={item.caption || 'Collection item'} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="flex items-center justify-between p-4 text-xs text-white/55"><span>#{item.sortOrder + 1}</span><Button size="sm" variant="outline" disabled={settingCoverItemId === item.id} onClick={() => setAsCover(item.id)} className="border-white/10 bg-white/[0.04] text-white/70">{settingCoverItemId === item.id ? 'Setting…' : 'Set as cover'}</Button></div></div>; })}{items.length === 0 ? <EmptyTile title="No photos yet" description="Add reviewed run images into this collection, then choose one as the portfolio cover." /> : null}</TileGrid></div>;
 }
