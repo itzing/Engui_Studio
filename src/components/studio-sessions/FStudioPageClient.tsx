@@ -107,7 +107,7 @@ function SessionTile({ session, href, confirming, deleting, onDeleteClick, onCon
   );
 }
 
-function Sidebar({ route, portfolioId, sessionId, collapsed, onToggle }: { route: FStudioRoute; portfolioId?: string | null; sessionId?: string | null; collapsed: boolean; onToggle: () => void }) {
+function Sidebar({ route, portfolioId, sessionId, collapsed, hydrated, onToggle }: { route: FStudioRoute; portfolioId?: string | null; sessionId?: string | null; collapsed: boolean; hydrated: boolean; onToggle: () => void }) {
   const items = [
     { key: 'portfolios', label: 'Portfolios', icon: Grid2X2, href: '/studio-sessions', visible: true, active: route.level === 'portfolios' },
     { key: 'sessions', label: 'Sessions', icon: Rows3, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}` : '#', visible: Boolean(portfolioId), active: (route.level === 'portfolio' && route.section !== 'collections') || route.level === 'session' },
@@ -115,7 +115,7 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, onToggle }: { route
     { key: 'collections', label: 'Collections', icon: FolderOpen, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}/collections` : '#', visible: Boolean(portfolioId), active: route.level === 'collection' || (route.level === 'portfolio' && route.section === 'collections') },
   ];
   return (
-    <aside className={`${collapsed ? 'w-[76px]' : 'w-64'} shrink-0 border-r border-white/10 bg-[#101014] p-3 transition-all`}>
+    <aside className={`${collapsed ? 'w-[76px]' : 'w-64'} shrink-0 border-r border-white/10 bg-[#101014] p-3 ${hydrated ? 'transition-all' : ''}`}>
       <Button variant="outline" onClick={onToggle} className="mb-4 h-10 w-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">{collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="mr-2 h-4 w-4" /> Collapse</>}</Button>
       <nav className="space-y-2">
         {items.filter((item) => item.visible).map((item) => {
@@ -156,6 +156,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const router = useRouter();
   const { activeWorkspaceId, jobs } = useStudio();
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [jobsPanelOpen, setJobsPanelOpen] = useState(false);
   const [portfolios, setPortfolios] = useState<StudioPortfolioSummary[]>([]);
   const [sessions, setSessions] = useState<StudioPhotoSessionSummary[]>([]);
@@ -184,7 +185,11 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const selectedRun = useMemo(() => runs.find((run) => route.level === 'run' && run.id === route.runId) ?? runDetail?.run ?? null, [route, runDetail?.run, runs]);
   const activeJobsCount = useMemo(() => jobs.filter((job) => job.workspaceId === activeWorkspaceId && ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status)).length, [activeWorkspaceId, jobs]);
 
-  useEffect(() => { setCollapsed(localStorage.getItem('f-studio-sidebar-collapsed') === '1'); setJobsPanelOpen(localStorage.getItem('f-studio-jobs-panel-open') === '1'); }, []);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('f-studio-sidebar-collapsed') === '1');
+    setJobsPanelOpen(localStorage.getItem('f-studio-jobs-panel-open') === '1');
+    requestAnimationFrame(() => setSidebarHydrated(true));
+  }, []);
   const toggleCollapsed = () => setCollapsed((next) => { localStorage.setItem('f-studio-sidebar-collapsed', next ? '0' : '1'); return !next; });
   const toggleJobsPanel = () => setJobsPanelOpen((next) => { localStorage.setItem('f-studio-jobs-panel-open', next ? '0' : '1'); return !next; });
 
@@ -306,7 +311,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
 
   return (
     <div className="flex min-h-screen bg-[#0b0b0d] text-white">
-      <Sidebar route={route} portfolioId={portfolioId} sessionId={sessionId} collapsed={collapsed} onToggle={toggleCollapsed} />
+      <Sidebar route={route} portfolioId={portfolioId} sessionId={sessionId} collapsed={collapsed} hydrated={sidebarHydrated} onToggle={toggleCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header breadcrumbs={breadcrumbs} jobsPanelOpen={jobsPanelOpen} activeJobsCount={activeJobsCount} onToggleJobsPanel={toggleJobsPanel} onOpenCharacterManager={() => setShowCharacterManager(true)} />
         <main className="min-w-0 flex-1 overflow-auto p-8">
