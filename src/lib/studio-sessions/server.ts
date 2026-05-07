@@ -534,12 +534,17 @@ export async function deleteStudioSessionRun(runId: string) {
   return { id: runId };
 }
 
+function isStudioSessionJobActive(status: string | null | undefined) {
+  if (!status) return false;
+  const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
+  return activeStatuses.has(status);
+}
+
 async function collectStudioSessionActiveJobs(runId: string) {
   const latestJobs = await collectStudioSessionLatestJobs(runId);
-  const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
   return new Set(
     Array.from(latestJobs.values())
-      .filter((job) => activeStatuses.has(job.status))
+      .filter((job) => isStudioSessionJobActive(job.status))
       .map((job) => job.id),
   );
 }
@@ -705,7 +710,7 @@ export async function getStudioSessionRun(runId: string) {
     shots: shots.map((shot) => {
       const summary = toStudioSessionShotSummary(shot);
       const latestJob = latestJobs.get(shot.id);
-      const isActive = latestJob ? activeStatuses.has(latestJob.status) : false;
+      const isActive = latestJob ? isStudioSessionJobActive(latestJob.status) : false;
       return {
         ...summary,
         activeJobId: isActive ? latestJob?.id ?? null : null,

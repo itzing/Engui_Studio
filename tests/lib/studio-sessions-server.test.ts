@@ -13,8 +13,9 @@ const {
     $transaction: vi.fn(),
     studioSessionTemplate: { findUnique: vi.fn() },
     studioSessionRun: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    studioSessionShot: { createMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
+    studioSessionShot: { createMany: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    studioSessionShotRevision: { findMany: vi.fn(), findUnique: vi.fn() },
+    studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
     studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
     job: { findUnique: vi.fn(), findMany: vi.fn() },
@@ -49,6 +50,7 @@ import {
   addStudioSessionShotVersionToGallery,
   createStudioSessionRun,
   deleteStudioSessionRun,
+  getStudioSessionRun,
   materializeStudioSessionCompletedJob,
   recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
@@ -75,6 +77,9 @@ describe('studio session server', () => {
     mockPrisma.studioSessionJobMaterialization.upsert.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'pending' });
     mockPrisma.studioSessionJobMaterialization.update.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'materialized' });
     mockPrisma.studioSessionJobMaterialization.findMany.mockResolvedValue([]);
+    mockPrisma.studioSessionShot.findMany.mockResolvedValue([]);
+    mockPrisma.studioSessionShotRevision.findMany.mockResolvedValue([]);
+    mockPrisma.studioSessionShotVersion.findMany.mockResolvedValue([]);
   });
 
   it('creates runs from a template snapshot without depending on future template edits', async () => {
@@ -227,6 +232,64 @@ describe('studio session server', () => {
 
     expect(mockPrisma.studioSessionJobMaterialization.upsert).toHaveBeenCalled();
     expect(mockPrisma.studioSessionShotVersion.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads run detail when a shot has a reshuffled latest revision and no active job', async () => {
+    mockPrisma.studioSessionRun.findUnique.mockResolvedValue({
+      id: 'run-1', workspaceId: 'workspace-1', templateId: 'template-1', templateNameSnapshot: 'Template', templateSnapshotJson: '{}', poseLibraryVersion: 'v1', poseLibraryHash: 'hash', status: 'needs_review', createdAt: new Date(), updatedAt: new Date(), shots: [
+        { skipped: false, status: 'needs_review', selectionVersionId: null, category: 'standing', slotIndex: 0 },
+      ],
+    });
+    mockPrisma.studioSessionShot.findMany.mockResolvedValue([
+      {
+        id: 'shot-1',
+        runId: 'run-1',
+        workspaceId: 'workspace-1',
+        category: 'standing',
+        slotIndex: 0,
+        label: 'Standing 1',
+        status: 'needs_review',
+        skipped: false,
+        selectionVersionId: null,
+        currentRevisionId: 'revision-2',
+        autoAssignmentHistoryJson: '[]',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    mockPrisma.studioSessionShotVersion.findMany.mockResolvedValue([]);
+    mockPrisma.studioSessionShotRevision.findMany.mockResolvedValue([
+      {
+        id: 'revision-2',
+        workspaceId: 'workspace-1',
+        shotId: 'shot-1',
+        revisionNumber: 2,
+        poseId: 'pose-2',
+        poseSnapshotJson: JSON.stringify({ id: 'pose-2', category: 'standing', name: 'Pose 2', prompt: 'pose prompt', orientation: 'portrait', framing: 'portrait' }),
+        derivedOrientation: 'portrait',
+        derivedFraming: 'portrait',
+        assembledPromptSnapshotJson: JSON.stringify({ positivePrompt: 'prompt', negativePrompt: '', pieces: { character: '', characterAge: '', environment: '', outfit: '', hairstyle: '', masterPositive: '', pose: 'pose prompt' } }),
+        overrideFieldsJson: null,
+        sourceKind: 'reshuffle',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    mockPrisma.job.findMany.mockResolvedValue([
+      {
+        id: 'job-1',
+        status: 'completed',
+        executionMs: 1000,
+        createdAt: new Date(),
+        completedAt: new Date(),
+        options: JSON.stringify({ studioSessionContext: { runId: 'run-1', shotId: 'shot-1' } }),
+      },
+    ]);
+
+    const result = await getStudioSessionRun('run-1');
+
+    expect(result?.run.id).toBe('run-1');
+    expect(result?.shots[0]?.latestJobId).toBe('job-1');
   });
 
   it('blocks run deletion while the latest shot job is still active', async () => {
