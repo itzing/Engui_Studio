@@ -73,8 +73,9 @@ describe('character preview prompt', () => {
     expect(prompt).toContain('Nose shape: small straight nose');
     expect(prompt).toContain('Lip shape: bow-shaped lips');
     expect(prompt).toContain('Body build: slim athletic');
-    expect(prompt).toContain('studio character reference photo');
+    expect(prompt).toContain('professional studio portrait photograph');
     expect(prompt).toContain('visible face');
+    expect(prompt).toContain('modest closed one-piece swimsuit');
   });
 
   it('makes full-body prompts photo-based without negative prompt fragments', () => {
@@ -89,13 +90,17 @@ describe('character preview prompt', () => {
       },
     }), 'full_body');
 
-    expect(prompt).toContain('studio character reference photo');
+    expect(prompt).toContain('professional full-body studio photograph');
+    expect(prompt).toContain('realistic camera photo');
     expect(prompt).toContain('face visible');
+    expect(prompt).toContain('modest closed one-piece swimsuit');
     expect(prompt).toContain('Face shape: oval');
     expect(prompt).toContain('Eye color: brown');
     expect(prompt).toContain('Hair color: black');
     expect(prompt).toContain('Body build: athletic');
     expect(prompt).toContain('Leg structure: long toned legs');
+    expect(prompt).not.toContain('character reference');
+    expect(prompt).not.toContain('anatomy reference');
     expect(prompt).not.toContain('photorealistic');
     expect(prompt).not.toContain('not a 3d render');
     expect(prompt).not.toContain('not a mannequin');
@@ -112,5 +117,15 @@ describe('character preview prompt', () => {
     expect(prompt).toContain('17yo');
     expect(prompt).toContain('boy');
     expect(prompt).not.toContain('male');
+  });
+
+  it('uses gendered swimwear for visible-body previews', () => {
+    const malePrompt = buildCharacterPreviewPrompt(buildCharacter({ gender: 'male', traits: { age: '25' } }), 'full_body');
+    const femalePrompt = buildCharacterPreviewPrompt(buildCharacter({ gender: 'female', traits: { age: '25' } }), 'upper_body');
+    const boyPrompt = buildCharacterPreviewPrompt(buildCharacter({ gender: 'male', traits: { age: '17' } }), 'full_body');
+
+    expect(malePrompt).toContain('plain swim briefs');
+    expect(femalePrompt).toContain('modest closed one-piece swimsuit');
+    expect(boyPrompt).toContain('plain athletic swim shorts');
   });
 });

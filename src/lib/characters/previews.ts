@@ -36,15 +36,15 @@ export const CHARACTER_PREVIEW_SLOT_META: Record<CharacterPreviewSlot, {
 };
 
 const SLOT_PROMPT_PREFIX: Record<CharacterPreviewSlot, string> = {
-  portrait: 'studio character portrait photo, head and shoulders framing, direct readable facial features, clean lighting, single person',
-  upper_body: 'studio character reference photo, upper body framing, visible face, torso and arms, clear posture, single person',
-  full_body: 'studio character reference photo, full body framing, standing natural pose, face visible, complete clothed human figure visible, single person',
+  portrait: 'professional studio portrait photograph, head and shoulders framing, direct readable facial features, softbox lighting, realistic camera photo, single person',
+  upper_body: 'professional studio portrait photograph, upper body framing, visible face, torso and arms, clear posture, softbox lighting, realistic camera photo, single person',
+  full_body: 'professional full-body studio photograph, standing natural pose, face visible, complete human figure visible, softbox lighting, realistic camera photo, single person',
 };
 
 const SLOT_PROMPT_SUFFIX: Record<CharacterPreviewSlot, string> = {
-  portrait: 'high clarity identity reference, neutral background, no extra people, face fully visible',
-  upper_body: 'clear identity and anatomy reference, neutral background, no extra people, hands visible when possible',
-  full_body: 'normal character preview photo, clear identity and full figure reference, neutral background, no extra people, feet visible when possible, natural skin texture, normal face, normal clothing or neutral fitted outfit',
+  portrait: 'high clarity identity photo, neutral seamless studio background, natural skin texture, face fully visible, no extra people',
+  upper_body: 'high clarity identity photo, neutral seamless studio background, natural skin texture, hands visible when possible, no extra people',
+  full_body: 'high clarity full figure photo, neutral seamless studio background, feet visible when possible, natural skin texture, normal face, no extra people',
 };
 
 export function normalizeCharacterPreviewSlot(input: unknown): CharacterPreviewSlot | null {
@@ -64,10 +64,23 @@ function getPreviewTraitKeys(slot: CharacterPreviewSlot): string[] {
     .map((definition) => definition.key);
 }
 
+function getPreviewWardrobe(character: CharacterSummary, slot: CharacterPreviewSlot): string {
+  if (slot === 'portrait') return '';
+  const gender = (character.gender || '').toLowerCase();
+  const ageValue = character.traits.age || '';
+  const age = Number(String(ageValue).match(/\d+/)?.[0] || NaN);
+  const isUnderage = Number.isFinite(age) && age < 18;
+
+  if (gender === 'male') return isUnderage ? 'plain athletic swim shorts' : 'plain swim briefs';
+  if (gender === 'female') return 'modest closed one-piece swimsuit';
+  return 'simple neutral fitted swimwear';
+}
+
 export function buildCharacterPreviewPrompt(character: CharacterSummary, slot: CharacterPreviewSlot): string {
   const ageValue = character.traits.age || '';
   const formattedAge = formatCharacterAge(ageValue);
   const formattedGender = resolveRenderedGender(character.gender || '', ageValue);
+  const wardrobe = getPreviewWardrobe(character, slot);
   const appearancePrompt = buildCharacterPromptFromSummary(character, {
     includeName: false,
     includeGender: false,
@@ -80,6 +93,7 @@ export function buildCharacterPreviewPrompt(character: CharacterSummary, slot: C
     formattedAge,
     formattedGender,
     appearancePrompt,
+    wardrobe,
     SLOT_PROMPT_SUFFIX[slot],
   ]
     .filter(Boolean)
