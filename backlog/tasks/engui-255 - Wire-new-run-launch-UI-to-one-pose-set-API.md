@@ -1,7 +1,7 @@
 ---
 id: ENGUI-255
 title: Wire new run launch UI to one-pose-set API
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

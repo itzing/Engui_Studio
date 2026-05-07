@@ -1,7 +1,7 @@
 ---
 id: ENGUI-254
 title: Add session run list and create run flow
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { ArrowLeft, Camera, FolderPlus, Image, Plus, RefreshCw, Settings, UserRound } from 'lucide-react';
+import { ArrowLeft, Camera, FolderPlus, Image, Play, Plus, RefreshCw, Settings, SlidersHorizontal, UserRound } from 'lucide-react';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
 import StudioSessionsPageClient from '@/components/studio-sessions/StudioSessionsPageClient';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
-import type { StudioCollectionSummary, StudioPhotoSessionSummary, StudioPortfolioSummary } from '@/lib/studio-sessions/types';
+import type { StudioCollectionSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioSessionRunSummary } from '@/lib/studio-sessions/types';
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -201,12 +201,136 @@ function SessionBriefEditor({
   );
 }
 
+
+type RunSettingsDraft = {
+  name: string;
+  poseSetId: string;
+  count: number;
+  positivePromptOverride: string;
+  negativePromptOverride: string;
+  generationSettings: {
+    modelId: string;
+    steps: number;
+    cfg: number;
+    seed: number;
+  };
+  resolutionPolicy: {
+    shortSidePx: number;
+    longSidePx: number;
+    squareSideSource: 'short' | 'long';
+  };
+};
+
+const defaultRunDraft: RunSettingsDraft = {
+  name: '',
+  poseSetId: '',
+  count: 5,
+  positivePromptOverride: '',
+  negativePromptOverride: '',
+  generationSettings: { modelId: 'z-image', steps: 9, cfg: 1, seed: -1 },
+  resolutionPolicy: { shortSidePx: 1024, longSidePx: 1536, squareSideSource: 'short' },
+};
+
+function RunSettingsPanel({
+  poseSets,
+  creating,
+  onCreate,
+}: {
+  poseSets: StudioPoseSetSummary[];
+  creating: boolean;
+  onCreate: (draft: RunSettingsDraft) => void;
+}) {
+  const [draft, setDraft] = useState<RunSettingsDraft>(defaultRunDraft);
+
+  useEffect(() => {
+    if (!draft.poseSetId && poseSets[0]) {
+      setDraft((current) => ({ ...current, poseSetId: poseSets[0].id }));
+    }
+  }, [draft.poseSetId, poseSets]);
+
+  const selectedPoseSet = poseSets.find((poseSet) => poseSet.id === draft.poseSetId) ?? null;
+  const canCreate = Boolean(draft.poseSetId) && draft.count > 0;
+
+  return (
+    <Card className="border-white/10 bg-white/[0.035] text-white">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4 text-white/50" /> Create Run</CardTitle>
+        <CardDescription className="text-white/45">One run uses exactly one pose set. Session brief fields are inherited from the selected photo session.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <FieldLabel>Run name</FieldLabel>
+          <Input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} className="border-white/10 bg-black/30 text-white" placeholder={selectedPoseSet?.name ?? 'Run name'} />
+        </div>
+        <div>
+          <FieldLabel>Pose set</FieldLabel>
+          <select
+            value={draft.poseSetId}
+            onChange={(event) => setDraft((current) => ({ ...current, poseSetId: event.target.value }))}
+            className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-white/25"
+          >
+            {poseSets.map((poseSet) => (
+              <option key={poseSet.id} value={poseSet.id} className="bg-[#101014] text-white">{poseSet.name} ({poseSet.poseIds.length})</option>
+            ))}
+          </select>
+          {selectedPoseSet ? <div className="mt-2 text-xs text-white/45">{selectedPoseSet.description}</div> : null}
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <FieldLabel>Count</FieldLabel>
+            <Input type="number" min={1} max={50} value={draft.count} onChange={(event) => setDraft((current) => ({ ...current, count: Math.max(1, Math.min(50, Number(event.target.value) || 1)) }))} className="border-white/10 bg-black/30 text-white" />
+          </div>
+          <div>
+            <FieldLabel>Short side</FieldLabel>
+            <Input type="number" min={64} value={draft.resolutionPolicy.shortSidePx} onChange={(event) => setDraft((current) => ({ ...current, resolutionPolicy: { ...current.resolutionPolicy, shortSidePx: Math.max(64, Number(event.target.value) || 1024) } }))} className="border-white/10 bg-black/30 text-white" />
+          </div>
+          <div>
+            <FieldLabel>Long side</FieldLabel>
+            <Input type="number" min={64} value={draft.resolutionPolicy.longSidePx} onChange={(event) => setDraft((current) => ({ ...current, resolutionPolicy: { ...current.resolutionPolicy, longSidePx: Math.max(64, Number(event.target.value) || 1536) } }))} className="border-white/10 bg-black/30 text-white" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <FieldLabel>Positive override</FieldLabel>
+            <textarea value={draft.positivePromptOverride} onChange={(event) => setDraft((current) => ({ ...current, positivePromptOverride: event.target.value }))} rows={3} className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25" />
+          </div>
+          <div>
+            <FieldLabel>Negative override</FieldLabel>
+            <textarea value={draft.negativePromptOverride} onChange={(event) => setDraft((current) => ({ ...current, negativePromptOverride: event.target.value }))} rows={3} className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25" />
+          </div>
+        </div>
+        <Button disabled={!canCreate || creating} onClick={() => onCreate({ ...draft, name: draft.name || selectedPoseSet?.name || 'Studio run' })} className="bg-blue-500 text-white hover:bg-blue-400">
+          {creating ? 'Creating…' : 'Create run'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RunCard({ run, launching, onLaunch }: { run: StudioSessionRunSummary; launching: boolean; onLaunch: () => void }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-white">{run.name || run.templateNameSnapshot || 'Untitled run'}</div>
+          <div className="mt-1 text-xs text-white/45">{run.poseSetId || 'No pose set'} · {run.count} shots · <span className="capitalize">{run.status.replace(/_/g, ' ')}</span></div>
+        </div>
+        <Button size="sm" disabled={launching} onClick={onLaunch} className="bg-emerald-500 text-white hover:bg-emerald-400">
+          <Play className="mr-2 h-3.5 w-3.5" /> {launching ? 'Launching…' : 'Launch'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function StudioPortfolioPageClient() {
   const { activeWorkspaceId } = useStudio();
   const [legacyMode, setLegacyMode] = useState(false);
   const [portfolios, setPortfolios] = useState<StudioPortfolioSummary[]>([]);
   const [sessions, setSessions] = useState<StudioPhotoSessionSummary[]>([]);
   const [collections, setCollections] = useState<StudioCollectionSummary[]>([]);
+  const [runs, setRuns] = useState<StudioSessionRunSummary[]>([]);
+  const [poseSets, setPoseSets] = useState<StudioPoseSetSummary[]>([]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -214,6 +338,8 @@ export default function StudioPortfolioPageClient() {
   const [loadingCharacters, setLoadingCharacters] = useState(false);
   const [creatingPortfolio, setCreatingPortfolio] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [creatingRun, setCreatingRun] = useState(false);
+  const [launchingRunId, setLaunchingRunId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [showCreateSession, setShowCreateSession] = useState(false);
@@ -240,6 +366,17 @@ export default function StudioPortfolioPageClient() {
       setError(toErrorMessage(fetchError, 'Failed to fetch characters'));
     } finally {
       setLoadingCharacters(false);
+    }
+  }, []);
+
+  const fetchPoseSets = useCallback(async () => {
+    try {
+      const response = await fetch('/api/studio/pose-sets', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch pose sets');
+      setPoseSets(Array.isArray(data.poseSets) ? data.poseSets : []);
+    } catch (fetchError) {
+      setError(toErrorMessage(fetchError, 'Failed to fetch pose sets'));
     }
   }, []);
 
@@ -276,20 +413,42 @@ export default function StudioPortfolioPageClient() {
     }
   }, []);
 
+  const fetchSessionDetail = useCallback(async (sessionId: string) => {
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/sessions/${encodeURIComponent(sessionId)}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch session detail');
+      setRuns(Array.isArray(data.runs) ? data.runs : []);
+    } catch (fetchError) {
+      setError(toErrorMessage(fetchError, 'Failed to fetch session detail'));
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeWorkspaceId || legacyMode) return;
     fetchPortfolios(activeWorkspaceId);
     fetchCharacters();
-  }, [activeWorkspaceId, fetchCharacters, fetchPortfolios, legacyMode]);
+    fetchPoseSets();
+  }, [activeWorkspaceId, fetchCharacters, fetchPortfolios, fetchPoseSets, legacyMode]);
 
   useEffect(() => {
     if (!selectedPortfolioId || legacyMode) {
       setSessions([]);
       setCollections([]);
+      setRuns([]);
       return;
     }
     fetchPortfolioDetail(selectedPortfolioId);
   }, [fetchPortfolioDetail, legacyMode, selectedPortfolioId]);
+
+  useEffect(() => {
+    if (!selectedSessionId || legacyMode) {
+      setRuns([]);
+      return;
+    }
+    fetchSessionDetail(selectedSessionId);
+  }, [fetchSessionDetail, legacyMode, selectedSessionId]);
 
   const createPortfolio = async (character: CharacterSummary) => {
     if (!activeWorkspaceId) return;
@@ -355,6 +514,44 @@ export default function StudioPortfolioPageClient() {
       setError(toErrorMessage(saveError, 'Failed to save session'));
     } finally {
       setSavingSession(false);
+    }
+  };
+
+  const createRun = async (draft: RunSettingsDraft) => {
+    if (!selectedSessionId) return;
+    setCreatingRun(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/sessions/${encodeURIComponent(selectedSessionId)}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to create run');
+      setMessage('Run created.');
+      await fetchSessionDetail(selectedSessionId);
+      if (selectedPortfolioId) await fetchPortfolioDetail(selectedPortfolioId);
+    } catch (createError) {
+      setError(toErrorMessage(createError, 'Failed to create run'));
+    } finally {
+      setCreatingRun(false);
+    }
+  };
+
+  const launchRun = async (runId: string) => {
+    setLaunchingRunId(runId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/runs/${encodeURIComponent(runId)}/launch`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch run');
+      setMessage(`Launch requested: ${Array.isArray(data.launched) ? data.launched.length : 0} jobs started.`);
+      if (selectedSessionId) await fetchSessionDetail(selectedSessionId);
+    } catch (launchError) {
+      setError(toErrorMessage(launchError, 'Failed to launch run'));
+    } finally {
+      setLaunchingRunId(null);
     }
   };
 
@@ -450,7 +647,24 @@ export default function StudioPortfolioPageClient() {
                       {sessions.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">No sessions yet.</div> : null}
                       {sessions.map((session) => <SessionCard key={session.id} session={session} selected={session.id === selectedSessionId} onClick={() => setSelectedSessionId(session.id)} />)}
                     </div>
-                    <SessionBriefEditor session={selectedSession} saving={savingSession} onSave={saveSession} />
+                    <div className="space-y-5">
+                      <SessionBriefEditor session={selectedSession} saving={savingSession} onSave={saveSession} />
+                      {selectedSession ? (
+                        <>
+                          <RunSettingsPanel poseSets={poseSets} creating={creatingRun} onCreate={createRun} />
+                          <Card className="border-white/10 bg-white/[0.035] text-white">
+                            <CardHeader>
+                              <CardTitle className="text-base">Runs</CardTitle>
+                              <CardDescription className="text-white/45">Each run is scoped to one pose set and creates a shot slot list for review.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              {runs.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">No runs yet. Create one from the settings panel above.</div> : null}
+                              {runs.map((run) => <RunCard key={run.id} run={run} launching={launchingRunId === run.id} onLaunch={() => launchRun(run.id)} />)}
+                            </CardContent>
+                          </Card>
+                        </>
+                      ) : null}
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="collections" className="mt-0">
