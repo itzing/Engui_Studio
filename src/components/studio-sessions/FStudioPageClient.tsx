@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ChevronLeft, ChevronRight, FolderOpen, Grid2X2, Image, Layers3, Plus, Rows3, UserRound } from 'lucide-react';
 import CharacterManagerPanel from '@/components/characters/CharacterManagerPanel';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
+import RightPanel from '@/components/layout/RightPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -97,7 +98,7 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, onToggle }: { route
   );
 }
 
-function Header({ breadcrumbs, onOpenCharacterManager }: { breadcrumbs: Array<{ label: string; href?: string }>; onOpenCharacterManager: () => void }) {
+function Header({ breadcrumbs, jobsPanelOpen, activeJobsCount, onToggleJobsPanel, onOpenCharacterManager }: { breadcrumbs: Array<{ label: string; href?: string }>; jobsPanelOpen: boolean; activeJobsCount: number; onToggleJobsPanel: () => void; onOpenCharacterManager: () => void }) {
   return (
     <header className="border-b border-white/10 bg-[#0f0f11]/95 px-8 py-5">
       <div className="flex items-start justify-between gap-4">
@@ -107,10 +108,16 @@ function Header({ breadcrumbs, onOpenCharacterManager }: { breadcrumbs: Array<{ 
             {breadcrumbs.map((crumb, index) => <span key={`${crumb.label}-${index}`} className="flex items-center gap-2">{index > 0 ? <span className="text-white/25">→</span> : null}{crumb.href ? <Link href={crumb.href} className="text-white/65 hover:text-white">{crumb.label}</Link> : <span className="text-white">{crumb.label}</span>}</span>)}
           </div>
         </div>
-        <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="shrink-0 border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
-          <UserRound className="mr-2 h-4 w-4" />
-          Character Manager
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button type="button" variant="outline" onClick={onToggleJobsPanel} className={`border-white/10 text-white hover:bg-white/[0.08] ${jobsPanelOpen ? 'bg-blue-500/20' : 'bg-white/[0.04]'}`}>
+            <Rows3 className="mr-2 h-4 w-4" />
+            Jobs{activeJobsCount > 0 ? ` · ${activeJobsCount}` : ''}
+          </Button>
+          <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
+            <UserRound className="mr-2 h-4 w-4" />
+            Character Manager
+          </Button>
+        </div>
       </div>
     </header>
   );
@@ -118,8 +125,9 @@ function Header({ breadcrumbs, onOpenCharacterManager }: { breadcrumbs: Array<{ 
 
 export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const router = useRouter();
-  const { activeWorkspaceId } = useStudio();
+  const { activeWorkspaceId, jobs } = useStudio();
   const [collapsed, setCollapsed] = useState(false);
+  const [jobsPanelOpen, setJobsPanelOpen] = useState(false);
   const [portfolios, setPortfolios] = useState<StudioPortfolioSummary[]>([]);
   const [sessions, setSessions] = useState<StudioPhotoSessionSummary[]>([]);
   const [collections, setCollections] = useState<StudioCollectionSummary[]>([]);
@@ -143,9 +151,11 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const selectedPortfolio = useMemo(() => portfolios.find((portfolio) => portfolio.id === portfolioId) ?? null, [portfolioId, portfolios]);
   const selectedSession = useMemo(() => sessions.find((session) => session.id === sessionId) ?? null, [sessionId, sessions]);
   const selectedRun = useMemo(() => runs.find((run) => route.level === 'run' && run.id === route.runId) ?? runDetail?.run ?? null, [route, runDetail?.run, runs]);
+  const activeJobsCount = useMemo(() => jobs.filter((job) => job.workspaceId === activeWorkspaceId && ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status)).length, [activeWorkspaceId, jobs]);
 
-  useEffect(() => { setCollapsed(localStorage.getItem('f-studio-sidebar-collapsed') === '1'); }, []);
+  useEffect(() => { setCollapsed(localStorage.getItem('f-studio-sidebar-collapsed') === '1'); setJobsPanelOpen(localStorage.getItem('f-studio-jobs-panel-open') === '1'); }, []);
   const toggleCollapsed = () => setCollapsed((next) => { localStorage.setItem('f-studio-sidebar-collapsed', next ? '0' : '1'); return !next; });
+  const toggleJobsPanel = () => setJobsPanelOpen((next) => { localStorage.setItem('f-studio-jobs-panel-open', next ? '0' : '1'); return !next; });
 
   const fetchJson = useCallback(async (url: string, fallback: string) => {
     const response = await fetch(url, { cache: 'no-store' });
@@ -252,11 +262,20 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     <div className="flex min-h-screen bg-[#0b0b0d] text-white">
       <Sidebar route={route} portfolioId={portfolioId} sessionId={sessionId} collapsed={collapsed} onToggle={toggleCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header breadcrumbs={breadcrumbs} onOpenCharacterManager={() => setShowCharacterManager(true)} />
+        <Header breadcrumbs={breadcrumbs} jobsPanelOpen={jobsPanelOpen} activeJobsCount={activeJobsCount} onToggleJobsPanel={toggleJobsPanel} onOpenCharacterManager={() => setShowCharacterManager(true)} />
         <main className="min-w-0 flex-1 overflow-auto p-8">
           {error ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div> : null}
           {renderCanvas()}
         </main>
+      </div>
+      <div className={`fixed inset-y-0 right-0 z-40 flex transition-transform duration-300 ease-out ${jobsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="relative h-full w-[340px] max-w-[88vw] border-l border-white/10 bg-[#101014] shadow-2xl shadow-black/50">
+          <Button type="button" variant="outline" size="sm" onClick={toggleJobsPanel} className="absolute right-full top-5 mr-3 border-white/10 bg-[#101014] text-white hover:bg-white/[0.08]">
+            <ChevronRight className="mr-1 h-4 w-4" />
+            Hide
+          </Button>
+          <RightPanel />
+        </div>
       </div>
       <Dialog open={showCharacterManager} onOpenChange={setShowCharacterManager}>
         <DialogContent className="flex h-[94vh] w-[96vw] max-w-[1600px] flex-col gap-0 overflow-hidden border-white/10 bg-[#101014] p-0 text-white">
