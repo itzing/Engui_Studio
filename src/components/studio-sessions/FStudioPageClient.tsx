@@ -153,13 +153,13 @@ function Header({ breadcrumbs, jobsPanelOpen, activeJobsCount, onToggleJobsPanel
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
+            <UserRound className="mr-2 h-4 w-4" />
+            Characters
+          </Button>
           <Button type="button" variant="outline" onClick={onToggleJobsPanel} className={`border-white/10 text-white hover:bg-white/[0.08] ${jobsPanelOpen ? 'bg-blue-500/20' : 'bg-white/[0.04]'}`}>
             <Rows3 className="mr-2 h-4 w-4" />
             Jobs{activeJobsCount > 0 ? ` · ${activeJobsCount}` : ''}
-          </Button>
-          <Button type="button" variant="outline" onClick={onOpenCharacterManager} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
-            <UserRound className="mr-2 h-4 w-4" />
-            Character Manager
           </Button>
         </div>
       </div>
