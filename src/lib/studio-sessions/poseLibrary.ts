@@ -13,11 +13,15 @@ export interface StudioSessionPoseLibrary {
 
 const ALLOWED_ORIENTATIONS = new Set<StudioSessionPoseOrientation>(['portrait', 'landscape', 'square']);
 const ALLOWED_FRAMINGS = new Set<StudioSessionPoseFraming>(['closeup', 'portrait', 'half_body', 'three_quarter', 'full_body']);
-const FALLBACK_CATEGORY_ORDER = ['standing', 'portrait', 'sitting', 'kneeling', 'floor', 'movement'];
+const FALLBACK_CATEGORY_ORDER = ['standing', 'portrait', 'sitting', 'kneeling', 'floor', 'lying', 'walking', 'leaning', 'editorial_dynamic'];
 
 function normalizeCategory(input: unknown): string {
   if (typeof input !== 'string') return 'uncategorized';
-  const normalized = input.trim().toLowerCase().replace(/\s+/g, '_');
+  const normalized = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
   return normalized || 'uncategorized';
 }
 
@@ -28,8 +32,11 @@ function normalizeOrientation(input: unknown): StudioSessionPoseOrientation {
 }
 
 function normalizeFraming(input: unknown): StudioSessionPoseFraming {
-  return typeof input === 'string' && ALLOWED_FRAMINGS.has(input as StudioSessionPoseFraming)
-    ? input as StudioSessionPoseFraming
+  if (typeof input !== 'string') return 'portrait';
+  const normalized = input.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  if (normalized === 'three_quarter_body') return 'three_quarter';
+  return ALLOWED_FRAMINGS.has(normalized as StudioSessionPoseFraming)
+    ? normalized as StudioSessionPoseFraming
     : 'portrait';
 }
 
@@ -53,7 +60,11 @@ function normalizePoseRecord(input: unknown, fallbackIndex: number): StudioSessi
 function normalizePoseLibraryDocument(input: unknown): StudioSessionPoseLibrary {
   const value = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const version = typeof value.version === 'string' && value.version.trim() ? value.version.trim() : 'v1';
-  const sourcePoses = Array.isArray(value.poses) ? value.poses : [];
+  const sourcePoses = Array.isArray(input)
+    ? input
+    : Array.isArray(value.poses)
+      ? value.poses
+      : [];
   const normalizedPoses = sourcePoses
     .map((item, index) => normalizePoseRecord(item, index))
     .filter((item): item is StudioSessionPoseLibraryRecord => item !== null);

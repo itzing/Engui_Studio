@@ -1,21 +1,1325 @@
 {
-  "version": "v1",
+  "version": "v2",
   "poses": [
-    { "id": "standing-front-full-01", "category": "standing", "orientation": "portrait", "framing": "full_body", "name": "Standing Front Full 01", "prompt": "standing upright, facing camera, balanced weight, arms relaxed by sides" },
-    { "id": "standing-contrapposto-01", "category": "standing", "orientation": "portrait", "framing": "full_body", "name": "Standing Contrapposto 01", "prompt": "standing contrapposto, one hip dropped, relaxed shoulders, soft arm bend" },
-    { "id": "standing-profile-01", "category": "standing", "orientation": "portrait", "framing": "three_quarter", "name": "Standing Profile 01", "prompt": "standing in profile, torso slightly turned, chin angled toward camera" },
-    { "id": "portrait-neutral-01", "category": "portrait", "orientation": "portrait", "framing": "portrait", "name": "Portrait Neutral 01", "prompt": "head and shoulders portrait, neutral expression, direct camera gaze" },
-    { "id": "portrait-over-shoulder-01", "category": "portrait", "orientation": "portrait", "framing": "portrait", "name": "Portrait Over Shoulder 01", "prompt": "portrait over shoulder, torso turned away, face back toward camera" },
-    { "id": "portrait-closeup-01", "category": "portrait", "orientation": "square", "framing": "closeup", "name": "Portrait Closeup 01", "prompt": "tight closeup portrait, face filling frame, calm expression" },
-    { "id": "sitting-chair-front-01", "category": "sitting", "orientation": "portrait", "framing": "three_quarter", "name": "Sitting Chair Front 01", "prompt": "sitting on chair, knees forward, back upright, hands resting on thighs" },
-    { "id": "sitting-side-01", "category": "sitting", "orientation": "landscape", "framing": "half_body", "name": "Sitting Side 01", "prompt": "sitting sideways on chair, torso turned to camera, legs together" },
-    { "id": "sitting-floor-01", "category": "sitting", "orientation": "portrait", "framing": "full_body", "name": "Sitting Floor 01", "prompt": "sitting on floor, one knee bent, one leg extended, hands braced lightly" },
-    { "id": "kneeling-upright-01", "category": "kneeling", "orientation": "portrait", "framing": "three_quarter", "name": "Kneeling Upright 01", "prompt": "kneeling upright, torso tall, hands resting softly near lap" },
-    { "id": "kneeling-turn-01", "category": "kneeling", "orientation": "portrait", "framing": "full_body", "name": "Kneeling Turn 01", "prompt": "kneeling with torso turned, one hand on hip, other hand relaxed" },
-    { "id": "floor-recline-01", "category": "floor", "orientation": "landscape", "framing": "full_body", "name": "Floor Recline 01", "prompt": "reclining on floor, upper body lifted on forearm, legs angled diagonally" },
-    { "id": "floor-side-01", "category": "floor", "orientation": "landscape", "framing": "three_quarter", "name": "Floor Side 01", "prompt": "lying on side, elbow supporting upper body, gaze toward camera" },
-    { "id": "floor-curled-01", "category": "floor", "orientation": "square", "framing": "full_body", "name": "Floor Curled 01", "prompt": "curled seated floor pose, knees drawn in, arms wrapped loosely" },
-    { "id": "walking-stride-01", "category": "movement", "orientation": "portrait", "framing": "full_body", "name": "Walking Stride 01", "prompt": "captured mid-stride, one leg forward, natural arm swing, forward energy" },
-    { "id": "turning-motion-01", "category": "movement", "orientation": "portrait", "framing": "three_quarter", "name": "Turning Motion 01", "prompt": "turning through frame, torso twisting, hair and clothing showing motion" }
+    {
+      "id": "standing_001",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 1",
+      "prompt": "contrapposto pose, weight on one leg, one hand touching hair, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "standing_002",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 2",
+      "prompt": "fashion standing pose, body turned three-quarters, one hand touching neck, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "standing_003",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 3",
+      "prompt": "relaxed standing pose, body turned three-quarters, one hand brushing hair back, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "standing_004",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 4",
+      "prompt": "relaxed standing pose, one knee bent slightly, hands behind back, looking softly into camera, warm intimate expression"
+    },
+    {
+      "id": "standing_005",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 5",
+      "prompt": "relaxed standing pose, shoulders relaxed, hands relaxed at sides, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "standing_006",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 6",
+      "prompt": "relaxed standing pose, hips slightly tilted, one hand brushing hair back, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "standing_007",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 7",
+      "prompt": "contrapposto pose, hips slightly tilted, one hand brushing hair back, looking over shoulder, warm intimate expression"
+    },
+    {
+      "id": "standing_008",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 8",
+      "prompt": "fashion standing pose, one knee bent slightly, one hand brushing hair back, looking softly into camera, quiet thoughtful expression"
+    },
+    {
+      "id": "standing_009",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 9",
+      "prompt": "contrapposto pose, one knee bent slightly, arms loosely crossed, looking softly into camera, warm intimate expression"
+    },
+    {
+      "id": "standing_010",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 10",
+      "prompt": "fashion standing pose, weight on one leg, one hand brushing hair back, looking over shoulder, subtle confident smirk"
+    },
+    {
+      "id": "standing_011",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 11",
+      "prompt": "casual standing pose, head tilted softly, one hand on hip, looking downward softly, quiet thoughtful expression"
+    },
+    {
+      "id": "standing_012",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 12",
+      "prompt": "fashion standing pose, head tilted softly, one hand touching hair, looking over shoulder, gentle natural smile"
+    },
+    {
+      "id": "standing_013",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 13",
+      "prompt": "contrapposto pose, weight on one leg, hands relaxed at sides, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "standing_014",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 14",
+      "prompt": "casual standing pose, hips slightly tilted, one hand touching neck, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "standing_015",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 15",
+      "prompt": "casual standing pose, body turned three-quarters, hands relaxed at sides, looking over shoulder, playful relaxed smile"
+    },
+    {
+      "id": "standing_016",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 16",
+      "prompt": "relaxed standing pose, head tilted softly, one hand on hip, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "standing_017",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 17",
+      "prompt": "casual standing pose, head tilted softly, one hand touching neck, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "standing_018",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 18",
+      "prompt": "casual standing pose, hips slightly tilted, one hand brushing hair back, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "standing_019",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 19",
+      "prompt": "fashion standing pose, hips slightly tilted, hands behind back, looking softly into camera, gentle natural smile"
+    },
+    {
+      "id": "standing_020",
+      "category": "Standing",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Standing Pose 20",
+      "prompt": "relaxed standing pose, weight on one leg, one hand touching hair, looking softly into camera, playful relaxed smile"
+    },
+    {
+      "id": "sitting_001",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 1",
+      "prompt": "sitting casually, shoulders relaxed, hands relaxed at sides, looking softly into camera, subtle confident smirk"
+    },
+    {
+      "id": "sitting_002",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 2",
+      "prompt": "sitting casually, one knee bent slightly, arms loosely crossed, looking confidently at camera, subtle confident smirk"
+    },
+    {
+      "id": "sitting_003",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 3",
+      "prompt": "relaxed sitting pose, weight on one leg, one hand touching hair, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "sitting_004",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 4",
+      "prompt": "lounging while sitting, one knee bent slightly, one hand brushing hair back, looking over shoulder, soft candid expression"
+    },
+    {
+      "id": "sitting_005",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 5",
+      "prompt": "lounging while sitting, body turned three-quarters, one hand on hip, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "sitting_006",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 6",
+      "prompt": "sitting casually, one knee bent slightly, one hand brushing hair back, looking slightly away, soft candid expression"
+    },
+    {
+      "id": "sitting_007",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 7",
+      "prompt": "lounging while sitting, weight on one leg, hands relaxed at sides, looking slightly away, warm intimate expression"
+    },
+    {
+      "id": "sitting_008",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 8",
+      "prompt": "sitting casually, hips slightly tilted, one hand on hip, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "sitting_009",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 9",
+      "prompt": "sitting casually, hips slightly tilted, one hand touching neck, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "sitting_010",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 10",
+      "prompt": "sitting casually, shoulders relaxed, one hand on hip, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "sitting_011",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 11",
+      "prompt": "sitting sideways, body turned three-quarters, one hand brushing hair back, looking softly into camera, warm intimate expression"
+    },
+    {
+      "id": "sitting_012",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 12",
+      "prompt": "lounging while sitting, shoulders relaxed, arms loosely crossed, looking downward softly, subtle confident smirk"
+    },
+    {
+      "id": "sitting_013",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 13",
+      "prompt": "sitting sideways, body turned three-quarters, hands behind back, looking over shoulder, playful relaxed smile"
+    },
+    {
+      "id": "sitting_014",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 14",
+      "prompt": "sitting sideways, body turned three-quarters, one hand brushing hair back, looking softly into camera, quiet thoughtful expression"
+    },
+    {
+      "id": "sitting_015",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 15",
+      "prompt": "relaxed sitting pose, weight on one leg, hands behind back, looking over shoulder, warm intimate expression"
+    },
+    {
+      "id": "sitting_016",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 16",
+      "prompt": "lounging while sitting, head tilted softly, one hand touching neck, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "sitting_017",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 17",
+      "prompt": "sitting casually, shoulders relaxed, hands relaxed at sides, looking softly into camera, subtle confident smirk"
+    },
+    {
+      "id": "sitting_018",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 18",
+      "prompt": "relaxed sitting pose, one knee bent slightly, one hand touching hair, looking downward softly, gentle natural smile"
+    },
+    {
+      "id": "sitting_019",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 19",
+      "prompt": "lounging while sitting, body turned three-quarters, one hand touching hair, looking downward softly, gentle natural smile"
+    },
+    {
+      "id": "sitting_020",
+      "category": "Sitting",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Sitting Pose 20",
+      "prompt": "relaxed sitting pose, shoulders relaxed, hands relaxed at sides, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_001",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 1",
+      "prompt": "sitting on floor, shoulders relaxed, one hand on hip, looking softly into camera, playful relaxed smile"
+    },
+    {
+      "id": "floor_002",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 2",
+      "prompt": "leaning back on floor, hips slightly tilted, hands relaxed at sides, looking softly into camera, soft candid expression"
+    },
+    {
+      "id": "floor_003",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 3",
+      "prompt": "floor lounging pose, weight on one leg, one hand brushing hair back, looking softly into camera, subtle confident smirk"
+    },
+    {
+      "id": "floor_004",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 4",
+      "prompt": "leaning back on floor, hips slightly tilted, one hand touching hair, looking softly into camera, gentle natural smile"
+    },
+    {
+      "id": "floor_005",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 5",
+      "prompt": "leaning back on floor, hips slightly tilted, one hand touching neck, looking downward softly, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_006",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 6",
+      "prompt": "leaning back on floor, one knee bent slightly, one hand on hip, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_007",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 7",
+      "prompt": "side sitting pose on floor, body turned three-quarters, one hand brushing hair back, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "floor_008",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 8",
+      "prompt": "side sitting pose on floor, body turned three-quarters, one hand on hip, looking over shoulder, warm intimate expression"
+    },
+    {
+      "id": "floor_009",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 9",
+      "prompt": "sitting on floor, hips slightly tilted, one hand touching neck, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "floor_010",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 10",
+      "prompt": "side sitting pose on floor, one knee bent slightly, one hand on hip, looking softly into camera, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_011",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 11",
+      "prompt": "sitting on floor, one knee bent slightly, one hand touching hair, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "floor_012",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 12",
+      "prompt": "sitting on floor, shoulders relaxed, arms loosely crossed, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "floor_013",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 13",
+      "prompt": "floor lounging pose, head tilted softly, hands behind back, looking slightly away, warm intimate expression"
+    },
+    {
+      "id": "floor_014",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 14",
+      "prompt": "side sitting pose on floor, weight on one leg, one hand brushing hair back, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_015",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 15",
+      "prompt": "sitting on floor, body turned three-quarters, arms loosely crossed, looking downward softly, gentle natural smile"
+    },
+    {
+      "id": "floor_016",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 16",
+      "prompt": "side sitting pose on floor, shoulders relaxed, one hand touching neck, looking softly into camera, playful relaxed smile"
+    },
+    {
+      "id": "floor_017",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 17",
+      "prompt": "leaning back on floor, shoulders relaxed, one hand touching neck, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "floor_018",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 18",
+      "prompt": "side sitting pose on floor, body turned three-quarters, arms loosely crossed, looking softly into camera, gentle natural smile"
+    },
+    {
+      "id": "floor_019",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 19",
+      "prompt": "leaning back on floor, head tilted softly, one hand touching neck, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "floor_020",
+      "category": "Floor",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Floor Pose 20",
+      "prompt": "sitting on floor, one knee bent slightly, hands behind back, looking softly into camera, playful relaxed smile"
+    },
+    {
+      "id": "lying_001",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 1",
+      "prompt": "lying on stomach, one knee bent slightly, hands behind back, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_002",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 2",
+      "prompt": "lying on stomach, shoulders relaxed, one hand touching hair, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "lying_003",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 3",
+      "prompt": "lying on back, head tilted softly, arms loosely crossed, looking over shoulder, soft candid expression"
+    },
+    {
+      "id": "lying_004",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 4",
+      "prompt": "lying on stomach, weight on one leg, one hand touching hair, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "lying_005",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 5",
+      "prompt": "resting sideways, shoulders relaxed, hands relaxed at sides, looking softly into camera, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_006",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 6",
+      "prompt": "lying on stomach, hips slightly tilted, one hand on hip, looking over shoulder, gentle natural smile"
+    },
+    {
+      "id": "lying_007",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 7",
+      "prompt": "lying on back, weight on one leg, one hand brushing hair back, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "lying_008",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 8",
+      "prompt": "lying on side, one knee bent slightly, one hand on hip, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "lying_009",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 9",
+      "prompt": "lying on side, weight on one leg, hands behind back, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_010",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 10",
+      "prompt": "lying on side, shoulders relaxed, one hand touching neck, looking downward softly, subtle confident smirk"
+    },
+    {
+      "id": "lying_011",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 11",
+      "prompt": "resting sideways, weight on one leg, hands behind back, looking confidently at camera, gentle natural smile"
+    },
+    {
+      "id": "lying_012",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 12",
+      "prompt": "lying on stomach, hips slightly tilted, one hand on hip, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_013",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 13",
+      "prompt": "resting sideways, body turned three-quarters, one hand brushing hair back, looking over shoulder, warm intimate expression"
+    },
+    {
+      "id": "lying_014",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 14",
+      "prompt": "resting sideways, shoulders relaxed, one hand brushing hair back, looking over shoulder, gentle natural smile"
+    },
+    {
+      "id": "lying_015",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 15",
+      "prompt": "lying on stomach, head tilted softly, one hand on hip, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_016",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 16",
+      "prompt": "lying on back, head tilted softly, hands behind back, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_017",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 17",
+      "prompt": "lying on back, body turned three-quarters, hands relaxed at sides, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_018",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 18",
+      "prompt": "lying on side, body turned three-quarters, one hand touching neck, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_019",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 19",
+      "prompt": "lying on back, head tilted softly, hands behind back, looking downward softly, quiet thoughtful expression"
+    },
+    {
+      "id": "lying_020",
+      "category": "Lying",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Lying Pose 20",
+      "prompt": "lying on stomach, one knee bent slightly, hands relaxed at sides, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "walking_001",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 1",
+      "prompt": "mid-step walking pose, hips slightly tilted, one hand brushing hair back, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "walking_002",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 2",
+      "prompt": "editorial walking pose, one knee bent slightly, hands behind back, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "walking_003",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 3",
+      "prompt": "mid-step walking pose, one knee bent slightly, arms loosely crossed, looking softly into camera, warm intimate expression"
+    },
+    {
+      "id": "walking_004",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 4",
+      "prompt": "mid-step walking pose, one knee bent slightly, arms loosely crossed, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "walking_005",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 5",
+      "prompt": "editorial walking pose, weight on one leg, hands behind back, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "walking_006",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 6",
+      "prompt": "walking toward camera, shoulders relaxed, hands behind back, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "walking_007",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 7",
+      "prompt": "walking toward camera, weight on one leg, hands relaxed at sides, looking confidently at camera, gentle natural smile"
+    },
+    {
+      "id": "walking_008",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 8",
+      "prompt": "walking toward camera, head tilted softly, one hand touching hair, looking over shoulder, subtle confident smirk"
+    },
+    {
+      "id": "walking_009",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 9",
+      "prompt": "editorial walking pose, one knee bent slightly, one hand touching hair, looking confidently at camera, gentle natural smile"
+    },
+    {
+      "id": "walking_010",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 10",
+      "prompt": "walking toward camera, head tilted softly, hands behind back, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "walking_011",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 11",
+      "prompt": "editorial walking pose, head tilted softly, one hand brushing hair back, looking over shoulder, subtle confident smirk"
+    },
+    {
+      "id": "walking_012",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 12",
+      "prompt": "walking toward camera, head tilted softly, hands behind back, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "walking_013",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 13",
+      "prompt": "casual walking pose, one knee bent slightly, arms loosely crossed, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "walking_014",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 14",
+      "prompt": "casual walking pose, weight on one leg, one hand brushing hair back, looking downward softly, gentle natural smile"
+    },
+    {
+      "id": "walking_015",
+      "category": "Walking",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Walking Pose 15",
+      "prompt": "walking toward camera, body turned three-quarters, arms loosely crossed, looking softly into camera, quiet thoughtful expression"
+    },
+    {
+      "id": "kneeling_001",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 1",
+      "prompt": "kneeling upright, hips slightly tilted, one hand touching hair, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "kneeling_002",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 2",
+      "prompt": "kneeling upright, weight on one leg, one hand touching hair, looking downward softly, subtle confident smirk"
+    },
+    {
+      "id": "kneeling_003",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 3",
+      "prompt": "casual kneeling pose, shoulders relaxed, one hand brushing hair back, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "kneeling_004",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 4",
+      "prompt": "kneeling upright, one knee bent slightly, arms loosely crossed, looking downward softly, warm intimate expression"
+    },
+    {
+      "id": "kneeling_005",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 5",
+      "prompt": "kneeling upright, shoulders relaxed, one hand brushing hair back, looking softly into camera, warm intimate expression"
+    },
+    {
+      "id": "kneeling_006",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 6",
+      "prompt": "kneeling upright, one knee bent slightly, arms loosely crossed, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "kneeling_007",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 7",
+      "prompt": "casual kneeling pose, hips slightly tilted, one hand touching hair, looking downward softly, warm intimate expression"
+    },
+    {
+      "id": "kneeling_008",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 8",
+      "prompt": "kneeling upright, body turned three-quarters, one hand touching hair, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "kneeling_009",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 9",
+      "prompt": "editorial kneeling pose, hips slightly tilted, one hand touching hair, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "kneeling_010",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 10",
+      "prompt": "editorial kneeling pose, head tilted softly, hands behind back, looking downward softly, warm intimate expression"
+    },
+    {
+      "id": "kneeling_011",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 11",
+      "prompt": "one knee raised kneeling pose, weight on one leg, hands relaxed at sides, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "kneeling_012",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 12",
+      "prompt": "casual kneeling pose, one knee bent slightly, hands relaxed at sides, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "kneeling_013",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 13",
+      "prompt": "casual kneeling pose, body turned three-quarters, one hand touching hair, looking over shoulder, gentle natural smile"
+    },
+    {
+      "id": "kneeling_014",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 14",
+      "prompt": "editorial kneeling pose, head tilted softly, one hand on hip, looking softly into camera, soft candid expression"
+    },
+    {
+      "id": "kneeling_015",
+      "category": "Kneeling",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Kneeling Pose 15",
+      "prompt": "kneeling upright, shoulders relaxed, hands relaxed at sides, looking over shoulder, warm intimate expression"
+    },
+    {
+      "id": "leaning_001",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 1",
+      "prompt": "casual leaning pose, body turned three-quarters, one hand on hip, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "leaning_002",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 2",
+      "prompt": "casual leaning pose, one knee bent slightly, one hand on hip, looking confidently at camera, quiet thoughtful expression"
+    },
+    {
+      "id": "leaning_003",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 3",
+      "prompt": "casual leaning pose, one knee bent slightly, hands relaxed at sides, looking over shoulder, playful relaxed smile"
+    },
+    {
+      "id": "leaning_004",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 4",
+      "prompt": "casual leaning pose, head tilted softly, hands behind back, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "leaning_005",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 5",
+      "prompt": "leaning against wall, shoulders relaxed, hands behind back, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "leaning_006",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 6",
+      "prompt": "casual leaning pose, weight on one leg, arms loosely crossed, looking softly into camera, soft candid expression"
+    },
+    {
+      "id": "leaning_007",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 7",
+      "prompt": "casual leaning pose, weight on one leg, hands relaxed at sides, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "leaning_008",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 8",
+      "prompt": "one shoulder against wall, body turned three-quarters, one hand brushing hair back, looking softly into camera, subtle confident smirk"
+    },
+    {
+      "id": "leaning_009",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 9",
+      "prompt": "editorial leaning pose, one knee bent slightly, one hand brushing hair back, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "leaning_010",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 10",
+      "prompt": "editorial leaning pose, shoulders relaxed, arms loosely crossed, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "leaning_011",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 11",
+      "prompt": "one shoulder against wall, body turned three-quarters, one hand touching hair, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "leaning_012",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 12",
+      "prompt": "editorial leaning pose, hips slightly tilted, one hand on hip, looking slightly away, quiet thoughtful expression"
+    },
+    {
+      "id": "leaning_013",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 13",
+      "prompt": "one shoulder against wall, weight on one leg, one hand touching hair, looking softly into camera, playful relaxed smile"
+    },
+    {
+      "id": "leaning_014",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 14",
+      "prompt": "editorial leaning pose, weight on one leg, one hand touching neck, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "leaning_015",
+      "category": "Leaning",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Leaning Pose 15",
+      "prompt": "leaning against wall, shoulders relaxed, one hand touching hair, looking downward softly, warm intimate expression"
+    },
+    {
+      "id": "editorial_dynamic_001",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 1",
+      "prompt": "dynamic fashion stance, shoulders relaxed, one hand touching neck, looking slightly away, subtle confident smirk"
+    },
+    {
+      "id": "editorial_dynamic_002",
+      "category": "Editorial/Dynamic",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 2",
+      "prompt": "editorial fashion pose, weight on one leg, one hand touching hair, looking downward softly, soft candid expression"
+    },
+    {
+      "id": "editorial_dynamic_003",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 3",
+      "prompt": "editorial fashion pose, shoulders relaxed, hands behind back, looking confidently at camera, subtle confident smirk"
+    },
+    {
+      "id": "editorial_dynamic_004",
+      "category": "Editorial/Dynamic",
+      "orientation": "square",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 4",
+      "prompt": "cinematic editorial pose, shoulders relaxed, one hand on hip, looking confidently at camera, playful relaxed smile"
+    },
+    {
+      "id": "editorial_dynamic_005",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 5",
+      "prompt": "dynamic fashion stance, hips slightly tilted, arms loosely crossed, looking downward softly, gentle natural smile"
+    },
+    {
+      "id": "editorial_dynamic_006",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 6",
+      "prompt": "cinematic editorial pose, head tilted softly, one hand brushing hair back, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "editorial_dynamic_007",
+      "category": "Editorial/Dynamic",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 7",
+      "prompt": "high-fashion dynamic pose, body turned three-quarters, arms loosely crossed, looking downward softly, warm intimate expression"
+    },
+    {
+      "id": "editorial_dynamic_008",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 8",
+      "prompt": "cinematic editorial pose, body turned three-quarters, one hand brushing hair back, looking over shoulder, quiet thoughtful expression"
+    },
+    {
+      "id": "editorial_dynamic_009",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 9",
+      "prompt": "editorial fashion pose, one knee bent slightly, one hand touching neck, looking slightly away, soft candid expression"
+    },
+    {
+      "id": "editorial_dynamic_010",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 10",
+      "prompt": "high-fashion dynamic pose, shoulders relaxed, one hand touching hair, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "editorial_dynamic_011",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 11",
+      "prompt": "high-fashion dynamic pose, head tilted softly, one hand brushing hair back, looking over shoulder, subtle confident smirk"
+    },
+    {
+      "id": "editorial_dynamic_012",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 12",
+      "prompt": "editorial fashion pose, head tilted softly, one hand on hip, looking slightly away, playful relaxed smile"
+    },
+    {
+      "id": "editorial_dynamic_013",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 13",
+      "prompt": "cinematic editorial pose, shoulders relaxed, hands behind back, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "editorial_dynamic_014",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 14",
+      "prompt": "high-fashion dynamic pose, head tilted softly, arms loosely crossed, looking over shoulder, soft candid expression"
+    },
+    {
+      "id": "editorial_dynamic_015",
+      "category": "Editorial/Dynamic",
+      "orientation": "square",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 15",
+      "prompt": "high-fashion dynamic pose, shoulders relaxed, hands behind back, looking over shoulder, playful relaxed smile"
+    },
+    {
+      "id": "editorial_dynamic_016",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 16",
+      "prompt": "high-fashion dynamic pose, body turned three-quarters, one hand touching neck, looking confidently at camera, warm intimate expression"
+    },
+    {
+      "id": "editorial_dynamic_017",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 17",
+      "prompt": "high-fashion dynamic pose, head tilted softly, arms loosely crossed, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "editorial_dynamic_018",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 18",
+      "prompt": "cinematic editorial pose, hips slightly tilted, one hand on hip, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "editorial_dynamic_019",
+      "category": "Editorial/Dynamic",
+      "orientation": "landscape",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 19",
+      "prompt": "dynamic fashion stance, weight on one leg, hands relaxed at sides, looking confidently at camera, soft candid expression"
+    },
+    {
+      "id": "editorial_dynamic_020",
+      "category": "Editorial/Dynamic",
+      "orientation": "portrait",
+      "framing": "full_body",
+      "name": "Editorial/Dynamic Pose 20",
+      "prompt": "dynamic fashion stance, hips slightly tilted, hands relaxed at sides, looking slightly away, gentle natural smile"
+    },
+    {
+      "id": "portrait_001",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "three_quarter_body",
+      "name": "Portrait Pose 1",
+      "prompt": "soft portrait framing, hips slightly tilted, arms loosely crossed, looking confidently at camera, gentle natural smile, natural skin texture, tight portrait composition"
+    },
+    {
+      "id": "portrait_002",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "closeup",
+      "name": "Portrait Pose 2",
+      "prompt": "editorial beauty portrait, hips slightly tilted, arms loosely crossed, looking slightly away, soft candid expression, subtle expression, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_003",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "three_quarter_body",
+      "name": "Portrait Pose 3",
+      "prompt": "cinematic closeup portrait, hips slightly tilted, one hand brushing hair back, looking softly into camera, soft candid expression, soft eye contact, beauty photography composition"
+    },
+    {
+      "id": "portrait_004",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "closeup",
+      "name": "Portrait Pose 4",
+      "prompt": "cinematic closeup portrait, hips slightly tilted, one hand touching hair, looking over shoulder, quiet thoughtful expression, detailed eyes, focus on face and eyes"
+    },
+    {
+      "id": "portrait_005",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "portrait",
+      "name": "Portrait Pose 5",
+      "prompt": "editorial beauty portrait, one knee bent slightly, one hand on hip, looking confidently at camera, gentle natural smile, editorial beauty mood, tight portrait composition"
+    },
+    {
+      "id": "portrait_006",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "portrait",
+      "name": "Portrait Pose 6",
+      "prompt": "editorial beauty portrait, body turned three-quarters, hands relaxed at sides, looking downward softly, warm intimate expression, editorial beauty mood, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_007",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "three_quarter_body",
+      "name": "Portrait Pose 7",
+      "prompt": "close portrait shot, body turned three-quarters, one hand touching neck, looking downward softly, quiet thoughtful expression, subtle expression, tight portrait composition"
+    },
+    {
+      "id": "portrait_008",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "closeup",
+      "name": "Portrait Pose 8",
+      "prompt": "editorial beauty portrait, weight on one leg, one hand brushing hair back, looking over shoulder, soft candid expression, soft facial lighting, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_009",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "three_quarter_body",
+      "name": "Portrait Pose 9",
+      "prompt": "soft portrait framing, head tilted softly, hands behind back, looking slightly away, quiet thoughtful expression, detailed eyes, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_010",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "portrait",
+      "name": "Portrait Pose 10",
+      "prompt": "cinematic closeup portrait, one knee bent slightly, hands behind back, looking over shoulder, playful relaxed smile, soft eye contact, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_011",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "portrait",
+      "name": "Portrait Pose 11",
+      "prompt": "cinematic closeup portrait, shoulders relaxed, one hand on hip, looking softly into camera, warm intimate expression, subtle expression, beauty photography composition"
+    },
+    {
+      "id": "portrait_012",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "portrait",
+      "name": "Portrait Pose 12",
+      "prompt": "editorial beauty portrait, head tilted softly, one hand on hip, looking confidently at camera, quiet thoughtful expression, soft eye contact, tight portrait composition"
+    },
+    {
+      "id": "portrait_013",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "closeup",
+      "name": "Portrait Pose 13",
+      "prompt": "soft portrait framing, weight on one leg, one hand touching hair, looking softly into camera, playful relaxed smile, subtle expression, focus on face and eyes"
+    },
+    {
+      "id": "portrait_014",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "portrait",
+      "name": "Portrait Pose 14",
+      "prompt": "cinematic closeup portrait, shoulders relaxed, one hand touching hair, looking over shoulder, playful relaxed smile, detailed eyes, tight portrait composition"
+    },
+    {
+      "id": "portrait_015",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "portrait",
+      "name": "Portrait Pose 15",
+      "prompt": "editorial beauty portrait, hips slightly tilted, one hand brushing hair back, looking over shoulder, gentle natural smile, natural skin texture, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_016",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "portrait",
+      "name": "Portrait Pose 16",
+      "prompt": "close portrait shot, one knee bent slightly, one hand touching neck, looking slightly away, playful relaxed smile, natural skin texture, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_017",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "half_body",
+      "name": "Portrait Pose 17",
+      "prompt": "close portrait shot, head tilted softly, hands relaxed at sides, looking softly into camera, warm intimate expression, soft facial lighting, focus on face and eyes"
+    },
+    {
+      "id": "portrait_018",
+      "category": "Portrait",
+      "orientation": "square",
+      "framing": "half_body",
+      "name": "Portrait Pose 18",
+      "prompt": "cinematic closeup portrait, hips slightly tilted, one hand on hip, looking downward softly, quiet thoughtful expression, natural skin texture, cinematic portrait framing"
+    },
+    {
+      "id": "portrait_019",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "closeup",
+      "name": "Portrait Pose 19",
+      "prompt": "cinematic closeup portrait, head tilted softly, hands relaxed at sides, looking downward softly, gentle natural smile, soft eye contact, focus on face and eyes"
+    },
+    {
+      "id": "portrait_020",
+      "category": "Portrait",
+      "orientation": "portrait",
+      "framing": "portrait",
+      "name": "Portrait Pose 20",
+      "prompt": "editorial beauty portrait, weight on one leg, hands relaxed at sides, looking over shoulder, soft candid expression, soft facial lighting, focus on face and eyes"
+    }
   ]
 }

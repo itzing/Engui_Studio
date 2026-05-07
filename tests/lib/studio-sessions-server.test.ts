@@ -256,16 +256,16 @@ describe('studio session server', () => {
       { currentRevisionId: 'revision-2' },
     ]);
     mockPrisma.studioSessionShotRevision.findMany.mockResolvedValue([
-      { poseId: 'standing-front-full-01' },
-      { poseId: 'standing-contrapposto-01' },
+      { poseId: 'standing_001' },
+      { poseId: 'standing_002' },
     ]);
 
     const result = await listStudioSessionShotPoses('shot-1');
 
     expect(result?.poses.length).toBeGreaterThan(0);
-    expect(result?.poses.some((pose) => pose.id === 'standing-front-full-01')).toBe(false);
-    expect(result?.poses.some((pose) => pose.id === 'standing-contrapposto-01')).toBe(false);
-    expect(result?.poses.some((pose) => pose.id === 'standing-profile-01')).toBe(true);
+    expect(result?.poses.some((pose) => pose.id === 'standing_001')).toBe(false);
+    expect(result?.poses.some((pose) => pose.id === 'standing_002')).toBe(false);
+    expect(result?.poses.some((pose) => pose.id === 'standing_003')).toBe(true);
   });
 
   it('loads run detail when a shot has a reshuffled latest revision and no active job', async () => {
