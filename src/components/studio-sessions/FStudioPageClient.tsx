@@ -506,6 +506,9 @@ function NameDialog({ open, title, value, onChange, onOpenChange, onSubmit }: { 
 function RunWorkspace({ detail }: { detail: RunDetail | null }) {
   const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
   const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
+  const [launching, setLaunching] = useState(false);
+  const [launchMessage, setLaunchMessage] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
   useEffect(() => { setVersions(detail?.versions || []); }, [detail?.versions]);
   const reviewStates: Array<{ value: StudioSessionShotVersionSummary['reviewState']; label: string }> = [
     { value: 'hero', label: 'Hero' },
@@ -529,7 +532,25 @@ function RunWorkspace({ detail }: { detail: RunDetail | null }) {
       setReviewingVersionId(null);
     }
   };
-  return <div className="space-y-5"><div><div className="text-xl font-semibold">{detail?.run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{detail?.run ? `${detail.run.count} shots · ${detail.run.status}` : 'Loading run details…'}</div></div><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}</div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Launch this run when you are ready; generated images will appear here for review." /> : null}</TileGrid></div>;
+  const launchRun = async () => {
+    if (!detail?.run || launching) return;
+    setLaunching(true);
+    setLaunchMessage(null);
+    setLaunchError(null);
+    try {
+      const response = await fetch(`/api/studio/runs/${encodeURIComponent(detail.run.id)}/launch`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch run');
+      const launchedCount = Array.isArray(data.launched) ? data.launched.length : 0;
+      const skippedCount = Array.isArray(data.skippedShotIds) ? data.skippedShotIds.length : 0;
+      setLaunchMessage(`Launched ${launchedCount} job${launchedCount === 1 ? '' : 's'}${skippedCount > 0 ? `, skipped ${skippedCount}` : ''}. Open Jobs to track progress.`);
+    } catch (error) {
+      setLaunchError(toErrorMessage(error, 'Failed to launch run'));
+    } finally {
+      setLaunching(false);
+    }
+  };
+  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xl font-semibold">{detail?.run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{detail?.run ? `${detail.run.count} shots · ${detail.run.status}` : 'Loading run details…'}</div></div><Button type="button" onClick={() => void launchRun()} disabled={!detail?.run || launching} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">{launching ? 'Launching…' : 'Launch run'}</Button></div>{launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}{launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}<TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}</div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Click Launch run when you are ready; generated images will appear here for review." /> : null}</TileGrid></div>;
 }
 function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
   const [settingCoverItemId, setSettingCoverItemId] = useState<string | null>(null);
