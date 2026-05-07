@@ -202,9 +202,20 @@ export function serializeCharacterPreviewState(previewState: CharacterPreviewSta
   return JSON.stringify(normalizeCharacterPreviewState(previewState));
 }
 
+function getPreviewDisplayUrl(slot: CharacterPreviewSlotState): string | null {
+  return slot.thumbnailUrl || slot.previewUrl || slot.imageUrl;
+}
+
+function getPrimaryCharacterPreview(previewState: CharacterPreviewState): CharacterPreviewSlotState {
+  if (getPreviewDisplayUrl(previewState.full_body)) return previewState.full_body;
+  if (getPreviewDisplayUrl(previewState.portrait)) return previewState.portrait;
+  if (getPreviewDisplayUrl(previewState.upper_body)) return previewState.upper_body;
+  return previewState.full_body;
+}
+
 export function toCharacterSummary(record: PersistedCharacterRecord): CharacterSummary {
   const previewState = normalizeCharacterPreviewState(parseJsonObject<Record<string, unknown>>(record.previewStateJson));
-  const primaryPreview = previewState.portrait;
+  const primaryPreview = getPrimaryCharacterPreview(previewState);
 
   return {
     id: record.id,
@@ -214,7 +225,7 @@ export function toCharacterSummary(record: PersistedCharacterRecord): CharacterS
     editorState: parseJsonObject<CharacterEditorState>(record.editorState),
     previewState,
     primaryPreviewImageUrl: primaryPreview.imageUrl,
-    primaryPreviewThumbnailUrl: primaryPreview.thumbnailUrl || primaryPreview.previewUrl || primaryPreview.imageUrl,
+    primaryPreviewThumbnailUrl: getPreviewDisplayUrl(primaryPreview),
     currentVersionId: record.currentVersionId,
     previewStatusSummary: record.previewStatusSummary,
     createdAt: record.createdAt.toISOString(),
