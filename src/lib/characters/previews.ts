@@ -1,3 +1,4 @@
+import { characterTraitDefinitions } from '@/lib/characters/schema';
 import { formatCharacterAge, resolveRenderedGender } from '@/lib/prompt-constructor/templates/sceneTemplateV2';
 import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
 import { CHARACTER_PREVIEW_SLOTS, type CharacterPreviewSlot, type CharacterSummary } from './types';
@@ -56,6 +57,13 @@ export function getCharacterPreviewSlotMeta(slot: CharacterPreviewSlot) {
   return CHARACTER_PREVIEW_SLOT_META[slot];
 }
 
+function getPreviewTraitKeys(slot: CharacterPreviewSlot): string[] {
+  const groupIds = new Set(CHARACTER_PREVIEW_SLOT_META[slot].groupIds);
+  return characterTraitDefinitions
+    .filter((definition) => groupIds.has(definition.group))
+    .map((definition) => definition.key);
+}
+
 export function buildCharacterPreviewPrompt(character: CharacterSummary, slot: CharacterPreviewSlot): string {
   const ageValue = character.traits.age || '';
   const formattedAge = formatCharacterAge(ageValue);
@@ -63,6 +71,7 @@ export function buildCharacterPreviewPrompt(character: CharacterSummary, slot: C
   const appearancePrompt = buildCharacterPromptFromSummary(character, {
     includeName: false,
     includeGender: false,
+    includeTraitKeys: getPreviewTraitKeys(slot),
     excludeTraitKeys: ['age'],
   }).trim();
 

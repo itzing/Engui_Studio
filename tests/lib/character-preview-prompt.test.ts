@@ -32,6 +32,25 @@ describe('character preview prompt', () => {
     expect(prompt).not.toContain('Age: 25');
   });
 
+  it('keeps portrait prompts scoped to identity, face, and hair traits', () => {
+    const prompt = buildCharacterPreviewPrompt(buildCharacter({
+      traits: {
+        age: '25',
+        hair_color: 'silver',
+        face_shape: 'oval',
+        body_build: 'athletic',
+        hip_width: 'wide',
+        glute_shape: 'round',
+      },
+    }), 'portrait');
+
+    expect(prompt).toContain('Hair color: silver');
+    expect(prompt).toContain('Face shape: oval');
+    expect(prompt).not.toContain('Body build');
+    expect(prompt).not.toContain('Hip width');
+    expect(prompt).not.toContain('Glute shape');
+  });
+
   it('renders underage gender terms like Prompt Constructor', () => {
     const prompt = buildCharacterPreviewPrompt(buildCharacter({
       gender: 'male',
