@@ -1,7 +1,7 @@
 ---
 id: ENGUI-244
 title: Add one-pose-set studio run create and update APIs
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

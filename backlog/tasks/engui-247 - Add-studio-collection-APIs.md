@@ -1,7 +1,7 @@
 ---
 id: ENGUI-247
 title: Add studio collection APIs
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

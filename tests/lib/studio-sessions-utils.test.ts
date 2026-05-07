@@ -90,8 +90,8 @@ describe('studio session utils', () => {
       { id: 'v2', shotId: 'shot-1', versionNumber: 2, createdAt: '2026-05-06T21:00:00.000Z', hidden: false, rejected: false },
     ] as any;
 
-    expect(sortStudioSessionVersions(versions).map((version) => version.id)).toEqual(['v3', 'v2', 'v1']);
-    expect(listPrimaryStudioSessionVersions(versions).map((version) => version.id)).toEqual(['v2', 'v1']);
+    expect(sortStudioSessionVersions(versions).map((version: any) => version.id)).toEqual(['v3', 'v2', 'v1']);
+    expect(listPrimaryStudioSessionVersions(versions).map((version: any) => version.id)).toEqual(['v2', 'v1']);
     expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v1' }, versions })?.id).toBe('v1');
     expect(selectPrimaryStudioSessionVersion({ shot: { selectionVersionId: 'v3' }, versions })?.id).toBe('v2');
   });
