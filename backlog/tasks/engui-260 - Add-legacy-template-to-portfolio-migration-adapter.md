@@ -1,7 +1,7 @@
 ---
 id: ENGUI-260
 title: Add legacy template to portfolio migration adapter
-status: Inbox
+status: Cancelled
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]
@@ -18,3 +18,7 @@ Reference docs:
 - `docs/studio-portfolio-refactor-plan.md`
 - `docs/studio-portfolio-technical-spec.md`
 <!-- SECTION:DESCRIPTION:END -->
+
+## Cancellation note
+
+No longer planned: Studio is a v1 rewrite/product refactor with no legacy template migration/backward compatibility requirement.

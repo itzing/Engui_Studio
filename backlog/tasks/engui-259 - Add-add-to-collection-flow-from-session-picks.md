@@ -1,7 +1,7 @@
 ---
 id: ENGUI-259
 title: Add add-to-collection flow from session picks
-status: Inbox
+status: Done
 assignee: []
 created_date: '2026-05-07 17:49'
 labels: [studio, portfolio, refactor]

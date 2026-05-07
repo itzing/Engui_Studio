@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { ArrowLeft, Camera, FolderPlus, Image, Play, Plus, RefreshCw, Settings, SlidersHorizontal, UserRound } from 'lucide-react';
+import { Camera, Image, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from 'lucide-react';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
-import StudioSessionsPageClient from '@/components/studio-sessions/StudioSessionsPageClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
-import type { StudioCollectionSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioSessionRunSummary } from '@/lib/studio-sessions/types';
+import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioSessionRunSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -307,6 +306,25 @@ function RunSettingsPanel({
   );
 }
 
+type ContactSheetItem = {
+  version: StudioSessionShotVersionSummary;
+  run: StudioSessionRunSummary;
+  shot: { id: string; label: string; category: string; slotIndex: number; currentRevisionId: string | null };
+};
+
+type CollectionDetailState = {
+  collection: StudioCollectionSummary;
+  items: StudioCollectionItemSummary[];
+} | null;
+
+const reviewStates: Array<{ value: StudioSessionShotVersionSummary['reviewState']; label: string }> = [
+  { value: 'hero', label: 'Hero' },
+  { value: 'pick', label: 'Pick' },
+  { value: 'maybe', label: 'Maybe' },
+  { value: 'reject', label: 'Reject' },
+  { value: 'needs_retry', label: 'Retry' },
+];
+
 function RunCard({ run, launching, onLaunch }: { run: StudioSessionRunSummary; launching: boolean; onLaunch: () => void }) {
   return (
     <div className="rounded-xl border border-white/10 bg-black/20 p-4">
@@ -316,20 +334,216 @@ function RunCard({ run, launching, onLaunch }: { run: StudioSessionRunSummary; l
           <div className="mt-1 text-xs text-white/45">{run.poseSetId || 'No pose set'} · {run.count} shots · <span className="capitalize">{run.status.replace(/_/g, ' ')}</span></div>
         </div>
         <Button size="sm" disabled={launching} onClick={onLaunch} className="bg-emerald-500 text-white hover:bg-emerald-400">
-          <Play className="mr-2 h-3.5 w-3.5" /> {launching ? 'Launching…' : 'Launch'}
+          {launching ? 'Launching…' : 'Launch'}
         </Button>
       </div>
     </div>
   );
 }
 
+function ContactSheet({
+  items,
+  runs,
+  collections,
+  selectedRunId,
+  selectedPoseSetId,
+  selectedReviewState,
+  reviewingVersionId,
+  addingVersionId,
+  onRunFilterChange,
+  onPoseSetFilterChange,
+  onReviewStateFilterChange,
+  onReview,
+  onAddToCollection,
+}: {
+  items: ContactSheetItem[];
+  runs: StudioSessionRunSummary[];
+  collections: StudioCollectionSummary[];
+  selectedRunId: string;
+  selectedPoseSetId: string;
+  selectedReviewState: string;
+  reviewingVersionId: string | null;
+  addingVersionId: string | null;
+  onRunFilterChange: (value: string) => void;
+  onPoseSetFilterChange: (value: string) => void;
+  onReviewStateFilterChange: (value: string) => void;
+  onReview: (versionId: string, reviewState: StudioSessionShotVersionSummary['reviewState']) => void;
+  onAddToCollection: (versionId: string, collectionId: string) => void;
+}) {
+  const [visibilityFilter, setVisibilityFilter] = useState('all');
+  const poseSetIds = Array.from(new Set(runs.map((run) => run.poseSetId).filter((value): value is string => Boolean(value))));
+  const filteredItems = items.filter((item) => {
+    if (selectedRunId && item.run.id !== selectedRunId) return false;
+    if (selectedPoseSetId && item.run.poseSetId !== selectedPoseSetId) return false;
+    if (selectedReviewState && item.version.reviewState !== selectedReviewState) return false;
+    if (visibilityFilter === 'reviewable' && (item.version.hidden || item.version.rejected)) return false;
+    if (visibilityFilter === 'hidden' && !item.version.hidden) return false;
+    if (visibilityFilter === 'rejected' && !item.version.rejected) return false;
+    return true;
+  });
+
+  return (
+    <Card className="border-white/10 bg-white/[0.035] text-white">
+      <CardHeader>
+        <CardTitle className="text-base">Contact Sheet</CardTitle>
+        <CardDescription className="text-white/45">All generated versions for this session, with review controls and collection actions.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          <select value={selectedRunId} onChange={(event) => onRunFilterChange(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">
+            <option value="">All runs</option>
+            {runs.map((run) => <option key={run.id} value={run.id}>{run.name || run.poseSetId || run.id}</option>)}
+          </select>
+          <select value={selectedPoseSetId} onChange={(event) => onPoseSetFilterChange(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">
+            <option value="">All pose sets</option>
+            {poseSetIds.map((poseSetId) => <option key={poseSetId} value={poseSetId}>{poseSetId}</option>)}
+          </select>
+          <select value={selectedReviewState} onChange={(event) => onReviewStateFilterChange(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">
+            <option value="">All review states</option>
+            <option value="unreviewed">Unreviewed</option>
+            {reviewStates.map((state) => <option key={state.value} value={state.value}>{state.label}</option>)}
+          </select>
+          <select value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">
+            <option value="all">All visibility</option>
+            <option value="reviewable">Reviewable only</option>
+            <option value="hidden">Hidden only</option>
+            <option value="rejected">Rejected only</option>
+          </select>
+        </div>
+        {filteredItems.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">No generated versions match these filters.</div> : null}
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {filteredItems.map((item) => {
+            const imageUrl = item.version.previewUrl || item.version.thumbnailUrl || item.version.originalUrl;
+            return (
+              <div key={item.version.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/25">
+                <div className="aspect-[3/4] bg-black/40">
+                  {imageUrl ? <img src={imageUrl} alt={item.shot.label} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-white/35">No preview</div>}
+                </div>
+                <div className="space-y-3 p-3">
+                  <div className="text-xs text-white/55">
+                    <div className="font-medium text-white/80">{item.shot.label}</div>
+                    <div>{item.run.name || item.run.poseSetId} · v{item.version.versionNumber} · {item.version.reviewState}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {reviewStates.map((state) => (
+                      <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === item.version.id} onClick={() => onReview(item.version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${item.version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>
+                        {state.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <select
+                    value=""
+                    disabled={addingVersionId === item.version.id || collections.length === 0}
+                    onChange={(event) => event.target.value && onAddToCollection(item.version.id, event.target.value)}
+                    className="h-9 w-full rounded-md border border-white/10 bg-black/30 px-2 text-xs text-white"
+                  >
+                    <option value="">{collections.length ? 'Add to collection…' : 'Create a collection first'}</option>
+                    {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CollectionsPanel({
+  collections,
+  detail,
+  creating,
+  saving,
+  onCreate,
+  onSelect,
+  onSave,
+  onRemoveItem,
+}: {
+  collections: StudioCollectionSummary[];
+  detail: CollectionDetailState;
+  creating: boolean;
+  saving: boolean;
+  onCreate: () => void;
+  onSelect: (collectionId: string) => void;
+  onSave: (collectionId: string, draft: Partial<StudioCollectionSummary>) => void;
+  onRemoveItem: (collectionId: string, itemId: string) => void;
+}) {
+  const [draft, setDraft] = useState<Partial<StudioCollectionSummary>>({});
+
+  useEffect(() => {
+    setDraft(detail?.collection ? { ...detail.collection } : {});
+  }, [detail?.collection?.id]);
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-3">
+        <Button className="w-full bg-blue-500 text-white hover:bg-blue-400" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'New collection'}</Button>
+        {collections.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">No collections yet.</div> : null}
+        {collections.map((collection) => (
+          <button key={collection.id} type="button" onClick={() => onSelect(collection.id)} className={`w-full rounded-xl border p-4 text-left ${detail?.collection.id === collection.id ? 'border-blue-400/60 bg-blue-500/10' : 'border-white/10 bg-black/20 hover:border-white/25'}`}>
+            <div className="text-sm font-semibold text-white">{collection.name}</div>
+            <div className="mt-1 text-xs text-white/45">{collection.itemCount} items · {collection.status}</div>
+          </button>
+        ))}
+      </div>
+      <Card className="border-white/10 bg-white/[0.035] text-white">
+        <CardHeader>
+          <CardTitle className="text-base">Collection Editor</CardTitle>
+          <CardDescription className="text-white/45">Build ordered final sets from reviewed session picks.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!detail ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">Select or create a collection.</div> : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <FieldLabel>Name</FieldLabel>
+                  <Input value={draft.name ?? ''} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} className="border-white/10 bg-black/30 text-white" />
+                </div>
+                <div>
+                  <FieldLabel>Status</FieldLabel>
+                  <select value={draft.status ?? 'draft'} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as StudioCollectionSummary['status'] }))} className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">
+                    <option value="draft">Draft</option>
+                    <option value="final">Final</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <FieldLabel>Description</FieldLabel>
+                <textarea value={draft.description ?? ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} rows={3} className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25" />
+              </div>
+              <Button disabled={saving} onClick={() => onSave(detail.collection.id, draft)} className="bg-blue-500 text-white hover:bg-blue-400">{saving ? 'Saving…' : 'Save collection'}</Button>
+              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                {detail.items.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">No items yet. Add images from the contact sheet.</div> : null}
+                {detail.items.map((item) => {
+                  const imageUrl = item.previewUrl || item.thumbnailUrl || item.originalUrl;
+                  return (
+                    <div key={item.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/25">
+                      <div className="aspect-[3/4] bg-black/40">{imageUrl ? <img src={imageUrl} alt={item.caption || item.id} className="h-full w-full object-cover" /> : null}</div>
+                      <div className="flex items-center justify-between gap-2 p-3 text-xs text-white/50">
+                        <span>#{item.sortOrder + 1}</span>
+                        <Button size="sm" variant="outline" onClick={() => onRemoveItem(detail.collection.id, item.id)} className="h-7 border-white/10 bg-white/[0.04] px-2 text-white/70 hover:bg-white/[0.08]"><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function StudioPortfolioPageClient() {
   const { activeWorkspaceId } = useStudio();
-  const [legacyMode, setLegacyMode] = useState(false);
   const [portfolios, setPortfolios] = useState<StudioPortfolioSummary[]>([]);
   const [sessions, setSessions] = useState<StudioPhotoSessionSummary[]>([]);
   const [collections, setCollections] = useState<StudioCollectionSummary[]>([]);
   const [runs, setRuns] = useState<StudioSessionRunSummary[]>([]);
+  const [runDetails, setRunDetails] = useState<Record<string, any>>({});
   const [poseSets, setPoseSets] = useState<StudioPoseSetSummary[]>([]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null);
@@ -340,20 +554,38 @@ export default function StudioPortfolioPageClient() {
   const [creatingSession, setCreatingSession] = useState(false);
   const [creatingRun, setCreatingRun] = useState(false);
   const [launchingRunId, setLaunchingRunId] = useState<string | null>(null);
+  const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
+  const [addingVersionId, setAddingVersionId] = useState<string | null>(null);
+  const [selectedRunFilter, setSelectedRunFilter] = useState('');
+  const [selectedPoseSetFilter, setSelectedPoseSetFilter] = useState('');
+  const [selectedReviewStateFilter, setSelectedReviewStateFilter] = useState('');
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [collectionDetail, setCollectionDetail] = useState<CollectionDetailState>(null);
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  const [savingCollection, setSavingCollection] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setLegacyMode(new URLSearchParams(window.location.search).get('legacy') === '1');
-    }
-  }, []);
-
   const selectedPortfolio = useMemo(() => portfolios.find((portfolio) => portfolio.id === selectedPortfolioId) ?? null, [portfolios, selectedPortfolioId]);
   const selectedSession = useMemo(() => sessions.find((session) => session.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
+
+  const contactSheetItems = useMemo<ContactSheetItem[]>(() => {
+    return runs.flatMap((run) => {
+      const detail = runDetails[run.id];
+      const shots = new Map((Array.isArray(detail?.shots) ? detail.shots : []).map((shot: any) => [shot.id, shot]));
+      return (Array.isArray(detail?.versions) ? detail.versions : []).map((version: StudioSessionShotVersionSummary) => {
+        const shot = shots.get(version.shotId) as ContactSheetItem['shot'] | undefined;
+        return {
+          version,
+          run,
+          shot: shot ?? { id: version.shotId, label: 'Shot', category: '', slotIndex: 0, currentRevisionId: version.revisionId },
+        };
+      });
+    });
+  }, [runDetails, runs]);
 
   const fetchCharacters = useCallback(async () => {
     setLoadingCharacters(true);
@@ -408,6 +640,7 @@ export default function StudioPortfolioPageClient() {
       setSessions(nextSessions);
       setCollections(nextCollections);
       setSelectedSessionId((current) => current && nextSessions.some((session) => session.id === current) ? current : nextSessions[0]?.id ?? null);
+      setSelectedCollectionId((current) => current && nextCollections.some((collection) => collection.id === current) ? current : nextCollections[0]?.id ?? null);
     } catch (fetchError) {
       setError(toErrorMessage(fetchError, 'Failed to fetch portfolio detail'));
     }
@@ -425,30 +658,72 @@ export default function StudioPortfolioPageClient() {
     }
   }, []);
 
+  const fetchRunDetails = useCallback(async (nextRuns: StudioSessionRunSummary[]) => {
+    if (nextRuns.length === 0) {
+      setRunDetails({});
+      return;
+    }
+    try {
+      const entries = await Promise.all(nextRuns.map(async (run) => {
+        const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch run detail');
+        return [run.id, data] as const;
+      }));
+      setRunDetails(Object.fromEntries(entries));
+    } catch (fetchError) {
+      setError(toErrorMessage(fetchError, 'Failed to fetch run detail'));
+    }
+  }, []);
+
+  const fetchCollectionDetail = useCallback(async (collectionId: string) => {
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/collections/${encodeURIComponent(collectionId)}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch collection detail');
+      setCollectionDetail({ collection: data.collection, items: Array.isArray(data.items) ? data.items : [] });
+    } catch (fetchError) {
+      setError(toErrorMessage(fetchError, 'Failed to fetch collection detail'));
+    }
+  }, []);
+
   useEffect(() => {
-    if (!activeWorkspaceId || legacyMode) return;
+    if (!activeWorkspaceId) return;
     fetchPortfolios(activeWorkspaceId);
     fetchCharacters();
     fetchPoseSets();
-  }, [activeWorkspaceId, fetchCharacters, fetchPortfolios, fetchPoseSets, legacyMode]);
+  }, [activeWorkspaceId, fetchCharacters, fetchPortfolios, fetchPoseSets]);
 
   useEffect(() => {
-    if (!selectedPortfolioId || legacyMode) {
+    if (!selectedPortfolioId) {
       setSessions([]);
       setCollections([]);
       setRuns([]);
       return;
     }
     fetchPortfolioDetail(selectedPortfolioId);
-  }, [fetchPortfolioDetail, legacyMode, selectedPortfolioId]);
+  }, [fetchPortfolioDetail, selectedPortfolioId]);
 
   useEffect(() => {
-    if (!selectedSessionId || legacyMode) {
+    if (!selectedSessionId) {
       setRuns([]);
       return;
     }
     fetchSessionDetail(selectedSessionId);
-  }, [fetchSessionDetail, legacyMode, selectedSessionId]);
+  }, [fetchSessionDetail, selectedSessionId]);
+
+  useEffect(() => {
+    fetchRunDetails(runs);
+  }, [fetchRunDetails, runs]);
+
+  useEffect(() => {
+    if (!selectedCollectionId) {
+      setCollectionDetail(null);
+      return;
+    }
+    fetchCollectionDetail(selectedCollectionId);
+  }, [fetchCollectionDetail, selectedCollectionId]);
 
   const createPortfolio = async (character: CharacterSummary) => {
     if (!activeWorkspaceId) return;
@@ -555,16 +830,106 @@ export default function StudioPortfolioPageClient() {
     }
   };
 
-  if (legacyMode) {
-    return (
-      <div className="space-y-4">
-        <Button variant="outline" className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]" onClick={() => setLegacyMode(false)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to portfolio Studio
-        </Button>
-        <StudioSessionsPageClient />
-      </div>
-    );
-  }
+  const reviewVersion = async (versionId: string, reviewState: StudioSessionShotVersionSummary['reviewState']) => {
+    setReviewingVersionId(versionId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/versions/${encodeURIComponent(versionId)}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewState }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to review version');
+      setRunDetails((current) => Object.fromEntries(Object.entries(current).map(([runId, detail]: [string, any]) => [
+        runId,
+        { ...detail, versions: Array.isArray(detail?.versions) ? detail.versions.map((version: StudioSessionShotVersionSummary) => version.id === versionId ? data.version : version) : [] },
+      ])));
+      setMessage(`Marked as ${reviewState.replace(/_/g, ' ')}.`);
+    } catch (reviewError) {
+      setError(toErrorMessage(reviewError, 'Failed to review version'));
+    } finally {
+      setReviewingVersionId(null);
+    }
+  };
+
+  const createCollection = async () => {
+    if (!selectedPortfolioId) return;
+    setCreatingCollection(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/portfolios/${encodeURIComponent(selectedPortfolioId)}/collections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'New collection' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to create collection');
+      setMessage('Collection created.');
+      await fetchPortfolioDetail(selectedPortfolioId);
+      setSelectedCollectionId(data.collection.id);
+    } catch (createError) {
+      setError(toErrorMessage(createError, 'Failed to create collection'));
+    } finally {
+      setCreatingCollection(false);
+    }
+  };
+
+  const saveCollection = async (collectionId: string, draft: Partial<StudioCollectionSummary>) => {
+    setSavingCollection(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/collections/${encodeURIComponent(collectionId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: draft.name, description: draft.description, status: draft.status }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to save collection');
+      setMessage('Collection saved.');
+      if (selectedPortfolioId) await fetchPortfolioDetail(selectedPortfolioId);
+      await fetchCollectionDetail(collectionId);
+    } catch (saveError) {
+      setError(toErrorMessage(saveError, 'Failed to save collection'));
+    } finally {
+      setSavingCollection(false);
+    }
+  };
+
+  const addVersionToCollection = async (versionId: string, collectionId: string) => {
+    setAddingVersionId(versionId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/collections/${encodeURIComponent(collectionId)}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to add to collection');
+      setMessage('Added to collection.');
+      if (selectedPortfolioId) await fetchPortfolioDetail(selectedPortfolioId);
+      await fetchCollectionDetail(collectionId);
+    } catch (addError) {
+      setError(toErrorMessage(addError, 'Failed to add to collection'));
+    } finally {
+      setAddingVersionId(null);
+    }
+  };
+
+  const removeCollectionItem = async (collectionId: string, itemId: string) => {
+    setError(null);
+    try {
+      const response = await fetch(`/api/studio/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(itemId)}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to remove item');
+      setMessage('Collection item removed.');
+      if (selectedPortfolioId) await fetchPortfolioDetail(selectedPortfolioId);
+      await fetchCollectionDetail(collectionId);
+    } catch (removeError) {
+      setError(toErrorMessage(removeError, 'Failed to remove item'));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0f0f11] p-6 text-white">
@@ -573,16 +938,13 @@ export default function StudioPortfolioPageClient() {
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-white/35">Studio</div>
             <h1 className="mt-1 text-2xl font-semibold text-white">Character Portfolios</h1>
-            <p className="mt-1 max-w-2xl text-sm text-white/50">Portfolio → Photo Sessions → Runs → Results → Collections. Templates are now a legacy/preset concept, not the primary flow.</p>
+            <p className="mt-1 max-w-2xl text-sm text-white/50">Portfolio → Photo Sessions → Runs → Results → Collections. Studio is now a portfolio-first product flow.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]" onClick={() => activeWorkspaceId && fetchPortfolios(activeWorkspaceId)} disabled={!activeWorkspaceId || loading}>
               <RefreshCw className="mr-2 h-4 w-4" /> Refresh
             </Button>
-            <Button variant="outline" className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]" onClick={() => setLegacyMode(true)}>
-              <Settings className="mr-2 h-4 w-4" /> Legacy templates
-            </Button>
-            <Button className="bg-blue-500 text-white hover:bg-blue-400" onClick={() => setShowCreatePortfolio(true)} disabled={!activeWorkspaceId}>
+                <Button className="bg-blue-500 text-white hover:bg-blue-400" onClick={() => setShowCreatePortfolio(true)} disabled={!activeWorkspaceId}>
               <Plus className="mr-2 h-4 w-4" /> New portfolio
             </Button>
           </div>
@@ -662,22 +1024,37 @@ export default function StudioPortfolioPageClient() {
                               {runs.map((run) => <RunCard key={run.id} run={run} launching={launchingRunId === run.id} onLaunch={() => launchRun(run.id)} />)}
                             </CardContent>
                           </Card>
+                          <ContactSheet
+                            items={contactSheetItems}
+                            runs={runs}
+                            collections={collections}
+                            selectedRunId={selectedRunFilter}
+                            selectedPoseSetId={selectedPoseSetFilter}
+                            selectedReviewState={selectedReviewStateFilter}
+                            reviewingVersionId={reviewingVersionId}
+                            addingVersionId={addingVersionId}
+                            onRunFilterChange={setSelectedRunFilter}
+                            onPoseSetFilterChange={setSelectedPoseSetFilter}
+                            onReviewStateFilterChange={setSelectedReviewStateFilter}
+                            onReview={reviewVersion}
+                            onAddToCollection={addVersionToCollection}
+                          />
                         </>
                       ) : null}
                     </div>
                   </TabsContent>
 
                   <TabsContent value="collections" className="mt-0">
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {collections.length === 0 ? <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-white/45">Collections will collect final picks across sessions.</div> : null}
-                      {collections.map((collection) => (
-                        <div key={collection.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                          <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><FolderPlus className="h-4 w-4 text-white/50" /> {collection.name}</div>
-                          <p className="line-clamp-2 text-xs text-white/50">{collection.description || 'Final set collection.'}</p>
-                          <div className="mt-3"><StatPill label="items" value={collection.itemCount} /></div>
-                        </div>
-                      ))}
-                    </div>
+                    <CollectionsPanel
+                      collections={collections}
+                      detail={collectionDetail}
+                      creating={creatingCollection}
+                      saving={savingCollection}
+                      onCreate={createCollection}
+                      onSelect={setSelectedCollectionId}
+                      onSave={saveCollection}
+                      onRemoveItem={removeCollectionItem}
+                    />
                   </TabsContent>
 
                   <TabsContent value="character" className="mt-0">
