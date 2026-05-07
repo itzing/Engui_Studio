@@ -129,6 +129,28 @@ function formatDuration(ms: number | null | undefined) {
   return `${seconds}s`;
 }
 
+function readStoredValue(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredValue(key: string, value: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value === null) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    // ignore storage failures
+  }
+}
+
 function buildShotPromptPreview(revision: StudioSessionShotRevisionSummary | undefined) {
   if (!revision) return '';
   const pieces = revision.assembledPromptSnapshot?.pieces;
@@ -146,6 +168,7 @@ function buildShotPromptPreview(revision: StudioSessionShotRevisionSummary | und
 }
 
 function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: string | null; onRunCreated: () => void; onOpenRuns: () => void; }) {
+  const templateSelectionStorageKey = workspaceId ? `studioSessions:selectedTemplate:${workspaceId}` : null;
   const [templates, setTemplates] = useState<StudioSessionTemplateSummary[]>([]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -225,8 +248,13 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch Studio Session templates');
       const nextTemplates = Array.isArray(data.templates) ? data.templates as StudioSessionTemplateSummary[] : [];
+      const storedTemplateId = templateSelectionStorageKey ? readStoredValue(templateSelectionStorageKey) : null;
       setTemplates(nextTemplates);
-      setSelectedTemplateId((current) => current && nextTemplates.some((template) => template.id === current) ? current : nextTemplates[0]?.id ?? null);
+      setSelectedTemplateId((current) => {
+        if (current && nextTemplates.some((template) => template.id === current)) return current;
+        if (storedTemplateId && nextTemplates.some((template) => template.id === storedTemplateId)) return storedTemplateId;
+        return nextTemplates[0]?.id ?? null;
+      });
     } catch (error) {
       setTemplates([]);
       setSelectedTemplateId(null);
@@ -299,6 +327,11 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
     void fetchTemplates(workspaceId);
     void fetchCharacters();
   }, [fetchCharacters, fetchTemplates, workspaceId]);
+
+  useEffect(() => {
+    if (!templateSelectionStorageKey) return;
+    writeStoredValue(templateSelectionStorageKey, selectedTemplateId);
+  }, [selectedTemplateId, templateSelectionStorageKey]);
 
   useEffect(() => {
     if (currentStudioModel?.parameters.some((param) => param.type === 'lora-selector')) {
@@ -634,6 +667,7 @@ function TemplatesTab({ workspaceId, onRunCreated, onOpenRuns }: { workspaceId: 
 }
 
 function RunsTab({ workspaceId }: { workspaceId: string | null }) {
+  const runSelectionStorageKey = workspaceId ? `studioSessions:selectedRun:${workspaceId}` : null;
   const [runs, setRuns] = useState<StudioSessionRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<StudioSessionRunDetailSummary | null>(null);
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
@@ -668,10 +702,18 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch runs');
       const nextRuns = Array.isArray(data.runs) ? data.runs as StudioSessionRunSummary[] : [];
+      const storedRunId = runSelectionStorageKey ? readStoredValue(runSelectionStorageKey) : null;
       setRuns(nextRuns);
-      setSelectedRun((current) => current && nextRuns.some((run) => run.id === current.id)
-        ? { ...current, ...nextRuns.find((run) => run.id === current.id)! }
-        : (nextRuns[0] ? nextRuns[0] as StudioSessionRunDetailSummary : null));
+      setSelectedRun((current) => {
+        if (current && nextRuns.some((run) => run.id === current.id)) {
+          return { ...current, ...nextRuns.find((run) => run.id === current.id)! };
+        }
+        if (storedRunId) {
+          const storedRun = nextRuns.find((run) => run.id === storedRunId);
+          if (storedRun) return storedRun as StudioSessionRunDetailSummary;
+        }
+        return nextRuns[0] ? nextRuns[0] as StudioSessionRunDetailSummary : null;
+      });
     } catch (error) {
       setRuns([]);
       setSelectedRun(null);
@@ -967,6 +1009,11 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
     }
     void fetchRuns();
   }, [fetchRuns, workspaceId]);
+
+  useEffect(() => {
+    if (!runSelectionStorageKey) return;
+    writeStoredValue(runSelectionStorageKey, selectedRun?.id ?? null);
+  }, [runSelectionStorageKey, selectedRun?.id]);
 
   useEffect(() => {
     if (selectedRun?.id) void fetchRunDetail(selectedRun.id);
@@ -1308,9 +1355,16 @@ function RunsTab({ workspaceId }: { workspaceId: string | null }) {
 
 export default function StudioSessionsPageClient() {
   const { activeWorkspaceId, workspaces } = useStudio();
-  const [tab, setTab] = useState<'templates' | 'runs'>('templates');
+  const [tab, setTab] = useState<'templates' | 'runs'>(() => {
+    const storedTab = readStoredValue('studioSessions:activeTab');
+    return storedTab === 'runs' ? 'runs' : 'templates';
+  });
   const effectiveWorkspaceId = useMemo(() => activeWorkspaceId || workspaces[0]?.id || null, [activeWorkspaceId, workspaces]);
   const [runsRefreshToken, setRunsRefreshToken] = useState(0);
+
+  useEffect(() => {
+    writeStoredValue('studioSessions:activeTab', tab);
+  }, [tab]);
 
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background text-white">
