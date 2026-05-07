@@ -220,6 +220,16 @@ export async function updateStudioPhotoSession(sessionId: string, input: Record<
   return toStudioPhotoSessionSummary(session);
 }
 
+export async function deleteStudioPhotoSession(sessionId: string) {
+  const existing = await prisma.studioPhotoSession.findUnique({ where: { id: sessionId }, select: { id: true } });
+  if (!existing) return null;
+  await prisma.$transaction(async (tx) => {
+    await tx.studioSessionRun.deleteMany({ where: { photoSessionId: sessionId } });
+    await tx.studioPhotoSession.delete({ where: { id: sessionId } });
+  });
+  return { id: sessionId };
+}
+
 export async function listStudioPhotoSessionRuns(photoSessionId: string) {
   const runs = await prisma.studioSessionRun.findMany({
     where: { photoSessionId },
