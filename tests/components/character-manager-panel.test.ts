@@ -146,6 +146,60 @@ describe('CharacterManagerPanel gender behavior', () => {
     });
   });
 
+
+  it('lets users edit age in the basics UI and saves it as a character trait', async () => {
+    const character = {
+      id: 'character-1',
+      name: 'Mira',
+      gender: 'female',
+      traits: { hair_color: 'silver' },
+      editorState: {},
+      previewState: buildPreviewState(),
+      primaryPreviewImageUrl: null,
+      primaryPreviewThumbnailUrl: null,
+      currentVersionId: 'version-1',
+      previewStatusSummary: null,
+      createdAt: '2026-04-26T00:00:00.000Z',
+      updatedAt: '2026-04-26T00:00:00.000Z',
+      deletedAt: null,
+      versionCount: 1,
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (method === 'GET' && url.includes('/api/characters?includeDeleted=true')) {
+        return jsonResponse({ success: true, characters: [character] });
+      }
+      if (method === 'GET' && url.endsWith('/api/characters/character-1/versions')) {
+        return jsonResponse({ success: true, versions: [] });
+      }
+      if (method === 'PUT' && url.endsWith('/api/characters/character-1')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body.traits.age).toBe('25');
+        return jsonResponse({ success: true, character: { ...character, traits: { ...character.traits, age: '25' } }, persisted: true });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(CharacterManagerPanel));
+
+    await waitFor(() => {
+      expect(screen.getByText('Not set')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    fireEvent.change(screen.getByTestId('character-manager-age-input'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('Character version saved', 'success');
+    });
+  });
+
   it('queues a portrait preview from the saved character record', async () => {
     const character = {
       id: 'character-1',

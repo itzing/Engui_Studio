@@ -22,6 +22,7 @@ export const characterTraitGroups: CharacterTraitGroup[] = [
 ];
 
 export const characterTraitDefinitions: CharacterTraitDefinition[] = [
+  { key: 'age', label: 'Age', group: 'identity', volatility: 'core' },
   { key: 'ethnicity', label: 'Ethnicity', group: 'identity', volatility: 'core' },
   { key: 'skin_tone', label: 'Skin tone', group: 'identity', volatility: 'core' },
   { key: 'undertone', label: 'Undertone', group: 'identity', volatility: 'core' },

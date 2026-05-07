@@ -115,7 +115,7 @@ export function serializeSceneTags(input: unknown): string {
 
 export function buildCharacterPromptFromSummary(
   character: CharacterSummary | null | undefined,
-  options: { includeName?: boolean; includeGender?: boolean } = {},
+  options: { includeName?: boolean; includeGender?: boolean; excludeTraitKeys?: string[] } = {},
 ): string {
   if (!character) return '';
 
@@ -127,8 +127,9 @@ export function buildCharacterPromptFromSummary(
     parts.push(character.gender.trim());
   }
 
+  const excludedTraitKeys = new Set(options.excludeTraitKeys || []);
   const traitParts = Object.entries(character.traits)
-    .filter(([, value]) => typeof value === 'string' && value.trim())
+    .filter(([key, value]) => !excludedTraitKeys.has(key) && typeof value === 'string' && value.trim())
     .map(([key, value]) => {
       const definition = characterTraitDefinitionMap.get(key);
       return definition ? `${definition.label}: ${value.trim()}` : `${key}: ${value.trim()}`;

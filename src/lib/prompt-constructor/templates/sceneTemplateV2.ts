@@ -90,7 +90,7 @@ export function createInitialSceneTemplateState(): SceneTemplateState {
   };
 }
 
-function formatCharacterAge(value: string): string {
+export function formatCharacterAge(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return '';
   const match = trimmed.match(/\d+/);
@@ -98,7 +98,7 @@ function formatCharacterAge(value: string): string {
   return `${match[0]}yo`;
 }
 
-function resolveRenderedGender(value: string, ageValue: string): string {
+export function resolveRenderedGender(value: string, ageValue: string): string {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return '';
   const ageMatch = ageValue.trim().match(/\d+/);

@@ -727,6 +727,7 @@ export default function CharacterManagerPanel() {
     setModalValues({
       name: draft.name,
       gender: normalizeCharacterGender(draft.gender, 'female') || 'female',
+      age: draft.traits.age || '',
     });
     setModalState({ kind: 'basics' });
   };
@@ -751,10 +752,19 @@ export default function CharacterManagerPanel() {
     if (!draft) return;
 
     if (modalState.kind === 'basics') {
+      const nextTraits = { ...draft.traits };
+      const nextAge = (modalValues.age || '').trim();
+      if (nextAge) {
+        nextTraits.age = nextAge;
+      } else {
+        delete nextTraits.age;
+      }
+
       setDraft({
         ...draft,
         name: (modalValues.name || '').trim(),
         gender: normalizeCharacterGender(modalValues.gender, 'female') || 'female',
+        traits: nextTraits,
       });
       closeModal();
       return;
@@ -1526,7 +1536,7 @@ export default function CharacterManagerPanel() {
                   Edit
                 </Button>
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Name</div>
                   <div className="mt-1 text-xs font-medium break-words">{draft.name || 'Required before first save'}</div>
@@ -1534,6 +1544,10 @@ export default function CharacterManagerPanel() {
                 <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Gender</div>
                   <div className="mt-1 text-xs font-medium break-words">{renderGenderLabel(draft.gender)}</div>
+                </div>
+                <div className="rounded-md bg-background/70 px-3 py-2">
+                  <div className="text-[10px] text-muted-foreground">Age</div>
+                  <div className="mt-1 text-xs font-medium break-words">{draft.traits.age || 'Not set'}</div>
                 </div>
                 <div className="rounded-md bg-background/70 px-3 py-2">
                   <div className="text-[10px] text-muted-foreground">Draft status</div>
@@ -1826,6 +1840,16 @@ export default function CharacterManagerPanel() {
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium">Name</div>
                   <Input value={modalValues.name || ''} onChange={(event) => setModalValues((prev) => ({ ...prev, name: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium">Age</div>
+                  <Input
+                    value={modalValues.age || ''}
+                    onChange={(event) => setModalValues((prev) => ({ ...prev, age: event.target.value }))}
+                    placeholder="e.g. 25"
+                    data-testid="character-manager-age-input"
+                  />
+                  <div className="text-[10px] text-muted-foreground">Rendered in previews like Prompt Constructor: 25 becomes 25yo.</div>
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium">Gender</div>
