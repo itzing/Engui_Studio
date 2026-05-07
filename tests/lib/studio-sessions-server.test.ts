@@ -15,8 +15,9 @@ const {
     studioSessionRun: { findUnique: vi.fn(), update: vi.fn() },
     studioSessionShot: { createMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
+    studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
-    job: { findUnique: vi.fn() },
+    job: { findUnique: vi.fn(), findMany: vi.fn() },
   },
   mockQueueGalleryDerivatives: vi.fn(),
   mockQueueGalleryEnrichment: vi.fn(),
@@ -48,6 +49,7 @@ import {
   addStudioSessionShotVersionToGallery,
   createStudioSessionRun,
   materializeStudioSessionCompletedJob,
+  recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
 } from '@/lib/studio-sessions/server';
 
@@ -69,6 +71,9 @@ describe('studio session server', () => {
         { skipped: false, status: 'completed', selectionVersionId: 'version-1', category: 'standing', slotIndex: 0 },
       ],
     }));
+    mockPrisma.studioSessionJobMaterialization.upsert.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'pending' });
+    mockPrisma.studioSessionJobMaterialization.update.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'materialized' });
+    mockPrisma.studioSessionJobMaterialization.findMany.mockResolvedValue([]);
   });
 
   it('creates runs from a template snapshot without depending on future template edits', async () => {
@@ -174,12 +179,53 @@ describe('studio session server', () => {
 
     const result = await materializeStudioSessionCompletedJob('job-1');
 
+    expect(mockPrisma.studioSessionJobMaterialization.upsert).toHaveBeenCalledTimes(1);
     expect(mockPrisma.studioSessionShotVersion.create).toHaveBeenCalledTimes(1);
     expect(mockPrisma.studioSessionShot.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'shot-1' },
       data: expect.objectContaining({ selectionVersionId: 'version-1', status: 'completed' }),
     }));
     expect(result).toEqual({ id: 'version-1' });
+  });
+
+  it('backfills missing materialization tasks and retries completed Studio Session jobs', async () => {
+    mockPrisma.job.findMany.mockResolvedValue([
+      {
+        id: 'job-1',
+        status: 'completed',
+        resultUrl: '/generations/output.png',
+        thumbnailUrl: '/generations/thumb.webp',
+        prompt: 'prompt',
+        modelId: 'z-image',
+        endpointId: 'endpoint-1',
+        createdAt: new Date('2026-05-07T08:00:00Z'),
+        options: JSON.stringify({ studioSessionContext: { workspaceId: 'workspace-1', runId: 'run-1', shotId: 'shot-1', revisionId: 'revision-1' } }),
+      },
+    ]);
+    mockPrisma.studioSessionJobMaterialization.findMany.mockResolvedValue([
+      { id: 'task-1', jobId: 'job-1', shotId: 'shot-1', status: 'pending', updatedAt: new Date('2026-05-07T08:01:00Z') },
+    ]);
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'completed',
+      resultUrl: '/generations/output.png',
+      thumbnailUrl: '/generations/thumb.webp',
+      prompt: 'prompt',
+      modelId: 'z-image',
+      endpointId: 'endpoint-1',
+      options: JSON.stringify({ studioSessionContext: { workspaceId: 'workspace-1', runId: 'run-1', shotId: 'shot-1', revisionId: 'revision-1' } }),
+    });
+    mockPrisma.studioSessionShot.findUnique.mockResolvedValue({ id: 'shot-1', runId: 'run-1', selectionVersionId: null });
+    mockPrisma.studioSessionShotVersion.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    mockPrisma.studioSessionShotVersion.create.mockResolvedValue({ id: 'version-1' });
+    mockExistsSync.mockReturnValue(true);
+
+    await recoverStudioSessionMaterializationTasks({ runId: 'run-1', limit: 10 });
+
+    expect(mockPrisma.studioSessionJobMaterialization.upsert).toHaveBeenCalled();
+    expect(mockPrisma.studioSessionShotVersion.create).toHaveBeenCalledTimes(1);
   });
 
   it('restores skipped shots back into ordinary review logic without losing history', async () => {

@@ -42,6 +42,7 @@ model Job {
   // 관계 설정
   workspace     Workspace? @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
   studioSessionShotVersions StudioSessionShotVersion[]
+  studioSessionMaterializationTask StudioSessionJobMaterialization?
 
   @@index([userId, createdAt(sort: Desc)]) // 사용자별 최신 순 정렬을 위한 복합 인덱스
   @@index([userId, status]) // 사용자별 상태별 조회를 위한 인덱스
@@ -563,14 +564,38 @@ model StudioSessionShotVersion {
   updatedAt                    DateTime                  @updatedAt
 
   workspace                    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  shot                         StudioSessionShot        @relation("StudioSessionShotVersions", fields: [shotId], references: [id], onDelete: Cascade)
+  shot                         StudioSessionShot         @relation("StudioSessionShotVersions", fields: [shotId], references: [id], onDelete: Cascade)
   revision                     StudioSessionShotRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
   sourceJob                    Job?                      @relation(fields: [sourceJobId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   selectedForShot              StudioSessionShot[]       @relation("StudioSessionShotSelectedVersion")
 
   @@unique([revisionId, versionNumber])
+  @@unique([sourceJobId])
   @@index([workspaceId, shotId, createdAt(sort: Desc)])
   @@index([workspaceId, hidden, rejected, createdAt(sort: Desc)])
   @@index([sourceJobId])
   @@map("studio_session_shot_versions")
+}
+
+model StudioSessionJobMaterialization {
+  id               String   @id @default(uuid())
+  jobId            String   @unique
+  workspaceId      String
+  runId            String
+  shotId           String
+  revisionId       String
+  status           String   @default("pending")
+  attemptCount     Int      @default(0)
+  lastAttemptAt    DateTime?
+  materializedAt   DateTime?
+  lastError        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([runId, status, updatedAt(sort: Desc)])
+  @@index([shotId, status, updatedAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
+  @@map("studio_session_job_materializations")
 }

@@ -120,6 +120,9 @@ export interface StudioSessionShotSummary {
   latestJobExecutionMs?: number | null;
   latestJobCreatedAt?: string | null;
   latestJobCompletedAt?: string | null;
+  materializationStatus?: 'pending' | 'processing' | 'materialized' | 'failed' | null;
+  materializationError?: string | null;
+  materializationUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -12,6 +12,7 @@ const {
   mockBuildAttemptPaths,
   mockBuildOutputFileName,
   mockStartRunPodSupervisor,
+  mockEnsureStudioSessionMaterializationTaskForJob,
   mockUuid,
   mockGetModelById,
 } = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const {
   mockBuildAttemptPaths: vi.fn(),
   mockBuildOutputFileName: vi.fn(),
   mockStartRunPodSupervisor: vi.fn(),
+  mockEnsureStudioSessionMaterializationTaskForJob: vi.fn(),
   mockUuid: vi.fn(),
   mockGetModelById: vi.fn(),
 }));
@@ -85,6 +87,10 @@ vi.mock('@/lib/runpodSupervisor', () => ({
   startRunPodSupervisor: mockStartRunPodSupervisor,
 }));
 
+vi.mock('@/lib/studio-sessions/server', () => ({
+  ensureStudioSessionMaterializationTaskForJob: mockEnsureStudioSessionMaterializationTaskForJob,
+}));
+
 vi.mock('@/lib/apiMessages', () => ({
   getApiMessage: vi.fn((group: string, code: string) => `${group}:${code}`),
 }));
@@ -126,6 +132,8 @@ describe('POST /api/generate secure RunPod flow', () => {
     });
 
     mockPrisma.workspace.findFirst.mockResolvedValue({ id: 'workspace-default' });
+
+    mockEnsureStudioSessionMaterializationTaskForJob.mockResolvedValue(null);
 
     mockPrisma.job.create.mockImplementation(async ({ data }: any) => ({
       id: data.id,

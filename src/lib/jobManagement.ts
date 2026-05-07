@@ -93,6 +93,38 @@ async function isUrlReferencedByGallery(url: string): Promise<boolean> {
   return count > 0;
 }
 
+async function isUrlReferencedByStudioSessionVersion(url: string): Promise<boolean> {
+  const count = await prisma.studioSessionShotVersion.count({
+    where: {
+      OR: [
+        { originalUrl: url },
+        { previewUrl: url },
+        { thumbnailUrl: url },
+      ],
+    },
+  });
+
+  return count > 0;
+}
+
+async function assertStudioSessionJobDeletionAllowed(job: any): Promise<void> {
+  const options = parseJobOptions(job.options);
+  const context = options.studioSessionContext && typeof options.studioSessionContext === 'object'
+    ? options.studioSessionContext as Record<string, unknown>
+    : null;
+  if (!context?.shotId) return;
+
+  if (String(job.status || '').toLowerCase() !== 'completed') return;
+
+  const task = await prisma.studioSessionJobMaterialization.findUnique({
+    where: { jobId: job.id },
+  });
+
+  if (!task || task.status !== 'materialized') {
+    throw new Error('Cannot delete Studio Session job before materialization finishes');
+  }
+}
+
 export async function cleanupJobArtifacts(job: any): Promise<{ deletedFiles: string[]; keptFiles: string[] }> {
   const urls = collectJobArtifactUrls(job);
   const deletedFiles: string[] = [];
@@ -105,7 +137,7 @@ export async function cleanupJobArtifacts(job: any): Promise<{ deletedFiles: str
       continue;
     }
 
-    if (await isUrlReferencedByGallery(url)) {
+    if (await isUrlReferencedByGallery(url) || await isUrlReferencedByStudioSessionVersion(url)) {
       keptFiles.push(url);
       continue;
     }
@@ -201,6 +233,8 @@ export async function deleteFinishedJob(job: any) {
   if (!FINISHED_JOB_STATUSES.has(status)) {
     throw new Error('Cannot delete active job, cancel it first');
   }
+
+  await assertStudioSessionJobDeletionAllowed(job);
 
   const cleanup = await cleanupJobArtifacts(job);
   await prisma.job.delete({ where: { id: job.id } });

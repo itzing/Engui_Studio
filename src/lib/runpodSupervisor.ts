@@ -9,7 +9,7 @@ import { getModelById } from '@/lib/models/modelConfig';
 import { decodeMasterKey, downloadAndDecryptResultMedia, storagePathToS3Key } from '@/lib/secureTransport';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 import { maybeAutoSaveUpscaleResult } from '@/lib/upscaleAutoSave';
-import { materializeStudioSessionCompletedJob } from '@/lib/studio-sessions/server';
+import { materializeStudioSessionCompletedJob, recoverStudioSessionMaterializationTasks } from '@/lib/studio-sessions/server';
 
 const settingsService = new SettingsService();
 const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
@@ -1051,6 +1051,12 @@ export async function processRunPodJobsOnce() {
         error,
       });
     }
+  }
+
+  try {
+    await recoverStudioSessionMaterializationTasks({ limit: 200 });
+  } catch (error) {
+    console.error('RunPod supervisor failed Studio Session materialization recovery sweep', error);
   }
 }
 

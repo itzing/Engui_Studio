@@ -7,6 +7,8 @@ const {
   mockDeleteFile,
   mockDownloadAndDecryptResultMedia,
   mockMaybeGenerateJobThumbnail,
+  mockMaterializeStudioSessionCompletedJob,
+  mockRecoverStudioSessionMaterializationTasks,
   mockExistsSync,
   mockMkdirSync,
   mockWriteFileSync,
@@ -22,6 +24,8 @@ const {
   mockDeleteFile: vi.fn(),
   mockDownloadAndDecryptResultMedia: vi.fn(),
   mockMaybeGenerateJobThumbnail: vi.fn(),
+  mockMaterializeStudioSessionCompletedJob: vi.fn(),
+  mockRecoverStudioSessionMaterializationTasks: vi.fn(),
   mockExistsSync: vi.fn(() => true),
   mockMkdirSync: vi.fn(),
   mockWriteFileSync: vi.fn(),
@@ -69,6 +73,11 @@ vi.mock('@/lib/jobPreviewDerivatives', () => ({
   maybeGenerateJobThumbnail: mockMaybeGenerateJobThumbnail,
 }));
 
+vi.mock('@/lib/studio-sessions/server', () => ({
+  materializeStudioSessionCompletedJob: mockMaterializeStudioSessionCompletedJob,
+  recoverStudioSessionMaterializationTasks: mockRecoverStudioSessionMaterializationTasks,
+}));
+
 vi.mock('fs', () => ({
   default: {
     existsSync: mockExistsSync,
@@ -86,6 +95,8 @@ describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMaybeGenerateJobThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
+    mockMaterializeStudioSessionCompletedJob.mockResolvedValue(null);
+    mockRecoverStudioSessionMaterializationTasks.mockResolvedValue(undefined);
     mockGetSettings.mockResolvedValue({
       settings: {
         runpod: {

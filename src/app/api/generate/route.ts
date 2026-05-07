@@ -15,6 +15,7 @@ import { getModelById } from '@/lib/models/modelConfig';
 import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 import { v4 as uuidv4 } from 'uuid';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
+import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -425,6 +426,10 @@ export async function POST(request: NextRequest) {
 
         // Create job in database with media input paths
         const jobId = (formData.get('jobId') as string) || uuidv4();
+        const persistedOptions = JSON.stringify(buildPersistedOptions(parameters, inputData, {
+            randomizeSeed,
+            studioSessionContext,
+        }));
         const job = await prisma.job.create({
             data: {
                 id: jobId,
@@ -437,16 +442,20 @@ export async function POST(request: NextRequest) {
                 sceneSnapshotJson: sceneSnapshot ? JSON.stringify(sceneSnapshot) : null,
                 sourcePromptDocumentId: sourcePromptDocumentId || sceneSnapshot?.sourceDocumentId || null,
                 sourcePromptDocumentTitle: sourcePromptDocumentTitle || sceneSnapshot?.sourceDocumentTitle || null,
-                options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
-                    randomizeSeed,
-                    studioSessionContext,
-                })),
+                options: persistedOptions,
                 imageInputPath: imageInputPath || null,
                 videoInputPath: videoInputPath || null,
                 audioInputPath: audioInputPath || null,
                 createdAt: new Date(),
             } as any, // Prisma client type may be out of sync
         });
+
+        if (studioSessionContext) {
+            await ensureStudioSessionMaterializationTaskForJob({
+                jobId: job.id,
+                options: persistedOptions,
+            });
+        }
 
         console.log('Created job record', {
             jobId: job.id,

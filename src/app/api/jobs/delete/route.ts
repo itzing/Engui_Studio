@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
+import { FINISHED_JOB_STATUSES, deleteFinishedJob } from '@/lib/jobManagement';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +23,15 @@ export async function DELETE(request: NextRequest) {
 
     const status = String(job.status || '').toLowerCase();
     const shouldCancelRemote = RUNNING_STATUSES.has(status);
+
+    if (FINISHED_JOB_STATUSES.has(status)) {
+      const result = await deleteFinishedJob(job);
+      return NextResponse.json({
+        success: true,
+        message: 'Job deleted locally',
+        ...result,
+      });
+    }
 
     if (shouldCancelRemote) {
       const settingsService = new SettingsService();
@@ -67,10 +77,11 @@ export async function DELETE(request: NextRequest) {
     console.error('Error deleting job:', error);
 
     if (error instanceof Error) {
+      const status = error.message.includes('materialization finishes') ? 409 : 500;
       return NextResponse.json({
         error: 'Failed to delete job',
         details: error.message,
-      }, { status: 500 });
+      }, { status });
     }
 
     return NextResponse.json({ error: 'Failed to delete job' }, { status: 500 });

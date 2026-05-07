@@ -27,6 +27,16 @@ import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
 import { queueGalleryEnrichment } from '@/lib/galleryEnrichment';
 import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
 
+type StudioSessionJobContext = {
+  workspaceId: string;
+  runId: string;
+  shotId: string;
+  revisionId: string;
+  templateId?: string | null;
+  label?: string | null;
+  executionMode?: string | null;
+};
+
 function parseJsonObject(value: unknown): Record<string, any> {
   if (!value) return {};
   if (typeof value === 'string') {
@@ -38,6 +48,124 @@ function parseJsonObject(value: unknown): Record<string, any> {
     }
   }
   return typeof value === 'object' ? value as Record<string, any> : {};
+}
+
+function parseStudioSessionContext(value: unknown): StudioSessionJobContext | null {
+  const root = parseJsonObject(value);
+  const context = root.studioSessionContext && typeof root.studioSessionContext === 'object'
+    ? root.studioSessionContext as Record<string, unknown>
+    : root;
+
+  const workspaceId = typeof context.workspaceId === 'string' && context.workspaceId.trim() ? context.workspaceId.trim() : null;
+  const runId = typeof context.runId === 'string' && context.runId.trim() ? context.runId.trim() : null;
+  const shotId = typeof context.shotId === 'string' && context.shotId.trim() ? context.shotId.trim() : null;
+  const revisionId = typeof context.revisionId === 'string' && context.revisionId.trim() ? context.revisionId.trim() : null;
+  if (!workspaceId || !runId || !shotId || !revisionId) return null;
+
+  return {
+    workspaceId,
+    runId,
+    shotId,
+    revisionId,
+    templateId: typeof context.templateId === 'string' && context.templateId.trim() ? context.templateId.trim() : null,
+    label: typeof context.label === 'string' && context.label.trim() ? context.label.trim() : null,
+    executionMode: typeof context.executionMode === 'string' && context.executionMode.trim() ? context.executionMode.trim() : null,
+  };
+}
+
+export async function ensureStudioSessionMaterializationTaskForJob(input: {
+  jobId: string;
+  options?: unknown;
+  context?: StudioSessionJobContext | null;
+}) {
+  const context = input.context ?? parseStudioSessionContext(input.options);
+  if (!context) return null;
+
+  return prisma.studioSessionJobMaterialization.upsert({
+    where: { jobId: input.jobId },
+    update: {
+      workspaceId: context.workspaceId,
+      runId: context.runId,
+      shotId: context.shotId,
+      revisionId: context.revisionId,
+    },
+    create: {
+      jobId: input.jobId,
+      workspaceId: context.workspaceId,
+      runId: context.runId,
+      shotId: context.shotId,
+      revisionId: context.revisionId,
+      status: 'pending',
+    },
+  });
+}
+
+async function backfillStudioSessionMaterializationTasks(input: { runId?: string; limit?: number } = {}) {
+  const jobs = await prisma.job.findMany({
+    where: {
+      AND: [
+        { options: { contains: '\"studioSessionContext\"' } },
+        ...(input.runId ? [{ options: { contains: `\"runId\":\"${input.runId}\"` } }] : []),
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: input.limit ?? 200,
+  });
+
+  for (const job of jobs) {
+    await ensureStudioSessionMaterializationTaskForJob({ jobId: job.id, options: job.options });
+  }
+}
+
+export async function recoverStudioSessionMaterializationTasks(input: { runId?: string; limit?: number } = {}) {
+  await backfillStudioSessionMaterializationTasks(input);
+
+  const tasks = await prisma.studioSessionJobMaterialization.findMany({
+    where: {
+      status: { in: ['pending', 'processing', 'failed'] },
+      ...(input.runId ? { runId: input.runId } : {}),
+    },
+    orderBy: [{ updatedAt: 'asc' }],
+    take: input.limit ?? 200,
+  });
+
+  for (const task of tasks) {
+    const job = await prisma.job.findUnique({ where: { id: task.jobId } });
+    if (!job) continue;
+
+    if (job.status === 'completed') {
+      try {
+        await materializeStudioSessionCompletedJob(job.id);
+      } catch (error) {
+        console.error('Studio Session recovery materialization failed', {
+          jobId: job.id,
+          taskId: task.id,
+          error,
+        });
+      }
+      continue;
+    }
+
+    if (job.status === 'failed') {
+      const shot = await prisma.studioSessionShot.findUnique({ where: { id: task.shotId } });
+      if (shot) {
+        await prisma.studioSessionShot.update({
+          where: { id: shot.id },
+          data: {
+            status: shot.currentRevisionId ? 'needs_review' : 'unassigned',
+          },
+        });
+      }
+
+      await prisma.studioSessionJobMaterialization.update({
+        where: { jobId: task.jobId },
+        data: {
+          status: 'failed',
+          lastError: job.error || 'Source job failed before materialization',
+        },
+      });
+    }
+  }
 }
 
 function normalizeUrlCandidate(value: unknown): string | null {
@@ -479,6 +607,8 @@ async function collectStudioSessionLatestJobs(runId: string) {
 }
 
 async function reconcileStudioSessionRunCompletedJobs(runId: string) {
+  await recoverStudioSessionMaterializationTasks({ runId, limit: 200 });
+
   const jobs = await prisma.job.findMany({
     where: {
       options: { contains: `"runId":"${runId}"` },
@@ -538,6 +668,16 @@ export async function getStudioSessionRun(runId: string) {
   });
   const exhaustedCategories = await collectRunExhaustedCategories(run, shots);
   const latestJobs = await collectStudioSessionLatestJobs(runId);
+  const materializationTasks = await prisma.studioSessionJobMaterialization.findMany({
+    where: { runId },
+    orderBy: [{ updatedAt: 'desc' }],
+  });
+  const materializationByShotId = new Map<string, typeof materializationTasks[number]>();
+  for (const task of materializationTasks) {
+    if (!materializationByShotId.has(task.shotId)) {
+      materializationByShotId.set(task.shotId, task);
+    }
+  }
   const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
   const activeJobCount = Array.from(latestJobs.values()).filter((job) => activeStatuses.has(job.status)).length;
   const totalExecutionMs = versions.reduce((sum, version) => {
@@ -565,6 +705,9 @@ export async function getStudioSessionRun(runId: string) {
         latestJobExecutionMs: latestJob?.executionMs ?? null,
         latestJobCreatedAt: latestJob?.createdAt ?? null,
         latestJobCompletedAt: latestJob?.completedAt ?? null,
+        materializationStatus: materializationByShotId.get(shot.id)?.status ?? null,
+        materializationError: materializationByShotId.get(shot.id)?.lastError ?? null,
+        materializationUpdatedAt: materializationByShotId.get(shot.id)?.updatedAt?.toISOString?.() ?? null,
       };
     }),
     revisions: revisions.map(toStudioSessionShotRevisionSummary),
@@ -1017,78 +1160,129 @@ export async function materializeStudioSessionCompletedJob(jobId: string) {
   if (!job || job.status !== 'completed') return null;
 
   const options = parseJsonObject(job.options);
-  const context = options.studioSessionContext && typeof options.studioSessionContext === 'object'
-    ? options.studioSessionContext as Record<string, any>
-    : null;
-  if (!context?.shotId || !context?.revisionId || !context?.workspaceId) return null;
+  const context = parseStudioSessionContext(options);
+  if (!context) return null;
 
-  const shot = await prisma.studioSessionShot.findUnique({ where: { id: String(context.shotId) } });
-  if (!shot) return null;
-
-  const existing = await prisma.studioSessionShotVersion.findFirst({ where: { sourceJobId: job.id } });
-  if (existing) return existing;
-
-  const outputUrl = buildJobOutputUrls(job)[0] ?? normalizeUrlCandidate(job.resultUrl);
-  if (!outputUrl) return null;
-
-  let contentHash: string | null = null;
-  let originalUrl = outputUrl;
-  const localPath = resolveLocalPathFromUrl(outputUrl);
-  if (localPath && fs.existsSync(localPath)) {
-    const bytes = fs.readFileSync(localPath);
-    contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
-    try {
-      const ext = getExtensionFromUrl(outputUrl);
-      const dir = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', String(context.workspaceId), String(context.runId), String(context.shotId));
-      fs.mkdirSync(dir, { recursive: true });
-      const fileName = `${contentHash}${ext}`;
-      const dest = path.join(dir, fileName);
-      if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
-      originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
-    } catch (error) {
-      console.warn('Studio Session materialization fallback: unable to copy output into namespaced directory, using original output URL instead.', error);
-    }
+  const task = await ensureStudioSessionMaterializationTaskForJob({ jobId: job.id, options, context });
+  if (task?.status === 'materialized') {
+    const existingByTask = await prisma.studioSessionShotVersion.findFirst({ where: { sourceJobId: job.id } });
+    if (existingByTask) return existingByTask;
   }
 
-  const latest = await prisma.studioSessionShotVersion.findFirst({
-    where: { revisionId: String(context.revisionId) },
-    orderBy: { versionNumber: 'desc' },
-  });
-  const version = await prisma.studioSessionShotVersion.create({
-    data: {
-      workspaceId: String(context.workspaceId),
-      shotId: String(context.shotId),
-      revisionId: String(context.revisionId),
-      sourceJobId: job.id,
-      versionNumber: (latest?.versionNumber ?? 0) + 1,
-      status: 'completed',
-      originKind: 'job_output',
-      contentHash,
-      originalUrl,
-      previewUrl: originalUrl,
-      thumbnailUrl: job.thumbnailUrl,
-      generationSnapshotJson: JSON.stringify({
-        ...options,
-        prompt: job.prompt || null,
-        modelId: job.modelId || null,
-        endpointId: job.endpointId || null,
-        sourceJobId: job.id,
-        executionMs: typeof job.executionMs === 'number' && Number.isFinite(job.executionMs) ? job.executionMs : null,
-        completedAt: job.completedAt ? job.completedAt.toISOString() : null,
-      }),
-    },
-  });
+  if (task) {
+    await prisma.studioSessionJobMaterialization.update({
+      where: { jobId: job.id },
+      data: {
+        status: 'processing',
+        attemptCount: { increment: 1 },
+        lastAttemptAt: new Date(),
+        lastError: null,
+      },
+    });
+  }
 
-  const shouldAutoSelect = !shot.selectionVersionId;
-  await prisma.studioSessionShot.update({
-    where: { id: shot.id },
-    data: {
-      status: shouldAutoSelect ? 'completed' : 'needs_review',
-      selectionVersionId: shouldAutoSelect ? version.id : shot.selectionVersionId,
-    },
-  });
-  await syncStudioSessionRunStatus(shot.runId);
-  return version;
+  try {
+    const shot = await prisma.studioSessionShot.findUnique({ where: { id: context.shotId } });
+    if (!shot) throw new Error(`Studio Session shot not found for job ${job.id}`);
+
+    const existing = await prisma.studioSessionShotVersion.findFirst({ where: { sourceJobId: job.id } });
+    if (existing) {
+      if (task) {
+        await prisma.studioSessionJobMaterialization.update({
+          where: { jobId: job.id },
+          data: {
+            status: 'materialized',
+            materializedAt: existing.createdAt,
+            lastError: null,
+          },
+        });
+      }
+      return existing;
+    }
+
+    const outputUrl = buildJobOutputUrls(job)[0] ?? normalizeUrlCandidate(job.resultUrl);
+    if (!outputUrl) throw new Error(`Completed Studio Session job ${job.id} has no output URL`);
+
+    let contentHash: string | null = null;
+    let originalUrl = outputUrl;
+    const localPath = resolveLocalPathFromUrl(outputUrl);
+    if (localPath && fs.existsSync(localPath)) {
+      const bytes = fs.readFileSync(localPath);
+      contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
+      try {
+        const ext = getExtensionFromUrl(outputUrl);
+        const dir = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', context.workspaceId, context.runId, context.shotId);
+        fs.mkdirSync(dir, { recursive: true });
+        const fileName = `${contentHash}${ext}`;
+        const dest = path.join(dir, fileName);
+        if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+        originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
+      } catch (error) {
+        console.warn('Studio Session materialization fallback: unable to copy output into namespaced directory, using original output URL instead.', error);
+      }
+    }
+
+    const latest = await prisma.studioSessionShotVersion.findFirst({
+      where: { revisionId: context.revisionId },
+      orderBy: { versionNumber: 'desc' },
+    });
+    const version = await prisma.studioSessionShotVersion.create({
+      data: {
+        workspaceId: context.workspaceId,
+        shotId: context.shotId,
+        revisionId: context.revisionId,
+        sourceJobId: job.id,
+        versionNumber: (latest?.versionNumber ?? 0) + 1,
+        status: 'completed',
+        originKind: 'job_output',
+        contentHash,
+        originalUrl,
+        previewUrl: originalUrl,
+        thumbnailUrl: job.thumbnailUrl,
+        generationSnapshotJson: JSON.stringify({
+          ...options,
+          prompt: job.prompt || null,
+          modelId: job.modelId || null,
+          endpointId: job.endpointId || null,
+          sourceJobId: job.id,
+          executionMs: typeof job.executionMs === 'number' && Number.isFinite(job.executionMs) ? job.executionMs : null,
+          completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+        }),
+      },
+    });
+
+    const shouldAutoSelect = !shot.selectionVersionId;
+    await prisma.studioSessionShot.update({
+      where: { id: shot.id },
+      data: {
+        status: shouldAutoSelect ? 'completed' : 'needs_review',
+        selectionVersionId: shouldAutoSelect ? version.id : shot.selectionVersionId,
+      },
+    });
+    if (task) {
+      await prisma.studioSessionJobMaterialization.update({
+        where: { jobId: job.id },
+        data: {
+          status: 'materialized',
+          materializedAt: new Date(),
+          lastError: null,
+        },
+      });
+    }
+    await syncStudioSessionRunStatus(shot.runId);
+    return version;
+  } catch (error: any) {
+    if (task) {
+      await prisma.studioSessionJobMaterialization.update({
+        where: { jobId: job.id },
+        data: {
+          status: 'failed',
+          lastError: error?.message || 'Studio Session materialization failed',
+        },
+      });
+    }
+    throw error;
+  }
 }
 
 export async function manualPickStudioSessionShot(input: { shotId: string; poseId: string }) {
