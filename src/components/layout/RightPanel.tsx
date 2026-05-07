@@ -106,7 +106,7 @@ function GalleryTileStatusBadges({ favorited, bucket, mobile = false }: { favori
 }
 
 export default function RightPanel({ mobile = false, mobileMode }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery' }) {
-    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, reuseJobInput, addJob } = useStudio();
+    const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, cancelActiveJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
     const [gallerySelectedAssetId, setGallerySelectedAssetId] = useState<string | null>(null);
@@ -146,6 +146,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [isCancellingAllJobs, setIsCancellingAllJobs] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const [galleryScrollerEl, setGalleryScrollerEl] = useState<HTMLElement | null>(null);
     const pageSize = 12;
@@ -945,6 +946,39 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         showToast(`Cleared ${result.deleted || 0} finished jobs`, 'success');
     };
 
+
+    const handleCancelAllActiveJobs = async () => {
+        if (activeJobsCount === 0 || isCancellingAllJobs) return;
+        if (!confirm(`Cancel all ${activeJobsCount} active job${activeJobsCount === 1 ? '' : 's'} in this workspace? They will become failed with reason cancelled.`)) return;
+
+        setIsCancellingAllJobs(true);
+        try {
+            const result = await cancelActiveJobs(activeWorkspaceId);
+            if (!result.success) {
+                showToast(result.error || 'Failed to cancel all active jobs', 'error');
+                return;
+            }
+
+            const cancelledSet = new Set(result.cancelled || []);
+            const deletedSet = new Set(result.deleted || []);
+            setLoadedJobs(prev => prev
+                .filter(job => !deletedSet.has(job.id))
+                .map(job => cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
+
+            if (selectedJob && deletedSet.has(selectedJob.id)) {
+                setDetailsOpen(false);
+                setSelectedJob(null);
+            } else if (selectedJob && cancelledSet.has(selectedJob.id)) {
+                setSelectedJob({ ...selectedJob, status: 'failed', error: 'cancelled' });
+            }
+
+            const cancelledCount = (result.cancelled?.length || 0) + (result.deleted?.length || 0);
+            showToast(`Cancelled ${cancelledCount} active job${cancelledCount === 1 ? '' : 's'}`, 'success');
+        } finally {
+            setIsCancellingAllJobs(false);
+        }
+    };
+
     const handleCreateWorkspace = async () => {
         if (newWorkspaceName.trim()) {
             await createWorkspace(newWorkspaceName.trim());
@@ -964,6 +998,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const filteredJobs = loadedJobs;
     const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
+    const activeJobsCount = filteredJobs.filter(job => ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status)).length;
 
     const handleGalleryViewerIndexChange = useCallback((index: number) => {
         const asset = galleryViewerItems[index];
@@ -1831,7 +1866,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                                     ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
                                                     : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                             >
-                                                {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                                                {Icon ? <Icon className="w-3.5 h-3.5" /> : ('label' in item ? item.label : null)}
                                             </button>
                                         );
                                     })}
@@ -1856,7 +1891,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                                 : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
                                         >
                                             {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
-                                            {!Icon ? item.label : null}
+                                            {!Icon && 'label' in item ? item.label : null}
                                         </button>
                                     );
                                 })}
@@ -1882,16 +1917,28 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 </div>
                             )}
                             {panelMode === 'jobs' && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
-                                    title="Delete all finished jobs"
-                                    onClick={() => void handleClearFinishedJobs()}
-                                    disabled={finishedJobsCount === 0}
-                                >
-                                    Clear finished
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
+                                        title="Cancel all active jobs"
+                                        onClick={() => void handleCancelAllActiveJobs()}
+                                        disabled={activeJobsCount === 0 || isCancellingAllJobs}
+                                    >
+                                        {isCancellingAllJobs ? 'Cancelling...' : 'Cancel all'}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
+                                        title="Delete all finished jobs"
+                                        onClick={() => void handleClearFinishedJobs()}
+                                        disabled={finishedJobsCount === 0}
+                                    >
+                                        Clear finished
+                                    </Button>
+                                </div>
                             )}
                             <Button
                                 variant="ghost"

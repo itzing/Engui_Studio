@@ -170,6 +170,7 @@ interface StudioContextType {
     deleteJob: (id: string) => Promise<boolean>;
     cancelJob: (id: string) => Promise<{ success: boolean; removed?: boolean }>;
     clearFinishedJobs: (workspaceId: string | null) => Promise<{ success: boolean; deleted?: number; deletedFiles?: number; error?: string }>;
+    cancelActiveJobs: (workspaceId: string | null) => Promise<{ success: boolean; totalActive?: number; cancelled?: string[]; deleted?: string[]; failed?: Array<{ id: string; error: string }>; error?: string }>;
     reuseJobInput: (jobId: string) => void;
 
     // Workspaces
@@ -588,6 +589,43 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         } catch (error: any) {
             console.error('Failed to clear finished jobs:', error);
             return { success: false, error: error?.message || 'Failed to clear finished jobs' };
+        }
+    };
+
+
+    const cancelActiveJobs = async (workspaceId: string | null) => {
+        try {
+            const response = await fetch('/api/jobs/cancel-active', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workspaceId, userId: 'user-with-settings' })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                if (response.status !== 207) {
+                    throw new Error(data.error || 'Failed to cancel active jobs');
+                }
+            }
+
+            const cancelledIds = Array.isArray(data.cancelled) ? data.cancelled : [];
+            const deletedIds = Array.isArray(data.deleted) ? data.deleted : [];
+            const deletedSet = new Set(deletedIds);
+            const cancelledSet = new Set(cancelledIds);
+
+            setJobs(prev => prev
+                .filter(job => !deletedSet.has(job.id))
+                .map(job => cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
+
+            return {
+                success: data.success !== false,
+                totalActive: data.totalActive,
+                cancelled: cancelledIds,
+                deleted: deletedIds,
+                failed: Array.isArray(data.failed) ? data.failed : [],
+            };
+        } catch (error: any) {
+            console.error('Failed to cancel active jobs:', error);
+            return { success: false, error: error?.message || 'Failed to cancel active jobs' };
         }
     };
 
@@ -1354,6 +1392,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             deleteJob,
             cancelJob,
             clearFinishedJobs,
+            cancelActiveJobs,
             reuseJobInput,
 
             // Workspaces

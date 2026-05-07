@@ -159,7 +159,8 @@ async function resolveRunPodDeletionContext(job: any) {
   const { settings } = await settingsService.getSettings('user-with-settings');
 
   const runpodApiKey = settings.runpod?.apiKey || undefined;
-  const endpointFromModelMap = settings.runpod?.endpoints?.[job.modelId || ''];
+  const endpoints = settings.runpod?.endpoints as Record<string, string | undefined> | undefined;
+  const endpointFromModelMap = endpoints?.[String(job.modelId || '')];
   const endpointId = job.endpointId || endpointFromModelMap;
   const runpodJobId = job.runpodJobId || (() => {
     try {
