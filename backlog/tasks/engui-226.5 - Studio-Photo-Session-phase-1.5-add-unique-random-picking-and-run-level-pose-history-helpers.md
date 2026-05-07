@@ -3,7 +3,7 @@ id: ENGUI-226.5
 title: >-
   Studio Photo Session phase 1.5 - add unique-random picking and run-level
   pose-history helpers
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Implement the picking helpers that enforce v1 uniqueness rules for automatic pos
 - [ ] #2 Reshuffle helpers exclude already auto-used poses from the same run and report exhaustion cleanly.
 - [ ] #3 The helper layer keeps manual-selection exceptions possible without weakening automatic uniqueness rules.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

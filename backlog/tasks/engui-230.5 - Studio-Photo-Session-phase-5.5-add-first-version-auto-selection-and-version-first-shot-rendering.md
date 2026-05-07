@@ -3,7 +3,7 @@ id: ENGUI-230.5
 title: >-
   Studio Photo Session phase 5.5 - add first-version auto-selection and
   version-first shot rendering
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Implement the first-version auto-selection rule and switch shot rendering toward
 - [ ] #2 Later successful versions do not automatically replace the selected version.
 - [ ] #3 Once versions exist, shot UI renders the current selected/current version rather than treating jobs as the primary long-term object.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

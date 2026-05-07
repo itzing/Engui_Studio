@@ -1,7 +1,7 @@
 ---
 id: ENGUI-232
 title: 'Studio Photo Session v1 phase 7 — hardening, QA, and cleanup'
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -28,3 +28,7 @@ Stabilize the Studio Photo Session module after the main workflow exists: consol
 - [ ] #3 Shared studio-session logic is consolidated and duplicate status/prompt assembly behavior is removed where practical.
 - [ ] #4 The module is stable enough to continue with follow-up tickets without rethinking the base architecture.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

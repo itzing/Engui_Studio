@@ -1,7 +1,7 @@
 ---
 id: ENGUI-227
 title: Studio Photo Session v1 phase 2 — template APIs and desktop editor
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -28,3 +28,7 @@ Build the saved-template surface for Studio Photo Session: desktop route shell, 
 - [ ] #3 Category counts are edited through a compact scrollable slider panel with one slider per category in the 0..20 range.
 - [ ] #4 Create Run uses the saved template state, not unsaved editor-only draft state.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

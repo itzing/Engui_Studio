@@ -3,7 +3,7 @@ id: ENGUI-230.1
 title: >-
   Studio Photo Session phase 5.1 - add run-shot execution requests with
   studio-session job context
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Connect Studio Session shots to the existing generation pipeline by launching or
 - [ ] #2 Each launched job carries enough studio-session context to map completion back to workspace, run, shot, and revision.
 - [ ] #3 The new execution path integrates cleanly with the current generation system and existing job persistence.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

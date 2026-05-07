@@ -1,7 +1,7 @@
 ---
 id: ENGUI-226
 title: Studio Photo Session v1 phase 1 — domain foundations and runtime helpers
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -27,3 +27,7 @@ Add the Studio Photo Session v1 domain foundation layer: Prisma models, workspac
 - [ ] #3 Shared runtime helpers exist for unique random pose picking, resolution derivation, prompt assembly, run status derivation, and shot labeling.
 - [ ] #4 The domain model keeps room for future category overrides and shot-level overrides without exposing them in v1 UI.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

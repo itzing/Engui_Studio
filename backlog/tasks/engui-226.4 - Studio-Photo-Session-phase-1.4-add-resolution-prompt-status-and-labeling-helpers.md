@@ -3,7 +3,7 @@ id: ENGUI-226.4
 title: >-
   Studio Photo Session phase 1.4 - add resolution, prompt, status, and labeling
   helpers
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Implement shared runtime helpers for derived Studio Session behavior: resolution
 - [ ] #2 Prompt assembly helpers combine template inputs, pose inputs, and derived composition context through one canonical path.
 - [ ] #3 Run-status and shot-label helpers provide reusable logic for product statuses and labels like Standing 1 or Portrait 2.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

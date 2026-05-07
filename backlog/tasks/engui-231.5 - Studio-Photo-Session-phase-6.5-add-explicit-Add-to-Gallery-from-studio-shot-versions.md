@@ -3,7 +3,7 @@ id: ENGUI-231.5
 title: >-
   Studio Photo Session phase 6.5 - add explicit Add to Gallery from studio shot
   versions
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Add the explicit handoff action that copies a studio-session result into the ord
 - [ ] #2 Session results do not automatically appear in Gallery until the user invokes Add to Gallery.
 - [ ] #3 Gallery handoff reuses existing gallery asset creation patterns while preserving separate session-result storage.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

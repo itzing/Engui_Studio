@@ -3,7 +3,7 @@ id: ENGUI-232.2
 title: >-
   Studio Photo Session phase 7.2 - run manual QA matrix across template, run,
   and review workflows
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Run and record the manual QA matrix for the end-to-end Studio Session workflow f
 - [ ] #2 Manual QA covers run creation, pose assignment, single-shot execution, run-all execution, reshuffle, and reshoot behavior.
 - [ ] #3 Manual QA covers version review, hide/reject, skip/restore, selected-version switching, and Add to Gallery behavior.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

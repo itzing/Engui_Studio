@@ -3,7 +3,7 @@ id: ENGUI-229.1
 title: >-
   Studio Photo Session phase 4.1 - add single-shot auto-pick and first revision
   creation
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Implement automatic pose assignment for one shot slot and create the first shot 
 - [ ] #2 Automatic picking respects the run's no-repeat rules for automatic pose usage.
 - [ ] #3 The first successful assignment creates a shot revision rather than mutating the shot into an untyped state.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

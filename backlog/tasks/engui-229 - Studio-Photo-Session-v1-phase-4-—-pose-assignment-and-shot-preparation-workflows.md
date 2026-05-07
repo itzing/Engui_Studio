@@ -3,7 +3,7 @@ id: ENGUI-229
 title: >-
   Studio Photo Session v1 phase 4 — pose assignment and shot preparation
   workflows
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -30,3 +30,7 @@ Add the pre-generation shot preparation workflows inside runs: lazy per-shot pos
 - [ ] #3 Manual pose picking is limited to the shot category but may intentionally reuse a pose already used elsewhere in the run.
 - [ ] #4 Assigning or reshuffling a pose creates or advances shot revisions while preserving the stable shot slot identity.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

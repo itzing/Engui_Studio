@@ -3,7 +3,7 @@ id: ENGUI-228.5
 title: >-
   Studio Photo Session phase 3.5 - build run detail shell with grouped
   unassigned shot cards
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Create the initial run detail workspace with grouped shot sections and unassigne
 - [ ] #2 Unassigned shot cards clearly show slot label, category, and action placeholders for Pick pose and Run shot.
 - [ ] #3 The run detail shell is usable before any generation, version browsing, or review features are added.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

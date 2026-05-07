@@ -3,7 +3,7 @@ id: ENGUI-231.2
 title: >-
   Studio Photo Session phase 6.2 - build shot detail viewer with current
   revision focus and revision history
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Build the detailed shot viewer that distinguishes between versions of the curren
 - [ ] #2 Users can browse versions within the current revision and inspect older revisions separately as history.
 - [ ] #3 The viewer clearly distinguishes version changes from revision changes in the UI.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

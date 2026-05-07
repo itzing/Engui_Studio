@@ -3,7 +3,7 @@ id: ENGUI-227.5
 title: >-
   Studio Photo Session phase 2.5 - add generation controls and autosave versus
   explicit save model
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Add the generation-settings block, short/long/square resolution policy controls,
 - [ ] #2 Editor changes autosave into draft state without silently promoting incomplete edits into canonical saved template state.
 - [ ] #3 Explicit Save writes the canonical template state later used by Create Run.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

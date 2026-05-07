@@ -3,7 +3,7 @@ id: ENGUI-227.4
 title: >-
   Studio Photo Session phase 2.4 - build template editor base form and character
   integration
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Build the first template editor form covering the approved base fields: characte
 - [ ] #2 The editor includes inline environment, outfit, hairstyle, master positive prompt, and master negative prompt fields.
 - [ ] #3 The editor does not expose run state, shot state, or concrete random pose selection.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

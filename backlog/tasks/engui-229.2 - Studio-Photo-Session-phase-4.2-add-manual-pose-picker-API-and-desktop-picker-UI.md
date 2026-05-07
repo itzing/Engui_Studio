@@ -3,7 +3,7 @@ id: ENGUI-229.2
 title: >-
   Studio Photo Session phase 4.2 - add manual pose picker API and desktop picker
   UI
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Add manual pose picking for a single shot, including the backend picker contract
 - [ ] #2 Manual selection may intentionally choose a pose already used elsewhere in the same run.
 - [ ] #3 Choosing a manual pose creates or advances a shot revision cleanly.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

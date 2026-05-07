@@ -3,7 +3,7 @@ id: ENGUI-230.3
 title: >-
   Studio Photo Session phase 5.3 - materialize completed studio jobs into shot
   versions
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -32,3 +32,7 @@ When a Studio Session job completes successfully, materialize its output into a 
 - [ ] #2 Shot versions store gallery-like asset metadata and generation snapshot data in the session-owned domain.
 - [ ] #3 Completed runs and shots primarily read from versions after materialization rather than from active job rows.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

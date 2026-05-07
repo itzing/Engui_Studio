@@ -3,7 +3,7 @@ id: ENGUI-230.2
 title: >-
   Studio Photo Session phase 5.2 - auto-pick and bootstrap revisions when
   running unassigned shots
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Implement the required shortcut where pressing Run shot on an unassigned slot fi
 - [ ] #2 The auto-pick flow creates the needed revision state before execution starts.
 - [ ] #3 This shortcut follows the same automatic uniqueness rules as explicit auto-pick actions.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

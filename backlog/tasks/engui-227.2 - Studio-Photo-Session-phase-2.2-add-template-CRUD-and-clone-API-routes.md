@@ -1,7 +1,7 @@
 ---
 id: ENGUI-227.2
 title: Studio Photo Session phase 2.2 - add template CRUD and clone API routes
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -29,3 +29,7 @@ Implement the Studio Session template API layer for create, read, update, save, 
 - [ ] #2 Template APIs are workspace-scoped and validate required fields consistently.
 - [ ] #3 Clone behavior creates a new editable template instead of mutating the original template record.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

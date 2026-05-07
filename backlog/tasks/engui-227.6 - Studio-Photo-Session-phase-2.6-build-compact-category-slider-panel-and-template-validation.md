@@ -3,7 +3,7 @@ id: ENGUI-227.6
 title: >-
   Studio Photo Session phase 2.6 - build compact category slider panel and
   template validation
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Add the compact scrollable category-count control panel with one slider per cate
 - [ ] #2 Each category uses a 0..20 slider with default value 5 and 0 meaning disabled.
 - [ ] #3 Template save validation preserves category counts in an extensible rule structure rather than rigid fixed fields.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

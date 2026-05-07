@@ -3,7 +3,7 @@ id: ENGUI-228
 title: >-
   Studio Photo Session v1 phase 3 — run creation, snapshots, and stable shot
   slots
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -30,3 +30,7 @@ Implement immutable run creation from template snapshots and render the first re
 - [ ] #3 Runs appear in a dedicated Runs surface with product-level statuses such as Draft and Ready.
 - [ ] #4 New run cards and run detail views correctly render unassigned shot slots grouped by category.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

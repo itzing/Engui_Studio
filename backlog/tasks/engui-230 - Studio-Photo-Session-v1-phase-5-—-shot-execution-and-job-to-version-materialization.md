@@ -3,7 +3,7 @@ id: ENGUI-230
 title: >-
   Studio Photo Session v1 phase 5 — shot execution and job-to-version
   materialization
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -30,3 +30,7 @@ Connect Studio Session shots to the existing generation pipeline so individual s
 - [ ] #3 Each successful completed job materializes into a shot version with gallery-like asset metadata stored in the run/session domain.
 - [ ] #4 The first successful version auto-becomes selected, while later versions do not replace the selected version automatically.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

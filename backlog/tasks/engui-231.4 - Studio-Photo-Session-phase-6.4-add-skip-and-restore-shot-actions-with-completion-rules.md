@@ -3,7 +3,7 @@ id: ENGUI-231.4
 title: >-
   Studio Photo Session phase 6.4 - add skip and restore shot actions with
   completion rules
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Implement skip and restore actions for shot slots and wire them into run complet
 - [ ] #2 Skipped shots are excluded from the requirements for Completed run status.
 - [ ] #3 Restore returns a skipped shot to normal run logic without losing its slot identity or history.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

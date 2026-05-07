@@ -3,7 +3,7 @@ id: ENGUI-229.4
 title: >-
   Studio Photo Session phase 4.4 - add shot reshuffle with revision lineage and
   reuse exclusion
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Implement per-shot reshuffle so a slot can receive a new automatic pose without 
 - [ ] #2 Each reshuffle creates a new shot revision that inherits non-pose state from the prior revision.
 - [ ] #3 Reshuffle excludes already auto-used poses from the same run when automatic selection is used.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

@@ -3,7 +3,7 @@ id: ENGUI-228.2
 title: >-
   Studio Photo Session phase 3.2 - generate stable shot slots and grouping
   metadata on run creation
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -32,3 +32,7 @@ Generate stable shot slots from the template category counts when a run is creat
 - [ ] #2 Each slot receives a user-facing label like Standing 1 or Portrait 2 that remains stable across the life of the run.
 - [ ] #3 New runs may contain unassigned shots without forcing immediate pose selection or execution.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

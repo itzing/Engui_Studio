@@ -3,7 +3,7 @@ id: ENGUI-229.3
 title: >-
   Studio Photo Session phase 4.3 - add assemble-all bulk pose assignment for
   runs
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Implement the bulk Assemble all action that fills existing run slots with automa
 - [ ] #2 Bulk assignment fills existing stable slots instead of reordering or regenerating them.
 - [ ] #3 Bulk assignment uses the same run-level uniqueness rules as single-shot auto-picking.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

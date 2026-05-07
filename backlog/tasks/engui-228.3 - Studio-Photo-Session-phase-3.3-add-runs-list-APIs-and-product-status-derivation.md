@@ -3,7 +3,7 @@ id: ENGUI-228.3
 title: >-
   Studio Photo Session phase 3.3 - add runs list APIs and product-status
   derivation
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Build the run-list API surface and product-status derivation needed to browse Dr
 - [ ] #2 Product-level run statuses are derived consistently through shared status helpers.
 - [ ] #3 Status derivation does not depend only on active jobs and remains meaningful for pre-run and review-heavy states.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

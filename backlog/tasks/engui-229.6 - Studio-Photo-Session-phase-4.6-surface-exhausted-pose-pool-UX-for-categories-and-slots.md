@@ -3,7 +3,7 @@ id: ENGUI-229.6
 title: >-
   Studio Photo Session phase 4.6 - surface exhausted-pose-pool UX for categories
   and slots
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Add explicit UX for exhausted unique-pose pools so users understand why some slo
 - [ ] #2 The run UI clearly surfaces that the category's unique automatic pose pool is exhausted.
 - [ ] #3 Exhaustion handling works consistently for single-shot auto-pick, Assemble all, and reshuffle flows.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

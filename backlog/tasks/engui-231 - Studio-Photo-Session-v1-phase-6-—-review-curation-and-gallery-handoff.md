@@ -1,7 +1,7 @@
 ---
 id: ENGUI-231
 title: 'Studio Photo Session v1 phase 6 — review, curation, and gallery handoff'
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:21'
 labels:
@@ -28,3 +28,7 @@ Turn runs into curation workspaces by adding version browsing, revision history 
 - [ ] #3 Users can hide/reject versions, skip/restore shots, and those states feed correct run completion logic.
 - [ ] #4 A run result can be explicitly added to Gallery without automatically mixing session results into the Gallery domain.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

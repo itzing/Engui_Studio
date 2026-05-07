@@ -3,7 +3,7 @@ id: ENGUI-231.1
 title: >-
   Studio Photo Session phase 6.1 - add card-level version browsing and
   selected-version switching
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -30,3 +30,7 @@ Add quick review controls directly on shot cards so users can browse versions an
 - [ ] #2 Users can set the shown version as the selected version for that shot from the card surface.
 - [ ] #3 Card-level browsing works without collapsing the stable shot grouping and ordering in the run UI.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

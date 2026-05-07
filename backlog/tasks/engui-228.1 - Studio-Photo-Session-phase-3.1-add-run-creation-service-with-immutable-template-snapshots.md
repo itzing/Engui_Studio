@@ -3,7 +3,7 @@ id: ENGUI-228.1
 title: >-
   Studio Photo Session phase 3.1 - add run creation service with immutable
   template snapshots
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -32,3 +32,7 @@ Implement run creation from canonical saved templates by snapshotting the approv
 - [ ] #2 Run creation stores an immutable snapshot of the template configuration and pose-library version context required by downstream work.
 - [ ] #3 Template edits after run creation do not mutate existing runs.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

@@ -3,7 +3,7 @@ id: ENGUI-226.2
 title: >-
   Studio Photo Session phase 1.2 - add static pose-library dataset and
   normalization layer
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -29,3 +29,7 @@ Check in the approved pose-library dataset for v1 and add a normalization layer 
 - [ ] #2 Normalization helpers expose stable access to categories, orientation, framing, ids, names, and prompts.
 - [ ] #3 Invalid or incomplete pose entries are caught or normalized consistently before downstream use.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

@@ -3,7 +3,7 @@ id: ENGUI-231.3
 title: >-
   Studio Photo Session phase 6.3 - add hide and reject controls for shot
   versions
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -31,3 +31,7 @@ Add soft hide/reject behavior for shot versions so poor results stop cluttering 
 - [ ] #2 Hidden or rejected versions remain in history while no longer dominating the primary review surface.
 - [ ] #3 Hide/reject state updates are visible consistently in both card-level and detail-view review flows.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

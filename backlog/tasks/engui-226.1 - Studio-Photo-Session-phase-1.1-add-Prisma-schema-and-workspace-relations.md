@@ -1,7 +1,7 @@
 ---
 id: ENGUI-226.1
 title: Studio Photo Session phase 1.1 - add Prisma schema and workspace relations
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -27,3 +27,7 @@ Add the core Prisma models and workspace relations for Studio Photo Session temp
 - [ ] #2 Relations between templates, runs, shots, revisions, versions, workspaces, and source jobs are defined cleanly.
 - [ ] #3 The schema leaves room for future category-level and shot-level override fields without requiring a later structural rewrite.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.

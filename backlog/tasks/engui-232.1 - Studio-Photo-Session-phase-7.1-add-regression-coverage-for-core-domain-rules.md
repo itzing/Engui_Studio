@@ -1,7 +1,7 @@
 ---
 id: ENGUI-232.1
 title: Studio Photo Session phase 7.1 - add regression coverage for core domain rules
-status: Inbox
+status: Superseded
 assignee: []
 created_date: '2026-05-06 18:29'
 labels:
@@ -29,3 +29,7 @@ Add focused automated regression coverage for the Studio Session behaviors most 
 - [ ] #2 Automated tests cover automatic pose uniqueness, reshuffle exclusion, and resolution derivation rules.
 - [ ] #3 Automated tests cover first-version auto-selection plus skip/restore and Add to Gallery behavior.
 <!-- AC:END -->
+
+## Superseded note
+
+Superseded by Studio portfolio v1 rewrite (`ENGUI-238` through `ENGUI-259`). Template-first Studio tickets are no longer the product direction.
