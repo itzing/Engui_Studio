@@ -101,10 +101,10 @@ describe('studio session utils', () => {
 
     expect(toStudioPortfolioSummary({
       id: 'portfolio-1', workspaceId: 'workspace-1', characterId: 'character-1', name: 'Mira', description: '', status: 'active', createdAt: now, updatedAt: now,
-      character: { name: 'Mira', previewStateJson: JSON.stringify({ full_body: { thumbnailUrl: '/full.jpg' } }) },
+      character: { name: 'Mira', previewStateJson: JSON.stringify({ portrait: { thumbnailUrl: '/portrait.jpg' }, full_body: { thumbnailUrl: '/full.jpg' } }) },
       _count: { sessions: 2, collections: 1 },
       selectedImageCount: 7,
-    })).toMatchObject({ characterName: 'Mira', characterPreviewUrl: '/full.jpg', sessionCount: 2, collectionCount: 1, selectedImageCount: 7 });
+    })).toMatchObject({ characterName: 'Mira', characterPreviewUrl: '/portrait.jpg', sessionCount: 2, collectionCount: 1, selectedImageCount: 7 });
 
     expect(toStudioPhotoSessionSummary({
       id: 'session-1', workspaceId: 'workspace-1', portfolioId: 'portfolio-1', name: 'Morning room', settingText: 'room', lightingText: 'window light', vibeText: 'quiet', outfitText: 'dress', hairstyleText: 'bun', negativePrompt: '', notes: '', status: 'review', createdAt: now, updatedAt: now,

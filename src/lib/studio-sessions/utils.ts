@@ -229,9 +229,9 @@ function extractPreviewSlotUrl(slot: unknown): string | null {
 
 function extractCharacterPreviewUrl(previewStateJson: string | null | undefined): string | null {
   const previewState = parseJson<Record<string, unknown>>(previewStateJson, {});
-  return extractPreviewSlotUrl(previewState.full_body)
-    ?? extractPreviewSlotUrl(previewState.portrait)
-    ?? extractPreviewSlotUrl(previewState.upper_body);
+  return extractPreviewSlotUrl(previewState.portrait)
+    ?? extractPreviewSlotUrl(previewState.upper_body)
+    ?? extractPreviewSlotUrl(previewState.full_body);
 }
 
 export function normalizeStudioSessionTemplateStatus(input: unknown): StudioSessionTemplateStatus {
