@@ -12,7 +12,7 @@ const {
   mockPrisma: {
     $transaction: vi.fn(),
     studioSessionTemplate: { findUnique: vi.fn() },
-    studioSessionRun: { findUnique: vi.fn(), update: vi.fn() },
+    studioSessionRun: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
     studioSessionShot: { createMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
     studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
@@ -48,6 +48,7 @@ vi.mock('fs', () => ({
 import {
   addStudioSessionShotVersionToGallery,
   createStudioSessionRun,
+  deleteStudioSessionRun,
   materializeStudioSessionCompletedJob,
   recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
@@ -226,6 +227,23 @@ describe('studio session server', () => {
 
     expect(mockPrisma.studioSessionJobMaterialization.upsert).toHaveBeenCalled();
     expect(mockPrisma.studioSessionShotVersion.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks run deletion while the latest shot job is still active', async () => {
+    mockPrisma.studioSessionRun.findUnique.mockResolvedValue({ id: 'run-1' });
+    mockPrisma.job.findMany.mockResolvedValue([
+      {
+        id: 'job-1',
+        status: 'processing',
+        executionMs: null,
+        createdAt: new Date('2026-05-07T09:00:00Z'),
+        completedAt: null,
+        options: JSON.stringify({ studioSessionContext: { runId: 'run-1', shotId: 'shot-1' } }),
+      },
+    ]);
+
+    await expect(deleteStudioSessionRun('run-1')).rejects.toThrow('Cannot delete a run while shot jobs are still active');
+    expect(mockPrisma.studioSessionRun.delete).not.toHaveBeenCalled();
   });
 
   it('restores skipped shots back into ordinary review logic without losing history', async () => {

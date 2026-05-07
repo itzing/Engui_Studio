@@ -534,6 +534,16 @@ export async function deleteStudioSessionRun(runId: string) {
   return { id: runId };
 }
 
+async function collectStudioSessionActiveJobs(runId: string) {
+  const latestJobs = await collectStudioSessionLatestJobs(runId);
+  const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
+  return new Set(
+    Array.from(latestJobs.values())
+      .filter((job) => activeStatuses.has(job.status))
+      .map((job) => job.id),
+  );
+}
+
 async function collectRunAutoAssignmentHistory(runId: string, category?: string) {
   const shots = await prisma.studioSessionShot.findMany({
     where: {
@@ -678,8 +688,8 @@ export async function getStudioSessionRun(runId: string) {
       materializationByShotId.set(task.shotId, task);
     }
   }
-  const activeStatuses = new Set([...Array.from(RUNNING_JOB_STATUSES), 'queueing_up', 'finalizing']);
-  const activeJobCount = Array.from(latestJobs.values()).filter((job) => activeStatuses.has(job.status)).length;
+  const activeJobs = await collectStudioSessionActiveJobs(runId);
+  const activeJobCount = activeJobs.size;
   const totalExecutionMs = versions.reduce((sum, version) => {
     const value = parseJsonObject(version.generationSnapshotJson).executionMs;
     return sum + (typeof value === 'number' && Number.isFinite(value) ? value : 0);
