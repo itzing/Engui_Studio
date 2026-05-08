@@ -1,15 +1,26 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Crop, FlipHorizontal2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Crop, FlipHorizontal2, ImageIcon, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useStudio } from '@/lib/context/StudioContext';
-import type { StudioFramingPresetSummary, StudioSessionPoseOrientation } from '@/lib/studio-sessions/types';
+import type { StudioFramingPresetSummary, StudioPoseSummary, StudioSessionPoseOrientation } from '@/lib/studio-sessions/types';
 
 export type FramingLibraryRoute = { level: 'framingLibrary' };
+
+
+type FramingPreviewResult = {
+  mode: 'openpose_control' | 'text_only';
+  previewUrl?: string;
+  width: number;
+  height: number;
+  pointCount?: number;
+  helperPrompt?: string;
+  message?: string;
+};
 
 type FramingDraft = {
   title: string;
@@ -230,6 +241,10 @@ export default function FramingLibraryWorkspace() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FramingDraft>(DEFAULT_DRAFT);
+  const [poses, setPoses] = useState<StudioPoseSummary[]>([]);
+  const [previewPoseId, setPreviewPoseId] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewResult, setPreviewResult] = useState<FramingPreviewResult | null>(null);
 
   const fetchJson = useCallback(async (url: string, fallback: string) => {
     const response = await fetch(url, { cache: 'no-store' });
@@ -256,6 +271,23 @@ export default function FramingLibraryWorkspace() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    if (!dialogOpen || !activeWorkspaceId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchJson(`/api/studio/pose-library/poses?workspaceId=${encodeURIComponent(activeWorkspaceId)}&orientation=${encodeURIComponent(draft.orientation)}`, 'Failed to fetch poses for preview');
+        if (cancelled) return;
+        const nextPoses = Array.isArray(data.poses) ? data.poses : [];
+        setPoses(nextPoses);
+        setPreviewPoseId((current) => current && nextPoses.some((pose: StudioPoseSummary) => pose.id === current) ? current : nextPoses[0]?.id ?? '');
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load poses for preview');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, dialogOpen, draft.orientation, fetchJson]);
+
   const grouped = useMemo(() => ({
     portrait: presets.filter((preset) => preset.orientation === 'portrait'),
     landscape: presets.filter((preset) => preset.orientation === 'landscape'),
@@ -272,12 +304,14 @@ export default function FramingLibraryWorkspace() {
   function openCreate() {
     setEditingId(null);
     setDraft(DEFAULT_DRAFT);
+    setPreviewResult(null);
     setDialogOpen(true);
   }
 
   function openEdit(preset: StudioFramingPresetSummary) {
     setEditingId(preset.id);
     setDraft(draftFromPreset(preset));
+    setPreviewResult(null);
     setDialogOpen(true);
   }
 
@@ -288,6 +322,35 @@ export default function FramingLibraryWorkspace() {
     const data = await response.json();
     if (!response.ok || !data?.success) { setError(data?.error || 'Failed to save framing preset'); return; }
     setDialogOpen(false); await refresh();
+  }
+
+
+  async function renderFramingPreview() {
+    if (!editingId || !previewPoseId) return;
+    setPreviewBusy(true); setPreviewResult(null); setError(null);
+    try {
+      const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poseId: previewPoseId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(data?.error || 'Failed to render framing preview');
+      setPreviewResult(data as FramingPreviewResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to render framing preview');
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
+  async function cleanFramingPreviews() {
+    if (!editingId) return;
+    if (!confirm('Delete preview/test assets for this framing preset only? Normal shot results are not touched.')) return;
+    const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, { method: 'DELETE' });
+    const data = await response.json();
+    if (!response.ok || !data?.success) { setError(data?.error || 'Failed to clean preview assets'); return; }
+    setPreviewResult(null);
   }
 
   async function duplicatePreset(id: string) {
@@ -358,6 +421,12 @@ export default function FramingLibraryWorkspace() {
               </div>
               <Field label="Description"><Input value={draft.description} onChange={(event) => updateDraft((current) => ({ ...current, description: event.target.value }))} className="border-white/10 bg-black/30 text-white" /></Field>
               <label className="block"><div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/35">Helper prompt</div><textarea value={draft.helperPrompt} onChange={(event) => updateDraft((current) => ({ ...current, helperPrompt: event.target.value }))} className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" placeholder="lower-left full-body composition with extra negative space above" /></label>
+              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-cyan-100">Pose + framing test</div><div className="mt-1 text-xs text-cyan-100/60">Safe control PNG preview only. It never launches a paid generation job.</div></div><Button type="button" variant="outline" onClick={() => void cleanFramingPreviews()} disabled={!editingId} className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]">Clean previews</Button></div>
+                <div className="mt-3 grid gap-2"><select value={previewPoseId} onChange={(event) => { setPreviewPoseId(event.target.value); setPreviewResult(null); }} disabled={!editingId || poses.length === 0} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white disabled:opacity-50">{poses.map((pose) => <option key={pose.id} value={pose.id}>{pose.title} · {pose.openPose.hasKeypoints ? 'OpenPose' : 'text-only'}</option>)}</select><Button type="button" onClick={() => void renderFramingPreview()} disabled={!editingId || !previewPoseId || previewBusy} className="bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-50"><ImageIcon className="mr-2 h-4 w-4" />{previewBusy ? 'Rendering…' : editingId ? 'Render control preview' : 'Save preset before preview'}</Button></div>
+                {!editingId ? <div className="mt-2 text-xs text-cyan-100/55">Save the preset first, then render a scoped preview asset.</div> : null}
+                {previewResult ? <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25">{previewResult.previewUrl ? <img src={previewResult.previewUrl} alt="OpenPose framing preview" className="max-h-80 w-full object-contain" /> : <div className="flex min-h-32 items-center justify-center p-4 text-center text-sm text-white/55">{previewResult.message || 'Text-only framing guidance will be used.'}</div>}<div className="space-y-1 p-3 text-xs text-white/55"><div>{previewResult.mode === 'openpose_control' ? `OpenPose control · ${previewResult.width}×${previewResult.height} · ${previewResult.pointCount ?? 0} body points` : 'Text-only fallback'}</div>{previewResult.helperPrompt ? <div className="text-white/40">Helper: {previewResult.helperPrompt}</div> : null}</div></div> : null}
+              </div>
               <Button type="button" onClick={() => void savePreset()} className="w-full bg-blue-500 text-white hover:bg-blue-400">{editingId ? 'Save changes' : 'Create preset'}</Button>
             </div>
           </div>
