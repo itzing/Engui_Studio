@@ -58,6 +58,60 @@ function formatResolution(value: MediaResolution | null) {
     return value ? `${value.width} × ${value.height}` : '—';
 }
 
+function compactLoraName(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const normalized = value.trim().split('/').pop() || value.trim();
+    return normalized.replace(/\.safetensors$/i, '');
+}
+
+function getLoraUsageSummary(job: Job | null) {
+    if (!job) return '';
+    const options = parseRecord((job as any).options);
+
+    const zImageSlots = Array.isArray(options.zImageLoraSlots)
+        ? options.zImageLoraSlots
+            .map((slot: any) => {
+                const name = compactLoraName(slot?.path);
+                if (!name) return null;
+                const rawWeight = slot?.weight;
+                const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+                return `${name} (${Number.isFinite(weight) ? weight : 1})`;
+            })
+            .filter(Boolean)
+        : [];
+
+    if (zImageSlots.length > 0) return zImageSlots.join(' • ');
+
+    const simpleSlots = Array.from({ length: 8 }, (_, index) => index + 1)
+        .map((index) => {
+            const pathKey = index === 1 ? 'lora' : `lora${index}`;
+            const weightKey = index === 1 ? 'loraWeight' : `loraWeight${index}`;
+            const name = compactLoraName(options[pathKey]);
+            if (!name) return null;
+            const rawWeight = options[weightKey];
+            const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+            return `${name} (${Number.isFinite(weight) ? weight : 1})`;
+        })
+        .filter(Boolean);
+
+    if (simpleSlots.length > 0) return simpleSlots.join(' • ');
+
+    const arraySlots = Array.isArray(options.lora)
+        ? options.lora
+            .map((entry: any) => {
+                if (!Array.isArray(entry)) return null;
+                const name = compactLoraName(entry[0]);
+                if (!name) return null;
+                const rawWeight = entry[1];
+                const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+                return `${name} (${Number.isFinite(weight) ? weight : 1})`;
+            })
+            .filter(Boolean)
+        : [];
+
+    return arraySlots.join(' • ');
+}
+
 type JobOutput = {
     outputId: string;
     type: 'image' | 'video' | 'audio';
@@ -158,6 +212,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
     const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
     const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
+    const loraUsageSummary = useMemo(() => getLoraUsageSummary(job), [job]);
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
     const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
@@ -536,6 +591,15 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     </div>
                                 </div>
                             </div>
+
+                            {loraUsageSummary ? (
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-medium text-foreground">LoRAs used</h3>
+                                    <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground break-words">
+                                        {loraUsageSummary}
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {parsedSecureState && (
                                 <div className="space-y-2">

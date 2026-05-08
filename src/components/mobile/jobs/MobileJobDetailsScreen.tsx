@@ -79,8 +79,9 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
           .map((slot: any) => {
             const name = compactLoraName(slot?.path);
             if (!name) return null;
-            const weight = typeof slot?.weight === 'number' && Number.isFinite(slot.weight) ? slot.weight : 1;
-            return `${name} (${weight})`;
+            const rawWeight = slot?.weight;
+            const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+            return `${name} (${Number.isFinite(weight) ? weight : 1})`;
           })
           .filter(Boolean)
       : [];
@@ -89,14 +90,15 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
       return zImageSlots.join(' • ');
     }
 
-    const simpleSlots = [1, 2, 3, 4]
+    const simpleSlots = Array.from({ length: 8 }, (_, index) => index + 1)
       .map((index) => {
         const pathKey = index === 1 ? 'lora' : `lora${index}`;
         const weightKey = index === 1 ? 'loraWeight' : `loraWeight${index}`;
         const name = compactLoraName(options[pathKey]);
         if (!name) return null;
-        const weight = typeof options[weightKey] === 'number' && Number.isFinite(options[weightKey]) ? options[weightKey] : 1;
-        return `${name} (${weight})`;
+        const rawWeight = options[weightKey];
+        const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+        return `${name} (${Number.isFinite(weight) ? weight : 1})`;
       })
       .filter(Boolean);
 
@@ -110,8 +112,9 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
             if (!Array.isArray(entry)) return null;
             const name = compactLoraName(entry[0]);
             if (!name) return null;
-            const weight = typeof entry[1] === 'number' && Number.isFinite(entry[1]) ? entry[1] : 1;
-            return `${name} (${weight})`;
+            const rawWeight = entry[1];
+            const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+            return `${name} (${Number.isFinite(weight) ? weight : 1})`;
           })
           .filter(Boolean)
       : [];
@@ -334,7 +337,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                   ) : null}
                   {loraSummary ? (
                     <div>
-                      <div className="text-muted-foreground">LoRA</div>
+                      <div className="text-muted-foreground">LoRAs used</div>
                       <div className="truncate">{loraSummary}</div>
                     </div>
                   ) : null}
