@@ -291,7 +291,9 @@ export async function updateStudioPoseCategory(categoryId: string, input: Record
 export async function deleteStudioPoseCategory(categoryId: string) {
   const existing = await prisma.studioPoseCategory.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!existing) return null;
+  const candidates = await prisma.studioPosePreviewCandidate.findMany({ where: { pose: { categoryId } }, select: { assetUrl: true, thumbnailUrl: true } });
   await prisma.studioPoseCategory.delete({ where: { id: categoryId } });
+  deletePreviewCandidateOutputs(candidates);
   return { id: categoryId };
 }
 
@@ -345,17 +347,21 @@ export async function updateStudioPose(poseId: string, input: Record<string, unk
   if (typeof input.sortOrder === 'number') data.sortOrder = Math.floor(input.sortOrder);
   if (semanticChanged) data.primaryPreviewId = null;
 
+  const staleCandidates = semanticChanged ? await prisma.studioPosePreviewCandidate.findMany({ where: { poseId }, select: { assetUrl: true, thumbnailUrl: true } }) : [];
   const pose = await prisma.$transaction(async (tx) => {
     if (semanticChanged) await tx.studioPosePreviewCandidate.deleteMany({ where: { poseId } });
     return tx.studioPose.update({ where: { id: poseId }, data, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
   });
+  if (semanticChanged) deletePreviewCandidateOutputs(staleCandidates);
   return toStudioPoseSummary(pose, true);
 }
 
 export async function deleteStudioPose(poseId: string) {
   const existing = await prisma.studioPose.findUnique({ where: { id: poseId }, select: { id: true } });
   if (!existing) return null;
+  const candidates = await prisma.studioPosePreviewCandidate.findMany({ where: { poseId }, select: { assetUrl: true, thumbnailUrl: true } });
   await prisma.studioPose.delete({ where: { id: poseId } });
+  deletePreviewCandidateOutputs(candidates);
   return { id: poseId };
 }
 
@@ -437,8 +443,12 @@ export async function deleteStudioPosePreviewCandidate(candidateId: string) {
   if (!candidate) return null;
   await prisma.$transaction(async (tx) => {
     await tx.studioPosePreviewCandidate.delete({ where: { id: candidateId } });
-    if (candidate.pose.primaryPreviewId === candidateId) await tx.studioPose.update({ where: { id: candidate.poseId }, data: { primaryPreviewId: null } });
+    if (candidate.pose.primaryPreviewId === candidateId) {
+      const replacement = await tx.studioPosePreviewCandidate.findFirst({ where: { poseId: candidate.poseId, id: { not: candidateId } }, orderBy: { createdAt: 'desc' }, select: { id: true } });
+      await tx.studioPose.update({ where: { id: candidate.poseId }, data: { primaryPreviewId: replacement?.id ?? null } });
+    }
   });
+  deletePreviewCandidateOutputs([{ assetUrl: candidate.assetUrl, thumbnailUrl: candidate.thumbnailUrl }]);
   return { id: candidateId, poseId: candidate.poseId };
 }
 
@@ -463,6 +473,33 @@ function resolveLocalPathFromUrl(url: string): string | null {
   const normalized = url.split('?')[0];
   if (normalized.startsWith('/generations/') || normalized.startsWith('/results/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
   return null;
+}
+
+function deleteLocalPosePreviewOutput(url: string | null | undefined) {
+  if (!url) return;
+  const localPath = resolveLocalPathFromUrl(url);
+  if (!localPath || !fs.existsSync(localPath)) return;
+  const allowedRoot = path.join(process.cwd(), 'public', 'generations', 'studio-pose-library');
+  const resolved = path.resolve(localPath);
+  if (!resolved.startsWith(path.resolve(allowedRoot))) return;
+  try {
+    fs.unlinkSync(resolved);
+    let dir = path.dirname(resolved);
+    while (dir.startsWith(path.resolve(allowedRoot)) && dir !== path.resolve(allowedRoot)) {
+      if (fs.readdirSync(dir).length > 0) break;
+      fs.rmdirSync(dir);
+      dir = path.dirname(dir);
+    }
+  } catch (error) {
+    console.warn('Failed to delete local pose preview output:', error);
+  }
+}
+
+function deletePreviewCandidateOutputs(candidates: Array<{ assetUrl: string; thumbnailUrl?: string | null }>) {
+  for (const candidate of candidates) {
+    deleteLocalPosePreviewOutput(candidate.assetUrl);
+    if (candidate.thumbnailUrl && candidate.thumbnailUrl !== candidate.assetUrl) deleteLocalPosePreviewOutput(candidate.thumbnailUrl);
+  }
 }
 
 function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail') {
