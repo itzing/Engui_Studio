@@ -799,8 +799,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const selectedVersionForShot = useCallback((shot: StudioSessionShotSummary) => {
     const shotVersions = versionsByShotId.get(shot.id) ?? [];
     if (!shotVersions.length) return null;
-    const selectedId = selectedVersionByShotId[shot.id] || shot.selectionVersionId || shotVersions[shotVersions.length - 1]?.id;
-    return shotVersions.find((version) => version.id === selectedId) ?? shotVersions[shotVersions.length - 1] ?? null;
+    const explicitSelectedId = selectedVersionByShotId[shot.id];
+    const latestVersion = shotVersions[shotVersions.length - 1] ?? null;
+    return explicitSelectedId
+      ? shotVersions.find((version) => version.id === explicitSelectedId) ?? latestVersion
+      : latestVersion;
   }, [selectedVersionByShotId, versionsByShotId]);
 
   const resultTileItems = useMemo(() => shots.map((shot) => {

@@ -1237,7 +1237,6 @@ export async function runAllStudioSessionShots(runId: string) {
         where: { hidden: false },
         orderBy: [{ versionNumber: 'desc' }, { createdAt: 'desc' }],
       },
-      selectedVersion: true,
     },
     orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
   });
@@ -1250,9 +1249,7 @@ export async function runAllStudioSessionShots(runId: string) {
       continue;
     }
 
-    const reviewVersion = shot.selectedVersion && !shot.selectedVersion.hidden
-      ? shot.selectedVersion
-      : shot.versions[0] ?? null;
+    const reviewVersion = shot.versions[0] ?? null;
     const reviewState = reviewVersion?.reviewState ?? 'unreviewed';
     if (!relaunchableReviewStates.has(reviewState)) {
       skippedShotIds.push(shot.id);
