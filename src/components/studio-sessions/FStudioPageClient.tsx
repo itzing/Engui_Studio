@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
-import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioFramingPresetSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionPoseSnapshot, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
+import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioFramingPresetSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseCategorySummary, StudioPoseSetSummary, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionPoseSnapshot, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
 
 type FStudioRoute =
   | { level: 'portfolios' }
@@ -311,6 +311,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [collectionDetail, setCollectionDetail] = useState<CollectionDetail>(null);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [poseSets, setPoseSets] = useState<StudioPoseSetSummary[]>([]);
+  const [poseCategories, setPoseCategories] = useState<StudioPoseCategorySummary[]>([]);
   const [framingPresets, setFramingPresets] = useState<StudioFramingPresetSummary[]>([]);
   const [showCharacterManager, setShowCharacterManager] = useState(false);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
@@ -375,12 +376,14 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
         const charData = await fetchJson('/api/characters', 'Failed to fetch characters');
         if (!cancelled) setCharacters(Array.isArray(charData.characters) ? charData.characters : []);
         if (!activeWorkspaceId) return;
-        const [poseData, framingData] = await Promise.all([
+        const [poseData, poseCategoryData, framingData] = await Promise.all([
           fetchJson(`/api/studio/pose-sets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch pose sets'),
+          fetchJson(`/api/studio/pose-library/categories?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch pose categories'),
           fetchJson(`/api/studio/framing-presets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch framing presets'),
         ]);
         if (!cancelled) {
           setPoseSets(Array.isArray(poseData.poseSets) ? poseData.poseSets : []);
+          setPoseCategories(Array.isArray(poseCategoryData.categories) ? poseCategoryData.categories : []);
           setFramingPresets(Array.isArray(framingData.presets) ? framingData.presets : []);
         }
       } catch (err) { if (!cancelled) setError(toErrorMessage(err, 'Failed to load F-Studio')); }
@@ -408,7 +411,10 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'poseLibrary' || route.level === 'poseLibraryCategory' || route.level === 'poseLibraryPose') {
       const crumbs: Array<{ label: string; href?: string }> = [{ label: 'Pose Library', href: route.level === 'poseLibrary' && route.view !== 'all' ? undefined : '/studio-sessions/pose-library' }];
       if (route.level === 'poseLibrary' && route.view === 'all') crumbs.push({ label: 'All poses' });
-      if (route.level === 'poseLibraryCategory' || route.level === 'poseLibraryPose') crumbs.push({ label: 'Category', href: route.level === 'poseLibraryCategory' ? undefined : `/studio-sessions/pose-library/categories/${route.categoryId}` });
+      if (route.level === 'poseLibraryCategory' || route.level === 'poseLibraryPose') {
+        const categoryName = poseCategories.find((category) => category.id === route.categoryId)?.name || 'Category';
+        crumbs.push({ label: categoryName, href: route.level === 'poseLibraryCategory' ? undefined : `/studio-sessions/pose-library/categories/${route.categoryId}` });
+      }
       if (route.level === 'poseLibraryPose') crumbs.push({ label: 'Pose' });
       return crumbs;
     }
@@ -422,7 +428,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if ((route.level === 'collection' || (route.level === 'portfolio' && route.section === 'collections')) && portfolioId) crumbs.push({ label: 'Collections', href: route.level === 'collection' ? `/studio-sessions/portfolios/${portfolioId}/collections` : undefined });
     if (route.level === 'collection' && collectionDetail?.collection) crumbs.push({ label: collectionDetail.collection.name });
     return crumbs;
-  }, [collectionDetail?.collection, portfolioId, route, selectedPortfolio, selectedRun, selectedSession, sessionId]);
+  }, [collectionDetail?.collection, portfolioId, poseCategories, route, selectedPortfolio, selectedRun, selectedSession, sessionId]);
 
   async function createPortfolio(character: CharacterSummary) {
     if (!activeWorkspaceId) return;
@@ -613,6 +619,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
   const [revisions, setRevisions] = useState<StudioSessionShotRevisionSummary[]>([]);
   const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
+  const [runOverride, setRunOverride] = useState<StudioSessionRunSummary | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [controlStrengthDraft, setControlStrengthDraft] = useState('1');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [launchMessage, setLaunchMessage] = useState<string | null>(null);
@@ -626,6 +637,17 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   useEffect(() => { setShots(detail?.shots || []); }, [detail?.shots]);
   useEffect(() => { setRevisions(detail?.revisions || []); }, [detail?.revisions]);
   useEffect(() => { setVersions(detail?.versions || []); }, [detail?.versions]);
+  useEffect(() => { setRunOverride(null); }, [detail?.run]);
+
+  const run = runOverride ?? detail?.run ?? null;
+  const runSettings = run?.runSettings || {};
+  const resolution = run?.resolutionPolicy || {};
+  const snapshot = run?.templateSnapshot as Record<string, any> | undefined;
+  const poseSetName = typeof snapshot?.poseSetName === 'string' && snapshot.poseSetName.trim() ? snapshot.poseSetName : run?.poseSetId;
+  const framingPolicyLabel = formatRunFramingPolicy(runSettings.framingPolicy, framingPresets);
+  const currentControlStrength = typeof runSettings.controlnet_strength === 'number' ? runSettings.controlnet_strength : 1;
+
+  useEffect(() => { setControlStrengthDraft(String(currentControlStrength)); }, [currentControlStrength, run?.id]);
 
   const revisionsByShotId = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const pickerShot = useMemo(() => shots.find((shot) => shot.id === posePickerShotId) ?? null, [posePickerShotId, shots]);
@@ -680,6 +702,31 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     }
   };
 
+  const saveRunSettings = async () => {
+    if (!run) return;
+    const parsed = Number(controlStrengthDraft);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
+      setSettingsError('ControlNet strength must be between 0 and 2.');
+      return;
+    }
+    setSavingSettings(true);
+    setSettingsError(null);
+    try {
+      const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generationSettings: { ...runSettings, controlnet_strength: parsed } }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to save run settings');
+      setRunOverride(data.run as StudioSessionRunSummary);
+    } catch (error) {
+      setSettingsError(toErrorMessage(error, 'Failed to save run settings'));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const reviewVersion = async (versionId: string, reviewState: StudioSessionShotVersionSummary['reviewState']) => {
     setReviewingVersionId(versionId);
     try {
@@ -697,12 +744,12 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   };
 
   const launchRun = async () => {
-    if (!detail?.run || launching) return;
+    if (!run || launching) return;
     setLaunching(true);
     setLaunchMessage(null);
     setLaunchError(null);
     try {
-      const response = await fetch(`/api/studio/runs/${encodeURIComponent(detail.run.id)}/launch`, { method: 'POST' });
+      const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}/launch`, { method: 'POST' });
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch run');
       const launchedCount = Array.isArray(data.launched) ? data.launched.length : 0;
@@ -715,21 +762,34 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     }
   };
 
-  const run = detail?.run;
-  const snapshot = run?.templateSnapshot as Record<string, any> | undefined;
-  const runSettings = run?.runSettings || {};
-  const resolution = run?.resolutionPolicy || {};
-  const poseSetName = typeof snapshot?.poseSetName === 'string' && snapshot.poseSetName.trim() ? snapshot.poseSetName : run?.poseSetId;
-  const framingPolicyLabel = formatRunFramingPolicy(runSettings.framingPolicy, framingPresets);
+  const renderPoseFrame = (shot: StudioSessionShotSummary, revision?: StudioSessionShotRevisionSummary) => {
+    const poseImage = revision?.poseSnapshot.primaryPreviewUrl || revision?.poseSnapshot.openPose?.imageUrl || null;
+    const poseName = revision?.poseSnapshot.name || 'Pose pending';
+    if (poseImage) return <img src={poseImage} alt={poseName} className="h-full w-full object-contain" />;
+    return <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>;
+  };
 
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xl font-semibold">{run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{run ? `${run.count} shots · ${run.status}` : 'Loading run details…'}</div></div><Button type="button" onClick={() => void launchRun()} disabled={!run || launching} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">{launching ? 'Launching…' : 'Launch run'}</Button></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xl font-semibold">{run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{run ? `${run.count} shots · ${run.status}` : 'Loading run details…'}</div></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">Run settings</Button><Button type="button" onClick={() => void launchRun()} disabled={!run || launching} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">{launching ? 'Launching…' : 'Launch run'}</Button></div></div>
     {launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}
     {launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}
-    <Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Draft shots</div><div className="mt-1 text-xs text-white/45">Choose a concrete pose before launch, or leave it pending for automatic assignment.</div></div><div className="space-y-2">{shots.map((shot) => { const revision = revisionsByShotId.get(shot.id); const poseImage = revision?.poseSnapshot.primaryPreviewUrl || revision?.poseSnapshot.openPose?.imageUrl || null; return <div key={shot.id} className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3">{poseImage ? <img src={poseImage} alt={revision?.poseSnapshot.name || shot.label} className="h-14 w-11 rounded-xl object-cover" /> : <div className="flex h-14 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[10px] text-white/35">Pose</div>}<div className="min-w-0"><div className="text-sm font-medium text-white">{shot.label}</div><div className="mt-1 text-xs text-white/50">{shot.category}{revision ? ` · ${revision.poseSnapshot.name}` : ' · pose pending'}</div>{revision?.poseSnapshot.prompt ? <div className="mt-1 line-clamp-2 max-w-2xl text-xs text-white/40">{revision.poseSnapshot.prompt}</div> : null}</div></div><div className="flex items-center gap-2"><div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.status}</div><Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(shot.id)} className="h-8 border-white/10 bg-white/[0.04] px-3 text-xs text-white/75 hover:bg-white/[0.08]">{revision ? 'Change pose' : 'Choose pose'}</Button></div></div></div>; })}{shots.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/45">No draft shots yet.</div> : null}</div></CardContent></Card>
-    <Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">For now these are set when creating the run; editing count/pose set after draft shots exist will be the next slice.</div></div><div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Shot count" value={run ? String(run.count) : 'Not set'} /><Info label="Framing" value={framingPolicyLabel} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} /><Info label="Resolution" value={typeof resolution.shortSidePx === 'number' && typeof resolution.longSidePx === 'number' ? `${resolution.shortSidePx} × ${resolution.longSidePx}` : 'Default'} /></div></CardContent></Card>
+
+    <TileGrid>{shots.map((shot) => { const revision = revisionsByShotId.get(shot.id); return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{renderPoseFrame(shot, revision)}</div><div className="space-y-3 p-4"><div><div className="text-sm font-semibold text-white">{shot.label}</div><div className="mt-1 text-xs text-white/50">{shot.category}{revision ? ` · ${revision.poseSnapshot.name}` : ' · pose pending'}</div></div><div className="flex items-center justify-between gap-2"><span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.status}</span><Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(shot.id)} className="h-8 border-white/10 bg-white/[0.04] px-3 text-xs text-white/75 hover:bg-white/[0.08]">{revision ? 'Change pose' : 'Choose pose'}</Button></div></div></div>; })}{shots.length === 0 ? <EmptyTile title="No draft shots yet" description="Create a run with shot slots before launching." /> : null}</TileGrid>
+
     <TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; const revision = revisions.find((item) => item.id === version.revisionId) ?? revisionsByShotId.get(version.shotId); return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}{revision ? ` · ${revision.poseSnapshot.name}` : ''}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}<Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(version.shotId)} className="h-7 border-white/10 bg-white/[0.04] px-2 text-[11px] text-white/70 hover:bg-white/[0.08]">Change shot pose</Button></div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Click Launch run when you are ready; generated images will appear here for review." /> : null}</TileGrid>
-    <Dialog open={Boolean(posePickerShotId)} onOpenChange={(open) => { if (!open) { setPosePickerShotId(null); setPosePickerPoses([]); setPosePickerError(null); } }}><DialogContent className="max-w-5xl border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{pickerShot ? `Choose pose for ${pickerShot.label}` : 'Choose pose'}</DialogTitle><DialogDescription className="text-white/50">Manual desktop assignment. This updates the shot plan only; it does not launch a generation job.</DialogDescription></DialogHeader>{posePickerError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{posePickerError}</div> : null}{posePickerLoading ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/50">Loading poses…</div> : <div className="grid max-h-[65vh] grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 overflow-y-auto pr-1">{posePickerPoses.map((pose) => { const selected = pickerRevision?.poseId === pose.id; const imageUrl = pose.primaryPreviewUrl || pose.openPose?.imageUrl || null; return <button key={pose.id} type="button" disabled={savingPoseId === pose.id} onClick={() => void choosePose(pose.id)} className={`overflow-hidden rounded-2xl border text-left transition ${selected ? 'border-blue-400/70 bg-blue-500/15' : 'border-white/10 bg-white/[0.035] hover:border-white/25 hover:bg-white/[0.06]'}`}>{imageUrl ? <img src={imageUrl} alt={pose.name} className="aspect-[3/4] w-full object-cover" /> : <div className="flex aspect-[3/4] w-full items-center justify-center bg-black/35 text-sm text-white/35">No preview</div>}<div className="space-y-1 p-3"><div className="line-clamp-1 text-sm font-medium text-white">{pose.name}</div><div className="text-[11px] text-white/45">{pose.orientation} · {pose.framing}{pose.openPose?.hasOpenPoseImage ? ' · OpenPose' : ''}</div>{selected ? <div className="text-[11px] text-blue-200">Current shot pose</div> : null}{savingPoseId === pose.id ? <div className="text-[11px] text-blue-200">Saving…</div> : null}</div></button>; })}{posePickerPoses.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/45">No available poses for this shot category.</div> : null}</div>}</DialogContent></Dialog>
+
+    <div className={`fixed inset-y-0 right-0 z-50 flex transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className="h-full w-[420px] max-w-[92vw] overflow-y-auto border-l border-white/10 bg-[#101014] p-5 shadow-2xl shadow-black/60">
+        <div className="mb-5 flex items-start justify-between gap-3"><div><div className="text-lg font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">Settings affect the next launch. Active jobs are not changed.</div></div><Button type="button" variant="outline" size="sm" onClick={() => setSettingsOpen(false)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">Close</Button></div>
+        <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Shot count" value={run ? String(run.count) : 'Not set'} /><Info label="Framing" value={framingPolicyLabel} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} /><Info label="Resolution" value={typeof resolution.shortSidePx === 'number' && typeof resolution.longSidePx === 'number' ? `${resolution.shortSidePx} × ${resolution.longSidePx}` : 'Default'} />
+          <label className="block rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65"><span className="text-xs uppercase tracking-[0.16em] text-white/35">ControlNet strength</span><Input type="number" min={0} max={2} step={0.05} value={controlStrengthDraft} onChange={(event) => setControlStrengthDraft(event.target.value)} className="mt-3 border-white/10 bg-black/30 text-white" /><span className="mt-2 block text-xs text-white/40">Used when a framing/OpenPose control image is attached. Default is 1.</span></label>
+          {settingsError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">{settingsError}</div> : null}
+          <Button type="button" onClick={() => void saveRunSettings()} disabled={!run || savingSettings} className="w-full bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</Button>
+        </div>
+      </div>
+    </div>
+
+    <Dialog open={Boolean(posePickerShotId)} onOpenChange={(open) => { if (!open) { setPosePickerShotId(null); setPosePickerPoses([]); setPosePickerError(null); } }}><DialogContent className="max-w-5xl border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{pickerShot ? `Choose pose for ${pickerShot.label}` : 'Choose pose'}</DialogTitle><DialogDescription className="text-white/50">Manual assignment. This updates the shot plan only; it does not launch a generation job.</DialogDescription></DialogHeader>{posePickerError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{posePickerError}</div> : null}{posePickerLoading ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/50">Loading poses…</div> : <div className="grid max-h-[65vh] grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 overflow-y-auto pr-1">{posePickerPoses.map((pose) => { const selected = pickerRevision?.poseId === pose.id; const imageUrl = pose.primaryPreviewUrl || pose.openPose?.imageUrl || null; return <button key={pose.id} type="button" disabled={savingPoseId === pose.id} onClick={() => void choosePose(pose.id)} className={`overflow-hidden rounded-2xl border text-left transition ${selected ? 'border-blue-400/70 bg-blue-500/15' : 'border-white/10 bg-white/[0.035] hover:border-white/25 hover:bg-white/[0.06]'}`}>{imageUrl ? <img src={imageUrl} alt={pose.name} className="aspect-[3/4] w-full object-contain" /> : <div className="flex aspect-[3/4] w-full items-center justify-center bg-black/35 px-3 text-center text-sm text-white/70">{pose.name}</div>}<div className="space-y-1 p-3"><div className="line-clamp-1 text-sm font-medium text-white">{pose.name}</div><div className="text-[11px] text-white/45">{pose.orientation} · {pose.framing}{pose.openPose?.hasOpenPoseImage ? ' · OpenPose' : ''}</div>{selected ? <div className="text-[11px] text-blue-200">Current shot pose</div> : null}{savingPoseId === pose.id ? <div className="text-[11px] text-blue-200">Saving…</div> : null}</div></button>; })}{posePickerPoses.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/45">No available poses for this shot category.</div> : null}</div>}</DialogContent></Dialog>
   </div>;
 }
 function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
