@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, FolderOpen, Grid2X2, Image, Layers3, Plus, Rows3, Trash2, UserRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crop, FolderOpen, Grid2X2, Image, Layers3, Plus, Rows3, Trash2, UserRound } from 'lucide-react';
 import CharacterManagerPanel from '@/components/characters/CharacterManagerPanel';
+import FramingLibraryWorkspace, { type FramingLibraryRoute } from '@/components/studio-sessions/FramingLibraryWorkspace';
 import PoseLibraryWorkspace, { type PoseLibraryRoute } from '@/components/studio-sessions/PoseLibraryWorkspace';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
 import RightPanel from '@/components/layout/RightPanel';
@@ -23,7 +24,8 @@ type FStudioRoute =
   | { level: 'runs'; portfolioId: string; sessionId: string }
   | { level: 'run'; portfolioId: string; sessionId: string; runId: string }
   | { level: 'collection'; portfolioId: string; collectionId: string }
-  | PoseLibraryRoute;
+  | PoseLibraryRoute
+  | FramingLibraryRoute;
 
 type RunDetail = { run?: StudioSessionRunSummary; shots?: StudioSessionShotSummary[]; revisions?: StudioSessionShotRevisionSummary[]; versions?: StudioSessionShotVersionSummary[] };
 type CollectionDetail = { collection: StudioCollectionSummary; items: StudioCollectionItemSummary[] } | null;
@@ -161,6 +163,7 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, hydrated, onToggle 
   const items = [
     { key: 'portfolios', label: 'Portfolios', icon: Grid2X2, href: '/studio-sessions', visible: true, active: route.level === 'portfolios' },
     { key: 'pose-library', label: 'Pose Library', icon: Image, href: '/studio-sessions/pose-library', visible: true, active: route.level === 'poseLibrary' || route.level === 'poseLibraryCategory' || route.level === 'poseLibraryPose' },
+    { key: 'framing-library', label: 'Framing Library', icon: Crop, href: '/studio-sessions/framing-library', visible: true, active: route.level === 'framingLibrary' },
     { key: 'sessions', label: 'Sessions', icon: Rows3, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}` : '#', visible: Boolean(portfolioId), active: (route.level === 'portfolio' && route.section !== 'collections') || route.level === 'session' },
     { key: 'runs', label: 'Runs', icon: Layers3, href: portfolioId && sessionId ? `/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs` : '#', visible: Boolean(portfolioId && sessionId), active: route.level === 'runs' || route.level === 'run' },
     { key: 'collections', label: 'Collections', icon: FolderOpen, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}/collections` : '#', visible: Boolean(portfolioId), active: route.level === 'collection' || (route.level === 'portfolio' && route.section === 'collections') },
@@ -398,6 +401,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
       if (route.level === 'poseLibraryPose') crumbs.push({ label: 'Pose' });
       return crumbs;
     }
+    if (route.level === 'framingLibrary') return [{ label: 'Framing Library' }];
     const crumbs: Array<{ label: string; href?: string }> = [{ label: 'Portfolios', href: route.level === 'portfolios' ? undefined : '/studio-sessions' }];
     if (selectedPortfolio && portfolioId) crumbs.push({ label: characterMeta(selectedPortfolio), href: route.level === 'portfolio' ? undefined : `/studio-sessions/portfolios/${portfolioId}` });
     if (route.level === 'session' || route.level === 'runs' || route.level === 'run') crumbs.push({ label: 'Sessions', href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}` : undefined });
@@ -498,6 +502,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   function renderCanvas() {
     if (!activeWorkspaceId) return <EmptyState title="No workspace selected" description="Select or create a workspace before using F-Studio." />;
     if (route.level === 'poseLibrary' || route.level === 'poseLibraryCategory' || route.level === 'poseLibraryPose') return <PoseLibraryWorkspace route={route} />;
+    if (route.level === 'framingLibrary') return <FramingLibraryWorkspace />;
     if (loading) return <LoadingGrid />;
     if (route.level === 'portfolios') return <TileGrid><AddTile label="New portfolio" onClick={() => setShowCreatePortfolio(true)} />{portfolios.map((portfolio) => <PortfolioTile key={portfolio.id} portfolio={portfolio} confirming={confirmingDeletePortfolioId === portfolio.id} deleting={deletingPortfolioId === portfolio.id} onDeleteClick={() => setConfirmingDeletePortfolioId(portfolio.id)} onConfirmDelete={() => void deletePortfolio(portfolio.id)} />)}{portfolios.length === 0 ? <EmptyTile title="No portfolios yet" description="Create the first character portfolio to start building sessions and collections." /> : null}</TileGrid>;
     if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
