@@ -14,6 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 
+type MediaResolution = { width: number; height: number };
+
 function parseJobOptions(rawOptions: unknown): Record<string, any> {
   if (!rawOptions) return {};
   if (typeof rawOptions === 'string') {
@@ -27,6 +29,29 @@ function parseJobOptions(rawOptions: unknown): Record<string, any> {
   return typeof rawOptions === 'object' ? rawOptions as Record<string, any> : {};
 }
 
+function readResolutionCandidate(value: unknown): MediaResolution | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const width = Number(record.width);
+  const height = Number(record.height);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    ? { width: Math.round(width), height: Math.round(height) }
+    : null;
+}
+
+function getRequestedResolution(job: { options?: unknown } | null): MediaResolution | null {
+  if (!job) return null;
+  const options = parseJobOptions((job as any).options);
+  const studioContext = parseJobOptions(options.studioSessionContext);
+  return readResolutionCandidate(studioContext.outputDimensions)
+    || readResolutionCandidate(studioContext.renderedOpenPoseControl)
+    || readResolutionCandidate(options);
+}
+
+function formatResolution(value: MediaResolution | null) {
+  return value ? `${value.width} × ${value.height}` : '—';
+}
+
 function compactLoraName(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return '';
   const normalized = value.trim().split('/').pop() || value.trim();
@@ -38,7 +63,10 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const { showToast } = useToast();
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
   const [isUpscaling, setIsUpscaling] = useState(false);
+  const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
   const selectedOutput = job?.outputs?.[0] || null;
+  const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
+  const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
   const hasSceneSnapshot = !!(job as any)?.sceneSnapshotJson;
@@ -90,6 +118,16 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
 
     return arraySlots.join(' • ');
   }, [job]);
+
+  const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
+    if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+    const next = { width: Math.round(width), height: Math.round(height) };
+    setActualResolutionByOutput((current) => {
+      const previous = current[outputId];
+      if (previous?.width === next.width && previous?.height === next.height) return current;
+      return { ...current, [outputId]: next };
+    });
+  };
 
   const downloadOutput = async () => {
     if (!selectedOutput?.url) return;
@@ -253,11 +291,11 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                   <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-border bg-black/30">
                     {selectedOutput?.url ? (
                       selectedOutput.type === 'video' ? (
-                        <video src={selectedOutput.url} controls playsInline className="max-h-[70vh] w-full object-contain" />
+                        <video src={selectedOutput.url} controls playsInline className="max-h-[70vh] w-full object-contain" onLoadedMetadata={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.videoWidth, event.currentTarget.videoHeight)} />
                       ) : selectedOutput.type === 'audio' ? (
                         <audio src={selectedOutput.url} controls className="w-full" />
                       ) : (
-                        <img src={selectedOutput.previewUrl || selectedOutput.url} alt={job.prompt || job.id} className="max-h-[70vh] w-full object-contain" />
+                        <img src={selectedOutput.previewUrl || selectedOutput.url} alt={job.prompt || job.id} className="max-h-[70vh] w-full object-contain" onLoad={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />
                       )
                     ) : (
                       <div className="p-6 text-sm text-muted-foreground">No output media yet.</div>
@@ -277,6 +315,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div><div className="text-muted-foreground">Type</div><div>{job.type}</div></div>
                     <div><div className="text-muted-foreground">Created</div><div>{new Date(job.createdAt || Date.now()).toLocaleString()}</div></div>
                     <div><div className="text-muted-foreground">Execution</div><div>{typeof job.executionMs === 'number' ? `${(job.executionMs / 1000).toFixed(2)}s` : '—'}</div></div>
+                    <div><div className="text-muted-foreground">Result resolution</div><div>{formatResolution(selectedActualResolution || requestedResolution)}</div></div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Prompt</div>

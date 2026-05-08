@@ -21,6 +21,7 @@ export type MobileJobDetail = {
   type: 'image' | 'video' | 'audio' | 'tts' | 'music';
   modelId: string;
   prompt: string;
+  options?: unknown;
   resultUrl?: string | null;
   thumbnailUrl?: string | null;
   outputs: MobileJobDetailOutput[];

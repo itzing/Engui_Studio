@@ -20,6 +20,44 @@ interface JobDetailsDialogProps {
 
 type GalleryBucket = 'common' | 'draft';
 
+type MediaResolution = { width: number; height: number };
+
+function parseRecord(value: unknown): Record<string, any> {
+    if (!value) return {};
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    return typeof value === 'object' ? value as Record<string, any> : {};
+}
+
+function readResolutionCandidate(value: unknown): MediaResolution | null {
+    if (!value || typeof value !== 'object') return null;
+    const record = value as Record<string, unknown>;
+    const width = Number(record.width);
+    const height = Number(record.height);
+    return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+        ? { width: Math.round(width), height: Math.round(height) }
+        : null;
+}
+
+function getRequestedResolution(job: Job | null): MediaResolution | null {
+    if (!job) return null;
+    const options = parseRecord((job as any).options);
+    const studioContext = parseRecord(options.studioSessionContext);
+    return readResolutionCandidate(studioContext.outputDimensions)
+        || readResolutionCandidate(studioContext.renderedOpenPoseControl)
+        || readResolutionCandidate(options);
+}
+
+function formatResolution(value: MediaResolution | null) {
+    return value ? `${value.width} × ${value.height}` : '—';
+}
+
 type JobOutput = {
     outputId: string;
     type: 'image' | 'video' | 'audio';
@@ -55,6 +93,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
     const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
     const [isUpscaling, setIsUpscaling] = useState(false);
+    const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -117,6 +156,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
 
     const outputs = jobOutputs.length > 0 ? jobOutputs : (fallbackOutput ? [fallbackOutput] : []);
     const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
+    const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
+    const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
     const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
@@ -124,6 +165,16 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
     const canNavigateLeft = Boolean(onNavigate && totalCount > 1 && currentIndex > 1);
     const canNavigateRight = Boolean(onNavigate && totalCount > 1 && currentIndex > 0 && currentIndex < totalCount);
+
+    const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
+        if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+        const next = { width: Math.round(width), height: Math.round(height) };
+        setActualResolutionByOutput((current) => {
+            const previous = current[outputId];
+            if (previous?.width === next.width && previous?.height === next.height) return current;
+            return { ...current, [outputId]: next };
+        });
+    };
 
     const handleDownload = async () => {
         if (!job || !selectedOutput?.url) return;
@@ -333,6 +384,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     controls
                                     loop
                                     className="max-w-full max-h-full object-contain"
+                                    onLoadedMetadata={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.videoWidth, event.currentTarget.videoHeight)}
                                 />
                             ) : isAudio ? (
                                 <div className="flex flex-col items-center justify-center w-full max-w-md gap-6 p-8 bg-zinc-900/50 rounded-xl border border-white/10 backdrop-blur-sm">
@@ -355,6 +407,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     src={selectedOutput.previewUrl || selectedOutput.url}
                                     alt={job.prompt || 'Generated Image'}
                                     className="max-w-full max-h-full object-contain"
+                                    onLoad={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
                                 />
                             )
                         ) : (
@@ -461,6 +514,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 <div className="space-y-1">
                                     <span className="text-xs text-muted-foreground">Execution</span>
                                     <div className="text-sm font-medium">{getExecutionLabel() || '—'}</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-xs text-muted-foreground">Result resolution</span>
+                                    <div className="text-sm font-medium">{formatResolution(selectedActualResolution || requestedResolution)}</div>
                                 </div>
                                 <div className="space-y-1 col-span-2">
                                     <span className="text-xs text-muted-foreground">Selected Output</span>
