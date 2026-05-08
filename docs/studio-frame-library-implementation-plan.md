@@ -545,7 +545,7 @@ Add preview generation for framing preset + pose combination:
 - Select framing preset.
 - Select pose with keypoints.
 - Render control PNG.
-- Launch Z-Image ControlNet preview if user confirms.
+- Live Z-Image ControlNet preview is intentionally deferred until the confirmation and budget UX is approved; current implementation must not launch paid preview jobs automatically.
 
 ### Pose preview extraction path
 
