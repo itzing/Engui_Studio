@@ -268,6 +268,18 @@ export function useMobileJobsScreen() {
   }, [selectedJobId, storageKey]);
 
   useEffect(() => {
+    if (!effectiveWorkspaceId) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadPage(1).catch(() => {
+        // ignore transient background refresh failures
+      });
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [effectiveWorkspaceId, loadPage]);
+
+  useEffect(() => {
     const activeJobs = loadedEntries
       .map(({ job }) => job)
       .filter((job) => ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status));

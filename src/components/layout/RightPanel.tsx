@@ -424,13 +424,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         return filters.join(',');
     };
 
-    const fetchJobsPage = useCallback(async (page: number, append = false) => {
+    const fetchJobsPage = useCallback(async (page: number, append = false, options?: { silent?: boolean }) => {
         if (!activeWorkspaceId) return;
 
-        if (append) {
-            setIsLoadingMore(true);
-        } else {
-            setIsLoadingJobs(true);
+        if (!options?.silent) {
+            if (append) {
+                setIsLoadingMore(true);
+            } else {
+                setIsLoadingJobs(true);
+            }
         }
 
         try {
@@ -463,8 +465,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 setLoadedJobs([]);
             }
         } finally {
-            setIsLoadingJobs(false);
-            setIsLoadingMore(false);
+            if (!options?.silent) {
+                setIsLoadingJobs(false);
+                setIsLoadingMore(false);
+            }
         }
     }, [activeWorkspaceId, mergeUniqueJobs, selectedFilters]);
 
@@ -750,6 +754,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         return () => window.clearInterval(interval);
     }, [activeWorkspaceId, panelMode, fetchGalleryAssets, filteredGalleryAssets]);
+
+    useEffect(() => {
+        if (!activeWorkspaceId || panelMode !== 'jobs') return;
+
+        const interval = window.setInterval(() => {
+            void fetchJobsPage(1, false, { silent: true });
+        }, 3000);
+
+        return () => window.clearInterval(interval);
+    }, [activeWorkspaceId, panelMode, fetchJobsPage]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
