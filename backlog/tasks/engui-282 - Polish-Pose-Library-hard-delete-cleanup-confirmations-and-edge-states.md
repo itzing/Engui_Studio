@@ -38,4 +38,4 @@ Reference:
 
 ## Implementation Notes
 
-Added stronger destructive confirmations for pose/category delete and replace import, missing-preview placeholders, import schema example, and no-preview candidate empty state. Physical preview file cleanup remains a follow-up hardening item if asset retention becomes an issue.
+Added stronger destructive confirmations for pose/category delete and replace import, missing-preview placeholders, import schema example, and no-preview candidate empty state. Preview candidate files are cleaned up only when their resolved paths are inside `public/generations/studio-pose-library`, including candidate/pose/category deletion and semantic pose edits. Deleting the primary candidate promotes the newest remaining candidate or clears the primary pointer.

@@ -46,4 +46,4 @@ Reference:
 
 ## Implementation Notes
 
-Final QA pass: Studio utils test suite passed, production build passed, service restarted, smoke checks for Studio/Pose Library/export/bulk-estimate passed. Drag-and-drop reorder is not implemented in this slice; reorder APIs exist and UI fallback remains a follow-up if strict DnD acceptance is required.
+Final QA pass: Studio utils test suite passed, production build passed, service restarted, smoke checks for Studio/Pose Library/export/bulk-estimate passed. Follow-up hardening added native desktop drag-and-drop reorder for category and pose tiles, retained Move up/down fallback controls, and added scoped local preview-file cleanup for pose library preview assets.
