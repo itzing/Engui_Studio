@@ -633,6 +633,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const [loraSettingsDraft, setLoraSettingsDraft] = useState<Record<string, unknown>>({});
   const [availableLoras, setAvailableLoras] = useState<StudioRunLoraFile[]>([]);
   const [isLoadingLoras, setIsLoadingLoras] = useState(false);
+  const [loraLoadError, setLoraLoadError] = useState<string | null>(null);
   const [showRunLoraSelector, setShowRunLoraSelector] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -676,16 +677,27 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   }, [loraSlotNames, loraWeightName, run?.id, runSettings]);
 
   useEffect(() => {
-    if (!settingsOpen || availableLoras.length > 0 || isLoadingLoras) return;
+    if ((!settingsOpen && !showRunLoraSelector) || availableLoras.length > 0) return;
     let cancelled = false;
     setIsLoadingLoras(true);
+    setLoraLoadError(null);
     fetch('/api/lora', { cache: 'no-store' })
-      .then((response) => response.json())
-      .then((data) => { if (!cancelled && data?.success && Array.isArray(data.loras)) setAvailableLoras(data.loras); })
-      .catch(() => { if (!cancelled) setAvailableLoras([]); })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data?.success || !Array.isArray(data.loras)) {
+          throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to load LoRAs');
+        }
+        if (!cancelled) setAvailableLoras(data.loras);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAvailableLoras([]);
+          setLoraLoadError(toErrorMessage(error, 'Failed to load LoRAs'));
+        }
+      })
       .finally(() => { if (!cancelled) setIsLoadingLoras(false); });
     return () => { cancelled = true; };
-  }, [availableLoras.length, isLoadingLoras, settingsOpen]);
+  }, [availableLoras.length, settingsOpen, showRunLoraSelector]);
 
   const selectedLoraSlots = useMemo(() => loraSlotNames.map((slotName) => {
     const path = String(loraSettingsDraft[slotName] ?? '').trim();
@@ -966,7 +978,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     </div>
 
     <Dialog open={showRunLoraSelector} onOpenChange={setShowRunLoraSelector}>
-      <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#101014] p-0 text-white"><DialogHeader className="border-b border-white/10 px-6 py-4"><DialogTitle>Select LoRA</DialogTitle></DialogHeader><div className="max-h-[65vh] overflow-y-auto px-6 py-4"><div className="space-y-2">{isLoadingLoras ? <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/45">Loading LoRAs…</div> : availableLoras.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">No LoRAs installed yet.</div> : availableLoras.map((lora) => <button key={lora.id} type="button" className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-left hover:border-blue-400/40 hover:bg-blue-500/10" onClick={() => { if (!nextEmptyLoraSlot) return; updateLoraDraft(nextEmptyLoraSlot, lora.s3Path); updateLoraDraft(loraWeightName(nextEmptyLoraSlot), 1); setShowRunLoraSelector(false); }}><div className="min-w-0 pr-3"><div className="truncate text-sm font-medium text-white/85">{lora.fileName}</div><div className="mt-1 truncate text-xs text-white/40">{lora.fileSize}</div></div><Plus className="h-4 w-4 shrink-0 text-white/45" /></button>)}</div></div></DialogContent>
+      <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#101014] p-0 text-white"><DialogHeader className="border-b border-white/10 px-6 py-4"><DialogTitle>Select LoRA</DialogTitle></DialogHeader><div className="max-h-[65vh] overflow-y-auto px-6 py-4"><div className="space-y-2">{isLoadingLoras ? <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/45">Loading LoRAs…</div> : loraLoadError ? <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100"><div>{loraLoadError}</div><Button type="button" variant="outline" size="sm" onClick={() => { setAvailableLoras([]); setLoraLoadError(null); setShowRunLoraSelector(false); window.setTimeout(() => setShowRunLoraSelector(true), 0); }} className="border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]">Retry</Button></div> : availableLoras.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">No LoRAs installed yet.</div> : availableLoras.map((lora) => <button key={lora.id} type="button" className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-left hover:border-blue-400/40 hover:bg-blue-500/10" onClick={() => { if (!nextEmptyLoraSlot) return; updateLoraDraft(nextEmptyLoraSlot, lora.s3Path); updateLoraDraft(loraWeightName(nextEmptyLoraSlot), 1); setShowRunLoraSelector(false); }}><div className="min-w-0 pr-3"><div className="truncate text-sm font-medium text-white/85">{lora.fileName}</div><div className="mt-1 truncate text-xs text-white/40">{lora.fileSize}</div></div><Plus className="h-4 w-4 shrink-0 text-white/45" /></button>)}</div></div></DialogContent>
     </Dialog>
 
     <GalleryFullscreenViewer open={viewerOpen} items={viewerItems} currentIndex={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerOpen(false)} />
