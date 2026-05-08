@@ -44,6 +44,7 @@ model Job {
   studioSessionShotVersions        StudioSessionShotVersion[]
   studioSessionMaterializationTask StudioSessionJobMaterialization?
   materializationTasks             JobMaterializationTask[]
+  studioPosePreviewCandidates      StudioPosePreviewCandidate[]
 
   @@index([userId, createdAt(sort: Desc)]) // 사용자별 최신 순 정렬을 위한 복합 인덱스
   @@index([userId, status]) // 사용자별 상태별 조회를 위한 인덱스
@@ -146,6 +147,9 @@ model Workspace {
   studioSessionRunPresets    StudioSessionRunPreset[]
   studioCollections          StudioCollection[]
   studioCollectionItems      StudioCollectionItem[]
+  studioPoseCategories       StudioPoseCategory[]
+  studioPoses                StudioPose[]
+  studioPoseLibrarySettings  StudioPoseLibrarySettings?
 
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
@@ -588,6 +592,89 @@ model StudioCollectionItem {
   @@index([workspaceId, portfolioId, collectionId, sortOrder])
   @@index([versionId])
   @@map("studio_collection_items")
+}
+
+model StudioPoseLibrarySettings {
+  id                         String   @id @default(uuid())
+  workspaceId                String   @unique
+  subjectDescription         String   @default("adult neutral model")
+  clothingDescription        String   @default("simple fitted neutral clothing")
+  backgroundDescription      String   @default("neutral seamless studio background")
+  stylePreset                String   @default("realistic studio photo, softbox lighting")
+  defaultVariantCount        Int      @default(4)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("studio_pose_library_settings")
+}
+
+model StudioPoseCategory {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  slug           String
+  name           String
+  description    String   @default("")
+  sortOrder      Int      @default(0)
+  coverPoseId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  poses     StudioPose[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, sortOrder])
+  @@index([workspaceId, updatedAt(sort: Desc)])
+  @@map("studio_pose_categories")
+}
+
+model StudioPose {
+  id                String   @id @default(uuid())
+  workspaceId       String
+  categoryId        String
+  slug              String
+  title             String
+  tagsJson          String   @default("[]")
+  posePrompt        String   @default("")
+  orientation       String   @default("portrait")
+  framing           String   @default("full_body")
+  cameraAngle       String   @default("front")
+  shotDistance      String   @default("wide")
+  sortOrder         Int      @default(0)
+  primaryPreviewId  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace         Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category          StudioPoseCategory           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  previewCandidates StudioPosePreviewCandidate[]
+
+  @@unique([workspaceId, categoryId, slug])
+  @@index([workspaceId, categoryId, sortOrder])
+  @@index([workspaceId, updatedAt(sort: Desc)])
+  @@map("studio_poses")
+}
+
+model StudioPosePreviewCandidate {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  poseId         String
+  sourceJobId    String?
+  assetUrl       String
+  thumbnailUrl   String?
+  promptSnapshotJson String @default("{}")
+  settingsSnapshotJson String @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pose      StudioPose @relation(fields: [poseId], references: [id], onDelete: Cascade)
+  sourceJob Job?       @relation(fields: [sourceJobId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([workspaceId, poseId, createdAt(sort: Desc)])
+  @@index([sourceJobId])
+  @@map("studio_pose_preview_candidates")
 }
 
 model StudioSessionRun {

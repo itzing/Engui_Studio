@@ -12,6 +12,8 @@ export type StudioSessionVersionStatus = 'completed' | 'failed' | 'canceled';
 export type StudioSessionVersionReviewState = 'unreviewed' | 'pick' | 'maybe' | 'reject' | 'hero' | 'needs_retry';
 export type StudioSessionPoseOrientation = 'portrait' | 'landscape' | 'square';
 export type StudioSessionPoseFraming = 'closeup' | 'portrait' | 'half_body' | 'three_quarter' | 'full_body';
+export type StudioPoseCameraAngle = 'front' | 'three_quarter' | 'side' | 'back' | 'high' | 'low';
+export type StudioPoseShotDistance = 'close' | 'medium' | 'wide';
 
 export interface StudioSessionTemplateCategoryRule {
   category: string;
@@ -50,6 +52,64 @@ export interface StudioPoseSetSummary {
   category: string;
   poseIds: string[];
   tags: string[];
+}
+
+export interface StudioPosePreviewCandidateSummary {
+  id: string;
+  poseId: string;
+  sourceJobId: string | null;
+  assetUrl: string;
+  thumbnailUrl: string | null;
+  promptSnapshot: Record<string, unknown>;
+  settingsSnapshot: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioPoseLibrarySettingsSummary {
+  id: string;
+  workspaceId: string;
+  subjectDescription: string;
+  clothingDescription: string;
+  backgroundDescription: string;
+  stylePreset: string;
+  defaultVariantCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioPoseCategorySummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  coverPoseId: string | null;
+  coverImageUrl: string | null;
+  poseCount: number;
+  missingPreviewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioPoseSummary {
+  id: string;
+  workspaceId: string;
+  categoryId: string;
+  categoryName: string;
+  title: string;
+  tags: string[];
+  posePrompt: string;
+  orientation: StudioSessionPoseOrientation;
+  framing: StudioSessionPoseFraming;
+  cameraAngle: StudioPoseCameraAngle;
+  shotDistance: StudioPoseShotDistance;
+  sortOrder: number;
+  primaryPreviewId: string | null;
+  primaryPreviewUrl: string | null;
+  previewCandidates?: StudioPosePreviewCandidateSummary[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StudioRunSettingsDraft {
@@ -176,6 +236,8 @@ export interface StudioSessionPoseSnapshot {
   prompt: string;
   orientation: StudioSessionPoseOrientation;
   framing: StudioSessionPoseFraming;
+  cameraAngle?: StudioPoseCameraAngle;
+  shotDistance?: StudioPoseShotDistance;
 }
 
 export interface StudioSessionPromptSnapshot {
