@@ -862,7 +862,8 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       <div className="absolute left-3 top-3 z-10 max-w-[calc(100%-1.5rem)] rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white/85 shadow-lg shadow-black/20">{poseName}</div>
       {resultUrl && version ? <button type="button" onClick={() => openResultViewer(version.id)} className="block h-full w-full cursor-zoom-in"><img src={resultUrl} alt={`${shot.label} result`} className="h-full w-full object-cover" /></button> : poseImage ? <img src={poseImage} alt={poseName} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>}
       {version && shotVersions.length > 1 ? <div className="absolute inset-x-3 top-1/2 z-20 flex -translate-y-1/2 items-center justify-between pointer-events-none"><button type="button" onClick={(event) => { event.stopPropagation(); showPreviousVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={(event) => { event.stopPropagation(); showNextVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronRight className="h-4 w-4" /></button></div> : null}
-      {version && shotVersions.length > 1 ? <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">{versionIndex + 1}/{shotVersions.length}</div> : null}
+      <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">{shot.activeJobStatus || shot.latestJobStatus || shot.status}</div>
+      {version ? <div className="absolute bottom-3 right-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">v{version.versionNumber}{shotVersions.length > 1 ? `/${shotVersions.length}` : ''} · {version.reviewState}</div> : null}
     </div>;
   };
 
@@ -884,12 +885,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       const selectedVersion = selectedVersionForShot(shot);
       return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         {renderShotFrame(shot, revision, selectedVersion)}
-        <div className="space-y-3 p-4">
-          <div className="flex items-center justify-between gap-2"><span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.activeJobStatus || shot.latestJobStatus || shot.status}</span><Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(shot.id)} className="h-8 border-white/10 bg-white/[0.04] px-3 text-xs text-white/75 hover:bg-white/[0.08]">{revision ? 'Change pose' : 'Choose pose'}</Button></div>
-          {selectedVersion ? <div className="flex flex-wrap items-center gap-1.5">
-            {reviewStates.map((state) => <Button key={state.value} size="icon" variant="outline" title={state.label} aria-label={state.label} disabled={reviewingVersionId === selectedVersion.id} onClick={() => reviewVersion(selectedVersion.id, state.value)} className={`h-8 w-8 border-white/10 ${state.value === 'reject' && selectedVersion.reviewState === state.value ? 'bg-red-500 text-white' : selectedVersion.reviewState === state.value ? 'bg-blue-500 text-white' : state.value === 'reject' ? 'bg-white/[0.04] text-red-200/75 hover:bg-red-500/15 hover:text-red-100' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{reviewIcon(state.value)}</Button>)}
-            <span className="ml-auto text-[11px] text-white/40">v{selectedVersion.versionNumber} · {selectedVersion.reviewState}</span>
-          </div> : null}
+        <div className="p-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedVersion ? reviewStates.map((state) => <Button key={state.value} size="icon" variant="outline" title={state.label} aria-label={state.label} disabled={reviewingVersionId === selectedVersion.id} onClick={() => reviewVersion(selectedVersion.id, state.value)} className={`h-8 w-8 border-white/10 ${state.value === 'reject' && selectedVersion.reviewState === state.value ? 'bg-red-500 text-white' : selectedVersion.reviewState === state.value ? 'bg-blue-500 text-white' : state.value === 'reject' ? 'bg-white/[0.04] text-red-200/75 hover:bg-red-500/15 hover:text-red-100' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{reviewIcon(state.value)}</Button>) : null}
+            <Button type="button" size="icon" variant="outline" title={revision ? 'Change pose' : 'Choose pose'} aria-label={revision ? 'Change pose' : 'Choose pose'} onClick={() => void openPosePicker(shot.id)} className="h-8 w-8 border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"><span className="relative flex h-4 w-4 items-center justify-center"><UserRound className="h-4 w-4" /><RotateCcw className="absolute -right-1 -top-1 h-2.5 w-2.5" /></span></Button>
+          </div>
         </div>
       </div>;
     })}{shots.length === 0 ? <EmptyTile title="No draft shots yet" description="Create a run with shot slots before launching." /> : null}</TileGrid>
