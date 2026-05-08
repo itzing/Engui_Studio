@@ -660,7 +660,6 @@ export const studioPoseOpenPoseMaterializationHandler = {
     const outputUrl = buildJobOutputUrls(job)[0];
     if (!outputUrl) throw new Error(`Completed OpenPose extraction job ${job.id} has no output URL`);
     const encryptedKeypoints = extractEncryptedPoseKeypoints(job);
-    if (!encryptedKeypoints) throw new Error(`Completed OpenPose extraction job ${job.id} has no encrypted pose keypoints`);
     const openPoseImageUrl = materializePosePreviewOutput(outputUrl, task.targetId, 'openpose');
     await prisma.studioPose.update({
       where: { id: task.targetId },
