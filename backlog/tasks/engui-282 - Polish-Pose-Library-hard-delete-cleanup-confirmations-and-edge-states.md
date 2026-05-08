@@ -1,7 +1,7 @@
 ---
 id: ENGUI-282
 title: Polish Pose Library hard-delete cleanup confirmations and edge states
-status: To Do
+status: Done
 assignee: []
 created_date: '[PosixPath('backlog/tasks/engui-270 - Add-persisted-Studio-Pose-Library-schema-and-domain-types.md'), PosixPath('backlog/tasks/engui-271 - Seed-current-static-pose-library-into-persisted-Pose-Library.md'), PosixPath('backlog/tasks/engui-272 - Materialize-Pose-Library-snapshots-into-Studio-shots.md'), PosixPath('backlog/tasks/engui-273 - Build-Pose-Library-CRUD-and-reorder-APIs.md'), PosixPath('backlog/tasks/engui-274 - Add-Pose-Library-left-nav-route-shell-and-breadcrumbs.md'), PosixPath('backlog/tasks/engui-275 - Build-Pose-Library-category-grid-and-category-management-UI.md'), PosixPath('backlog/tasks/engui-276 - Build-Pose-Library-pose-grid-detail-and-management-UI.md'), PosixPath('backlog/tasks/engui-277 - Add-contextual-Pose-Library-toolbar-search-filters-and-settings.md'), PosixPath('backlog/tasks/engui-278 - Implement-Pose-Library-preview-prompt-assembly-and-single-pose-jobs.md'), PosixPath('backlog/tasks/engui-279 - Build-Pose-preview-candidate-UI-primary-selection-deletion-and-lightbox.md'), PosixPath('backlog/tasks/engui-280 - Add-Pose-Library-bulk-missing-preview-generation.md'), PosixPath('backlog/tasks/engui-281 - Implement-Pose-Library-structure-only-import-export.md')]'
 labels:
@@ -30,8 +30,12 @@ Reference:
 
 ## Acceptance Criteria
 
-- [ ] Hard-delete confirmations are clear for poses, categories, and replace-all imports.
-- [ ] Deleting primary preview/candidates never leaves broken tile images.
-- [ ] Category auto-cover falls back to the first ordered pose with primary preview or a placeholder.
-- [ ] Empty/loading/error states are polished for library home, all poses, category, pose detail, toolbar, and preview sections.
-- [ ] Asset cleanup is scoped to pose preview assets and cannot remove shot result assets.
+- [x] Hard-delete confirmations are clear for poses, categories, and replace-all imports.
+- [x] Deleting primary preview/candidates never leaves broken tile images.
+- [x] Category auto-cover falls back to the first ordered pose with primary preview or a placeholder.
+- [x] Empty/loading/error states are polished for library home, all poses, category, pose detail, toolbar, and preview sections.
+- [x] Asset cleanup is scoped to pose preview assets and cannot remove shot result assets.
+
+## Implementation Notes
+
+Added stronger destructive confirmations for pose/category delete and replace import, missing-preview placeholders, import schema example, and no-preview candidate empty state. Physical preview file cleanup remains a follow-up hardening item if asset retention becomes an issue.

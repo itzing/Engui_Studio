@@ -566,3 +566,110 @@ export const studioPosePreviewMaterializationHandler = {
     console.warn(`Studio pose preview generation failed for ${task.targetId}: ${sourceError}`);
   },
 };
+
+export type StudioPoseLibraryExportPayload = {
+  version: 1;
+  exportedAt: string;
+  categories: Array<{
+    name: string;
+    description: string;
+    poses: Array<{
+      title: string;
+      tags: string[];
+      posePrompt: string;
+      orientation: StudioSessionPoseOrientation;
+      framing: StudioSessionPoseFraming;
+      cameraAngle: StudioPoseCameraAngle;
+      shotDistance: StudioPoseShotDistance;
+    }>;
+  }>;
+};
+
+export async function exportStudioPoseLibrary(input: { workspaceId: string; categoryId?: string | null }): Promise<StudioPoseLibraryExportPayload> {
+  await ensureStudioPoseLibrarySeeded(input.workspaceId);
+  const categories = await prisma.studioPoseCategory.findMany({
+    where: { workspaceId: input.workspaceId, ...(input.categoryId ? { id: input.categoryId } : {}) },
+    include: { poses: { orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }] } },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    categories: categories.map((category) => ({
+      name: category.name,
+      description: category.description,
+      poses: category.poses.map((pose) => ({
+        title: pose.title,
+        tags: parseJson<string[]>(pose.tagsJson, []),
+        posePrompt: pose.posePrompt,
+        orientation: normalizeOrientation(pose.orientation),
+        framing: normalizeFraming(pose.framing),
+        cameraAngle: normalizeCameraAngle(pose.cameraAngle),
+        shotDistance: normalizeShotDistance(pose.shotDistance),
+      })),
+    })),
+  };
+}
+
+function normalizeImportPayload(input: unknown): StudioPoseLibraryExportPayload {
+  const raw = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const categories = Array.isArray(raw.categories) ? raw.categories : [];
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    categories: categories.map((item) => {
+      const category = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      const poses = Array.isArray(category.poses) ? category.poses : [];
+      return {
+        name: readString(category.name, 'Imported category') || 'Imported category',
+        description: readString(category.description),
+        poses: poses.map((poseItem) => {
+          const pose = poseItem && typeof poseItem === 'object' ? poseItem as Record<string, unknown> : {};
+          return {
+            title: readString(pose.title, 'Imported pose') || 'Imported pose',
+            tags: readTags(pose.tags),
+            posePrompt: readString(pose.posePrompt),
+            orientation: normalizeOrientation(pose.orientation),
+            framing: normalizeFraming(pose.framing),
+            cameraAngle: normalizeCameraAngle(pose.cameraAngle),
+            shotDistance: normalizeShotDistance(pose.shotDistance),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+export async function importStudioPoseLibrary(input: { workspaceId: string; payload: unknown; mode: 'merge' | 'replace_all'; categoryId?: string | null }) {
+  const payload = normalizeImportPayload(input.payload);
+  if (payload.categories.length === 0) return { error: 'Import payload must include at least one category' as const };
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (input.mode === 'replace_all') {
+      if (input.categoryId) await tx.studioPose.deleteMany({ where: { workspaceId: input.workspaceId, categoryId: input.categoryId } });
+      else await tx.studioPoseCategory.deleteMany({ where: { workspaceId: input.workspaceId } });
+    }
+
+    let categoriesCreated = 0;
+    let posesCreated = 0;
+    const categoryCount = await tx.studioPoseCategory.count({ where: { workspaceId: input.workspaceId } });
+    for (const [categoryIndex, category] of payload.categories.entries()) {
+      const categoryRecord = input.categoryId && input.mode === 'replace_all' && categoryIndex === 0
+        ? await tx.studioPoseCategory.update({ where: { id: input.categoryId }, data: { name: category.name, description: category.description } })
+        : await tx.studioPoseCategory.create({ data: { workspaceId: input.workspaceId, slug: `${slugify(category.name, 'category')}-${Date.now()}-${categoryIndex}`, name: category.name, description: category.description, sortOrder: categoryCount + categoryIndex } });
+      if (!(input.categoryId && input.mode === 'replace_all' && categoryIndex === 0)) categoriesCreated += 1;
+      for (const [poseIndex, pose] of category.poses.entries()) {
+        await tx.studioPose.create({ data: { workspaceId: input.workspaceId, categoryId: categoryRecord.id, slug: `${slugify(pose.title, 'pose')}-${Date.now()}-${categoryIndex}-${poseIndex}`, title: pose.title, tagsJson: JSON.stringify(pose.tags), posePrompt: pose.posePrompt, orientation: pose.orientation, framing: pose.framing, cameraAngle: pose.cameraAngle, shotDistance: pose.shotDistance, sortOrder: poseIndex } });
+        posesCreated += 1;
+      }
+    }
+    return { categoriesCreated, posesCreated };
+  });
+
+  return { imported: result };
+}
+
+export async function listStudioPosesMissingPreviews(input: { workspaceId: string; categoryId?: string | null; limit?: number }) {
+  const poses = await listStudioPoses({ workspaceId: input.workspaceId, categoryId: input.categoryId ?? null, preview: 'missing' });
+  return poses.slice(0, Math.max(1, Math.min(500, Math.floor(input.limit ?? 500))));
+}

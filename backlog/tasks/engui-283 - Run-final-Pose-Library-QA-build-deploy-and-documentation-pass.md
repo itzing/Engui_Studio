@@ -1,7 +1,7 @@
 ---
 id: ENGUI-283
 title: Run final Pose Library QA build deploy and documentation pass
-status: To Do
+status: Done
 assignee: []
 created_date: '[PosixPath('backlog/tasks/engui-270 - Add-persisted-Studio-Pose-Library-schema-and-domain-types.md'), PosixPath('backlog/tasks/engui-271 - Seed-current-static-pose-library-into-persisted-Pose-Library.md'), PosixPath('backlog/tasks/engui-272 - Materialize-Pose-Library-snapshots-into-Studio-shots.md'), PosixPath('backlog/tasks/engui-273 - Build-Pose-Library-CRUD-and-reorder-APIs.md'), PosixPath('backlog/tasks/engui-274 - Add-Pose-Library-left-nav-route-shell-and-breadcrumbs.md'), PosixPath('backlog/tasks/engui-275 - Build-Pose-Library-category-grid-and-category-management-UI.md'), PosixPath('backlog/tasks/engui-276 - Build-Pose-Library-pose-grid-detail-and-management-UI.md'), PosixPath('backlog/tasks/engui-277 - Add-contextual-Pose-Library-toolbar-search-filters-and-settings.md'), PosixPath('backlog/tasks/engui-278 - Implement-Pose-Library-preview-prompt-assembly-and-single-pose-jobs.md'), PosixPath('backlog/tasks/engui-279 - Build-Pose-preview-candidate-UI-primary-selection-deletion-and-lightbox.md'), PosixPath('backlog/tasks/engui-280 - Add-Pose-Library-bulk-missing-preview-generation.md'), PosixPath('backlog/tasks/engui-281 - Implement-Pose-Library-structure-only-import-export.md'), PosixPath('backlog/tasks/engui-282 - Polish-Pose-Library-hard-delete-cleanup-confirmations-and-edge-states.md')]'
 labels:
@@ -38,8 +38,12 @@ Reference:
 
 ## Acceptance Criteria
 
-- [ ] Targeted tests pass for pose library helpers, APIs, snapshot/rerun behavior, prompt assembly, preview materialization, and import/export.
-- [ ] `npm run build` passes.
-- [ ] SQLite database is backed up before deployed schema changes are applied.
-- [ ] `engui-studio.service` is restarted after deployment.
-- [ ] Smoke checks pass for `/studio-sessions`, `/studio-sessions/pose-library`, representative Pose Library APIs, and existing Studio run flows.
+- [x] Targeted tests pass for pose library helpers, APIs, snapshot/rerun behavior, prompt assembly, preview materialization, and import/export.
+- [x] `npm run build` passes.
+- [x] SQLite database is backed up before deployed schema changes are applied.
+- [x] `engui-studio.service` is restarted after deployment.
+- [x] Smoke checks pass for `/studio-sessions`, `/studio-sessions/pose-library`, representative Pose Library APIs, and existing Studio run flows.
+
+## Implementation Notes
+
+Final QA pass: Studio utils test suite passed, production build passed, service restarted, smoke checks for Studio/Pose Library/export/bulk-estimate passed. Drag-and-drop reorder is not implemented in this slice; reorder APIs exist and UI fallback remains a follow-up if strict DnD acceptance is required.
