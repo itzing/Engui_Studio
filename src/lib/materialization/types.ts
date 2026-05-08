@@ -2,6 +2,7 @@ export const MATERIALIZATION_TARGET_TYPES = [
   'character_preview',
   'scene_preview',
   'studio_session_version',
+  'studio_pose_preview',
 ] as const;
 
 export const JOB_MATERIALIZATION_STATUSES = [

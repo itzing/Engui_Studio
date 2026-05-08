@@ -601,9 +601,9 @@ export default function StudioPortfolioPageClient() {
     }
   }, []);
 
-  const fetchPoseSets = useCallback(async () => {
+  const fetchPoseSets = useCallback(async (workspaceId: string) => {
     try {
-      const response = await fetch('/api/studio/pose-sets', { cache: 'no-store' });
+      const response = await fetch(`/api/studio/pose-sets?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to fetch pose sets');
       setPoseSets(Array.isArray(data.poseSets) ? data.poseSets : []);
@@ -692,7 +692,7 @@ export default function StudioPortfolioPageClient() {
     if (!activeWorkspaceId) return;
     fetchPortfolios(activeWorkspaceId);
     fetchCharacters();
-    fetchPoseSets();
+    fetchPoseSets(activeWorkspaceId);
   }, [activeWorkspaceId, fetchCharacters, fetchPortfolios, fetchPoseSets]);
 
   useEffect(() => {

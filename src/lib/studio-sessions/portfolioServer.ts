@@ -257,7 +257,7 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
 
   const draft = readRunSettingsDraft(input);
   if (!draft.poseSetId) return { error: 'poseSetId is required' as const };
-  const poseSet = getStudioPoseSetById(draft.poseSetId);
+  const poseSet = await getStudioPoseSetById(session.workspaceId, draft.poseSetId);
   if (!poseSet) return { error: 'Pose set not found' as const };
 
   const library = getStudioSessionPoseLibrary();
@@ -285,7 +285,7 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
     resolutionPolicy: draft.resolutionPolicy,
     categoryRules,
   }));
-  const slots = buildStudioRunShotSlotsFromPoseSet({ poseSetId: poseSet.id, count: draft.count });
+  const slots = await buildStudioRunShotSlotsFromPoseSet({ workspaceId: session.workspaceId, poseSetId: poseSet.id, count: draft.count });
 
   const run = await prisma.$transaction(async (tx) => {
     const created = await tx.studioSessionRun.create({
@@ -354,7 +354,7 @@ export async function updateStudioRun(runId: string, input: Record<string, unkno
     generationSettings: input.generationSettings ?? JSON.parse(run.runSettingsJson || '{}'),
     resolutionPolicy: input.resolutionPolicy ?? JSON.parse(run.resolutionPolicyJson || '{}'),
   });
-  if (draft.poseSetId && !getStudioPoseSetById(draft.poseSetId)) return { error: 'Pose set not found' as const };
+  if (draft.poseSetId && !await getStudioPoseSetById(run.workspaceId, draft.poseSetId)) return { error: 'Pose set not found' as const };
 
   const updated = await prisma.studioSessionRun.update({
     where: { id: runId },

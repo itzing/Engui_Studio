@@ -5,9 +5,11 @@ import { handleStudioSessionApiError, studioSessionNoStoreJson } from '@/lib/stu
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    return studioSessionNoStoreJson({ success: true, poseSets: getStudioPoseSets() });
+    const workspaceId = request.nextUrl.searchParams.get('workspaceId')?.trim();
+    if (!workspaceId) return studioSessionNoStoreJson({ success: false, error: 'workspaceId is required' }, { status: 400 });
+    return studioSessionNoStoreJson({ success: true, poseSets: await getStudioPoseSets(workspaceId) });
   } catch (error) {
     return handleStudioSessionApiError(error, 'Failed to fetch Studio pose sets:');
   }

@@ -11,7 +11,6 @@ import {
   createStudioSessionSavedStateFromDraft,
   deriveStudioSessionResolution,
   deriveStudioSessionRunStatus,
-  pickUniqueStudioSessionPose,
   normalizeStudioSessionTemplateDraftState,
   serializeStudioSessionCategoryRule,
   toStudioSessionRunSummary,
@@ -20,7 +19,7 @@ import {
   toStudioSessionShotVersionSummary,
   toStudioSessionTemplateSummary,
 } from './utils';
-import { getStudioSessionPoseById, getStudioSessionPosesByCategory } from './poseLibrary';
+import { getStudioSessionPoseSnapshotById, listStudioSessionPoseSnapshotsByCategory, pickUniqueStudioPoseSnapshot } from './poseLibraryServer';
 import { getModelById } from '@/lib/models/modelConfig';
 import { RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
 import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
@@ -586,7 +585,8 @@ async function collectRunExhaustedCategories(run: StudioSessionRunSummary, shots
     const categoryRule = Array.isArray(run.templateSnapshot.categoryRules)
       ? run.templateSnapshot.categoryRules.find((rule) => rule.category === shot.category) ?? null
       : null;
-    const pick = pickUniqueStudioSessionPose({
+    const pick = await pickUniqueStudioPoseSnapshot({
+      workspaceId: shot.workspaceId,
       category: shot.category,
       autoAssignmentHistory: await collectRunAutoAssignmentHistory(run.id, shot.category),
       excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
@@ -768,7 +768,7 @@ export async function listStudioSessionShotPoses(shotId: string) {
 
   return {
     shot: toStudioSessionShotSummary(shot),
-    poses: getStudioSessionPosesByCategory(shot.category).filter((pose) => !usedPoseIds.has(pose.id)),
+    poses: (await listStudioSessionPoseSnapshotsByCategory(shot.workspaceId, shot.category)).filter((pose) => !usedPoseIds.has(pose.id)),
   };
 }
 
@@ -784,7 +784,7 @@ async function createStudioSessionShotRevision(params: {
   });
   if (!shot) return null;
 
-  const pose = getStudioSessionPoseById(params.poseId);
+  const pose = await getStudioSessionPoseSnapshotById(shot.workspaceId, params.poseId);
   if (!pose || pose.category !== shot.category) return null;
 
   const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
@@ -854,7 +854,8 @@ export async function autoPickStudioSessionShot(shotId: string) {
     ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
     : null;
 
-  const pick = pickUniqueStudioSessionPose({
+  const pick = await pickUniqueStudioPoseSnapshot({
+    workspaceId: shot.workspaceId,
     category: shot.category,
     autoAssignmentHistory: await collectRunAutoAssignmentHistory(shot.runId, shot.category),
     excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
@@ -901,7 +902,8 @@ export async function assembleStudioSessionRun(runId: string): Promise<StudioSes
       ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
       : null;
     const categoryHistory = Array.from(historyByCategory.get(shot.category) ?? new Set<string>());
-    const pick = pickUniqueStudioSessionPose({
+    const pick = await pickUniqueStudioPoseSnapshot({
+      workspaceId: shot.workspaceId,
       category: shot.category,
       autoAssignmentHistory: categoryHistory,
       excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],
@@ -938,7 +940,8 @@ export async function reshuffleStudioSessionShot(shotId: string) {
   const categoryRule = Array.isArray(snapshot.categoryRules)
     ? snapshot.categoryRules.find((rule: any) => rule?.category === shot.category) ?? null
     : null;
-  const pick = pickUniqueStudioSessionPose({
+  const pick = await pickUniqueStudioPoseSnapshot({
+    workspaceId: shot.workspaceId,
     category: shot.category,
     autoAssignmentHistory: await collectRunAutoAssignmentHistory(shot.runId, shot.category),
     excludedPoseIds: Array.isArray(categoryRule?.excludedPoseIds) ? categoryRule.excludedPoseIds : [],

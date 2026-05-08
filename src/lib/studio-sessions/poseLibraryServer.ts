@@ -1,3 +1,6 @@
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { getStudioSessionPoseLibrary } from './poseLibrary';
 import type {
@@ -9,6 +12,8 @@ import type {
   StudioPoseSummary,
   StudioSessionPoseFraming,
   StudioSessionPoseOrientation,
+  StudioSessionAutoPickResult,
+  StudioSessionPoseSnapshot,
 } from './types';
 
 const ORIENTATIONS = new Set<StudioSessionPoseOrientation>(['portrait', 'landscape', 'square']);
@@ -436,3 +441,128 @@ export async function deleteStudioPosePreviewCandidate(candidateId: string) {
   });
   return { id: candidateId, poseId: candidate.poseId };
 }
+
+function buildJobOutputUrls(job: { options?: unknown; resultUrl?: string | null }) {
+  const options = typeof job.options === 'string'
+    ? parseJson<Record<string, unknown>>(job.options, {})
+    : (job.options && typeof job.options === 'object' ? job.options as Record<string, unknown> : {});
+  const direct = [job.resultUrl, options.url, options.resultUrl, options.image, options.image_url, options.image_path, options.output_path, options.s3_path]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim());
+  const lists: string[] = [];
+  for (const key of ['images', 'outputs', 'resultUrls'] as const) {
+    const value = options[key];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) if (typeof item === 'string' && item.trim()) lists.push(item.trim());
+  }
+  return Array.from(new Set([...direct, ...lists]));
+}
+
+function resolveLocalPathFromUrl(url: string): string | null {
+  if (!url.startsWith('/')) return null;
+  const normalized = url.split('?')[0];
+  if (normalized.startsWith('/generations/') || normalized.startsWith('/results/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
+  return null;
+}
+
+function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail') {
+  const localPath = resolveLocalPathFromUrl(url);
+  if (!localPath || !fs.existsSync(localPath)) return url;
+  const bytes = fs.readFileSync(localPath);
+  const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+  const ext = path.extname(url.split('?')[0]) || '.png';
+  const dir = path.join(process.cwd(), 'public', 'generations', 'studio-pose-library', poseId);
+  fs.mkdirSync(dir, { recursive: true });
+  const suffix = variant === 'thumbnail' ? '--thumb' : '';
+  const fileName = `${hash}${suffix}${ext}`;
+  const dest = path.join(dir, fileName);
+  if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+  return `/generations/studio-pose-library/${poseId}/${fileName}`;
+}
+
+export function toStudioSessionPoseSnapshot(pose: StudioPoseSummary): StudioSessionPoseSnapshot {
+  return {
+    id: pose.id,
+    category: pose.categoryId,
+    name: pose.title,
+    prompt: pose.posePrompt,
+    orientation: pose.orientation,
+    framing: pose.framing,
+    cameraAngle: pose.cameraAngle,
+    shotDistance: pose.shotDistance,
+  };
+}
+
+export async function getStudioSessionPoseSnapshotById(workspaceId: string, poseId: string) {
+  const pose = await prisma.studioPose.findFirst({ where: { id: poseId, workspaceId }, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
+  return pose ? toStudioSessionPoseSnapshot(toStudioPoseSummary(pose)) : null;
+}
+
+export async function listStudioSessionPoseSnapshotsByCategory(workspaceId: string, categoryId: string) {
+  const poses = await listStudioPoses({ workspaceId, categoryId });
+  return poses.map(toStudioSessionPoseSnapshot);
+}
+
+export async function pickUniqueStudioPoseSnapshot(params: {
+  workspaceId: string;
+  category: string;
+  autoAssignmentHistory?: string[];
+  excludedPoseIds?: string[];
+  includedPoseIds?: string[];
+  preferredOrientation?: StudioSessionPoseOrientation | null;
+  preferredFraming?: StudioSessionPoseFraming | null;
+  rng?: () => number;
+}): Promise<StudioSessionAutoPickResult> {
+  const poses = await listStudioSessionPoseSnapshotsByCategory(params.workspaceId, params.category);
+  const excluded = new Set([...(params.excludedPoseIds ?? []), ...(params.autoAssignmentHistory ?? [])]);
+  const included = new Set(params.includedPoseIds ?? []);
+  let available = poses.filter((pose) => !excluded.has(pose.id) && (included.size === 0 || included.has(pose.id)));
+  if (available.length === 0 && (params.autoAssignmentHistory?.length ?? 0) > 0) {
+    available = poses.filter((pose) => !(params.excludedPoseIds ?? []).includes(pose.id) && (included.size === 0 || included.has(pose.id)));
+  }
+  if (available.length === 0) return { pose: null, exhausted: true, exhaustedCategories: [params.category] };
+  const scorePose = (pose: StudioSessionPoseSnapshot) => (params.preferredOrientation && pose.orientation === params.preferredOrientation ? 2 : 0)
+    + (params.preferredFraming && pose.framing === params.preferredFraming ? 1 : 0);
+  const bestScore = Math.max(...available.map(scorePose));
+  const eligible = available.filter((pose) => scorePose(pose) === bestScore);
+  const rng = params.rng ?? Math.random;
+  const index = Math.min(eligible.length - 1, Math.max(0, Math.floor(rng() * eligible.length)));
+  return { pose: eligible[index], exhausted: false, exhaustedCategories: [] };
+}
+
+export async function queueStudioPosePreviewGeneration(params: { poseId: string; jobId: string; promptSnapshot: string; settingsSnapshot: Record<string, unknown> }) {
+  const pose = await prisma.studioPose.findUnique({ where: { id: params.poseId }, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
+  if (!pose) throw new Error('Pose not found');
+  await prisma.studioPose.update({ where: { id: params.poseId }, data: { primaryPreviewId: null } });
+  return toStudioPoseSummary(pose, true);
+}
+
+export const studioPosePreviewMaterializationHandler = {
+  async materialize({ job, task, payload }: { job: any; task: any; payload: Record<string, unknown> }) {
+    const pose = await prisma.studioPose.findUnique({ where: { id: task.targetId }, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
+    if (!pose) return;
+    const outputUrl = buildJobOutputUrls(job)[0];
+    if (!outputUrl) throw new Error(`Completed pose preview job ${job.id} has no output URL`);
+    const assetUrl = materializePosePreviewOutput(outputUrl, task.targetId);
+    const thumbnailUrl = typeof job.thumbnailUrl === 'string' && job.thumbnailUrl.trim()
+      ? materializePosePreviewOutput(job.thumbnailUrl.trim(), task.targetId, 'thumbnail')
+      : assetUrl;
+    const candidate = await prisma.studioPosePreviewCandidate.create({
+      data: {
+        workspaceId: pose.workspaceId,
+        poseId: task.targetId,
+        sourceJobId: job.id,
+        assetUrl,
+        thumbnailUrl,
+        promptSnapshotJson: JSON.stringify({ prompt: typeof job.prompt === 'string' ? job.prompt : payload.promptSnapshot ?? null }),
+        settingsSnapshotJson: JSON.stringify(payload.settingsSnapshot ?? {}),
+      },
+    });
+    await prisma.studioPose.update({ where: { id: task.targetId }, data: { primaryPreviewId: candidate.id } });
+  },
+
+  async onSourceJobFailed({ task, sourceError }: { job: any; task: any; payload: Record<string, unknown>; sourceError: string }) {
+    await prisma.studioPose.updateMany({ where: { id: task.targetId }, data: { primaryPreviewId: null } });
+    console.warn(`Studio pose preview generation failed for ${task.targetId}: ${sourceError}`);
+  },
+};

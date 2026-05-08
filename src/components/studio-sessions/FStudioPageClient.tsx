@@ -366,14 +366,15 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
         await refreshPortfolios();
         const charData = await fetchJson('/api/characters', 'Failed to fetch characters');
         if (!cancelled) setCharacters(Array.isArray(charData.characters) ? charData.characters : []);
-        const poseData = await fetchJson('/api/studio/pose-sets', 'Failed to fetch pose sets');
+        if (!activeWorkspaceId) return;
+        const poseData = await fetchJson(`/api/studio/pose-sets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch pose sets');
         if (!cancelled) setPoseSets(Array.isArray(poseData.poseSets) ? poseData.poseSets : []);
       } catch (err) { if (!cancelled) setError(toErrorMessage(err, 'Failed to load F-Studio')); }
       finally { if (!cancelled) setLoading(false); }
     }
     load();
     return () => { cancelled = true; };
-  }, [fetchJson, refreshPortfolios]);
+  }, [activeWorkspaceId, fetchJson, refreshPortfolios]);
 
   useEffect(() => { if (portfolioId) refreshPortfolioDetail(portfolioId).catch((err) => setError(toErrorMessage(err, 'Failed to load portfolio'))); }, [portfolioId, refreshPortfolioDetail]);
   useEffect(() => {
