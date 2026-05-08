@@ -293,6 +293,7 @@ export async function submitGenerationFormData(formData: FormData) {
         }
 
         const randomizeSeed = formData.get('randomizeSeed') === 'true';
+        const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
         // Collect all parameters from formData
         const parameters: Record<string, any> = {};
@@ -311,6 +312,10 @@ export async function submitGenerationFormData(formData: FormData) {
                 parameters[param.name] = param.default;
             }
         });
+
+        if (randomizeSeed && model.parameters.some(param => param.name === 'seed')) {
+            parameters.seed = generateRandomSeed();
+        }
 
         // Collect LoRA weights for WAN 2.2 (4 pairs = 8 weights)
         if (modelId === 'wan22') {

@@ -19,7 +19,8 @@ const {
     studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     studioPoseLibrarySettings: { upsert: vi.fn() },
     studioPoseCategory: { count: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
-    studioPose: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    studioPose: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    studioPosePreviewCandidate: { create: vi.fn() },
     galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
     job: { findUnique: vi.fn(), findMany: vi.fn() },
   },
@@ -59,7 +60,7 @@ import {
   recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
 } from '@/lib/studio-sessions/server';
-import { studioPoseOpenPoseMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
+import { studioPoseOpenPoseMaterializationHandler, studioPosePreviewMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
 
 describe('studio session server', () => {
   beforeEach(() => {
@@ -398,6 +399,39 @@ describe('studio session server', () => {
       }),
     }));
     expect(JSON.stringify(mockPrisma.studioPose.update.mock.calls[0][0].data)).not.toContain('people');
+  });
+
+  it('adds Studio pose preview candidates even when local copy fallback is needed', async () => {
+    mockPrisma.studioPose.findUnique.mockResolvedValue({ id: 'pose-1', workspaceId: 'workspace-1', category: { id: 'standing', name: 'Standing', slug: 'standing' }, previewCandidates: [] });
+    mockMkdirSync.mockImplementationOnce(() => { throw new Error('EACCES'); });
+    mockPrisma.studioPosePreviewCandidate.create.mockResolvedValue({ id: 'candidate-1' });
+    mockPrisma.studioPose.update.mockResolvedValue({});
+
+    await studioPosePreviewMaterializationHandler.materialize({
+      job: {
+        id: 'job-preview-1',
+        prompt: 'pose prompt',
+        resultUrl: '/generations/preview-job.png',
+        thumbnailUrl: '/generations/job-previews/preview-thumb.webp',
+        options: '{}',
+      },
+      task: { targetId: 'pose-1' },
+      payload: { settingsSnapshot: { subject: 'adult neutral model' } },
+    });
+
+    expect(mockPrisma.studioPosePreviewCandidate.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        workspaceId: 'workspace-1',
+        poseId: 'pose-1',
+        sourceJobId: 'job-preview-1',
+        assetUrl: '/generations/preview-job.png',
+        thumbnailUrl: expect.stringContaining('/generations/studio-pose-library/pose-1/'),
+      }),
+    }));
+    expect(mockPrisma.studioPose.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pose-1' },
+      data: { primaryPreviewId: 'candidate-1' },
+    }));
   });
 
   it('adds studio session versions to Gallery explicitly and reuses gallery queues', async () => {

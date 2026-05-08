@@ -537,16 +537,21 @@ function deletePreviewCandidateOutputs(candidates: Array<{ assetUrl: string; thu
 function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail' | 'openpose') {
   const localPath = resolveLocalPathFromUrl(url);
   if (!localPath || !fs.existsSync(localPath)) return url;
-  const bytes = fs.readFileSync(localPath);
-  const hash = crypto.createHash('sha256').update(bytes).digest('hex');
-  const ext = path.extname(url.split('?')[0]) || '.png';
-  const dir = path.join(process.cwd(), 'public', 'generations', 'studio-pose-library', poseId);
-  fs.mkdirSync(dir, { recursive: true });
-  const suffix = variant === 'thumbnail' ? '--thumb' : variant === 'openpose' ? '--openpose' : '';
-  const fileName = `${hash}${suffix}${ext}`;
-  const dest = path.join(dir, fileName);
-  if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
-  return `/generations/studio-pose-library/${poseId}/${fileName}`;
+  try {
+    const bytes = fs.readFileSync(localPath);
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const ext = path.extname(url.split('?')[0]) || '.png';
+    const dir = path.join(process.cwd(), 'public', 'generations', 'studio-pose-library', poseId);
+    fs.mkdirSync(dir, { recursive: true });
+    const suffix = variant === 'thumbnail' ? '--thumb' : variant === 'openpose' ? '--openpose' : '';
+    const fileName = `${hash}${suffix}${ext}`;
+    const dest = path.join(dir, fileName);
+    if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+    return `/generations/studio-pose-library/${poseId}/${fileName}`;
+  } catch (error) {
+    console.warn('Studio pose preview materialization fallback: unable to copy output into pose library directory, using original output URL instead.', error);
+    return url;
+  }
 }
 
 export function toStudioSessionPoseSnapshot(pose: StudioPoseSummary): StudioSessionPoseSnapshot {

@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       formData.append('height', pose.orientation === 'landscape' ? '832' : pose.orientation === 'square' ? '1024' : '1216');
       formData.append('steps', '9');
       formData.append('cfg', '1.0');
+      formData.append('randomizeSeed', 'true');
       const response = await submitGenerationFormData(formData);
       const payload = await response.json() as Record<string, unknown>;
       const jobId = typeof payload.jobId === 'string' ? payload.jobId : null;
