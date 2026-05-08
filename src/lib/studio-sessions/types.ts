@@ -73,6 +73,7 @@ export interface StudioPoseLibrarySettingsSummary {
   clothingDescription: string;
   backgroundDescription: string;
   stylePreset: string;
+  previewAgeDescription: string;
   defaultVariantCount: number;
   createdAt: string;
   updatedAt: string;

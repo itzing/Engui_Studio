@@ -157,6 +157,7 @@ function toSettingsSummary(record: any): StudioPoseLibrarySettingsSummary {
     clothingDescription: record.clothingDescription,
     backgroundDescription: record.backgroundDescription,
     stylePreset: record.stylePreset,
+    previewAgeDescription: record.previewAgeDescription ?? '',
     defaultVariantCount: record.defaultVariantCount,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -430,6 +431,7 @@ export async function updateStudioPoseLibrarySettings(workspaceId: string, input
       ...(input.clothingDescription !== undefined ? { clothingDescription: readString(input.clothingDescription, 'simple fitted neutral clothing') } : {}),
       ...(input.backgroundDescription !== undefined ? { backgroundDescription: readString(input.backgroundDescription, 'neutral seamless studio background') } : {}),
       ...(input.stylePreset !== undefined ? { stylePreset: readString(input.stylePreset, 'realistic studio photo, softbox lighting') } : {}),
+      ...(input.previewAgeDescription !== undefined ? { previewAgeDescription: readString(input.previewAgeDescription, '') } : {}),
       ...(typeof input.defaultVariantCount === 'number' ? { defaultVariantCount: Math.max(1, Math.min(8, Math.floor(input.defaultVariantCount))) } : {}),
     },
     create: { workspaceId },
@@ -453,6 +455,7 @@ export function buildStudioPosePreviewPrompt(input: { pose: StudioPoseSummary; s
   return [
     input.settings.stylePreset,
     `Subject: ${input.settings.subjectDescription}`,
+    input.settings.previewAgeDescription ? `Age: ${input.settings.previewAgeDescription}` : '',
     `Wardrobe: ${input.settings.clothingDescription}`,
     `Background: ${input.settings.backgroundDescription}`,
     `Orientation: ${input.pose.orientation}`,

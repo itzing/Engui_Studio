@@ -602,6 +602,7 @@ model StudioPoseLibrarySettings {
   clothingDescription   String   @default("simple fitted neutral clothing")
   backgroundDescription String   @default("neutral seamless studio background")
   stylePreset           String   @default("realistic studio photo, softbox lighting")
+  previewAgeDescription String   @default("")
   defaultVariantCount   Int      @default(4)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
