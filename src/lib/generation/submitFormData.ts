@@ -338,6 +338,13 @@ export async function submitGenerationFormData(formData: FormData) {
         // Collect LoRA parameters for z-image from any submitted slot keys.
         // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
         if (modelId === 'z-image') {
+            if (parameters.task_type === 'openpose_extract') {
+                parameters.openpose_resolution = Number(formData.get('openpose_resolution') || formData.get('openposeResolution') || 1024);
+                parameters.detect_body = formData.get('detect_body') === null ? true : formData.get('detect_body') === 'true';
+                parameters.detect_hand = formData.get('detect_hand') === null ? true : formData.get('detect_hand') === 'true';
+                parameters.detect_face = formData.get('detect_face') === null ? true : formData.get('detect_face') === 'true';
+            }
+
             const zImageLoraSlots: Array<{ path: string; weight: number }> = [];
             const loraIndexes = new Set<number>();
 

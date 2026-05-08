@@ -388,7 +388,11 @@ class RunPodService {
           ...(input.transport_request && { transport_request: input.transport_request }),
           ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet }),
           ...(input.controlnet_strength !== undefined && { controlnet_strength: input.controlnet_strength }),
-          ...(input.task_type && { task_type: input.task_type })
+          ...(input.task_type && { task_type: input.task_type, task: input.task_type }),
+          ...(input.openpose_resolution !== undefined && { openpose_resolution: input.openpose_resolution }),
+          ...(input.detect_body !== undefined && { detect_body: input.detect_body }),
+          ...(input.detect_hand !== undefined && { detect_hand: input.detect_hand }),
+          ...(input.detect_face !== undefined && { detect_face: input.detect_face })
         };
 
         // Add lora array if provided

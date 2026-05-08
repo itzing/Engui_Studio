@@ -82,6 +82,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     formData.append('modelId', 'z-image');
     formData.append('prompt', 'Extract an OpenPose control image and encrypted pose keypoints from the source image.');
     formData.append('task_type', 'openpose_extract');
+    formData.append('openpose_resolution', '1024');
+    formData.append('detect_body', 'true');
+    formData.append('detect_hand', 'true');
+    formData.append('detect_face', 'true');
     formData.append('image', source.blob, source.filename);
 
     const response = await submitGenerationFormData(formData);
