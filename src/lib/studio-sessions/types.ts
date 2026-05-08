@@ -122,6 +122,39 @@ export interface StudioPoseSummary {
   updatedAt: string;
 }
 
+export interface StudioFramingTransform {
+  orientation: StudioSessionPoseOrientation;
+  aspectRatio: number;
+  centerX: number;
+  centerY: number;
+  poseHeight: number;
+  rotationDeg: number;
+  flipX: boolean;
+  helperPrompt: string;
+}
+
+export interface StudioFramingPresetSummary extends StudioFramingTransform {
+  id: string;
+  workspaceId: string;
+  title: string;
+  description: string;
+  tags: string[];
+  previewImageUrl: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudioRunFramingPolicy {
+  fallbackPresetId: string | null;
+  presetByOrientation: Partial<Record<StudioSessionPoseOrientation, string | null>>;
+}
+
+export interface StudioResolvedFramingSnapshot extends StudioFramingTransform {
+  presetId: string | null;
+  title: string;
+}
+
 export interface StudioRunSettingsDraft {
   name: string;
   poseSetId: string | null;

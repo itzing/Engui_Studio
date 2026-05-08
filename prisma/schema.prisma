@@ -150,6 +150,7 @@ model Workspace {
   studioPoseCategories       StudioPoseCategory[]
   studioPoses                StudioPose[]
   studioPoseLibrarySettings  StudioPoseLibrarySettings?
+  studioFramingPresets       StudioFramingPreset[]
 
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
@@ -660,6 +661,32 @@ model StudioPose {
   @@index([workspaceId, categoryId, sortOrder])
   @@index([workspaceId, updatedAt(sort: Desc)])
   @@map("studio_poses")
+}
+
+model StudioFramingPreset {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  title           String
+  description     String   @default("")
+  tagsJson        String   @default("[]")
+  orientation     String   @default("portrait")
+  aspectRatio     Float    @default(0.6666667)
+  centerX         Float    @default(0.5)
+  centerY         Float    @default(0.58)
+  poseHeight      Float    @default(0.78)
+  rotationDeg     Float    @default(0)
+  flipX           Boolean  @default(false)
+  helperPrompt    String   @default("")
+  previewImageUrl String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, orientation, sortOrder])
+  @@index([workspaceId, sortOrder])
+  @@map("studio_framing_presets")
 }
 
 model StudioPosePreviewCandidate {
