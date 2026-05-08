@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
-import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
+import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioFramingPresetSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseSetSummary, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
 
 type FStudioRoute =
   | { level: 'portfolios' }
@@ -30,6 +30,7 @@ type FStudioRoute =
 type RunDetail = { run?: StudioSessionRunSummary; shots?: StudioSessionShotSummary[]; revisions?: StudioSessionShotRevisionSummary[]; versions?: StudioSessionShotVersionSummary[] };
 type CollectionDetail = { collection: StudioCollectionSummary; items: StudioCollectionItemSummary[] } | null;
 type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
+type FramingPolicyMode = 'default' | 'single' | 'orientation';
 
 const SESSION_BRIEF_FIELDS: Array<{ key: keyof SessionBriefDraft; label: string; multiline?: boolean; placeholder: string }> = [
   { key: 'name', label: 'Session name', placeholder: 'New photo session' },
@@ -310,6 +311,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [collectionDetail, setCollectionDetail] = useState<CollectionDetail>(null);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [poseSets, setPoseSets] = useState<StudioPoseSetSummary[]>([]);
+  const [framingPresets, setFramingPresets] = useState<StudioFramingPresetSummary[]>([]);
   const [showCharacterManager, setShowCharacterManager] = useState(false);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [showCreateSession, setShowCreateSession] = useState(false);
@@ -318,6 +320,9 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [newName, setNewName] = useState('');
   const [selectedPoseSetId, setSelectedPoseSetId] = useState('');
   const [newRunCount, setNewRunCount] = useState(5);
+  const [framingPolicyMode, setFramingPolicyMode] = useState<FramingPolicyMode>('default');
+  const [fallbackFramingPresetId, setFallbackFramingPresetId] = useState('');
+  const [framingPresetByOrientation, setFramingPresetByOrientation] = useState<Record<StudioSessionPoseOrientation, string>>({ portrait: '', landscape: '', square: '' });
   const [confirmingDeletePortfolioId, setConfirmingDeletePortfolioId] = useState<string | null>(null);
   const [deletingPortfolioId, setDeletingPortfolioId] = useState<string | null>(null);
   const [confirmingDeleteSessionId, setConfirmingDeleteSessionId] = useState<string | null>(null);
@@ -370,8 +375,14 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
         const charData = await fetchJson('/api/characters', 'Failed to fetch characters');
         if (!cancelled) setCharacters(Array.isArray(charData.characters) ? charData.characters : []);
         if (!activeWorkspaceId) return;
-        const poseData = await fetchJson(`/api/studio/pose-sets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch pose sets');
-        if (!cancelled) setPoseSets(Array.isArray(poseData.poseSets) ? poseData.poseSets : []);
+        const [poseData, framingData] = await Promise.all([
+          fetchJson(`/api/studio/pose-sets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch pose sets'),
+          fetchJson(`/api/studio/framing-presets?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, 'Failed to fetch framing presets'),
+        ]);
+        if (!cancelled) {
+          setPoseSets(Array.isArray(poseData.poseSets) ? poseData.poseSets : []);
+          setFramingPresets(Array.isArray(framingData.presets) ? framingData.presets : []);
+        }
       } catch (err) { if (!cancelled) setError(toErrorMessage(err, 'Failed to load F-Studio')); }
       finally { if (!cancelled) setLoading(false); }
     }
@@ -431,10 +442,24 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     const data = await response.json();
     if (data?.success) router.push(`/studio-sessions/portfolios/${portfolioId}/collections/${data.collection.id}`); else setError(data?.error || 'Failed to create collection');
   }
+  function buildRunFramingPolicy(): StudioRunFramingPolicy {
+    if (framingPolicyMode === 'default') return { fallbackPresetId: null, presetByOrientation: {} };
+    if (framingPolicyMode === 'single') return { fallbackPresetId: fallbackFramingPresetId || null, presetByOrientation: {} };
+    return {
+      fallbackPresetId: fallbackFramingPresetId || null,
+      presetByOrientation: {
+        portrait: framingPresetByOrientation.portrait || null,
+        landscape: framingPresetByOrientation.landscape || null,
+        square: framingPresetByOrientation.square || null,
+      },
+    };
+  }
+
   async function createRun() {
     if (!portfolioId || !sessionId || !selectedPoseSetId) return;
     const pose = poseSets.find((item) => item.id === selectedPoseSetId);
-    const response = await fetch(`/api/studio/sessions/${sessionId}/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName || pose?.name || 'New run', poseSetId: selectedPoseSetId, count: newRunCount }) });
+    const framingPolicy = buildRunFramingPolicy();
+    const response = await fetch(`/api/studio/sessions/${sessionId}/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName || pose?.name || 'New run', poseSetId: selectedPoseSetId, count: newRunCount, generationSettings: { framingPolicy } }) });
     const data = await response.json();
     if (data?.success) router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${data.run.id}`); else setError(data?.error || 'Failed to create run');
   }
@@ -508,8 +533,8 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
     if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SessionTile key={session.id} session={session} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} confirming={confirmingDeleteSessionId === session.id} deleting={deletingSessionId === session.id} onDeleteClick={() => setConfirmingDeleteSessionId(session.id)} onConfirmDelete={() => void deleteSession(session.id)} />)}{sessions.length === 0 ? <EmptyTile title="No sessions yet" description="Create a photo session to define setting, vibe, outfit, and runs." /> : null}</TileGrid>;
     if (route.level === 'session') return <SessionBriefEditor session={selectedSession} onSave={saveSessionBrief} onOpenRuns={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} />;
-    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setNewRunCount(5); setShowCreateRun(true); }} />{runs.map((run) => <RunTile key={run.id} run={run} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} confirming={confirmingDeleteRunId === run.id} deleting={deletingRunId === run.id} onDeleteClick={() => setConfirmingDeleteRunId(run.id)} onConfirmDelete={() => void deleteRun(run.id)} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
-    if (route.level === 'run') return <RunWorkspace detail={runDetail} />;
+    if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setNewRunCount(5); setFramingPolicyMode('default'); setFallbackFramingPresetId(''); setFramingPresetByOrientation({ portrait: '', landscape: '', square: '' }); setShowCreateRun(true); }} />{runs.map((run) => <RunTile key={run.id} run={run} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} confirming={confirmingDeleteRunId === run.id} deleting={deletingRunId === run.id} onDeleteClick={() => setConfirmingDeleteRunId(run.id)} onConfirmDelete={() => void deleteRun(run.id)} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
+    if (route.level === 'run') return <RunWorkspace detail={runDetail} framingPresets={framingPresets} />;
     if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
     return null;
   }
@@ -549,17 +574,42 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
       <CharacterSelectModal open={showCreatePortfolio} characters={characters} loading={false} selectedCharacterId={null} onOpenChange={setShowCreatePortfolio} onSelect={createPortfolio} />
       <NameDialog open={showCreateSession} title="New session" value={newName} onChange={setNewName} onOpenChange={setShowCreateSession} onSubmit={createSession} />
       <NameDialog open={showCreateCollection} title="New collection" value={newName} onChange={setNewName} onOpenChange={setShowCreateCollection} onSubmit={createCollection} />
-      <Dialog open={showCreateRun} onOpenChange={setShowCreateRun}><DialogContent className="border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>New run</DialogTitle><DialogDescription className="text-white/50">Choose one pose set and how many draft shots to create for this run.</DialogDescription></DialogHeader><Input value={newName} onChange={(event) => setNewName(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Run name" /><select value={selectedPoseSetId} onChange={(event) => setSelectedPoseSetId(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">{poseSets.map((poseSet) => <option key={poseSet.id} value={poseSet.id}>{poseSet.name}</option>)}</select><label className="space-y-1 text-sm text-white/60"><span>Shot count</span><Input type="number" min={1} max={50} value={newRunCount} onChange={(event) => setNewRunCount(Math.max(1, Math.min(50, Number(event.target.value) || 1)))} className="border-white/10 bg-black/30 text-white" /></label><Button onClick={createRun} disabled={!selectedPoseSetId} className="bg-blue-500 text-white hover:bg-blue-400">Create run</Button></DialogContent></Dialog>
+      <Dialog open={showCreateRun} onOpenChange={setShowCreateRun}><DialogContent className="max-w-3xl border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>New run</DialogTitle><DialogDescription className="text-white/50">Choose one pose set, shot count, and the run-level framing policy.</DialogDescription></DialogHeader><Input value={newName} onChange={(event) => setNewName(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Run name" /><select value={selectedPoseSetId} onChange={(event) => setSelectedPoseSetId(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">{poseSets.map((poseSet) => <option key={poseSet.id} value={poseSet.id}>{poseSet.name}</option>)}</select><label className="space-y-1 text-sm text-white/60"><span>Shot count</span><Input type="number" min={1} max={50} value={newRunCount} onChange={(event) => setNewRunCount(Math.max(1, Math.min(50, Number(event.target.value) || 1)))} className="border-white/10 bg-black/30 text-white" /></label><RunFramingPolicySelector mode={framingPolicyMode} onModeChange={setFramingPolicyMode} presets={framingPresets} fallbackPresetId={fallbackFramingPresetId} onFallbackChange={setFallbackFramingPresetId} byOrientation={framingPresetByOrientation} onOrientationPresetChange={(orientation, presetId) => setFramingPresetByOrientation((current) => ({ ...current, [orientation]: presetId }))} /><Button onClick={createRun} disabled={!selectedPoseSetId || (framingPolicyMode === 'single' && !fallbackFramingPresetId)} className="bg-blue-500 text-white hover:bg-blue-400">Create run</Button></DialogContent></Dialog>
     </div>
   );
 }
 
 function Info({ label, value }: { label: string; value?: string | null }) { return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-xs uppercase tracking-[0.16em] text-white/35">{label}</div><div className="mt-2 text-sm text-white/75">{value || 'Not set'}</div></div>; }
+
+function presetTitle(presets: StudioFramingPresetSummary[], id: string | null | undefined) {
+  if (!id) return '';
+  return presets.find((preset) => preset.id === id)?.title || id.slice(0, 8);
+}
+
+function formatRunFramingPolicy(value: unknown, presets: StudioFramingPresetSummary[]) {
+  const policy = value && typeof value === 'object' ? value as Partial<StudioRunFramingPolicy> : {};
+  const byOrientation = policy.presetByOrientation && typeof policy.presetByOrientation === 'object' ? policy.presetByOrientation : {};
+  const orientationParts = (['portrait', 'landscape', 'square'] as const)
+    .map((orientation) => byOrientation[orientation] ? `${orientation}: ${presetTitle(presets, byOrientation[orientation])}` : '')
+    .filter(Boolean);
+  if (orientationParts.length) {
+    const fallback = policy.fallbackPresetId ? `; fallback: ${presetTitle(presets, policy.fallbackPresetId)}` : '; fallback: default centered';
+    return `By orientation — ${orientationParts.join(', ')}${fallback}`;
+  }
+  if (policy.fallbackPresetId) return `Single preset — ${presetTitle(presets, policy.fallbackPresetId)}`;
+  return 'Default centered';
+}
+
+function RunFramingPolicySelector({ mode, onModeChange, presets, fallbackPresetId, onFallbackChange, byOrientation, onOrientationPresetChange }: { mode: FramingPolicyMode; onModeChange: (mode: FramingPolicyMode) => void; presets: StudioFramingPresetSummary[]; fallbackPresetId: string; onFallbackChange: (id: string) => void; byOrientation: Record<StudioSessionPoseOrientation, string>; onOrientationPresetChange: (orientation: StudioSessionPoseOrientation, presetId: string) => void }) {
+  const orientations: StudioSessionPoseOrientation[] = ['portrait', 'landscape', 'square'];
+  return <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4"><div><div className="text-sm font-semibold text-white">Framing policy</div><div className="mt-1 text-xs text-white/45">Resolution order: orientation-specific preset → fallback preset → default centered.</div></div><div className="grid gap-2 sm:grid-cols-3">{([{ value: 'default', label: 'Default centered' }, { value: 'single', label: 'Single preset' }, { value: 'orientation', label: 'By orientation' }] as Array<{ value: FramingPolicyMode; label: string }>).map((item) => <button key={item.value} type="button" onClick={() => onModeChange(item.value)} className={`rounded-xl border px-3 py-2 text-left text-sm transition ${mode === item.value ? 'border-blue-400/60 bg-blue-500/15 text-blue-100' : 'border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]'}`}>{item.label}</button>)}</div>{mode !== 'default' ? <label className="block space-y-1 text-sm text-white/60"><span>{mode === 'single' ? 'Preset for all orientations' : 'Fallback preset'}</span><select value={fallbackPresetId} onChange={(event) => onFallbackChange(event.target.value)} className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"><option value="">Default centered</option>{presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.title} · {preset.orientation}</option>)}</select></label> : null}{mode === 'orientation' ? <div className="grid gap-3 sm:grid-cols-3">{orientations.map((orientation) => <label key={orientation} className="block space-y-1 text-sm text-white/60"><span>{orientation}</span><select value={byOrientation[orientation]} onChange={(event) => onOrientationPresetChange(orientation, event.target.value)} className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"><option value="">Use fallback</option>{presets.filter((preset) => preset.orientation === orientation).map((preset) => <option key={preset.id} value={preset.id}>{preset.title}</option>)}</select></label>)}</div> : null}{presets.length === 0 ? <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">No framing presets yet. Default centered remains available.</div> : null}</div>;
+}
+
 function EmptyState({ title, description }: { title: string; description: string }) { return <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-white"><div className="text-lg font-semibold">{title}</div><div className="mt-2 max-w-xl text-sm text-white/50">{description}</div></div>; }
 function EmptyTile({ title, description }: { title: string; description: string }) { return <div className="flex min-h-[220px] flex-col justify-center rounded-3xl border border-white/10 bg-white/[0.025] p-6 text-white"><div className="text-base font-semibold">{title}</div><div className="mt-2 text-sm text-white/45">{description}</div></div>; }
 function LoadingGrid() { return <TileGrid>{Array.from({ length: 6 }).map((_, index) => <div key={index} className="min-h-[220px] animate-pulse rounded-3xl border border-white/10 bg-white/[0.035]" />)}</TileGrid>; }
 function NameDialog({ open, title, value, onChange, onOpenChange, onSubmit }: { open: boolean; title: string; value: string; onChange: (value: string) => void; onOpenChange: (open: boolean) => void; onSubmit: () => void }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><Input value={value} onChange={(event) => onChange(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Name" /><Button onClick={onSubmit} className="bg-blue-500 text-white hover:bg-blue-400">Create</Button></DialogContent></Dialog>; }
-function RunWorkspace({ detail }: { detail: RunDetail | null }) {
+function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; framingPresets: StudioFramingPresetSummary[] }) {
   const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
   const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
@@ -613,8 +663,9 @@ function RunWorkspace({ detail }: { detail: RunDetail | null }) {
   const runSettings = run?.runSettings || {};
   const resolution = run?.resolutionPolicy || {};
   const poseSetName = typeof snapshot?.poseSetName === 'string' && snapshot.poseSetName.trim() ? snapshot.poseSetName : run?.poseSetId;
+  const framingPolicyLabel = formatRunFramingPolicy(runSettings.framingPolicy, framingPresets);
 
-  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xl font-semibold">{run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{run ? `${run.count} shots · ${run.status}` : 'Loading run details…'}</div></div><Button type="button" onClick={() => void launchRun()} disabled={!run || launching} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">{launching ? 'Launching…' : 'Launch run'}</Button></div>{launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}{launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}<Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Draft shots</div><div className="mt-1 text-xs text-white/45">This is the pre-launch shot plan. Poses are assigned automatically when the shot is prepared/launched.</div></div><div className="space-y-2">{shots.map((shot) => { const revision = revisionsByShotId.get(shot.id); return <div key={shot.id} className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-medium text-white">{shot.label}</div><div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.status}</div></div><div className="mt-1 text-xs text-white/50">{shot.category}{revision ? ` · ${revision.poseSnapshot.name}` : ' · pose pending'}</div>{revision?.poseSnapshot.prompt ? <div className="mt-2 line-clamp-2 text-xs text-white/40">{revision.poseSnapshot.prompt}</div> : null}</div>; })}{shots.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/45">No draft shots yet.</div> : null}</div></CardContent></Card><Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">For now these are set when creating the run; editing count/pose set after draft shots exist will be the next slice.</div></div><div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Shot count" value={run ? String(run.count) : 'Not set'} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} /><Info label="Resolution" value={typeof resolution.shortSidePx === 'number' && typeof resolution.longSidePx === 'number' ? `${resolution.shortSidePx} × ${resolution.longSidePx}` : 'Default'} /></div></CardContent></Card><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}</div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Click Launch run when you are ready; generated images will appear here for review." /> : null}</TileGrid></div>;
+  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xl font-semibold">{run?.name || 'Run'}</div><div className="mt-1 text-sm text-white/45">{run ? `${run.count} shots · ${run.status}` : 'Loading run details…'}</div></div><Button type="button" onClick={() => void launchRun()} disabled={!run || launching} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">{launching ? 'Launching…' : 'Launch run'}</Button></div>{launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}{launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}<Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Draft shots</div><div className="mt-1 text-xs text-white/45">This is the pre-launch shot plan. Poses are assigned automatically when the shot is prepared/launched.</div></div><div className="space-y-2">{shots.map((shot) => { const revision = revisionsByShotId.get(shot.id); return <div key={shot.id} className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-medium text-white">{shot.label}</div><div className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.status}</div></div><div className="mt-1 text-xs text-white/50">{shot.category}{revision ? ` · ${revision.poseSnapshot.name}` : ' · pose pending'}</div>{revision?.poseSnapshot.prompt ? <div className="mt-2 line-clamp-2 text-xs text-white/40">{revision.poseSnapshot.prompt}</div> : null}</div>; })}{shots.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/45">No draft shots yet.</div> : null}</div></CardContent></Card><Card className="border-white/10 bg-white/[0.035] text-white"><CardContent className="space-y-4 p-5"><div><div className="text-sm font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">For now these are set when creating the run; editing count/pose set after draft shots exist will be the next slice.</div></div><div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Shot count" value={run ? String(run.count) : 'Not set'} /><Info label="Framing" value={framingPolicyLabel} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} /><Info label="Resolution" value={typeof resolution.shortSidePx === 'number' && typeof resolution.longSidePx === 'number' ? `${resolution.shortSidePx} × ${resolution.longSidePx}` : 'Default'} /></div></CardContent></Card><TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}</div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Click Launch run when you are ready; generated images will appear here for review." /> : null}</TileGrid></div>;
 }
 function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
   const [settingCoverItemId, setSettingCoverItemId] = useState<string | null>(null);
