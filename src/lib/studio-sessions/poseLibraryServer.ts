@@ -97,7 +97,7 @@ function toPreviewCandidateSummary(record: any): StudioPosePreviewCandidateSumma
 function resolvePrimaryPreview(record: any): { id: string | null; url: string | null } {
   const candidates = Array.isArray(record.previewCandidates) ? record.previewCandidates : [];
   const primary = candidates.find((candidate: any) => candidate.id === record.primaryPreviewId) ?? candidates[0] ?? null;
-  return { id: primary?.id ?? null, url: primary?.thumbnailUrl || primary?.assetUrl || null };
+  return { id: primary?.id ?? null, url: primary?.assetUrl || primary?.thumbnailUrl || null };
 }
 
 export function toStudioPoseSummary(record: any, includeCandidates = false): StudioPoseSummary {
