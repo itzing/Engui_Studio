@@ -1189,7 +1189,7 @@ export default function CharacterManagerPanel() {
     if (!selectedCharacter?.previewState) return [];
     return CHARACTER_PREVIEW_SLOTS.flatMap((slot) => {
       const state = selectedCharacter.previewState?.[slot];
-      const url = state?.previewUrl || state?.imageUrl || state?.thumbnailUrl || null;
+      const url = state?.imageUrl || state?.previewUrl || state?.thumbnailUrl || null;
       return url ? [{ id: `${selectedCharacter.id}:${slot}`, url, type: 'image' as const }] : [];
     });
   }, [selectedCharacter]);
@@ -1803,7 +1803,7 @@ export default function CharacterManagerPanel() {
                       <img
                         src={card.imageUrl}
                         alt={`${card.title} for ${draft?.name || 'character'}`}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     </button>
                   ) : (
