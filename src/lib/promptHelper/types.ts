@@ -31,13 +31,17 @@ export interface PromptHelperResult {
   improvedNegativePrompt: string;
 }
 
+export type PromptHelperProviderErrorCode = 'invalid_json' | 'truncated_response' | 'empty_response' | 'empty_prompt' | 'provider_error';
+
 export class PromptHelperProviderError extends Error {
   debug?: PromptHelperDebugInfo;
+  code: PromptHelperProviderErrorCode;
 
-  constructor(message: string, debug?: PromptHelperDebugInfo) {
+  constructor(message: string, debug?: PromptHelperDebugInfo, code: PromptHelperProviderErrorCode = 'provider_error') {
     super(message);
     this.name = 'PromptHelperProviderError';
     this.debug = debug;
+    this.code = code;
   }
 }
 

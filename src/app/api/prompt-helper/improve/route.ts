@@ -32,13 +32,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Prompt Helper request failed';
-    const status = /disabled|required/i.test(message) ? 400 : 500;
-    const debug = error instanceof PromptHelperProviderError ? error.debug : undefined;
+    const isProviderError = error instanceof PromptHelperProviderError;
+    const isInvalidJson = isProviderError && error.code === 'invalid_json';
+    const status = /disabled|required/i.test(message) ? 400 : isInvalidJson ? 422 : 500;
+    const debug = isProviderError ? error.debug : undefined;
 
     return NextResponse.json(
       {
         success: false,
-        error: message,
+        error: isInvalidJson ? 'Prompt Helper returned invalid JSON. No retry was attempted.' : message,
+        code: isProviderError ? error.code : undefined,
+        retryable: isInvalidJson ? false : undefined,
         debug,
       },
       { status }

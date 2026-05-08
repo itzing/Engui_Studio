@@ -271,25 +271,26 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     }
 
     if (!normalizedText) {
-      throw new PromptHelperProviderError('Prompt Helper provider returned empty text', debug);
+      throw new PromptHelperProviderError('Prompt Helper provider returned empty text', debug, 'empty_response');
     }
 
     if (choice?.finish_reason === 'length') {
-      throw new PromptHelperProviderError('Prompt Helper response was truncated by max_tokens before completing valid JSON', debug);
+      throw new PromptHelperProviderError('Prompt Helper response was truncated by max_tokens before completing valid JSON', debug, 'truncated_response');
     }
 
     let parsed: { prompt?: unknown; negativePrompt?: unknown };
     try {
       parsed = JSON.parse(extractJsonObject(normalizedText));
     } catch {
-      throw new PromptHelperProviderError('Prompt Helper provider returned invalid JSON', debug);
+      // Invalid JSON is terminal for this request: do not retry, surface the first bad model response to the UI.
+      throw new PromptHelperProviderError('Prompt Helper provider returned invalid JSON', debug, 'invalid_json');
     }
 
     const improvedPrompt = typeof parsed.prompt === 'string' ? normalizeModelText(parsed.prompt) : '';
     const improvedNegativePrompt = typeof parsed.negativePrompt === 'string' ? normalizeModelText(parsed.negativePrompt) : '';
 
     if (!improvedPrompt) {
-      throw new PromptHelperProviderError('Prompt Helper provider returned empty prompt text', debug);
+      throw new PromptHelperProviderError('Prompt Helper provider returned empty prompt text', debug, 'empty_prompt');
     }
 
     return {
