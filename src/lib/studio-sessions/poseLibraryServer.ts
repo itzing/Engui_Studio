@@ -417,6 +417,18 @@ export async function updateStudioPoseLibrarySettings(workspaceId: string, input
   return toSettingsSummary(settings);
 }
 
+function describeStudioPoseShotDistance(distance: StudioPoseShotDistance) {
+  switch (distance) {
+    case 'close':
+      return 'Close shot: crop tightly around the face, shoulders, and upper chest; the body pose may be implied, with very little background or empty space.';
+    case 'medium':
+      return 'Medium shot: show the subject from roughly the waist or mid-thigh upward; the body fills most of the frame with moderate background space.';
+    case 'wide':
+    default:
+      return 'Wide full-body shot: show the entire body from head to feet, including the stance, feet, and surrounding negative space; the subject should be smaller in frame than a medium shot.';
+  }
+}
+
 export function buildStudioPosePreviewPrompt(input: { pose: StudioPoseSummary; settings: StudioPoseLibrarySettingsSummary }) {
   return [
     input.settings.stylePreset,
@@ -426,7 +438,7 @@ export function buildStudioPosePreviewPrompt(input: { pose: StudioPoseSummary; s
     `Orientation: ${input.pose.orientation}`,
     `Framing: ${input.pose.framing}`,
     `Camera angle: ${input.pose.cameraAngle}`,
-    `Shot distance: ${input.pose.shotDistance}`,
+    describeStudioPoseShotDistance(input.pose.shotDistance),
     `Pose: ${input.pose.posePrompt}`,
   ].filter((part) => part.trim()).join('\n');
 }
