@@ -21,7 +21,7 @@ import {
 } from './utils';
 import { getStudioSessionPoseSnapshotById, listStudioSessionPoseSnapshotsByCategory, pickUniqueStudioPoseSnapshot } from './poseLibraryServer';
 import { buildDefaultStudioFramingPreset, getStudioFramingPreset } from './framingLibraryServer';
-import { extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from './openPoseRenderer';
+import { composeOpenPosePngControlImage, extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from './openPoseRenderer';
 import SettingsService from '@/lib/settingsService';
 import { decryptStructuredEnvelope } from '@/lib/secureTransport';
 import { getModelById } from '@/lib/models/modelConfig';
@@ -125,13 +125,30 @@ async function decodeStudioPoseKeypoints(value: unknown): Promise<unknown | null
 async function prepareStudioOpenPoseControlImage(input: { workspaceId: string; runId: string; shotId: string; revisionId: string; poseId: string; width: number; height: number; framing: StudioResolvedFramingSnapshot }) {
   const pose = await prisma.studioPose.findUnique({
     where: { id: input.poseId },
-    select: { poseKeypointEncryptedJson: true },
+    select: { openPoseImageUrl: true, poseKeypointEncryptedJson: true },
   });
-  if (!pose?.poseKeypointEncryptedJson) return null;
-  const keypoints = await decodeStudioPoseKeypoints(pose.poseKeypointEncryptedJson);
-  if (!keypoints || extractOpenPoseBodyKeypoints(keypoints).length === 0) return null;
+  if (!pose) return null;
   const fileName = `${input.revisionId}-${input.width}x${input.height}.png`;
   const outputPath = path.join(STUDIO_OPENPOSE_CONTROL_DIR, input.workspaceId, input.runId, input.shotId, fileName);
+  const publicPath = `/generations/studio-sessions/openpose-controls/${input.workspaceId}/${input.runId}/${input.shotId}/${fileName}`;
+
+  if (pose.openPoseImageUrl) {
+    const sourcePath = resolveLocalPathFromUrl(pose.openPoseImageUrl);
+    if (sourcePath && fs.existsSync(sourcePath)) {
+      const rendered = await composeOpenPosePngControlImage({
+        sourcePath,
+        width: input.width,
+        height: input.height,
+        transform: input.framing,
+        outputPath,
+      });
+      if (rendered.buffer.length > 0) return { ...rendered, path: publicPath, source: 'openpose_png' as const };
+    }
+  }
+
+  if (!pose.poseKeypointEncryptedJson) return null;
+  const keypoints = await decodeStudioPoseKeypoints(pose.poseKeypointEncryptedJson);
+  if (!keypoints || extractOpenPoseBodyKeypoints(keypoints).length === 0) return null;
   const rendered = await renderOpenPoseControlImage({
     poseKeypointJson: keypoints,
     width: input.width,
@@ -140,8 +157,7 @@ async function prepareStudioOpenPoseControlImage(input: { workspaceId: string; r
     outputPath,
   });
   if (rendered.buffer.length <= 0) return null;
-  const publicPath = `/generations/studio-sessions/openpose-controls/${input.workspaceId}/${input.runId}/${input.shotId}/${fileName}`;
-  return { ...rendered, path: publicPath };
+  return { ...rendered, path: publicPath, source: 'keypoints' as const };
 }
 
 type StudioSessionJobContext = {
@@ -1154,6 +1170,7 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
       path: renderedOpenPoseControl.path,
       width: renderedOpenPoseControl.width,
       height: renderedOpenPoseControl.height,
+      source: renderedOpenPoseControl.source,
     } : null,
     outputDimensions: resolvedSize,
     framingHelperPrompt: helperPrompt,

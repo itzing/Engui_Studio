@@ -319,6 +319,185 @@ function encodePngRgba(width: number, height: number, rgba: Buffer) {
   ]);
 }
 
+
+export type OpenPosePngControlInput = {
+  sourcePath: string;
+  width: number;
+  height: number;
+  transform: OpenPoseRendererTransform;
+  outputPath?: string;
+};
+
+type DecodedPng = { width: number; height: number; rgba: Buffer };
+
+function paethPredictor(a: number, b: number, c: number) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+
+function decodePngRgba(buffer: Buffer): DecodedPng {
+  if (!buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) throw new Error('OpenPose source is not a PNG');
+  let offset = PNG_SIGNATURE.length;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat: Buffer[] = [];
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === 'IDAT') {
+      idat.push(Buffer.from(data));
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+  if (bitDepth !== 8 || interlace !== 0) throw new Error('Only non-interlaced 8-bit PNG OpenPose sources are supported');
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : colorType === 0 ? 1 : 0;
+  if (!channels) throw new Error(`Unsupported OpenPose PNG color type: ${colorType}`);
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const unfiltered = Buffer.alloc(stride * height);
+  let rawOffset = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[rawOffset++];
+    const rowStart = y * stride;
+    const prevStart = (y - 1) * stride;
+    for (let x = 0; x < stride; x += 1) {
+      const value = raw[rawOffset++];
+      const left = x >= channels ? unfiltered[rowStart + x - channels] : 0;
+      const up = y > 0 ? unfiltered[prevStart + x] : 0;
+      const upLeft = y > 0 && x >= channels ? unfiltered[prevStart + x - channels] : 0;
+      let decoded = value;
+      if (filter === 1) decoded = (value + left) & 0xff;
+      else if (filter === 2) decoded = (value + up) & 0xff;
+      else if (filter === 3) decoded = (value + Math.floor((left + up) / 2)) & 0xff;
+      else if (filter === 4) decoded = (value + paethPredictor(left, up, upLeft)) & 0xff;
+      else if (filter !== 0) throw new Error(`Unsupported PNG filter: ${filter}`);
+      unfiltered[rowStart + x] = decoded;
+    }
+  }
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let i = 0, o = 0; i < width * height; i += 1, o += channels) {
+    const target = i * 4;
+    if (channels === 4) {
+      rgba[target] = unfiltered[o];
+      rgba[target + 1] = unfiltered[o + 1];
+      rgba[target + 2] = unfiltered[o + 2];
+      rgba[target + 3] = unfiltered[o + 3];
+    } else if (channels === 3) {
+      rgba[target] = unfiltered[o];
+      rgba[target + 1] = unfiltered[o + 1];
+      rgba[target + 2] = unfiltered[o + 2];
+      rgba[target + 3] = 255;
+    } else {
+      rgba[target] = unfiltered[o];
+      rgba[target + 1] = unfiltered[o];
+      rgba[target + 2] = unfiltered[o];
+      rgba[target + 3] = 255;
+    }
+  }
+  return { width, height, rgba };
+}
+
+function isOpenPoseForeground(rgba: Buffer, offset: number) {
+  const alpha = rgba[offset + 3];
+  if (alpha === 0) return false;
+  return rgba[offset] > 12 || rgba[offset + 1] > 12 || rgba[offset + 2] > 12;
+}
+
+function computeForegroundBBox(image: DecodedPng) {
+  let minX = image.width;
+  let minY = image.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      if (!isOpenPoseForeground(image.rgba, (y * image.width + x) * 4)) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: Math.max(1, maxX - minX + 1),
+    height: Math.max(1, maxY - minY + 1),
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+  };
+}
+
+export async function composeOpenPosePngControlImage(input: OpenPosePngControlInput): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const width = normalizeDimension(input.width, 'width');
+  const height = normalizeDimension(input.height, 'height');
+  const source = decodePngRgba(fs.readFileSync(input.sourcePath));
+  const sourceBBox = computeForegroundBBox(source);
+  if (!sourceBBox) return { buffer: Buffer.alloc(0), width, height };
+
+  const targetPoseHeight = clamp(readFiniteNumber(input.transform.poseHeight) ?? 0.78, 0.05, 2) * height;
+  const scale = targetPoseHeight / sourceBBox.height;
+  const targetCenterX = clamp(readFiniteNumber(input.transform.centerX) ?? 0.5, -0.5, 1.5) * width;
+  const targetCenterY = clamp(readFiniteNumber(input.transform.centerY) ?? 0.58, -0.5, 1.5) * height;
+  const radians = -(((input.transform.rotationDeg || 0) * Math.PI) / 180);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const dest = Buffer.alloc(width * height * 4);
+  for (let i = 0; i < dest.length; i += 4) dest[i + 3] = 255;
+
+  const targetHalfWidth = (sourceBBox.width * scale) / 2;
+  const targetHalfHeight = (sourceBBox.height * scale) / 2;
+  const radius = Math.ceil(Math.sqrt(targetHalfWidth * targetHalfWidth + targetHalfHeight * targetHalfHeight)) + 2;
+  const startX = Math.max(0, Math.floor(targetCenterX - radius));
+  const endX = Math.min(width - 1, Math.ceil(targetCenterX + radius));
+  const startY = Math.max(0, Math.floor(targetCenterY - radius));
+  const endY = Math.min(height - 1, Math.ceil(targetCenterY + radius));
+
+  for (let y = startY; y <= endY; y += 1) {
+    for (let x = startX; x <= endX; x += 1) {
+      const dx = (x - targetCenterX) / scale;
+      const dy = (y - targetCenterY) / scale;
+      const unrotatedX = dx * cos - dy * sin;
+      const unrotatedY = dx * sin + dy * cos;
+      const sourceX = Math.round(sourceBBox.centerX + (input.transform.flipX ? -unrotatedX : unrotatedX));
+      const sourceY = Math.round(sourceBBox.centerY + unrotatedY);
+      if (sourceX < 0 || sourceY < 0 || sourceX >= source.width || sourceY >= source.height) continue;
+      const sourceOffset = (sourceY * source.width + sourceX) * 4;
+      if (!isOpenPoseForeground(source.rgba, sourceOffset)) continue;
+      const targetOffset = (y * width + x) * 4;
+      dest[targetOffset] = source.rgba[sourceOffset];
+      dest[targetOffset + 1] = source.rgba[sourceOffset + 1];
+      dest[targetOffset + 2] = source.rgba[sourceOffset + 2];
+      dest[targetOffset + 3] = 255;
+    }
+  }
+
+  const buffer = encodePngRgba(width, height, dest);
+  if (input.outputPath) {
+    fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
+    fs.writeFileSync(input.outputPath, buffer);
+  }
+  return { buffer, width, height };
+}
+
 export async function renderOpenPoseControlImage(input: OpenPoseRendererInput): Promise<{ buffer: Buffer; width: number; height: number }> {
   const width = normalizeDimension(input.width, 'width');
   const height = normalizeDimension(input.height, 'height');
