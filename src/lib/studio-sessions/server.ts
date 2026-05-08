@@ -1117,7 +1117,12 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
   if (!revision) return null;
 
   const snapshot = shot.run.templateSnapshotJson ? JSON.parse(shot.run.templateSnapshotJson) : {};
-  const generationSettings = snapshot.generationSettings && typeof snapshot.generationSettings === 'object' ? snapshot.generationSettings as Record<string, unknown> : {};
+  const snapshotGenerationSettings = snapshot.generationSettings && typeof snapshot.generationSettings === 'object' ? snapshot.generationSettings as Record<string, unknown> : {};
+  const currentRunSettings = shot.run.runSettingsJson ? JSON.parse(shot.run.runSettingsJson) : {};
+  const generationSettings = {
+    ...snapshotGenerationSettings,
+    ...(currentRunSettings && typeof currentRunSettings === 'object' ? currentRunSettings as Record<string, unknown> : {}),
+  };
   const modelId = typeof generationSettings.modelId === 'string' && generationSettings.modelId.trim() ? generationSettings.modelId.trim() : 'z-image';
   const model = getModelById(modelId);
   if (!model || model.type !== 'image') {
