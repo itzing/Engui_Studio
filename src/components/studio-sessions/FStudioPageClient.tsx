@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Crop, FolderOpen, Grid2X2, Image, Layers3, Plus, Rows3, Trash2, UserRound } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Crop, FolderOpen, Grid2X2, Image, Layers3, Plus, RotateCcw, Rows3, Star, Trash2, UserRound, X } from 'lucide-react';
 import CharacterManagerPanel from '@/components/characters/CharacterManagerPanel';
 import FramingLibraryWorkspace, { type FramingLibraryRoute } from '@/components/studio-sessions/FramingLibraryWorkspace';
 import PoseLibraryWorkspace, { type PoseLibraryRoute } from '@/components/studio-sessions/PoseLibraryWorkspace';
 import CharacterSelectModal from '@/components/characters/CharacterSelectModal';
 import RightPanel from '@/components/layout/RightPanel';
 import { Button } from '@/components/ui/button';
+import { GalleryFullscreenViewer, type GalleryFullscreenViewerItem } from '@/components/workspace/GalleryFullscreenViewer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -633,6 +634,9 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const [posePickerLoading, setPosePickerLoading] = useState(false);
   const [posePickerError, setPosePickerError] = useState<string | null>(null);
   const [savingPoseId, setSavingPoseId] = useState<string | null>(null);
+  const [selectedVersionByShotId, setSelectedVersionByShotId] = useState<Record<string, string>>({});
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   useEffect(() => { setShots(detail?.shots || []); }, [detail?.shots]);
   useEffect(() => { setRevisions(detail?.revisions || []); }, [detail?.revisions]);
@@ -649,9 +653,58 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
 
   useEffect(() => { setControlStrengthDraft(String(currentControlStrength)); }, [currentControlStrength, run?.id]);
 
+  useEffect(() => {
+    if (!run?.id) return;
+    const activeStatuses = new Set(['queueing_up', 'queued', 'processing', 'finalizing']);
+    const shouldPoll = run.status === 'in_progress' || shots.some((shot) => activeStatuses.has(String(shot.activeJobStatus || shot.latestJobStatus || shot.status)) || shot.materializationStatus === 'pending' || shot.materializationStatus === 'processing');
+    if (!shouldPoll) return;
+    let cancelled = false;
+    const refreshRun = async () => {
+      try {
+        const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !data?.success || cancelled) return;
+        setShots(Array.isArray(data.shots) ? data.shots : []);
+        setRevisions(Array.isArray(data.revisions) ? data.revisions : []);
+        setVersions(Array.isArray(data.versions) ? data.versions : []);
+        if (data.run) setRunOverride(data.run as StudioSessionRunSummary);
+      } catch {
+        // Best-effort polling only; the manual refresh path remains the page reload.
+      }
+    };
+    const timer = window.setInterval(() => { void refreshRun(); }, 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [run?.id, run?.status, shots]);
+
   const revisionsByShotId = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const pickerShot = useMemo(() => shots.find((shot) => shot.id === posePickerShotId) ?? null, [posePickerShotId, shots]);
   const pickerRevision = posePickerShotId ? revisionsByShotId.get(posePickerShotId) ?? null : null;
+  const versionsByShotId = useMemo(() => {
+    const grouped = new Map<string, StudioSessionShotVersionSummary[]>();
+    for (const version of versions) {
+      if (version.hidden) continue;
+      const list = grouped.get(version.shotId) ?? [];
+      list.push(version);
+      grouped.set(version.shotId, list);
+    }
+    for (const list of grouped.values()) list.sort((a, b) => a.versionNumber - b.versionNumber);
+    return grouped;
+  }, [versions]);
+
+  const selectedVersionForShot = useCallback((shot: StudioSessionShotSummary) => {
+    const shotVersions = versionsByShotId.get(shot.id) ?? [];
+    if (!shotVersions.length) return null;
+    const selectedId = selectedVersionByShotId[shot.id] || shot.selectionVersionId || shotVersions[shotVersions.length - 1]?.id;
+    return shotVersions.find((version) => version.id === selectedId) ?? shotVersions[shotVersions.length - 1] ?? null;
+  }, [selectedVersionByShotId, versionsByShotId]);
+
+  const resultTileItems = useMemo(() => shots.map((shot) => {
+    const version = selectedVersionForShot(shot);
+    const url = version?.previewUrl || version?.thumbnailUrl || version?.originalUrl || null;
+    return version && url ? { shot, version, url } : null;
+  }).filter((item): item is { shot: StudioSessionShotSummary; version: StudioSessionShotVersionSummary; url: string } => Boolean(item)), [selectedVersionForShot, shots]);
+
+  const viewerItems = useMemo<GalleryFullscreenViewerItem[]>(() => resultTileItems.map((item) => ({ id: item.version.id, url: item.url, type: 'image' })), [resultTileItems]);
 
   const reviewStates: Array<{ value: StudioSessionShotVersionSummary['reviewState']; label: string }> = [
     { value: 'hero', label: 'Hero' },
@@ -754,7 +807,16 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch run');
       const launchedCount = Array.isArray(data.launched) ? data.launched.length : 0;
       const skippedCount = Array.isArray(data.skippedShotIds) ? data.skippedShotIds.length : 0;
-      setLaunchMessage(`Launched ${launchedCount} job${launchedCount === 1 ? '' : 's'}${skippedCount > 0 ? `, skipped ${skippedCount}` : ''}. Open Jobs to track progress.`);
+      setLaunchMessage(`Launched ${launchedCount} job${launchedCount === 1 ? '' : 's'}${skippedCount > 0 ? `, skipped ${skippedCount}` : ''}. Tiles will update as jobs finish.`);
+      if (data.run) setRunOverride(data.run as StudioSessionRunSummary);
+      const refreshResponse = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, { cache: 'no-store' });
+      const refreshData = await refreshResponse.json();
+      if (refreshResponse.ok && refreshData?.success) {
+        setShots(Array.isArray(refreshData.shots) ? refreshData.shots : []);
+        setRevisions(Array.isArray(refreshData.revisions) ? refreshData.revisions : []);
+        setVersions(Array.isArray(refreshData.versions) ? refreshData.versions : []);
+        if (refreshData.run) setRunOverride(refreshData.run as StudioSessionRunSummary);
+      }
     } catch (error) {
       setLaunchError(toErrorMessage(error, 'Failed to launch run'));
     } finally {
@@ -762,11 +824,54 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     }
   };
 
-  const renderPoseFrame = (shot: StudioSessionShotSummary, revision?: StudioSessionShotRevisionSummary) => {
+  const showPreviousVersion = (shotId: string) => {
+    const shotVersions = versionsByShotId.get(shotId) ?? [];
+    if (shotVersions.length <= 1) return;
+    const currentId = selectedVersionByShotId[shotId] || shotVersions[shotVersions.length - 1]?.id;
+    const index = Math.max(0, shotVersions.findIndex((version) => version.id === currentId));
+    const next = shotVersions[(index - 1 + shotVersions.length) % shotVersions.length];
+    if (!next) return;
+    setSelectedVersionByShotId((current) => ({ ...current, [shotId]: next.id }));
+  };
+
+  const showNextVersion = (shotId: string) => {
+    const shotVersions = versionsByShotId.get(shotId) ?? [];
+    if (shotVersions.length <= 1) return;
+    const currentId = selectedVersionByShotId[shotId] || shotVersions[shotVersions.length - 1]?.id;
+    const index = Math.max(0, shotVersions.findIndex((version) => version.id === currentId));
+    const next = shotVersions[(index + 1) % shotVersions.length];
+    if (!next) return;
+    setSelectedVersionByShotId((current) => ({ ...current, [shotId]: next.id }));
+  };
+
+  const openResultViewer = (versionId: string) => {
+    const index = viewerItems.findIndex((item) => item.id === versionId);
+    if (index < 0) return;
+    setViewerIndex(index);
+    setViewerOpen(true);
+  };
+
+  const renderShotFrame = (shot: StudioSessionShotSummary, revision?: StudioSessionShotRevisionSummary, version?: StudioSessionShotVersionSummary | null) => {
     const poseImage = revision?.poseSnapshot.primaryPreviewUrl || revision?.poseSnapshot.openPose?.imageUrl || null;
     const poseName = revision?.poseSnapshot.name || 'Pose pending';
-    if (poseImage) return <img src={poseImage} alt={poseName} className="h-full w-full object-contain" />;
-    return <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>;
+    const resultUrl = version?.previewUrl || version?.thumbnailUrl || version?.originalUrl || null;
+    const shotVersions = versionsByShotId.get(shot.id) ?? [];
+    const versionIndex = version ? shotVersions.findIndex((item) => item.id === version.id) : -1;
+
+    return <div className="relative aspect-square bg-black/35">
+      <div className="absolute left-3 top-3 z-10 max-w-[calc(100%-1.5rem)] rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white/85 shadow-lg shadow-black/20">{poseName}</div>
+      {resultUrl && version ? <button type="button" onClick={() => openResultViewer(version.id)} className="block h-full w-full cursor-zoom-in"><img src={resultUrl} alt={`${shot.label} result`} className="h-full w-full object-cover" /></button> : poseImage ? <img src={poseImage} alt={poseName} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>}
+      {version && shotVersions.length > 1 ? <div className="absolute inset-x-3 top-1/2 z-20 flex -translate-y-1/2 items-center justify-between pointer-events-none"><button type="button" onClick={(event) => { event.stopPropagation(); showPreviousVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={(event) => { event.stopPropagation(); showNextVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronRight className="h-4 w-4" /></button></div> : null}
+      {version && shotVersions.length > 1 ? <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">{versionIndex + 1}/{shotVersions.length}</div> : null}
+    </div>;
+  };
+
+  const reviewIcon = (state: StudioSessionShotVersionSummary['reviewState']) => {
+    if (state === 'hero') return <Star className="h-3.5 w-3.5" />;
+    if (state === 'pick') return <Check className="h-3.5 w-3.5" />;
+    if (state === 'maybe') return <span className="text-sm leading-none">~</span>;
+    if (state === 'reject') return <X className="h-3.5 w-3.5" />;
+    return <RotateCcw className="h-3.5 w-3.5" />;
   };
 
   return <div className="space-y-5">
@@ -774,9 +879,20 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     {launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}
     {launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}
 
-    <TileGrid>{shots.map((shot) => { const revision = revisionsByShotId.get(shot.id); return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{renderPoseFrame(shot, revision)}</div><div className="space-y-3 p-4"><div><div className="text-sm font-semibold text-white">{shot.label}</div><div className="mt-1 text-xs text-white/50">{shot.category}{revision ? ` · ${revision.poseSnapshot.name}` : ' · pose pending'}</div></div><div className="flex items-center justify-between gap-2"><span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.status}</span><Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(shot.id)} className="h-8 border-white/10 bg-white/[0.04] px-3 text-xs text-white/75 hover:bg-white/[0.08]">{revision ? 'Change pose' : 'Choose pose'}</Button></div></div></div>; })}{shots.length === 0 ? <EmptyTile title="No draft shots yet" description="Create a run with shot slots before launching." /> : null}</TileGrid>
-
-    <TileGrid>{versions.map((version) => { const url = version.previewUrl || version.thumbnailUrl || version.originalUrl; const revision = revisions.find((item) => item.id === version.revisionId) ?? revisionsByShotId.get(version.shotId); return <div key={version.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"><div className="aspect-[3/4] bg-black/35">{url ? <img src={url} alt="Version" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-white/35">No preview</div>}</div><div className="space-y-3 p-4"><div className="text-xs text-white/55">v{version.versionNumber} · {version.reviewState}{revision ? ` · ${revision.poseSnapshot.name}` : ''}</div><div className="flex flex-wrap gap-1.5">{reviewStates.map((state) => <Button key={state.value} size="sm" variant="outline" disabled={reviewingVersionId === version.id} onClick={() => reviewVersion(version.id, state.value)} className={`h-7 border-white/10 px-2 text-[11px] ${version.reviewState === state.value ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{state.label}</Button>)}<Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(version.shotId)} className="h-7 border-white/10 bg-white/[0.04] px-2 text-[11px] text-white/70 hover:bg-white/[0.08]">Change shot pose</Button></div></div></div>; })}{versions.length === 0 ? <EmptyTile title="No generated versions yet" description="Click Launch run when you are ready; generated images will appear here for review." /> : null}</TileGrid>
+    <TileGrid>{shots.map((shot) => {
+      const revision = revisionsByShotId.get(shot.id);
+      const selectedVersion = selectedVersionForShot(shot);
+      return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+        {renderShotFrame(shot, revision, selectedVersion)}
+        <div className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2"><span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/55">{shot.activeJobStatus || shot.latestJobStatus || shot.status}</span><Button type="button" size="sm" variant="outline" onClick={() => void openPosePicker(shot.id)} className="h-8 border-white/10 bg-white/[0.04] px-3 text-xs text-white/75 hover:bg-white/[0.08]">{revision ? 'Change pose' : 'Choose pose'}</Button></div>
+          {selectedVersion ? <div className="flex flex-wrap items-center gap-1.5">
+            {reviewStates.map((state) => <Button key={state.value} size="icon" variant="outline" title={state.label} aria-label={state.label} disabled={reviewingVersionId === selectedVersion.id} onClick={() => reviewVersion(selectedVersion.id, state.value)} className={`h-8 w-8 border-white/10 ${state.value === 'reject' && selectedVersion.reviewState === state.value ? 'bg-red-500 text-white' : selectedVersion.reviewState === state.value ? 'bg-blue-500 text-white' : state.value === 'reject' ? 'bg-white/[0.04] text-red-200/75 hover:bg-red-500/15 hover:text-red-100' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{reviewIcon(state.value)}</Button>)}
+            <span className="ml-auto text-[11px] text-white/40">v{selectedVersion.versionNumber} · {selectedVersion.reviewState}</span>
+          </div> : null}
+        </div>
+      </div>;
+    })}{shots.length === 0 ? <EmptyTile title="No draft shots yet" description="Create a run with shot slots before launching." /> : null}</TileGrid>
 
     <div className={`fixed inset-y-0 right-0 z-50 flex transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="h-full w-[420px] max-w-[92vw] overflow-y-auto border-l border-white/10 bg-[#101014] p-5 shadow-2xl shadow-black/60">
@@ -788,6 +904,8 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
         </div>
       </div>
     </div>
+
+    <GalleryFullscreenViewer open={viewerOpen} items={viewerItems} currentIndex={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerOpen(false)} />
 
     <Dialog open={Boolean(posePickerShotId)} onOpenChange={(open) => { if (!open) { setPosePickerShotId(null); setPosePickerPoses([]); setPosePickerError(null); } }}><DialogContent className="max-w-5xl border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{pickerShot ? `Choose pose for ${pickerShot.label}` : 'Choose pose'}</DialogTitle><DialogDescription className="text-white/50">Manual assignment. This updates the shot plan only; it does not launch a generation job.</DialogDescription></DialogHeader>{posePickerError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{posePickerError}</div> : null}{posePickerLoading ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/50">Loading poses…</div> : <div className="grid max-h-[65vh] grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 overflow-y-auto pr-1">{posePickerPoses.map((pose) => { const selected = pickerRevision?.poseId === pose.id; const imageUrl = pose.primaryPreviewUrl || pose.openPose?.imageUrl || null; return <button key={pose.id} type="button" disabled={savingPoseId === pose.id} onClick={() => void choosePose(pose.id)} className={`overflow-hidden rounded-2xl border text-left transition ${selected ? 'border-blue-400/70 bg-blue-500/15' : 'border-white/10 bg-white/[0.035] hover:border-white/25 hover:bg-white/[0.06]'}`}>{imageUrl ? <img src={imageUrl} alt={pose.name} className="aspect-[3/4] w-full object-contain" /> : <div className="flex aspect-[3/4] w-full items-center justify-center bg-black/35 px-3 text-center text-sm text-white/70">{pose.name}</div>}<div className="space-y-1 p-3"><div className="line-clamp-1 text-sm font-medium text-white">{pose.name}</div><div className="text-[11px] text-white/45">{pose.orientation} · {pose.framing}{pose.openPose?.hasOpenPoseImage ? ' · OpenPose' : ''}</div>{selected ? <div className="text-[11px] text-blue-200">Current shot pose</div> : null}{savingPoseId === pose.id ? <div className="text-[11px] text-blue-200">Saving…</div> : null}</div></button>; })}{posePickerPoses.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/45">No available poses for this shot category.</div> : null}</div>}</DialogContent></Dialog>
   </div>;
