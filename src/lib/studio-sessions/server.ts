@@ -1229,8 +1229,16 @@ export async function runStudioSessionShot(shotId: string) {
 }
 
 export async function runAllStudioSessionShots(runId: string) {
+  const relaunchableReviewStates = new Set(['unreviewed', 'needs_retry', 'maybe', 'reject']);
   const shots = await prisma.studioSessionShot.findMany({
     where: { runId, skipped: false },
+    include: {
+      versions: {
+        where: { hidden: false },
+        orderBy: [{ versionNumber: 'desc' }, { createdAt: 'desc' }],
+      },
+      selectedVersion: true,
+    },
     orderBy: [{ category: 'asc' }, { slotIndex: 'asc' }],
   });
 
@@ -1241,6 +1249,16 @@ export async function runAllStudioSessionShots(runId: string) {
       skippedShotIds.push(shot.id);
       continue;
     }
+
+    const reviewVersion = shot.selectedVersion && !shot.selectedVersion.hidden
+      ? shot.selectedVersion
+      : shot.versions[0] ?? null;
+    const reviewState = reviewVersion?.reviewState ?? 'unreviewed';
+    if (!relaunchableReviewStates.has(reviewState)) {
+      skippedShotIds.push(shot.id);
+      continue;
+    }
+
     const result = await launchStudioSessionShotJob(shot.id, 'run_all');
     if (result) {
       launched.push(result);
@@ -1482,12 +1500,11 @@ export async function materializeStudioSessionCompletedJob(jobId: string) {
       },
     });
 
-    const shouldAutoSelect = !shot.selectionVersionId;
     await prisma.studioSessionShot.update({
       where: { id: shot.id },
       data: {
-        status: shouldAutoSelect ? 'completed' : 'needs_review',
-        selectionVersionId: shouldAutoSelect ? version.id : shot.selectionVersionId,
+        status: 'needs_review',
+        selectionVersionId: version.id,
       },
     });
     if (task) {

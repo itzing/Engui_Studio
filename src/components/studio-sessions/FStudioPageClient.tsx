@@ -65,6 +65,30 @@ function TileGrid({ children, dense = false }: { children: ReactNode; dense?: bo
   return <div className={dense ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-0' : 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5'}>{children}</div>;
 }
 
+function StudioResultImage({ version, alt }: { version: StudioSessionShotVersionSummary; alt: string }) {
+  const urls = useMemo(() => Array.from(new Set([version.previewUrl, version.thumbnailUrl, version.originalUrl].filter((url): url is string => typeof url === 'string' && url.trim().length > 0))), [version.originalUrl, version.previewUrl, version.thumbnailUrl]);
+  const [urlIndex, setUrlIndex] = useState(0);
+
+  useEffect(() => {
+    setUrlIndex(0);
+  }, [version.id]);
+
+  const currentUrl = urls[urlIndex] || null;
+  if (!currentUrl) {
+    return <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/45">Result image missing</div>;
+  }
+
+  return <img
+    key={`${version.id}:${urlIndex}:${currentUrl}`}
+    src={currentUrl}
+    alt={alt}
+    loading="eager"
+    decoding="async"
+    onError={() => setUrlIndex((current) => Math.min(current + 1, urls.length - 1))}
+    className="h-full w-full object-cover"
+  />;
+}
+
 function AddTile({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="group flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.025] text-white/60 transition hover:border-blue-400/60 hover:bg-blue-500/10 hover:text-white">
@@ -743,6 +767,20 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [run?.id, run?.status, shots]);
 
+  useEffect(() => {
+    setSelectedVersionByShotId((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const shot of shots) {
+        if (shot.selectionVersionId && next[shot.id] && next[shot.id] !== shot.selectionVersionId) {
+          delete next[shot.id];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [shots]);
+
   const revisionsByShotId = useMemo(() => new Map(revisions.map((revision) => [revision.shotId, revision])), [revisions]);
   const pickerShot = useMemo(() => shots.find((shot) => shot.id === posePickerShotId) ?? null, [posePickerShotId, shots]);
   const pickerRevision = posePickerShotId ? revisionsByShotId.get(posePickerShotId) ?? null : null;
@@ -927,7 +965,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
 
     return <div className="relative aspect-square bg-black/35">
       <div className="absolute left-3 top-3 z-10 max-w-[calc(100%-1.5rem)] rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white/85 shadow-lg shadow-black/20">{poseName}</div>
-      {resultUrl && version ? <button type="button" onClick={() => openResultViewer(version.id)} className="block h-full w-full cursor-zoom-in"><img src={resultUrl} alt={`${shot.label} result`} className="h-full w-full object-cover" /></button> : poseImage ? <img src={poseImage} alt={poseName} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>}
+      {resultUrl && version ? <button type="button" onClick={() => openResultViewer(version.id)} className="block h-full w-full cursor-zoom-in"><StudioResultImage version={version} alt={`${shot.label} result`} /></button> : poseImage ? <img src={poseImage} alt={poseName} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center px-4 text-center text-sm font-medium text-white/70">{poseName}</div>}
       {version && shotVersions.length > 1 ? <div className="absolute inset-x-3 top-1/2 z-20 flex -translate-y-1/2 items-center justify-between pointer-events-none"><button type="button" onClick={(event) => { event.stopPropagation(); showPreviousVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={(event) => { event.stopPropagation(); showNextVersion(shot.id); }} className="pointer-events-auto rounded-full border border-white/15 bg-black/55 p-1.5 text-white/80 hover:bg-black/75"><ChevronRight className="h-4 w-4" /></button></div> : null}
       <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">{shot.activeJobStatus || shot.latestJobStatus || shot.status}</div>
       {version ? <div className="absolute bottom-3 right-3 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white/75">v{version.versionNumber}{shotVersions.length > 1 ? `/${shotVersions.length}` : ''} · {version.reviewState}</div> : null}
