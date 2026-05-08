@@ -112,14 +112,41 @@ function AddTile({ onClick }: { onClick: () => void }) {
   );
 }
 
-function GenericSkeleton({ transform }: { transform: Pick<FramingDraft, 'poseHeight' | 'rotationDeg' | 'flipX'> }) {
-  const skeletonHeight = clamp(transform.poseHeight, 0.05, 1.5) * 72;
+function subjectRectStyle(transform: Pick<FramingDraft, 'aspectRatio' | 'centerX' | 'centerY' | 'poseHeight' | 'rotationDeg' | 'flipX'>) {
+  const aspectRatio = clamp(transform.aspectRatio, 0.2, 4);
+  const heightPct = clamp(transform.poseHeight, 0.05, 1.5) * 100;
+  const widthPct = clamp((clamp(transform.poseHeight, 0.05, 1.5) * 0.38 / aspectRatio) * 100, 4, 96);
+  return {
+    left: `${clamp(transform.centerX, 0, 1) * 100}%`,
+    top: `${clamp(transform.centerY, 0, 1) * 100}%`,
+    width: `${widthPct}%`,
+    height: `${heightPct}%`,
+    transform: `translate(-50%, -50%) rotate(${transform.rotationDeg}deg) scaleX(${transform.flipX ? -1 : 1})`,
+  };
+}
+
+function SubjectAreaOverlay({ transform, interactive = false, onPointerDown }: { transform: Pick<FramingDraft, 'aspectRatio' | 'centerX' | 'centerY' | 'poseHeight' | 'rotationDeg' | 'flipX'>; interactive?: boolean; onPointerDown?: (event: ReactPointerEvent<HTMLDivElement>, action: 'drag' | 'resize') => void }) {
   return (
-    <div className="absolute left-1/2 top-1/2 w-[2px] origin-center rounded-full bg-cyan-300/80" style={{ height: `${skeletonHeight}%`, transform: `translate(-50%, -50%) rotate(${transform.rotationDeg}deg) scaleX(${transform.flipX ? -1 : 1})` }}>
-      <span className="absolute left-1/2 top-0 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-100 bg-cyan-400/80 shadow-[0_0_20px_rgba(34,211,238,.45)]" />
-      <span className="absolute left-1/2 top-[18%] h-[22%] w-[22%] -translate-x-1/2 rounded-full border-2 border-cyan-300/70" />
-      <span className="absolute left-1/2 top-[33%] h-0 w-[54%] -translate-x-1/2 border-t-2 border-cyan-300/80 before:absolute before:left-0 before:top-0 before:h-[26%] before:w-0 before:origin-top before:rotate-[24deg] before:border-l-2 before:border-cyan-300/70 after:absolute after:right-0 after:top-0 after:h-[26%] after:w-0 after:origin-top after:-rotate-[24deg] after:border-l-2 after:border-cyan-300/70" />
-      <span className="absolute bottom-[25%] left-1/2 h-0 w-[34%] -translate-x-1/2 border-t-2 border-cyan-300/80 before:absolute before:left-0 before:top-0 before:h-[31%] before:w-0 before:origin-top before:-rotate-[12deg] before:border-l-2 before:border-cyan-300/70 after:absolute after:right-0 after:top-0 after:h-[31%] after:w-0 after:origin-top after:rotate-[12deg] after:border-l-2 after:border-cyan-300/70" />
+    <div
+      className={`absolute origin-center rounded-[10%] border-2 border-cyan-200/90 bg-cyan-400/10 shadow-[0_0_28px_rgba(34,211,238,.32)] ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      style={subjectRectStyle(transform)}
+      onPointerDown={interactive ? (event) => onPointerDown?.(event, 'drag') : undefined}
+    >
+      <div className="absolute inset-x-[42%] inset-y-0 border-x border-cyan-100/35" />
+      <div className="absolute inset-x-0 top-[12%] border-t border-cyan-100/35" />
+      <div className="absolute inset-x-0 top-[34%] border-t border-cyan-100/30" />
+      <div className="absolute inset-x-0 bottom-[18%] border-t border-cyan-100/30" />
+      <div className="absolute left-1/2 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-50 bg-cyan-300/95" />
+      <div className="absolute left-1/2 top-[18%] h-[18%] w-[46%] -translate-x-1/2 rounded-full border-2 border-cyan-200/70" />
+      <div className="absolute left-1/2 top-[42%] h-0 w-[92%] -translate-x-1/2 border-t-2 border-cyan-200/75 before:absolute before:left-0 before:top-0 before:h-8 before:w-0 before:origin-top before:rotate-[22deg] before:border-l-2 before:border-cyan-200/65 after:absolute after:right-0 after:top-0 after:h-8 after:w-0 after:origin-top after:-rotate-[22deg] after:border-l-2 after:border-cyan-200/65" />
+      <div className="absolute bottom-[22%] left-1/2 h-0 w-[54%] -translate-x-1/2 border-t-2 border-cyan-200/75 before:absolute before:left-0 before:top-0 before:h-9 before:w-0 before:origin-top before:-rotate-[10deg] before:border-l-2 before:border-cyan-200/65 after:absolute after:right-0 after:top-0 after:h-9 after:w-0 after:origin-top after:rotate-[10deg] after:border-l-2 after:border-cyan-200/65" />
+      {interactive ? (
+        <>
+          <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-blue-400 shadow-[0_0_14px_rgba(96,165,250,.8)]" />
+          <div className="absolute -bottom-2 left-1/2 h-4 w-10 -translate-x-1/2 cursor-ns-resize rounded-full border border-cyan-100 bg-cyan-400/90 shadow-lg" onPointerDown={(event) => onPointerDown?.(event, 'resize')} />
+          <div className="absolute -top-2 left-1/2 h-4 w-10 -translate-x-1/2 cursor-ns-resize rounded-full border border-cyan-100 bg-cyan-400/60 shadow-lg" onPointerDown={(event) => onPointerDown?.(event, 'resize')} />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -128,14 +155,24 @@ function PlacementPreview({ preset, className = 'max-w-[220px]' }: { preset: Pic
   return (
     <div className={`relative mx-auto w-full overflow-hidden rounded-2xl border border-white/10 bg-black ${className}`} style={{ aspectRatio: `${clamp(preset.aspectRatio, 0.2, 4)} / 1` }}>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.06)_1px,transparent_1px)] bg-[size:25%_25%]" />
-      <div className="absolute h-2 w-2 rounded-full bg-blue-300 shadow-[0_0_18px_rgba(147,197,253,.85)]" style={{ left: `${clamp(preset.centerX, 0, 1) * 100}%`, top: `${clamp(preset.centerY, 0, 1) * 100}%`, transform: 'translate(-50%, -50%)' }} />
-      <div className="absolute" style={{ left: `${clamp(preset.centerX, 0, 1) * 100}%`, top: `${clamp(preset.centerY, 0, 1) * 100}%` }}><GenericSkeleton transform={preset} /></div>
+      <SubjectAreaOverlay transform={preset} />
     </div>
   );
 }
 
+type FramingPointerState = {
+  action: 'drag' | 'resize';
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startCenterX: number;
+  startCenterY: number;
+  startPoseHeight: number;
+};
+
 function FramingEditor({ draft, onChange }: { draft: FramingDraft; onChange: (updater: (current: FramingDraft) => FramingDraft) => void }) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const pointerState = useRef<FramingPointerState | null>(null);
 
   function updateCenterFromPointer(event: ReactPointerEvent<HTMLDivElement>) {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -143,14 +180,50 @@ function FramingEditor({ draft, onChange }: { draft: FramingDraft; onChange: (up
     onChange((current) => ({ ...current, centerX: round(clamp((event.clientX - rect.left) / rect.width, 0, 1)), centerY: round(clamp((event.clientY - rect.top) / rect.height, 0, 1)) }));
   }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+  function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     updateCenterFromPointer(event);
   }
 
+  function handleSubjectPointerDown(event: ReactPointerEvent<HTMLDivElement>, action: 'drag' | 'resize') {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    canvasRef.current?.setPointerCapture(event.pointerId);
+    pointerState.current = {
+      action,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startCenterX: draft.centerX,
+      startCenterY: draft.centerY,
+      startPoseHeight: draft.poseHeight,
+    };
+  }
+
   function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.buttons !== 1) return;
-    updateCenterFromPointer(event);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const state = pointerState.current;
+    if (state && state.pointerId === event.pointerId) {
+      if (state.action === 'drag') {
+        const dx = (event.clientX - state.startX) / rect.width;
+        const dy = (event.clientY - state.startY) / rect.height;
+        onChange((current) => ({ ...current, centerX: round(clamp(state.startCenterX + dx, 0, 1)), centerY: round(clamp(state.startCenterY + dy, 0, 1)) }));
+      } else {
+        const pointerY = (event.clientY - rect.top) / rect.height;
+        const nextHeight = Math.abs(pointerY - state.startCenterY) * 2;
+        onChange((current) => ({ ...current, poseHeight: round(clamp(nextHeight, 0.05, 1.5)) }));
+      }
+      return;
+    }
+    if (event.buttons === 1) updateCenterFromPointer(event);
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointerState.current?.pointerId === event.pointerId) pointerState.current = null;
   }
 
   function setAspectPreset(orientation: StudioSessionPoseOrientation) {
@@ -163,17 +236,18 @@ function FramingEditor({ draft, onChange }: { draft: FramingDraft; onChange: (up
         ref={canvasRef}
         role="application"
         aria-label="2D framing editor canvas"
-        onPointerDown={handlePointerDown}
+        onPointerDown={handleCanvasPointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         className="relative mx-auto w-full max-w-[520px] touch-none overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl"
         style={{ aspectRatio: `${clamp(draft.aspectRatio, 0.2, 4)} / 1` }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(59,130,246,.16),transparent_38%),linear-gradient(rgba(255,255,255,.075)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.075)_1px,transparent_1px)] bg-[size:100%_100%,12.5%_12.5%,12.5%_12.5%]" />
-        <div className="absolute left-1/2 top-0 h-full border-l border-white/10" />
-        <div className="absolute left-0 top-1/2 w-full border-t border-white/10" />
-        <div className="absolute h-4 w-4 rounded-full border-2 border-blue-100 bg-blue-400 shadow-[0_0_24px_rgba(96,165,250,.8)]" style={{ left: `${draft.centerX * 100}%`, top: `${draft.centerY * 100}%`, transform: 'translate(-50%, -50%)' }} />
-        <div className="absolute" style={{ left: `${draft.centerX * 100}%`, top: `${draft.centerY * 100}%` }}><GenericSkeleton transform={draft} /></div>
-        <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/55 px-3 py-1 text-xs text-white/55">Drag skeleton center</div>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(59,130,246,.16),transparent_38%),linear-gradient(rgba(255,255,255,.075)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.075)_1px,transparent_1px)] bg-[size:100%_100%,12.5%_12.5%,12.5%_12.5%]" />
+        <div className="pointer-events-none absolute left-1/2 top-0 h-full border-l border-white/10" />
+        <div className="pointer-events-none absolute left-0 top-1/2 w-full border-t border-white/10" />
+        <SubjectAreaOverlay transform={draft} interactive onPointerDown={handleSubjectPointerDown} />
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/55 px-3 py-1 text-xs text-white/55">Drag rectangle to place · pull top/bottom handle to resize</div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -185,10 +259,10 @@ function FramingEditor({ draft, onChange }: { draft: FramingDraft; onChange: (up
           </div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-white/55">
-          <div className="mb-2 uppercase tracking-[0.16em] text-white/35">Stored relative values</div>
+          <div className="mb-2 uppercase tracking-[0.16em] text-white/35">Stored relative subject area</div>
           <div>centerX {draft.centerX.toFixed(3)} · centerY {draft.centerY.toFixed(3)}</div>
           <div>poseHeight {draft.poseHeight.toFixed(3)} · rotation {draft.rotationDeg.toFixed(1)}° · {draft.flipX ? 'flipX' : 'normal'}</div>
-          <div className="mt-1 text-white/35">No pixel dimensions are saved.</div>
+          <div className="mt-1 text-white/35">The rectangle is a relative subject box; no pixel dimensions are saved.</div>
         </div>
       </div>
     </div>

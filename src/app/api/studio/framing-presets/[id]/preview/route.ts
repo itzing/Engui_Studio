@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import SettingsService from '@/lib/settingsService';
 import { decryptStructuredEnvelope } from '@/lib/secureTransport';
 import { getStudioFramingPreset } from '@/lib/studio-sessions/framingLibraryServer';
-import { extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from '@/lib/studio-sessions/openPoseRenderer';
+import { composeOpenPosePngControlImage, extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from '@/lib/studio-sessions/openPoseRenderer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJson, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +66,15 @@ async function decodePoseKeypoints(value: unknown): Promise<unknown | null> {
   return parsed;
 }
 
+
+function resolveLocalPathFromUrl(url: string): string | null {
+  if (!url.startsWith('/')) return null;
+  const normalized = url.split('?')[0];
+  if (normalized.startsWith('/generations/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
+  if (normalized.startsWith('/results/')) return path.join(process.cwd(), 'public', normalized.replace(/^\//, ''));
+  return null;
+}
+
 function safePreviewDir(workspaceId: string, presetId: string, poseId: string) {
   const resolved = path.resolve(PREVIEW_ROOT, workspaceId, presetId, poseId);
   if (!resolved.startsWith(path.resolve(PREVIEW_ROOT))) throw new Error('Invalid preview path');
@@ -93,6 +102,31 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const width = readDimension(body.width, preset.orientation === 'landscape' ? 1216 : preset.orientation === 'square' ? 1024 : 832);
     const height = readDimension(body.height, preset.orientation === 'landscape' ? 832 : preset.orientation === 'square' ? 1024 : 1216);
+    const dir = safePreviewDir(preset.workspaceId, preset.id, pose.id);
+    const fileName = `${Date.now()}-${width}x${height}.png`;
+    const outputPath = path.join(dir, fileName);
+    const previewUrl = `${PREVIEW_PUBLIC_ROOT}/${preset.workspaceId}/${preset.id}/${pose.id}/${fileName}`;
+
+    if (typeof pose.openPoseImageUrl === 'string' && pose.openPoseImageUrl.trim()) {
+      const sourcePath = resolveLocalPathFromUrl(pose.openPoseImageUrl.trim());
+      if (sourcePath && fs.existsSync(sourcePath)) {
+        const rendered = await composeOpenPosePngControlImage({ sourcePath, width, height, transform: preset, outputPath });
+        if (rendered.buffer.length > 0) {
+          return studioSessionNoStoreJson({
+            success: true,
+            mode: 'openpose_control',
+            previewUrl,
+            width: rendered.width,
+            height: rendered.height,
+            pointCount: null,
+            pose: { id: pose.id, title: pose.title, categoryId: pose.categoryId },
+            preset,
+            helperPrompt: preset.helperPrompt,
+          });
+        }
+      }
+    }
+
     const hasStoredKeypoints = typeof pose.poseKeypointEncryptedJson === 'string' && pose.poseKeypointEncryptedJson.trim().length > 0;
 
     if (!hasStoredKeypoints) {
@@ -104,7 +138,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         width,
         height,
         helperPrompt: preset.helperPrompt,
-        message: 'Pose has no OpenPose keypoints. Studio generation will fall back to text-only framing guidance.',
+        message: 'Pose has no local OpenPose PNG or keypoints. Studio generation will fall back to text-only framing guidance.',
       });
     }
 
@@ -123,11 +157,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       });
     }
 
-    const dir = safePreviewDir(preset.workspaceId, preset.id, pose.id);
-    const fileName = `${Date.now()}-${width}x${height}.png`;
-    const outputPath = path.join(dir, fileName);
     const rendered = await renderOpenPoseControlImage({ poseKeypointJson: keypoints, width, height, transform: preset, outputPath });
-    const previewUrl = `${PREVIEW_PUBLIC_ROOT}/${preset.workspaceId}/${preset.id}/${pose.id}/${fileName}`;
 
     return studioSessionNoStoreJson({
       success: true,
