@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { GalleryFullscreenViewer, type GalleryFullscreenViewerItem } from '@/components/workspace/GalleryFullscreenViewer';
 import {
   Dialog,
   DialogContent,
@@ -494,6 +495,8 @@ export default function CharacterManagerPanel() {
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
   const [generatingPreviewSlot, setGeneratingPreviewSlot] = useState<CharacterPreviewSlot | null>(null);
+  const [previewViewerOpen, setPreviewViewerOpen] = useState(false);
+  const [previewViewerIndex, setPreviewViewerIndex] = useState(0);
   const [listMode, setListMode] = useState<CharacterListMode>('active');
   const [sortMode, setSortMode] = useState<CharacterSortMode>('updated_desc');
   const [isTrashMutating, setIsTrashMutating] = useState(false);
@@ -1182,6 +1185,22 @@ export default function CharacterManagerPanel() {
     ? versions.find((version) => version.id === selectedCharacter.currentVersionId) || null
     : versions[0] || null;
 
+  const characterPreviewViewerItems = useMemo<GalleryFullscreenViewerItem[]>(() => {
+    if (!selectedCharacter?.previewState) return [];
+    return CHARACTER_PREVIEW_SLOTS.flatMap((slot) => {
+      const state = selectedCharacter.previewState?.[slot];
+      const url = state?.previewUrl || state?.imageUrl || state?.thumbnailUrl || null;
+      return url ? [{ id: `${selectedCharacter.id}:${slot}`, url, type: 'image' as const }] : [];
+    });
+  }, [selectedCharacter]);
+
+  const openCharacterPreviewViewer = (slot: CharacterPreviewSlot) => {
+    const index = characterPreviewViewerItems.findIndex((item) => item.id === `${selectedCharacter?.id}:${slot}`);
+    if (index < 0) return;
+    setPreviewViewerIndex(index);
+    setPreviewViewerOpen(true);
+  };
+
   const previewCards = useMemo(() => {
     return CHARACTER_PREVIEW_SLOTS.map((slot) => {
       const meta = CHARACTER_PREVIEW_SLOT_META[slot];
@@ -1775,11 +1794,18 @@ export default function CharacterManagerPanel() {
               <div className="mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-2 text-center">
                 <div className={`relative flex items-center justify-center overflow-hidden rounded-lg border ${card.imageUrl ? 'border-border bg-background/70' : 'border-dashed border-border/80 bg-background/40'} px-3 ${previewAspectClassName(card.slot)}`}>
                   {card.imageUrl ? (
-                    <img
-                      src={card.imageUrl}
-                      alt={`${card.title} for ${draft?.name || 'character'}`}
-                      className="h-full w-full object-cover"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openCharacterPreviewViewer(card.slot)}
+                      className="block h-full w-full cursor-zoom-in overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+                      aria-label={`Open ${card.title} preview viewer`}
+                    >
+                      <img
+                        src={card.imageUrl}
+                        alt={`${card.title} for ${draft?.name || 'character'}`}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
                   ) : (
                     <div>
                       <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Ready to generate' : 'Empty preview state'}</div>
@@ -2068,6 +2094,14 @@ export default function CharacterManagerPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GalleryFullscreenViewer
+        open={previewViewerOpen}
+        items={characterPreviewViewerItems}
+        currentIndex={previewViewerIndex}
+        onIndexChange={setPreviewViewerIndex}
+        onClose={() => setPreviewViewerOpen(false)}
+      />
 
       <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
         <DialogContent className="max-w-2xl">
