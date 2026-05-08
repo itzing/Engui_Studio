@@ -940,10 +940,10 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       const selectedVersion = selectedVersionForShot(shot);
       return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         {renderShotFrame(shot, revision, selectedVersion)}
-        <div className="p-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {selectedVersion ? reviewStates.map((state) => <Button key={state.value} size="icon" variant="outline" title={state.label} aria-label={state.label} disabled={reviewingVersionId === selectedVersion.id} onClick={() => reviewVersion(selectedVersion.id, state.value)} className={`h-8 w-8 border-white/10 ${state.value === 'reject' && selectedVersion.reviewState === state.value ? 'bg-red-500 text-white' : selectedVersion.reviewState === state.value ? 'bg-blue-500 text-white' : state.value === 'reject' ? 'bg-white/[0.04] text-red-200/75 hover:bg-red-500/15 hover:text-red-100' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{reviewIcon(state.value)}</Button>) : null}
-            <Button type="button" size="icon" variant="outline" title={revision ? 'Change pose' : 'Choose pose'} aria-label={revision ? 'Change pose' : 'Choose pose'} onClick={() => void openPosePicker(shot.id)} className="h-8 w-8 border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"><span className="relative flex h-4 w-4 items-center justify-center"><UserRound className="h-4 w-4" /><RotateCcw className="absolute -right-1 -top-1 h-2.5 w-2.5" /></span></Button>
+        <div className="p-2">
+          <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
+            {selectedVersion ? reviewStates.map((state) => <Button key={state.value} size="icon" variant="outline" title={state.label} aria-label={state.label} disabled={reviewingVersionId === selectedVersion.id} onClick={() => reviewVersion(selectedVersion.id, state.value)} className={`h-7 w-7 shrink-0 border-white/10 ${state.value === 'reject' && selectedVersion.reviewState === state.value ? 'bg-red-500 text-white' : selectedVersion.reviewState === state.value ? 'bg-blue-500 text-white' : state.value === 'reject' ? 'bg-white/[0.04] text-red-200/75 hover:bg-red-500/15 hover:text-red-100' : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'}`}>{reviewIcon(state.value)}</Button>) : null}
+            <Button type="button" size="icon" variant="outline" title={revision ? 'Change pose' : 'Choose pose'} aria-label={revision ? 'Change pose' : 'Choose pose'} onClick={() => void openPosePicker(shot.id)} className="h-7 w-7 shrink-0 border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"><span className="relative flex h-3.5 w-3.5 items-center justify-center"><UserRound className="h-3.5 w-3.5" /><RotateCcw className="absolute -right-1 -top-1 h-2.5 w-2.5" /></span></Button>
           </div>
         </div>
       </div>;
