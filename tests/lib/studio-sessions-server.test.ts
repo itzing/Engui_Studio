@@ -17,6 +17,9 @@ const {
     studioSessionShotRevision: { findMany: vi.fn(), findUnique: vi.fn() },
     studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
     studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
+    studioPoseLibrarySettings: { upsert: vi.fn() },
+    studioPoseCategory: { count: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    studioPose: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
     job: { findUnique: vi.fn(), findMany: vi.fn() },
   },
@@ -56,6 +59,7 @@ import {
   recoverStudioSessionMaterializationTasks,
   updateStudioSessionShotSkipState,
 } from '@/lib/studio-sessions/server';
+import { studioPoseOpenPoseMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
 
 describe('studio session server', () => {
   beforeEach(() => {
@@ -78,6 +82,15 @@ describe('studio session server', () => {
     mockPrisma.studioSessionJobMaterialization.upsert.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'pending' });
     mockPrisma.studioSessionJobMaterialization.update.mockResolvedValue({ id: 'task-1', jobId: 'job-1', status: 'materialized' });
     mockPrisma.studioSessionJobMaterialization.findMany.mockResolvedValue([]);
+    mockPrisma.studioPoseLibrarySettings.upsert.mockResolvedValue({
+      id: 'pose-settings-1', workspaceId: 'workspace-1', subjectDescription: '', clothingDescription: '', backgroundDescription: '', stylePreset: '', defaultVariantCount: 3, createdAt: new Date(), updatedAt: new Date(),
+    });
+    mockPrisma.studioPoseCategory.count.mockResolvedValue(1);
+    mockPrisma.studioPose.findMany.mockResolvedValue([
+      { id: 'standing_001', workspaceId: 'workspace-1', categoryId: 'standing', category: { id: 'standing', name: 'Standing', slug: 'standing' }, slug: 'standing-001', title: 'Standing 001', tagsJson: '["standing"]', posePrompt: 'Standing pose 1', orientation: 'portrait', framing: 'full_body', cameraAngle: 'front', shotDistance: 'wide', negativePrompt: null, primaryPreviewUrl: null, primaryPreviewId: null, notes: null, sortOrder: 0, openPoseImageUrl: null, poseKeypointEncryptedJson: null, openPoseSourceImageUrl: null, openPoseSourceJobId: null, openPoseExtractedAt: null, createdAt: new Date(), updatedAt: new Date(), previewCandidates: [] },
+      { id: 'standing_002', workspaceId: 'workspace-1', categoryId: 'standing', category: { id: 'standing', name: 'Standing', slug: 'standing' }, slug: 'standing-002', title: 'Standing 002', tagsJson: '["standing"]', posePrompt: 'Standing pose 2', orientation: 'portrait', framing: 'full_body', cameraAngle: 'front', shotDistance: 'wide', negativePrompt: null, primaryPreviewUrl: null, primaryPreviewId: null, notes: null, sortOrder: 1, openPoseImageUrl: null, poseKeypointEncryptedJson: null, openPoseSourceImageUrl: null, openPoseSourceJobId: null, openPoseExtractedAt: null, createdAt: new Date(), updatedAt: new Date(), previewCandidates: [] },
+      { id: 'standing_003', workspaceId: 'workspace-1', categoryId: 'standing', category: { id: 'standing', name: 'Standing', slug: 'standing' }, slug: 'standing-003', title: 'Standing 003', tagsJson: '["standing"]', posePrompt: 'Standing pose 3', orientation: 'portrait', framing: 'full_body', cameraAngle: 'front', shotDistance: 'wide', negativePrompt: null, primaryPreviewUrl: null, primaryPreviewId: null, notes: null, sortOrder: 2, openPoseImageUrl: null, poseKeypointEncryptedJson: null, openPoseSourceImageUrl: null, openPoseSourceJobId: null, openPoseExtractedAt: null, createdAt: new Date(), updatedAt: new Date(), previewCandidates: [] },
+    ]);
     mockPrisma.studioSessionShot.findMany.mockResolvedValue([]);
     mockPrisma.studioSessionShotRevision.findMany.mockResolvedValue([]);
     mockPrisma.studioSessionShotVersion.findMany.mockResolvedValue([]);
@@ -358,6 +371,33 @@ describe('studio session server', () => {
       where: { id: 'shot-1' },
       data: expect.objectContaining({ skipped: false, status: 'needs_review' }),
     }));
+  });
+
+  it('materializes Studio pose OpenPose output without persisting plaintext keypoints', async () => {
+    mockPrisma.studioPose.findUnique.mockResolvedValue({ id: 'pose-1', category: { id: 'standing', name: 'Standing', slug: 'standing' }, previewCandidates: [] });
+    mockPrisma.studioPose.update.mockResolvedValue({});
+
+    await studioPoseOpenPoseMaterializationHandler.materialize({
+      job: {
+        id: 'job-openpose-1',
+        resultUrl: '/generations/openpose-job.png',
+        thumbnailUrl: null,
+        options: JSON.stringify({ openPoseExtraction: { pose_keypoint_encrypted: { nonce: 'n', ciphertext: 'c' } } }),
+      },
+      task: { targetId: 'pose-1' },
+      payload: { sourceImageUrl: '/generations/source.png' },
+    });
+
+    expect(mockPrisma.studioPose.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pose-1' },
+      data: expect.objectContaining({
+        openPoseImageUrl: expect.stringContaining('/generations/studio-pose-library/pose-1/'),
+        poseKeypointEncryptedJson: JSON.stringify({ nonce: 'n', ciphertext: 'c' }),
+        openPoseSourceImageUrl: '/generations/source.png',
+        openPoseSourceJobId: 'job-openpose-1',
+      }),
+    }));
+    expect(JSON.stringify(mockPrisma.studioPose.update.mock.calls[0][0].data)).not.toContain('people');
   });
 
   it('adds studio session versions to Gallery explicitly and reuses gallery queues', async () => {

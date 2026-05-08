@@ -182,6 +182,39 @@ function getUpscaleResultEncryptionKey(settings: any): Buffer | null {
   return getConfiguredEncryptionKey(settings?.runpod?.fieldEncKeyB64);
 }
 
+function extractPoseKeypointEncrypted(output: any) {
+  if (!output || typeof output !== 'object') return null;
+  const candidates = [
+    output.pose_keypoint_encrypted,
+    output.poseKeypointEncrypted,
+    output.pose_keypoints_encrypted,
+    output.poseKeypointsEncrypted,
+    output.openpose?.pose_keypoint_encrypted,
+    output.openpose?.poseKeypointEncrypted,
+    output.transport_result?.pose_keypoint_encrypted,
+    output.transport_result?.poseKeypointEncrypted,
+    output.transport_result?.artifacts?.pose_keypoint_encrypted,
+    output.transport_result?.artifacts?.poseKeypointEncrypted,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') return candidate;
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
+}
+
+function withOpenPoseExtractionMetadata(options: JsonObject, output: any): JsonObject {
+  const poseKeypointEncrypted = extractPoseKeypointEncrypted(output);
+  if (!poseKeypointEncrypted) return options;
+  return {
+    ...options,
+    openPoseExtraction: {
+      ...(options.openPoseExtraction && typeof options.openPoseExtraction === 'object' ? options.openPoseExtraction : {}),
+      pose_keypoint_encrypted: poseKeypointEncrypted,
+    },
+  };
+}
+
 function decryptEncryptedMediaBlock(block: any, key: Buffer, aad: string): string {
   if (!block || typeof block !== 'object') {
     throw new Error('Encrypted media block is missing');
@@ -805,10 +838,10 @@ async function finalizeSecureTransportResult(params: {
 
     await markJobCompleted({
       job,
-      options: {
+      options: withOpenPoseExtractionMetadata({
         ...options,
         transportResultStatus: transportResult.status,
-      },
+      }, output),
       secureState: secureStateWithResponse,
       resultUrl: relativePath,
       resultPath: filePath,
@@ -871,7 +904,7 @@ async function finalizeLegacyResult(params: {
 
     await markJobCompleted({
       job,
-      options,
+      options: withOpenPoseExtractionMetadata(options, output),
       secureState,
       resultUrl: materialized.relativePath,
       resultPath: materialized.filePath,

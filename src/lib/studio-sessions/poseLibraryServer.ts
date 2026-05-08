@@ -534,7 +534,7 @@ function deletePreviewCandidateOutputs(candidates: Array<{ assetUrl: string; thu
   }
 }
 
-function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail') {
+function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail' | 'openpose') {
   const localPath = resolveLocalPathFromUrl(url);
   if (!localPath || !fs.existsSync(localPath)) return url;
   const bytes = fs.readFileSync(localPath);
@@ -542,7 +542,7 @@ function materializePosePreviewOutput(url: string, poseId: string, variant?: 'th
   const ext = path.extname(url.split('?')[0]) || '.png';
   const dir = path.join(process.cwd(), 'public', 'generations', 'studio-pose-library', poseId);
   fs.mkdirSync(dir, { recursive: true });
-  const suffix = variant === 'thumbnail' ? '--thumb' : '';
+  const suffix = variant === 'thumbnail' ? '--thumb' : variant === 'openpose' ? '--openpose' : '';
   const fileName = `${hash}${suffix}${ext}`;
   const dest = path.join(dir, fileName);
   if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
@@ -559,7 +559,49 @@ export function toStudioSessionPoseSnapshot(pose: StudioPoseSummary): StudioSess
     framing: pose.framing,
     cameraAngle: pose.cameraAngle,
     shotDistance: pose.shotDistance,
+    openPose: pose.openPose,
   };
+}
+
+function extractEncryptedPoseKeypoints(job: { options?: unknown }) {
+  const options = typeof job.options === 'string'
+    ? parseJson<Record<string, unknown>>(job.options, {})
+    : (job.options && typeof job.options === 'object' ? job.options as Record<string, unknown> : {});
+  const extraction = options.openPoseExtraction && typeof options.openPoseExtraction === 'object'
+    ? options.openPoseExtraction as Record<string, unknown>
+    : {};
+  const candidates = [
+    extraction.pose_keypoint_encrypted,
+    extraction.poseKeypointEncrypted,
+    options.pose_keypoint_encrypted,
+    options.poseKeypointEncrypted,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') return JSON.stringify(candidate);
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
+}
+
+export async function clearStudioPoseOpenPoseData(poseId: string) {
+  const pose = await prisma.studioPose.update({
+    where: { id: poseId },
+    data: {
+      openPoseImageUrl: null,
+      poseKeypointEncryptedJson: null,
+      openPoseSourceImageUrl: null,
+      openPoseSourceJobId: null,
+      openPoseExtractedAt: null,
+    },
+    include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } },
+  }).catch(() => null);
+  return pose ? toStudioPoseSummary(pose, true) : null;
+}
+
+export async function queueStudioPoseOpenPoseExtraction(params: { poseId: string; jobId: string; sourceImageUrl: string }) {
+  const pose = await prisma.studioPose.findUnique({ where: { id: params.poseId }, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
+  if (!pose) throw new Error('Pose not found');
+  return toStudioPoseSummary(pose, true);
 }
 
 export async function getStudioSessionPoseSnapshotById(workspaceId: string, poseId: string) {
@@ -605,6 +647,32 @@ export async function queueStudioPosePreviewGeneration(params: { poseId: string;
   await prisma.studioPose.update({ where: { id: params.poseId }, data: { primaryPreviewId: null } });
   return toStudioPoseSummary(pose, true);
 }
+
+export const studioPoseOpenPoseMaterializationHandler = {
+  async materialize({ job, task, payload }: { job: any; task: any; payload: Record<string, unknown> }) {
+    const pose = await prisma.studioPose.findUnique({ where: { id: task.targetId }, include: { category: true, previewCandidates: { orderBy: { createdAt: 'desc' } } } });
+    if (!pose) return;
+    const outputUrl = buildJobOutputUrls(job)[0];
+    if (!outputUrl) throw new Error(`Completed OpenPose extraction job ${job.id} has no output URL`);
+    const encryptedKeypoints = extractEncryptedPoseKeypoints(job);
+    if (!encryptedKeypoints) throw new Error(`Completed OpenPose extraction job ${job.id} has no encrypted pose keypoints`);
+    const openPoseImageUrl = materializePosePreviewOutput(outputUrl, task.targetId, 'openpose');
+    await prisma.studioPose.update({
+      where: { id: task.targetId },
+      data: {
+        openPoseImageUrl,
+        poseKeypointEncryptedJson: encryptedKeypoints,
+        openPoseSourceImageUrl: typeof payload.sourceImageUrl === 'string' && payload.sourceImageUrl.trim() ? payload.sourceImageUrl.trim() : null,
+        openPoseSourceJobId: job.id,
+        openPoseExtractedAt: new Date(),
+      },
+    });
+  },
+
+  async onSourceJobFailed({ task, sourceError }: { job: any; task: any; payload: Record<string, unknown>; sourceError: string }) {
+    console.warn(`Studio pose OpenPose extraction failed for ${task.targetId}: ${sourceError}`);
+  },
+};
 
 export const studioPosePreviewMaterializationHandler = {
   async materialize({ job, task, payload }: { job: any; task: any; payload: Record<string, unknown> }) {

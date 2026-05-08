@@ -386,7 +386,8 @@ class RunPodService {
           ...(input._secure && { _secure: input._secure }),
           ...(input.media_inputs && { media_inputs: input.media_inputs }),
           ...(input.transport_request && { transport_request: input.transport_request }),
-          ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet })
+          ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet }),
+          ...(input.task_type && { task_type: input.task_type })
         };
 
         // Add lora array if provided

@@ -5,7 +5,7 @@ import {
   type MaterializationTargetType,
 } from '@/lib/materialization/types';
 import { characterPreviewMaterializationHandler } from '@/lib/characters/server';
-import { studioPosePreviewMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
+import { studioPoseOpenPoseMaterializationHandler, studioPosePreviewMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
 
 type PersistedJobRecord = {
   id: string;
@@ -61,6 +61,7 @@ type MaterializationHandler<TPayload extends JobMaterializationPayload = JobMate
 const handlers: Partial<Record<MaterializationTargetType, MaterializationHandler>> = {
   character_preview: characterPreviewMaterializationHandler,
   studio_pose_preview: studioPosePreviewMaterializationHandler,
+  studio_pose_openpose: studioPoseOpenPoseMaterializationHandler,
 };
 
 function parseTaskPayload(payloadJson: string | null | undefined): JobMaterializationPayload {

@@ -281,6 +281,7 @@ export interface StudioSessionPoseSnapshot {
   framing: StudioSessionPoseFraming;
   cameraAngle?: StudioPoseCameraAngle;
   shotDistance?: StudioPoseShotDistance;
+  openPose?: StudioPoseOpenPoseSummary;
 }
 
 export interface StudioSessionPromptSnapshot {

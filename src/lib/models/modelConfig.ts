@@ -356,6 +356,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'seed', label: 'Seed', type: 'number', default: 533303727624653, group: 'advanced', description: 'Random seed for generation' },
             { name: 'steps', label: 'Steps', type: 'number', default: 9, min: 1, max: 50, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 0.1, max: 20, step: 0.1, group: 'advanced' },
+            { name: 'task_type', label: 'Task Type', type: 'string', default: '', group: 'hidden' },
             { name: 'lora', label: 'LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'Primary LoRA model for custom styling' },
             { name: 'loraWeight', label: 'LoRA 1 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
             { name: 'lora2', label: 'LoRA 2', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional second LoRA model' },
