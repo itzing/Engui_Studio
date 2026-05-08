@@ -387,6 +387,7 @@ class RunPodService {
           ...(input.media_inputs && { media_inputs: input.media_inputs }),
           ...(input.transport_request && { transport_request: input.transport_request }),
           ...(input.use_controlnet !== undefined && { use_controlnet: input.use_controlnet }),
+          ...(input.controlnet_strength !== undefined && { controlnet_strength: input.controlnet_strength }),
           ...(input.task_type && { task_type: input.task_type })
         };
 

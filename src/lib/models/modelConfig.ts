@@ -350,6 +350,7 @@ export const MODELS: ModelConfig[] = [
         ],
         parameters: [
             { name: 'use_controlnet', label: 'Use ControlNet', type: 'boolean', default: false, group: 'basic', description: 'Enable ControlNet with reference image' },
+            { name: 'controlnet_strength', label: 'ControlNet Strength', type: 'number', default: 1.0, min: 0, max: 2, step: 0.05, group: 'advanced', description: 'ControlNet conditioning strength for OpenPose/reference inputs' },
             { name: 'width', label: 'Width', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'height', label: 'Height', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },

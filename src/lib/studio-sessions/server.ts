@@ -20,11 +20,129 @@ import {
   toStudioSessionTemplateSummary,
 } from './utils';
 import { getStudioSessionPoseSnapshotById, listStudioSessionPoseSnapshotsByCategory, pickUniqueStudioPoseSnapshot } from './poseLibraryServer';
+import { buildDefaultStudioFramingPreset, getStudioFramingPreset } from './framingLibraryServer';
+import { extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from './openPoseRenderer';
+import SettingsService from '@/lib/settingsService';
+import { decryptStructuredEnvelope } from '@/lib/secureTransport';
 import { getModelById } from '@/lib/models/modelConfig';
 import { RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
 import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
 import { queueGalleryEnrichment } from '@/lib/galleryEnrichment';
-import type { StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
+import type { StudioResolvedFramingSnapshot, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionRunAssembleResult, StudioSessionRunDetailSummary, StudioSessionRunSummary, StudioSessionTemplateDraftState } from './types';
+
+
+const settingsService = new SettingsService();
+const STUDIO_OPENPOSE_CONTROL_DIR = path.join(process.cwd(), 'public', 'generations', 'studio-sessions', 'openpose-controls');
+
+function normalizeStudioRunFramingPolicy(value: unknown): StudioRunFramingPolicy {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const byOrientation = record.presetByOrientation && typeof record.presetByOrientation === 'object'
+    ? record.presetByOrientation as Record<string, unknown>
+    : {};
+  const normalizePresetId = (candidate: unknown) => typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+  return {
+    fallbackPresetId: normalizePresetId(record.fallbackPresetId),
+    presetByOrientation: {
+      portrait: normalizePresetId(byOrientation.portrait),
+      landscape: normalizePresetId(byOrientation.landscape),
+      square: normalizePresetId(byOrientation.square),
+    },
+  };
+}
+
+async function resolveStudioRunFramingSnapshot(input: { workspaceId: string; orientation: StudioSessionPoseOrientation; generationSettings: Record<string, unknown> }): Promise<StudioResolvedFramingSnapshot> {
+  const policy = normalizeStudioRunFramingPolicy(input.generationSettings.framingPolicy);
+  const presetId = policy.presetByOrientation[input.orientation] ?? policy.fallbackPresetId;
+  const preset = presetId ? await getStudioFramingPreset(presetId) : null;
+  const resolved = preset && preset.workspaceId === input.workspaceId
+    ? preset
+    : { ...buildDefaultStudioFramingPreset(input.orientation), id: null, workspaceId: input.workspaceId };
+  return {
+    presetId: resolved.id,
+    title: resolved.title,
+    orientation: input.orientation,
+    aspectRatio: resolved.aspectRatio,
+    centerX: resolved.centerX,
+    centerY: resolved.centerY,
+    poseHeight: resolved.poseHeight,
+    rotationDeg: resolved.rotationDeg,
+    flipX: resolved.flipX,
+    helperPrompt: resolved.helperPrompt,
+  };
+}
+
+function parseJsonMaybe(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function decryptAesGcmPayload(block: Record<string, unknown>, key: Buffer, aad: string): string {
+  const nonce = typeof block.nonce === 'string' ? Buffer.from(block.nonce, 'base64') : null;
+  const payload = typeof block.ciphertext === 'string' ? Buffer.from(block.ciphertext, 'base64') : null;
+  if (!nonce || !payload || payload.length <= 16) throw new Error('Encrypted keypoint payload is malformed');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
+  if (aad) decipher.setAAD(Buffer.from(aad, 'utf-8'));
+  decipher.setAuthTag(payload.subarray(payload.length - 16));
+  return Buffer.concat([decipher.update(payload.subarray(0, payload.length - 16)), decipher.final()]).toString('utf8');
+}
+
+async function decodeStudioPoseKeypoints(value: unknown): Promise<unknown | null> {
+  const parsed = parseJsonMaybe(value);
+  if (!parsed) return null;
+  if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const record = parsed as Record<string, unknown>;
+    if (record.people || record.pose_keypoints_2d || record.keypoints || record.points || record.body) return record;
+    const { settings } = await settingsService.getSettings('user-with-settings');
+    const keyB64 = settings.runpod?.fieldEncKeyB64?.trim();
+    if (!keyB64) return null;
+    const key = Buffer.from(keyB64, 'base64');
+    if (key.length !== 32) return null;
+    if (typeof record.wrapped_key === 'string' && typeof record.nonce === 'string' && typeof record.ciphertext === 'string' && record.binding && typeof record.binding === 'object') {
+      return decryptStructuredEnvelope(key, record as any, record.binding as any);
+    }
+    if (typeof record.nonce === 'string' && typeof record.ciphertext === 'string') {
+      const aadCandidates = [
+        'engui:zimage:openpose-keypoints:v1',
+        'engui:zimage:pose-keypoints:v1',
+        'engui:zimage:result:v1',
+        '',
+      ];
+      for (const aad of aadCandidates) {
+        try {
+          const plain = decryptAesGcmPayload(record, key, aad);
+          return parseJsonMaybe(plain);
+        } catch {}
+      }
+    }
+  }
+  return parsed;
+}
+
+async function prepareStudioOpenPoseControlImage(input: { workspaceId: string; runId: string; shotId: string; revisionId: string; poseId: string; width: number; height: number; framing: StudioResolvedFramingSnapshot }) {
+  const pose = await prisma.studioPose.findUnique({
+    where: { id: input.poseId },
+    select: { poseKeypointEncryptedJson: true },
+  });
+  if (!pose?.poseKeypointEncryptedJson) return null;
+  const keypoints = await decodeStudioPoseKeypoints(pose.poseKeypointEncryptedJson);
+  if (!keypoints || extractOpenPoseBodyKeypoints(keypoints).length === 0) return null;
+  const fileName = `${input.revisionId}-${input.width}x${input.height}.png`;
+  const outputPath = path.join(STUDIO_OPENPOSE_CONTROL_DIR, input.workspaceId, input.runId, input.shotId, fileName);
+  const rendered = await renderOpenPoseControlImage({
+    poseKeypointJson: keypoints,
+    width: input.width,
+    height: input.height,
+    transform: input.framing,
+    outputPath,
+  });
+  if (rendered.buffer.length <= 0) return null;
+  const publicPath = `/generations/studio-sessions/openpose-controls/${input.workspaceId}/${input.runId}/${input.shotId}/${fileName}`;
+  return { ...rendered, path: publicPath };
+}
 
 type StudioSessionJobContext = {
   workspaceId: string;
@@ -991,12 +1109,36 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
 
   const promptSnapshot = JSON.parse(revision.assembledPromptSnapshotJson || '{}');
   const resolvedSize = deriveStudioSessionResolution(snapshot.resolutionPolicy ?? { shortSidePx: 832, longSidePx: 1216, squareSideSource: 'short' }, revision.derivedOrientation as any);
+  const resolvedFraming = await resolveStudioRunFramingSnapshot({
+    workspaceId: shot.workspaceId,
+    orientation: revision.derivedOrientation as StudioSessionPoseOrientation,
+    generationSettings,
+  });
+  const renderedOpenPoseControl = modelId === 'z-image'
+    ? await prepareStudioOpenPoseControlImage({
+        workspaceId: shot.workspaceId,
+        runId: shot.runId,
+        shotId: shot.id,
+        revisionId: revision.id,
+        poseId: revision.poseId,
+        width: resolvedSize.width,
+        height: resolvedSize.height,
+        framing: resolvedFraming,
+      })
+    : null;
+  const helperPrompt = resolvedFraming.helperPrompt.trim();
+  const basePrompt = typeof promptSnapshot?.positivePrompt === 'string' ? promptSnapshot.positivePrompt : '';
+  const finalPrompt = !renderedOpenPoseControl && helperPrompt ? [basePrompt, helperPrompt].filter(Boolean).join(', ') : basePrompt;
+
   const formData = new FormData();
   formData.append('userId', 'user-with-settings');
   formData.append('workspaceId', shot.workspaceId);
   formData.append('modelId', modelId);
   formData.append('jobId', `${shot.id}-${Date.now()}`);
-  formData.append('prompt', typeof promptSnapshot?.positivePrompt === 'string' ? promptSnapshot.positivePrompt : '');
+  formData.append('prompt', finalPrompt);
+  if (renderedOpenPoseControl) {
+    formData.append('image', new Blob([new Uint8Array(renderedOpenPoseControl.buffer)], { type: 'image/png' }), 'studio-openpose-control.png');
+  }
 
   const studioSessionContext = {
     workspaceId: shot.workspaceId,
@@ -1006,6 +1148,14 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
     templateId: shot.run.templateId,
     label: shot.label,
     executionMode,
+    resolvedFraming,
+    renderedOpenPoseControl: renderedOpenPoseControl ? {
+      path: renderedOpenPoseControl.path,
+      width: renderedOpenPoseControl.width,
+      height: renderedOpenPoseControl.height,
+    } : null,
+    outputDimensions: resolvedSize,
+    framingHelperPrompt: helperPrompt,
   };
   formData.append('studioSessionContext', JSON.stringify(studioSessionContext));
 
@@ -1020,6 +1170,10 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
     cfg: typeof generationSettings.cfg === 'number' ? generationSettings.cfg : 1,
     seed: resolvedSeed,
     negativePrompt: typeof promptSnapshot?.negativePrompt === 'string' ? promptSnapshot.negativePrompt : (typeof generationSettings.negativePrompt === 'string' ? generationSettings.negativePrompt : ''),
+    ...(renderedOpenPoseControl ? {
+      use_controlnet: true,
+      controlnet_strength: typeof generationSettings.controlnet_strength === 'number' ? generationSettings.controlnet_strength : 1,
+    } : {}),
   } as Record<string, unknown>;
 
   for (const [key, value] of Object.entries(mergedSettings)) {
