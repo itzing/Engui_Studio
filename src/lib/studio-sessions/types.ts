@@ -277,6 +277,7 @@ export interface StudioSessionPoseSnapshot {
   category: string;
   name: string;
   prompt: string;
+  primaryPreviewUrl?: string | null;
   orientation: StudioSessionPoseOrientation;
   framing: StudioSessionPoseFraming;
   cameraAngle?: StudioPoseCameraAngle;

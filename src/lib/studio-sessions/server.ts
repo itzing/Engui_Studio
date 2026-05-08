@@ -863,6 +863,7 @@ export async function listStudioSessionShotPoses(shotId: string) {
   const siblingShots = await prisma.studioSessionShot.findMany({
     where: {
       runId: shot.runId,
+      id: { not: shot.id },
       category: shot.category,
       currentRevisionId: { not: null },
     },

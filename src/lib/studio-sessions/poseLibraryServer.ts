@@ -560,6 +560,7 @@ export function toStudioSessionPoseSnapshot(pose: StudioPoseSummary): StudioSess
     category: pose.categoryId,
     name: pose.title,
     prompt: pose.posePrompt,
+    primaryPreviewUrl: pose.primaryPreviewUrl,
     orientation: pose.orientation,
     framing: pose.framing,
     cameraAngle: pose.cameraAngle,
