@@ -117,6 +117,14 @@ export function toStudioPoseSummary(record: any, includeCandidates = false): Stu
     sortOrder: record.sortOrder,
     primaryPreviewId: primary.id,
     primaryPreviewUrl: primary.url,
+    openPose: {
+      hasOpenPoseImage: typeof record.openPoseImageUrl === 'string' && record.openPoseImageUrl.trim().length > 0,
+      hasKeypoints: typeof record.poseKeypointEncryptedJson === 'string' && record.poseKeypointEncryptedJson.trim().length > 0,
+      imageUrl: typeof record.openPoseImageUrl === 'string' && record.openPoseImageUrl.trim() ? record.openPoseImageUrl : null,
+      sourceImageUrl: typeof record.openPoseSourceImageUrl === 'string' && record.openPoseSourceImageUrl.trim() ? record.openPoseSourceImageUrl : null,
+      sourceJobId: typeof record.openPoseSourceJobId === 'string' && record.openPoseSourceJobId.trim() ? record.openPoseSourceJobId : null,
+      extractedAt: record.openPoseExtractedAt instanceof Date ? record.openPoseExtractedAt.toISOString() : null,
+    },
     previewCandidates: includeCandidates ? (record.previewCandidates ?? []).map(toPreviewCandidateSummary) : undefined,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -346,6 +354,13 @@ export async function updateStudioPose(poseId: string, input: Record<string, unk
   if (input.shotDistance !== undefined) data.shotDistance = normalizeShotDistance(input.shotDistance);
   if (typeof input.sortOrder === 'number') data.sortOrder = Math.floor(input.sortOrder);
   if (semanticChanged) data.primaryPreviewId = null;
+  if (input.posePrompt !== undefined || input.orientation !== undefined || input.cameraAngle !== undefined) {
+    data.openPoseImageUrl = null;
+    data.poseKeypointEncryptedJson = null;
+    data.openPoseSourceImageUrl = null;
+    data.openPoseSourceJobId = null;
+    data.openPoseExtractedAt = null;
+  }
 
   const staleCandidates = semanticChanged ? await prisma.studioPosePreviewCandidate.findMany({ where: { poseId }, select: { assetUrl: true, thumbnailUrl: true } }) : [];
   const pose = await prisma.$transaction(async (tx) => {
@@ -385,6 +400,11 @@ export async function duplicateStudioPose(poseId: string, input: Record<string, 
       framing: existing.framing,
       cameraAngle: existing.cameraAngle,
       shotDistance: existing.shotDistance,
+      openPoseImageUrl: existing.openPoseImageUrl,
+      poseKeypointEncryptedJson: existing.poseKeypointEncryptedJson,
+      openPoseSourceImageUrl: existing.openPoseSourceImageUrl,
+      openPoseSourceJobId: existing.openPoseSourceJobId,
+      openPoseExtractedAt: existing.openPoseExtractedAt,
       sortOrder: count,
     },
     include: { category: true, previewCandidates: true },

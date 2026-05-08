@@ -488,9 +488,9 @@ model StudioPortfolio {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  character           Character             @relation(fields: [characterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  coverCollectionItem StudioCollectionItem? @relation("StudioPortfolioCoverItem", fields: [coverCollectionItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workspace           Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character           Character              @relation(fields: [characterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  coverCollectionItem StudioCollectionItem?  @relation("StudioPortfolioCoverItem", fields: [coverCollectionItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   sessions            StudioPhotoSession[]
   collections         StudioCollection[]
   collectionItems     StudioCollectionItem[]
@@ -579,12 +579,12 @@ model StudioCollectionItem {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  workspace    Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  collection   StudioCollection         @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  portfolio    StudioPortfolio          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  photoSession StudioPhotoSession?      @relation(fields: [photoSessionId], references: [id], onDelete: SetNull)
-  run          StudioSessionRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
-  shot         StudioSessionShot?       @relation(fields: [shotId], references: [id], onDelete: SetNull)
+  workspace          Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  collection         StudioCollection         @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  portfolio          StudioPortfolio          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  photoSession       StudioPhotoSession?      @relation(fields: [photoSessionId], references: [id], onDelete: SetNull)
+  run                StudioSessionRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
+  shot               StudioSessionShot?       @relation(fields: [shotId], references: [id], onDelete: SetNull)
   version            StudioSessionShotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   coverForPortfolios StudioPortfolio[]        @relation("StudioPortfolioCoverItem")
 
@@ -595,15 +595,15 @@ model StudioCollectionItem {
 }
 
 model StudioPoseLibrarySettings {
-  id                         String   @id @default(uuid())
-  workspaceId                String   @unique
-  subjectDescription         String   @default("adult neutral model")
-  clothingDescription        String   @default("simple fitted neutral clothing")
-  backgroundDescription      String   @default("neutral seamless studio background")
-  stylePreset                String   @default("realistic studio photo, softbox lighting")
-  defaultVariantCount        Int      @default(4)
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  workspaceId           String   @unique
+  subjectDescription    String   @default("adult neutral model")
+  clothingDescription   String   @default("simple fitted neutral clothing")
+  backgroundDescription String   @default("neutral seamless studio background")
+  stylePreset           String   @default("realistic studio photo, softbox lighting")
+  defaultVariantCount   Int      @default(4)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -611,15 +611,15 @@ model StudioPoseLibrarySettings {
 }
 
 model StudioPoseCategory {
-  id             String   @id @default(uuid())
-  workspaceId    String
-  slug           String
-  name           String
-  description    String   @default("")
-  sortOrder      Int      @default(0)
-  coverPoseId    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(uuid())
+  workspaceId String
+  slug        String
+  name        String
+  description String   @default("")
+  sortOrder   Int      @default(0)
+  coverPoseId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   poses     StudioPose[]
@@ -631,21 +631,26 @@ model StudioPoseCategory {
 }
 
 model StudioPose {
-  id                String   @id @default(uuid())
-  workspaceId       String
-  categoryId        String
-  slug              String
-  title             String
-  tagsJson          String   @default("[]")
-  posePrompt        String   @default("")
-  orientation       String   @default("portrait")
-  framing           String   @default("full_body")
-  cameraAngle       String   @default("front")
-  shotDistance      String   @default("wide")
-  sortOrder         Int      @default(0)
-  primaryPreviewId  String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                        String    @id @default(uuid())
+  workspaceId               String
+  categoryId                String
+  slug                      String
+  title                     String
+  tagsJson                  String    @default("[]")
+  posePrompt                String    @default("")
+  orientation               String    @default("portrait")
+  framing                   String    @default("full_body")
+  cameraAngle               String    @default("front")
+  shotDistance              String    @default("wide")
+  sortOrder                 Int       @default(0)
+  primaryPreviewId          String?
+  openPoseImageUrl          String?
+  poseKeypointEncryptedJson String?
+  openPoseSourceImageUrl    String?
+  openPoseSourceJobId       String?
+  openPoseExtractedAt       DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   workspace         Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category          StudioPoseCategory           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -658,16 +663,16 @@ model StudioPose {
 }
 
 model StudioPosePreviewCandidate {
-  id             String   @id @default(uuid())
-  workspaceId    String
-  poseId         String
-  sourceJobId    String?
-  assetUrl       String
-  thumbnailUrl   String?
-  promptSnapshotJson String @default("{}")
-  settingsSnapshotJson String @default("{}")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  workspaceId          String
+  poseId               String
+  sourceJobId          String?
+  assetUrl             String
+  thumbnailUrl         String?
+  promptSnapshotJson   String   @default("{}")
+  settingsSnapshotJson String   @default("{}")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   pose      StudioPose @relation(fields: [poseId], references: [id], onDelete: Cascade)
   sourceJob Job?       @relation(fields: [sourceJobId], references: [id], onDelete: SetNull, onUpdate: Cascade)

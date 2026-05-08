@@ -92,6 +92,15 @@ export interface StudioPoseCategorySummary {
   updatedAt: string;
 }
 
+export interface StudioPoseOpenPoseSummary {
+  hasOpenPoseImage: boolean;
+  hasKeypoints: boolean;
+  imageUrl: string | null;
+  sourceImageUrl: string | null;
+  sourceJobId: string | null;
+  extractedAt: string | null;
+}
+
 export interface StudioPoseSummary {
   id: string;
   workspaceId: string;
@@ -107,6 +116,7 @@ export interface StudioPoseSummary {
   sortOrder: number;
   primaryPreviewId: string | null;
   primaryPreviewUrl: string | null;
+  openPose: StudioPoseOpenPoseSummary;
   previewCandidates?: StudioPosePreviewCandidateSummary[];
   createdAt: string;
   updatedAt: string;
