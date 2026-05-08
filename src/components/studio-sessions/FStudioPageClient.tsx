@@ -61,8 +61,8 @@ function characterMeta(portfolio: StudioPortfolioSummary | null) {
   return parts.length ? `${portfolio.characterName} (${parts.join('/')})` : portfolio.characterName;
 }
 
-function TileGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">{children}</div>;
+function TileGrid({ children, dense = false }: { children: ReactNode; dense?: boolean }) {
+  return <div className={dense ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-0' : 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5'}>{children}</div>;
 }
 
 function AddTile({ label, onClick }: { label: string; onClick: () => void }) {
@@ -935,7 +935,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     {launchMessage ? <div className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">{launchMessage}</div> : null}
     {launchError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{launchError}</div> : null}
 
-    <TileGrid>{shots.map((shot) => {
+    <TileGrid dense>{shots.map((shot) => {
       const revision = revisionsByShotId.get(shot.id);
       const selectedVersion = selectedVersionForShot(shot);
       return <div key={shot.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
