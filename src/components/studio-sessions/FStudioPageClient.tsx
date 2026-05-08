@@ -18,6 +18,13 @@ import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
 import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioFramingPresetSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseCategorySummary, StudioPoseSetSummary, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionPoseSnapshot, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
 
+type StudioRunLoraFile = {
+  id: string;
+  fileName: string;
+  s3Path: string;
+  fileSize?: string;
+};
+
 type FStudioRoute =
   | { level: 'portfolios' }
   | { level: 'portfolio'; portfolioId: string; section?: 'sessions' | 'collections' }
@@ -623,6 +630,10 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const [runOverride, setRunOverride] = useState<StudioSessionRunSummary | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [controlStrengthDraft, setControlStrengthDraft] = useState('1');
+  const [loraSettingsDraft, setLoraSettingsDraft] = useState<Record<string, unknown>>({});
+  const [availableLoras, setAvailableLoras] = useState<StudioRunLoraFile[]>([]);
+  const [isLoadingLoras, setIsLoadingLoras] = useState(false);
+  const [showRunLoraSelector, setShowRunLoraSelector] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [reviewingVersionId, setReviewingVersionId] = useState<string | null>(null);
@@ -645,13 +656,57 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
 
   const run = runOverride ?? detail?.run ?? null;
   const runSettings = run?.runSettings || {};
-  const resolution = run?.resolutionPolicy || {};
   const snapshot = run?.templateSnapshot as Record<string, any> | undefined;
   const poseSetName = typeof snapshot?.poseSetName === 'string' && snapshot.poseSetName.trim() ? snapshot.poseSetName : run?.poseSetId;
-  const framingPolicyLabel = formatRunFramingPolicy(runSettings.framingPolicy, framingPresets);
   const currentControlStrength = typeof runSettings.controlnet_strength === 'number' ? runSettings.controlnet_strength : 1;
 
   useEffect(() => { setControlStrengthDraft(String(currentControlStrength)); }, [currentControlStrength, run?.id]);
+
+  const loraSlotNames = useMemo(() => Array.from({ length: 8 }, (_, index) => index === 0 ? 'lora' : `lora${index + 1}`), []);
+  const loraWeightName = useCallback((slotName: string) => slotName === 'lora' ? 'loraWeight' : `loraWeight${slotName.slice(4)}`, []);
+
+  useEffect(() => {
+    const nextDraft: Record<string, unknown> = {};
+    for (const slotName of loraSlotNames) {
+      const weightName = loraWeightName(slotName);
+      nextDraft[slotName] = runSettings[slotName] ?? '';
+      nextDraft[weightName] = runSettings[weightName] ?? 1;
+    }
+    setLoraSettingsDraft(nextDraft);
+  }, [loraSlotNames, loraWeightName, run?.id, runSettings]);
+
+  useEffect(() => {
+    if (!settingsOpen || availableLoras.length > 0 || isLoadingLoras) return;
+    let cancelled = false;
+    setIsLoadingLoras(true);
+    fetch('/api/lora', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => { if (!cancelled && data?.success && Array.isArray(data.loras)) setAvailableLoras(data.loras); })
+      .catch(() => { if (!cancelled) setAvailableLoras([]); })
+      .finally(() => { if (!cancelled) setIsLoadingLoras(false); });
+    return () => { cancelled = true; };
+  }, [availableLoras.length, isLoadingLoras, settingsOpen]);
+
+  const selectedLoraSlots = useMemo(() => loraSlotNames.map((slotName) => {
+    const path = String(loraSettingsDraft[slotName] ?? '').trim();
+    if (!path) return null;
+    const weightName = loraWeightName(slotName);
+    const rawWeight = loraSettingsDraft[weightName];
+    const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
+    return {
+      slotName,
+      weightName,
+      path,
+      weight: Number.isFinite(weight) ? weight : 1,
+      matchedLoRA: availableLoras.find((lora) => lora.s3Path === path) ?? null,
+    };
+  }).filter((slot): slot is NonNullable<typeof slot> => slot !== null), [availableLoras, loraSettingsDraft, loraSlotNames, loraWeightName]);
+
+  const nextEmptyLoraSlot = useMemo(() => loraSlotNames.find((slotName) => !String(loraSettingsDraft[slotName] ?? '').trim()) ?? null, [loraSettingsDraft, loraSlotNames]);
+
+  const updateLoraDraft = (key: string, value: unknown) => {
+    setLoraSettingsDraft((current) => ({ ...current, [key]: value }));
+  };
 
   useEffect(() => {
     if (!run?.id) return;
@@ -768,7 +823,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generationSettings: { ...runSettings, controlnet_strength: parsed } }),
+        body: JSON.stringify({ generationSettings: { ...runSettings, ...loraSettingsDraft, controlnet_strength: parsed } }),
       });
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to save run settings');
@@ -897,13 +952,22 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     <div className={`fixed inset-y-0 right-0 z-50 flex transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="h-full w-[420px] max-w-[92vw] overflow-y-auto border-l border-white/10 bg-[#101014] p-5 shadow-2xl shadow-black/60">
         <div className="mb-5 flex items-start justify-between gap-3"><div><div className="text-lg font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">Settings affect the next launch. Active jobs are not changed.</div></div><Button type="button" variant="outline" size="sm" onClick={() => setSettingsOpen(false)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">Close</Button></div>
-        <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Shot count" value={run ? String(run.count) : 'Not set'} /><Info label="Framing" value={framingPolicyLabel} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} /><Info label="Resolution" value={typeof resolution.shortSidePx === 'number' && typeof resolution.longSidePx === 'number' ? `${resolution.shortSidePx} × ${resolution.longSidePx}` : 'Default'} />
+        <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} />
+          <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
+            <div className="flex items-center justify-between gap-3"><div><div className="text-xs uppercase tracking-[0.16em] text-white/35">LoRAs</div><div className="mt-1 text-xs text-white/40">Selected LoRAs are used on the next launch.</div></div><div className="text-xs text-white/35">{selectedLoraSlots.length}/8</div></div>
+            {selectedLoraSlots.length > 0 ? <div className="space-y-2">{selectedLoraSlots.map((slot) => <div key={slot.slotName} className="rounded-xl border border-white/10 bg-white/[0.035] p-3"><div className="mb-2 flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-medium text-white/85">{slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}</div><div className="mt-1 text-xs text-white/40">Weight {slot.weight.toFixed(2)}</div></div><Button type="button" variant="outline" size="sm" onClick={() => { updateLoraDraft(slot.slotName, ''); updateLoraDraft(slot.weightName, 1); }} className="h-7 border-white/10 bg-white/[0.04] px-2 text-xs text-white/65 hover:bg-white/[0.08]">Clear</Button></div><div className="flex items-center gap-2"><Input type="text" inputMode="decimal" value={String(loraSettingsDraft[slot.weightName] ?? slot.weight)} onChange={(event) => updateLoraDraft(slot.weightName, event.target.value)} className="h-8 w-24 border-white/10 bg-black/30 text-sm text-white" /><span className="text-xs text-white/35">weight</span></div></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 px-4 py-5 text-sm text-white/40">No LoRAs selected yet.</div>}
+            {nextEmptyLoraSlot ? <Button type="button" variant="outline" onClick={() => setShowRunLoraSelector(true)} className="w-full border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]"><Plus className="mr-2 h-4 w-4" />Add LoRA</Button> : null}
+          </div>
           <label className="block rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65"><span className="text-xs uppercase tracking-[0.16em] text-white/35">ControlNet strength</span><Input type="number" min={0} max={2} step={0.05} value={controlStrengthDraft} onChange={(event) => setControlStrengthDraft(event.target.value)} className="mt-3 border-white/10 bg-black/30 text-white" /><span className="mt-2 block text-xs text-white/40">Used when a framing/OpenPose control image is attached. Default is 1.</span></label>
           {settingsError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">{settingsError}</div> : null}
           <Button type="button" onClick={() => void saveRunSettings()} disabled={!run || savingSettings} className="w-full bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</Button>
         </div>
       </div>
     </div>
+
+    <Dialog open={showRunLoraSelector} onOpenChange={setShowRunLoraSelector}>
+      <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#101014] p-0 text-white"><DialogHeader className="border-b border-white/10 px-6 py-4"><DialogTitle>Select LoRA</DialogTitle></DialogHeader><div className="max-h-[65vh] overflow-y-auto px-6 py-4"><div className="space-y-2">{isLoadingLoras ? <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/45">Loading LoRAs…</div> : availableLoras.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">No LoRAs installed yet.</div> : availableLoras.map((lora) => <button key={lora.id} type="button" className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-left hover:border-blue-400/40 hover:bg-blue-500/10" onClick={() => { if (!nextEmptyLoraSlot) return; updateLoraDraft(nextEmptyLoraSlot, lora.s3Path); updateLoraDraft(loraWeightName(nextEmptyLoraSlot), 1); setShowRunLoraSelector(false); }}><div className="min-w-0 pr-3"><div className="truncate text-sm font-medium text-white/85">{lora.fileName}</div><div className="mt-1 truncate text-xs text-white/40">{lora.fileSize}</div></div><Plus className="h-4 w-4 shrink-0 text-white/45" /></button>)}</div></div></DialogContent>
+    </Dialog>
 
     <GalleryFullscreenViewer open={viewerOpen} items={viewerItems} currentIndex={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerOpen(false)} />
 
