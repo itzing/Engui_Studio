@@ -11,7 +11,7 @@ import { PhotoIcon } from '@heroicons/react/24/outline';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     type ImageCreateDraftSnapshot,
     createImageDraftSnapshot,
@@ -76,6 +76,9 @@ export default function ImageGenerationForm() {
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
+    const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
+    const [promptEditorDraft, setPromptEditorDraft] = useState('');
+    const promptEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
     const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
     const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
     const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
@@ -215,6 +218,33 @@ export default function ImageGenerationForm() {
         });
         return map;
     }, [isZImageModel, zImageDynamicLoraParamNames]);
+    const openPromptEditor = () => {
+        if (isPhoneLayout || isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected) {
+            return;
+        }
+        setPromptEditorDraft(prompt);
+        setIsPromptEditorOpen(true);
+    };
+
+    const savePromptEditor = () => {
+        setPrompt(promptEditorDraft);
+        setIsPromptEditorOpen(false);
+    };
+
+    useEffect(() => {
+        if (!isPromptEditorOpen) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            const editor = promptEditorTextareaRef.current;
+            editor?.focus();
+            editor?.setSelectionRange(editor.value.length, editor.value.length);
+        }, 0);
+
+        return () => window.clearTimeout(timeout);
+    }, [isPromptEditorOpen]);
+
     const selectedZImageLoraSlots = useMemo(() => {
         return zImageDynamicLoraParamNames
             .map((name) => {
@@ -1206,10 +1236,14 @@ export default function ImageGenerationForm() {
                                 placeholder={t('generationForm.describeYourImage')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
+                                onFocus={openPromptEditor}
                                 disabled={isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected}
                                 data-testid="image-create-prompt-textarea"
                             />
                         </div>
+                        {!isPhoneLayout && !isPromptDraftSelected && (
+                            <div className="text-[11px] text-muted-foreground">Focus the prompt to edit it in a larger window. Press Ctrl+Enter there to save.</div>
+                        )}
                         <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'}`}>
                             <Button
                                 type="button"
@@ -1259,6 +1293,38 @@ export default function ImageGenerationForm() {
                                 Image → Prompt
                             </Button>
                         </div>
+                        {!isPhoneLayout && (
+                            <Dialog open={isPromptEditorOpen} onOpenChange={setIsPromptEditorOpen}>
+                                <DialogContent className="max-w-5xl border-border bg-background text-foreground">
+                                    <DialogHeader>
+                                        <DialogTitle>Edit image prompt</DialogTitle>
+                                        <DialogDescription>Use the larger editor for long prompts. Press Ctrl+Enter to save and close.</DialogDescription>
+                                    </DialogHeader>
+                                    <textarea
+                                        ref={promptEditorTextareaRef}
+                                        value={promptEditorDraft}
+                                        onChange={(event) => setPromptEditorDraft(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                                                event.preventDefault();
+                                                savePromptEditor();
+                                            }
+                                        }}
+                                        className="min-h-[60vh] w-full resize-y rounded-lg border border-border bg-secondary/50 p-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary"
+                                        placeholder={t('generationForm.describeYourImage')}
+                                        data-testid="image-create-prompt-editor-textarea"
+                                    />
+                                    <DialogFooter className="gap-2 sm:space-x-0">
+                                        <Button type="button" variant="outline" onClick={() => setIsPromptEditorOpen(false)}>
+                                            Cancel
+                                        </Button>
+                                        <Button type="button" onClick={savePromptEditor}>
+                                            Save prompt
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
                     </div>
                 )}
 

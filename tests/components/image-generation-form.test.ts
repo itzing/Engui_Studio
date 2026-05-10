@@ -191,6 +191,34 @@ describe('ImageGenerationForm prompt draft selector', () => {
     });
   });
 
+
+  it('opens a large desktop prompt editor on focus and saves with Ctrl+Enter', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    render(React.createElement(ImageGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('image-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'small prompt' } });
+    fireEvent.focus(promptTextarea);
+
+    const editor = await screen.findByTestId('image-create-prompt-editor-textarea') as HTMLTextAreaElement;
+    expect(editor.value).toBe('small prompt');
+
+    fireEvent.change(editor, { target: { value: 'expanded prompt' } });
+    fireEvent.keyDown(editor, { key: 'Enter', code: 'Enter', ctrlKey: true });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('image-create-prompt-editor-textarea')).toBeNull();
+    });
+    expect(promptTextarea.value).toBe('expanded prompt');
+  });
+
   it('locks prompt editing for a selected draft and re-renders latest draft prompt on generate', async () => {
     let detailFetchCount = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
