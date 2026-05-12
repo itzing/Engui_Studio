@@ -4,6 +4,7 @@ import path from 'path';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import SettingsService from '@/lib/settingsService';
+import { submitGenerationFormData } from '@/lib/generation/submitFormData';
 import { decryptStructuredEnvelope } from '@/lib/secureTransport';
 import { getStudioFramingPreset } from '@/lib/studio-sessions/framingLibraryServer';
 import { composeOpenPosePngControlImage, extractOpenPoseBodyKeypoints, renderOpenPoseControlImage } from '@/lib/studio-sessions/openPoseRenderer';
@@ -81,6 +82,58 @@ function safePreviewDir(workspaceId: string, presetId: string, poseId: string) {
   return resolved;
 }
 
+function readNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+async function launchZImageControlPreview(params: {
+  body: Record<string, unknown>;
+  controlImagePath: string;
+  width: number;
+  height: number;
+  poseTitle: string;
+  helperPrompt?: string | null;
+  workspaceId: string;
+  presetId: string;
+  poseId: string;
+}) {
+  const prompt = typeof params.body.prompt === 'string' && params.body.prompt.trim()
+    ? params.body.prompt.trim()
+    : [params.poseTitle, params.helperPrompt].filter(Boolean).join('. ');
+
+  if (!prompt.trim()) {
+    return studioSessionJson({ success: false, error: 'A prompt is required to launch a Z-Image ControlNet preview.' }, { status: 400 });
+  }
+
+  const imageBuffer = fs.readFileSync(params.controlImagePath);
+  const formData = new FormData();
+  formData.append('userId', 'user-with-settings');
+  formData.append('workspaceId', params.workspaceId);
+  formData.append('modelId', 'z-image');
+  formData.append('prompt', prompt);
+  formData.append('image', new File([imageBuffer], 'framing-control-preview.png', { type: 'image/png' }));
+  formData.append('use_controlnet', 'true');
+  formData.append('task_type', '');
+  formData.append('controlnet_strength', String(readNumber(params.body.controlnetStrength, 1, 0, 2)));
+  formData.append('width', String(params.width));
+  formData.append('height', String(params.height));
+  formData.append('seed', String(Math.round(readNumber(params.body.seed, 533303727624653, 0, Number.MAX_SAFE_INTEGER))));
+  formData.append('steps', String(Math.round(readNumber(params.body.steps, 9, 1, 50))));
+  formData.append('cfg', String(readNumber(params.body.cfg, 1, 0.1, 20)));
+  formData.append('randomizeSeed', 'false');
+  formData.append('studioSessionContext', JSON.stringify({
+    source: 'framing-preview',
+    workspaceId: params.workspaceId,
+    framingPresetId: params.presetId,
+    poseId: params.poseId,
+    outputDimensions: { width: params.width, height: params.height },
+  }));
+
+  return submitGenerationFormData(formData);
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
@@ -90,9 +143,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (body.launchPreview === true && body.confirmLaunch !== true) {
       return studioSessionNoStoreJson({ success: true, requiresConfirmation: true, reason: 'Launching a Z-Image ControlNet preview can spend generation budget. Confirm explicitly to continue.' });
-    }
-    if (body.launchPreview === true) {
-      return studioSessionJson({ success: false, error: 'Live ControlNet preview launch is intentionally not enabled in this safe preview endpoint yet.' }, { status: 400 });
     }
 
     const preset = await getStudioFramingPreset(id);
@@ -112,6 +162,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       if (sourcePath && fs.existsSync(sourcePath)) {
         const rendered = await composeOpenPosePngControlImage({ sourcePath, width, height, transform: preset, outputPath });
         if (rendered.buffer.length > 0) {
+          if (body.launchPreview === true) {
+            return launchZImageControlPreview({ body, controlImagePath: outputPath, width: rendered.width, height: rendered.height, poseTitle: pose.title, helperPrompt: preset.helperPrompt, workspaceId: preset.workspaceId, presetId: preset.id, poseId: pose.id });
+          }
           return studioSessionNoStoreJson({
             success: true,
             mode: 'openpose_control',
@@ -158,6 +211,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const rendered = await renderOpenPoseControlImage({ poseKeypointJson: keypoints, width, height, transform: preset, outputPath });
+
+    if (body.launchPreview === true) {
+      return launchZImageControlPreview({ body, controlImagePath: outputPath, width: rendered.width, height: rendered.height, poseTitle: pose.title, helperPrompt: preset.helperPrompt, workspaceId: preset.workspaceId, presetId: preset.id, poseId: pose.id });
+    }
 
     return studioSessionNoStoreJson({
       success: true,

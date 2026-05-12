@@ -20,6 +20,16 @@ type FramingPreviewResult = {
   pointCount?: number;
   helperPrompt?: string;
   message?: string;
+  pose?: { id: string; title: string; categoryId?: string | null };
+};
+
+type PreviewLaunchResult = {
+  success: boolean;
+  requiresConfirmation?: boolean;
+  reason?: string;
+  jobId?: string;
+  runpodJobId?: string;
+  error?: string;
 };
 
 type FramingDraft = {
@@ -306,7 +316,7 @@ function SliderField({ label, value, min, max, step, onChange, suffix = '' }: { 
 }
 
 export default function FramingLibraryWorkspace() {
-  const { activeWorkspaceId } = useStudio();
+  const { activeWorkspaceId, addJob } = useStudio();
   const [presets, setPresets] = useState<StudioFramingPresetSummary[]>([]);
   const [query, setQuery] = useState('');
   const [orientation, setOrientation] = useState('');
@@ -318,6 +328,8 @@ export default function FramingLibraryWorkspace() {
   const [poses, setPoses] = useState<StudioPoseSummary[]>([]);
   const [previewPoseId, setPreviewPoseId] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewLaunchBusy, setPreviewLaunchBusy] = useState(false);
+  const [previewLaunchMessage, setPreviewLaunchMessage] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<FramingPreviewResult | null>(null);
 
   const fetchJson = useCallback(async (url: string, fallback: string) => {
@@ -401,7 +413,7 @@ export default function FramingLibraryWorkspace() {
 
   async function renderFramingPreview() {
     if (!editingId || !previewPoseId) return;
-    setPreviewBusy(true); setPreviewResult(null); setError(null);
+    setPreviewBusy(true); setPreviewResult(null); setPreviewLaunchMessage(null); setError(null);
     try {
       const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, {
         method: 'POST',
@@ -415,6 +427,43 @@ export default function FramingLibraryWorkspace() {
       setError(err instanceof Error ? err.message : 'Failed to render framing preview');
     } finally {
       setPreviewBusy(false);
+    }
+  }
+
+  async function launchZImagePreview() {
+    if (!editingId || !previewPoseId || !previewResult || previewResult.mode !== 'openpose_control') return;
+    const prompt = [previewResult.pose?.title, previewResult.helperPrompt || draft.helperPrompt].filter(Boolean).join('. ');
+    const firstResponse = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poseId: previewPoseId, launchPreview: true, prompt }),
+    });
+    const firstData = await firstResponse.json() as PreviewLaunchResult;
+    const reason = firstData.reason || 'Launching a Z-Image ControlNet preview can spend generation budget. Continue?';
+    if (!firstData.requiresConfirmation && (!firstResponse.ok || !firstData.success)) {
+      throw new Error(firstData.error || 'Failed to prepare Z-Image preview launch');
+    }
+    if (!confirm(`${reason}\n\nThis will submit one RunPod Z-Image ControlNet job.`)) return;
+
+    const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poseId: previewPoseId, launchPreview: true, confirmLaunch: true, prompt }),
+    });
+    const data = await response.json() as PreviewLaunchResult;
+    if (!response.ok || !data.success || !data.jobId) throw new Error(data.error || 'Failed to launch Z-Image preview');
+    addJob({ id: data.jobId, modelId: 'z-image', type: 'image', status: 'queueing_up', prompt, createdAt: Date.now(), options: { use_controlnet: true, task_type: '', width: previewResult.width, height: previewResult.height } });
+    setPreviewLaunchMessage(`Z-Image preview queued: ${data.jobId}`);
+  }
+
+  async function launchZImagePreviewWithState() {
+    setPreviewLaunchBusy(true); setPreviewLaunchMessage(null); setError(null);
+    try {
+      await launchZImagePreview();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to launch Z-Image preview');
+    } finally {
+      setPreviewLaunchBusy(false);
     }
   }
 
@@ -496,10 +545,10 @@ export default function FramingLibraryWorkspace() {
               <Field label="Description"><Input value={draft.description} onChange={(event) => updateDraft((current) => ({ ...current, description: event.target.value }))} className="border-white/10 bg-black/30 text-white" /></Field>
               <label className="block"><div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/35">Helper prompt</div><textarea value={draft.helperPrompt} onChange={(event) => updateDraft((current) => ({ ...current, helperPrompt: event.target.value }))} className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" placeholder="lower-left full-body composition with extra negative space above" /></label>
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-cyan-100">Pose + framing test</div><div className="mt-1 text-xs text-cyan-100/60">Safe control PNG preview only. It never launches a paid generation job.</div></div><Button type="button" variant="outline" onClick={() => void cleanFramingPreviews()} disabled={!editingId} className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]">Clean previews</Button></div>
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-cyan-100">Pose + framing test</div><div className="mt-1 text-xs text-cyan-100/60">Render a free control PNG first. Z-Image preview launch is optional and requires explicit confirmation.</div></div><Button type="button" variant="outline" onClick={() => void cleanFramingPreviews()} disabled={!editingId} className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]">Clean previews</Button></div>
                 <div className="mt-3 grid gap-2"><select value={previewPoseId} onChange={(event) => { setPreviewPoseId(event.target.value); setPreviewResult(null); }} disabled={!editingId || poses.length === 0} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white disabled:opacity-50">{poses.map((pose) => <option key={pose.id} value={pose.id}>{pose.title} · {pose.openPose.hasKeypoints ? 'OpenPose' : 'text-only'}</option>)}</select><Button type="button" onClick={() => void renderFramingPreview()} disabled={!editingId || !previewPoseId || previewBusy} className="bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-50"><ImageIcon className="mr-2 h-4 w-4" />{previewBusy ? 'Rendering…' : editingId ? 'Render control preview' : 'Save preset before preview'}</Button></div>
                 {!editingId ? <div className="mt-2 text-xs text-cyan-100/55">Save the preset first, then render a scoped preview asset.</div> : null}
-                {previewResult ? <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25">{previewResult.previewUrl ? <img src={previewResult.previewUrl} alt="OpenPose framing preview" className="max-h-80 w-full object-contain" /> : <div className="flex min-h-32 items-center justify-center p-4 text-center text-sm text-white/55">{previewResult.message || 'Text-only framing guidance will be used.'}</div>}<div className="space-y-1 p-3 text-xs text-white/55"><div>{previewResult.mode === 'openpose_control' ? `OpenPose control · ${previewResult.width}×${previewResult.height} · ${previewResult.pointCount ?? 0} body points` : 'Text-only fallback'}</div>{previewResult.helperPrompt ? <div className="text-white/40">Helper: {previewResult.helperPrompt}</div> : null}</div></div> : null}
+                {previewResult ? <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25">{previewResult.previewUrl ? <img src={previewResult.previewUrl} alt="OpenPose framing preview" className="max-h-80 w-full object-contain" /> : <div className="flex min-h-32 items-center justify-center p-4 text-center text-sm text-white/55">{previewResult.message || 'Text-only framing guidance will be used.'}</div>}<div className="space-y-2 p-3 text-xs text-white/55"><div>{previewResult.mode === 'openpose_control' ? `OpenPose control · ${previewResult.width}×${previewResult.height} · ${previewResult.pointCount ?? 0} body points` : 'Text-only fallback'}</div>{previewResult.helperPrompt ? <div className="text-white/40">Helper: {previewResult.helperPrompt}</div> : null}{previewResult.mode === 'openpose_control' ? <Button type="button" variant="outline" onClick={() => void launchZImagePreviewWithState()} disabled={previewLaunchBusy} className="mt-2 w-full border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 disabled:opacity-50">{previewLaunchBusy ? 'Launching…' : 'Launch Z-Image ControlNet preview…'}</Button> : null}{previewLaunchMessage ? <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 p-2 text-emerald-100">{previewLaunchMessage}</div> : null}</div></div> : null}
               </div>
               <Button type="button" onClick={() => void savePreset()} className="w-full bg-blue-500 text-white hover:bg-blue-400">{editingId ? 'Save changes' : 'Create preset'}</Button>
             </div>
