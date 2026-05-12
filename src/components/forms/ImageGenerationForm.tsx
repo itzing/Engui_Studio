@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/modelConfig';
 import { Button } from '@/components/ui/button';
@@ -850,24 +850,28 @@ export default function ImageGenerationForm() {
         }));
     };
 
+    const applyPrimaryImageFile = useCallback((file: File, previewOverride?: string) => {
+        setImageFile(file);
+        const url = previewOverride || URL.createObjectURL(file);
+        setPreviewUrl(url);
+
+        // Auto-set dimensions in React state so draft persistence sees them
+        const img = new Image();
+        img.onload = () => {
+            setParameterValues(prev => ({
+                ...prev,
+                width: img.width,
+                height: img.height,
+            }));
+            console.log('✅ Auto-set image dimensions:', img.width, 'x', img.height);
+        };
+        img.src = url;
+    }, []);
+
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            setImageFile(file);
-            const url = URL.createObjectURL(file);
-            setPreviewUrl(url);
-
-            // Auto-set dimensions in React state so draft persistence sees them
-            const img = new Image();
-            img.onload = () => {
-                setParameterValues(prev => ({
-                    ...prev,
-                    width: img.width,
-                    height: img.height,
-                }));
-                console.log('✅ Auto-set image dimensions:', img.width, 'x', img.height);
-            };
-            img.src = url;
+            applyPrimaryImageFile(file);
         }
     };
 
@@ -885,19 +889,7 @@ export default function ImageGenerationForm() {
                     const blob = await response.blob();
                     const file = new File([blob], `workspace-${mediaData.id}.png`, { type: 'image/png' });
 
-                    setImageFile(file);
-                    setPreviewUrl(mediaData.url);
-
-                    // Auto-set dimensions
-                    const img = new Image();
-                    img.onload = () => {
-                        setParameterValues(prev => ({
-                            ...prev,
-                            width: img.width,
-                            height: img.height,
-                        }));
-                    };
-                    img.src = mediaData.url;
+                    applyPrimaryImageFile(file, mediaData.url);
                 }
             }
         } catch (error) {
@@ -909,6 +901,41 @@ export default function ImageGenerationForm() {
         e.preventDefault();
         e.stopPropagation();
     };
+
+    const handlePrimaryImagePaste = useCallback((event: React.ClipboardEvent<HTMLElement> | ClipboardEvent) => {
+        if (!isZImageModel || zImageMode !== 'i2i' || !isInputVisible(currentModel, 'image', parameterValues)) {
+            return;
+        }
+
+        const imageItem = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith('image/'));
+        if (!imageItem) return;
+
+        const file = imageItem.getAsFile();
+        if (!file) return;
+
+        event.preventDefault();
+        applyPrimaryImageFile(file);
+        setMessage({ type: 'success', text: 'Init image pasted from clipboard.' });
+    }, [applyPrimaryImageFile, currentModel, isZImageModel, parameterValues, zImageMode]);
+
+    useEffect(() => {
+        if (!isZImageModel || zImageMode !== 'i2i') return;
+
+        const isEditableTarget = (target: EventTarget | null) => {
+            if (!(target instanceof HTMLElement)) return false;
+            if (target.isContentEditable) return true;
+            const tagName = target.tagName.toLowerCase();
+            return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+        };
+
+        const onPaste = (event: ClipboardEvent) => {
+            if (isEditableTarget(event.target)) return;
+            handlePrimaryImagePaste(event);
+        };
+
+        window.addEventListener('paste', onPaste);
+        return () => window.removeEventListener('paste', onPaste);
+    }, [handlePrimaryImagePaste, isZImageModel, zImageMode]);
 
     const handleImageUpload2 = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1150,8 +1177,10 @@ export default function ImageGenerationForm() {
                             className="hidden"
                         />
                         <div
-                            className="w-full p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors"
+                            className="w-full p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            tabIndex={0}
                             onClick={() => !isLoadingMedia && fileInputRef.current?.click()}
+                            onPaste={handlePrimaryImagePaste}
                             onDrop={handleDrop}
                             onDragOver={handleDragOver}
                         >
@@ -1183,6 +1212,7 @@ export default function ImageGenerationForm() {
                                 <div className="text-center text-muted-foreground">
                                     <PhotoIcon className="w-8 h-8 mx-auto mb-2" />
                                     <p className="text-xs">Click to upload image</p>
+                                    {isZImageModel && zImageMode === 'i2i' ? <p className="mt-1 text-[11px]">or press Ctrl+V to paste init image</p> : null}
                                 </div>
                             )}
                         </div>
