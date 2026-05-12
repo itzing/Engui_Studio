@@ -349,8 +349,9 @@ export const MODELS: ModelConfig[] = [
             { type: 'image', dependsOn: { parameter: 'use_controlnet', value: true } }
         ],
         parameters: [
-            { name: 'use_controlnet', label: 'Use ControlNet', type: 'boolean', default: false, group: 'basic', description: 'Enable ControlNet with reference image' },
-            { name: 'controlnet_strength', label: 'ControlNet Strength', type: 'number', default: 1.0, min: 0, max: 2, step: 0.05, group: 'advanced', description: 'ControlNet conditioning strength for OpenPose/reference inputs' },
+            { name: 'use_controlnet', label: 'Use ControlNet', type: 'boolean', default: false, group: 'hidden', description: 'Enable ControlNet with reference image' },
+            { name: 'controlnet_strength', label: 'ControlNet Strength', type: 'number', default: 1.0, min: 0, max: 2, step: 0.05, group: 'advanced', dependsOn: { parameter: 'use_controlnet', value: true }, description: 'ControlNet conditioning strength for OpenPose/reference inputs' },
+            { name: 'denoise', label: 'Denoise', type: 'number', default: 0.35, min: 0, max: 1, step: 0.01, group: 'advanced', dependsOn: { parameter: 'task_type', value: 'image_to_image' }, description: 'Image-to-image change strength. Lower values preserve the init image more.' },
             { name: 'width', label: 'Width', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'height', label: 'Height', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },

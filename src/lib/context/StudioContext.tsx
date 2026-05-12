@@ -84,6 +84,9 @@ export interface Job {
     options?: any;
     resultUrl?: string;
     thumbnailUrl?: string;
+    imageInputPath?: string | null;
+    videoInputPath?: string | null;
+    audioInputPath?: string | null;
     error?: string;
     endpointId?: string;
     cost?: number;

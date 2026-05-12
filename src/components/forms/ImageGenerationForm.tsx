@@ -193,6 +193,11 @@ export default function ImageGenerationForm() {
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
     const isZImageModel = currentModel?.id === 'z-image';
+    const zImageMode = isZImageModel && parameterValues.task_type === 'image_to_image'
+        ? 'i2i'
+        : isZImageModel && parameterValues.use_controlnet === true
+            ? 'control'
+            : 'text';
     const zImageAddCap = 8;
     const zImageConfiguredLoraParamNames = useMemo(() => {
         if (!isZImageModel || !currentModel) return [];
@@ -827,9 +832,21 @@ export default function ImageGenerationForm() {
 
     // Check if a parameter should be visible based on dependsOn
     const isParameterVisible = (param: any) => {
+        if (isZImageModel && param.name === 'controlnet_strength' && parameterValues.task_type === 'image_to_image') {
+            return false;
+        }
         if (!param.dependsOn) return true;
         const dependentValue = parameterValues[param.dependsOn.parameter];
         return dependentValue === param.dependsOn.value;
+    };
+
+    const setZImageMode = (mode: 'text' | 'control' | 'i2i') => {
+        setParameterValues(prev => ({
+            ...prev,
+            use_controlnet: mode === 'control' || mode === 'i2i',
+            task_type: mode === 'i2i' ? 'image_to_image' : '',
+            denoise: mode === 'i2i' ? (prev.denoise ?? 0.35) : prev.denoise,
+        }));
     };
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1086,11 +1103,43 @@ export default function ImageGenerationForm() {
             </div>
 
             <form ref={formElementRef} onSubmit={handleSubmit} className="space-y-4">
+                {isZImageModel && !isPhoneLayout && (
+                    <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Generation mode</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                { value: 'text', label: 'Text' },
+                                { value: 'control', label: 'Control' },
+                                { value: 'i2i', label: 'I2I' },
+                            ].map((mode) => (
+                                <button
+                                    key={mode.value}
+                                    type="button"
+                                    onClick={() => setZImageMode(mode.value as 'text' | 'control' | 'i2i')}
+                                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${zImageMode === mode.value
+                                        ? 'border-primary bg-primary/15 text-foreground'
+                                        : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                                    }`}
+                                >
+                                    {mode.label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            {zImageMode === 'i2i'
+                                ? 'Image-to-image uses the uploaded source as init image; denoise controls how much it changes.'
+                                : zImageMode === 'control'
+                                    ? 'Control mode uses the uploaded image as a pose/reference condition.'
+                                    : 'Text mode generates from prompt only.'}
+                        </p>
+                    </div>
+                )}
+
                 {/* Image Upload - conditionalInputs 기반으로 표시 */}
                 {isInputVisible(currentModel, 'image', parameterValues) && (
                     <div className="space-y-2">
                         <Label className="text-xs">
-                            Input Image {currentModel.optionalInputs?.includes('image') ? '(Optional)' : '(Required)'}
+                            {isZImageModel && zImageMode === 'i2i' ? 'Init Image' : isZImageModel && zImageMode === 'control' ? 'Control Image' : 'Input Image'} {currentModel.optionalInputs?.includes('image') ? '(Optional)' : '(Required)'}
                         </Label>
                         <input
                             ref={fileInputRef}

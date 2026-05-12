@@ -338,6 +338,19 @@ export async function submitGenerationFormData(formData: FormData) {
         // Collect LoRA parameters for z-image from any submitted slot keys.
         // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
         if (modelId === 'z-image') {
+            const isZImageI2IRequest = parameters.task_type === 'image_to_image' || parameters.task === 'i2i' || parameters.mode === 'i2i';
+            if (isZImageI2IRequest) {
+                if (!primaryImageFile) {
+                    return NextResponse.json({
+                        error: 'Z-Image image-to-image requires an uploaded init image file.',
+                        code: 'ZIMAGE_I2I_INIT_IMAGE_REQUIRED',
+                    }, { status: 400 });
+                }
+                inputData.mode = 'i2i';
+                inputData.task = 'i2i';
+                parameters.task_type = 'image_to_image';
+            }
+
             if (parameters.task_type === 'openpose_extract') {
                 parameters.openpose_resolution = Number(formData.get('openpose_resolution') || formData.get('openposeResolution') || 1024);
                 parameters.detect_body = formData.get('detect_body') === null ? true : formData.get('detect_body') === 'true';
@@ -420,6 +433,8 @@ export async function submitGenerationFormData(formData: FormData) {
             delete merged.image_path_2;
             delete merged.video_path;
             delete merged.condition_image;
+            delete merged.init_image;
+            delete merged.source_image;
             delete merged.output_path;
             delete merged.s3_path;
             delete merged.image_url;
@@ -530,7 +545,11 @@ export async function submitGenerationFormData(formData: FormData) {
                 });
 
                 const mediaInputs: any[] = [];
-                const imageRole = modelId === 'z-image' ? 'condition_image' : 'source_image';
+                const isZImageI2I = modelId === 'z-image'
+                    && (runpodInput.task_type === 'image_to_image' || runpodInput.task === 'i2i' || runpodInput.mode === 'i2i');
+                const imageRole = modelId === 'z-image'
+                    ? (isZImageI2I ? 'init_image' : 'condition_image')
+                    : 'source_image';
                 if (primaryImageFile) {
                     mediaInputs.push(await uploadEncryptedMediaInput({
                         s3: s3Service,
@@ -613,6 +632,8 @@ export async function submitGenerationFormData(formData: FormData) {
                 delete runpodInput.image_path_2;
                 delete runpodInput.video_path;
                 delete runpodInput.condition_image;
+                delete runpodInput.init_image;
+                delete runpodInput.source_image;
                 delete runpodInput.image_url;
                 delete runpodInput.video_url;
                 delete runpodInput.image_base64;

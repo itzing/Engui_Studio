@@ -98,6 +98,7 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
 
     if (modelId === 'z-image') {
       txt2imgOptions.use_controlnet = false;
+      txt2imgOptions.task_type = '';
     }
 
     return {
@@ -118,7 +119,7 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
       imageInputPath: outputUrl,
       options: {
         ...baseOptions,
-        ...(modelId === 'z-image' ? { use_controlnet: true } : {}),
+        ...(modelId === 'z-image' ? { use_controlnet: true, task_type: 'image_to_image' } : {}),
         image_path: outputUrl,
       },
     };

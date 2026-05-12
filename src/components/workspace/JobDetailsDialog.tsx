@@ -213,6 +213,9 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
     const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
     const loraUsageSummary = useMemo(() => getLoraUsageSummary(job), [job]);
+    const sourceImagePath = typeof (job as any)?.imageInputPath === 'string' && (job as any).imageInputPath.trim()
+        ? (job as any).imageInputPath.trim()
+        : '';
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
     const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
@@ -520,6 +523,19 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     {job.prompt || 'No prompt provided'}
                                 </div>
                             </div>
+
+                            {sourceImagePath ? (
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-medium text-foreground">Source image</h3>
+                                    <div className="rounded-lg border border-border bg-muted/20 p-2">
+                                        <img
+                                            src={sourceImagePath}
+                                            alt="Source image"
+                                            className="max-h-32 w-full rounded object-contain"
+                                        />
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {outputs.length > 1 && (
                                 <div className="space-y-2">
