@@ -325,14 +325,15 @@ export default function VideoGenerationForm() {
             if (data.success && data.loras) {
                 setAvailableLoras(data.loras);
                 if (currentModel && hasLoRAParameter(currentModel)) {
-                    const sanitized = sanitizeHydratedLoraParameterValues(
-                        currentModel.id,
-                        parameterValues,
-                        data.loras.map((lora: LoRAFile) => lora.s3Path),
-                    );
-                    if (sanitized.changed) {
-                        setParameterValues(sanitized.parameterValues || {});
-                    }
+                    const availableLoraPaths = data.loras.map((lora: LoRAFile) => lora.s3Path);
+                    setParameterValues((prev) => {
+                        const sanitized = sanitizeHydratedLoraParameterValues(
+                            currentModel.id,
+                            prev,
+                            availableLoraPaths,
+                        );
+                        return sanitized.changed ? sanitized.parameterValues || {} : prev;
+                    });
                 }
             } else {
                 console.error('Failed to fetch LoRAs:', data.error);

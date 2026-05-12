@@ -1,7 +1,7 @@
 ---
 id: ENGUI-218
 title: Preserve reuse LoRAs until LoRA catalog loads
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-05-01 07:48'
 labels:
@@ -23,8 +23,14 @@ Fix create reuse so LoRA values restored from gallery/job snapshots are not clea
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Reuse from gallery preserves valid saved LoRAs until `/api/lora` finishes loading
-- [ ] #2 Invalid saved LoRAs are still cleared after a successful catalog fetch
-- [ ] #3 Image and video create flows no longer clear all LoRAs during initial hydration
-- [ ] #4 Build passes and deployed app is restarted and verified
+- [x] #1 Reuse from gallery preserves valid saved LoRAs until `/api/lora` finishes loading
+- [x] #2 Invalid saved LoRAs are still cleared after a successful catalog fetch
+- [x] #3 Image and video create flows no longer clear all LoRAs during initial hydration
+- [x] #4 Build passes and deployed app is restarted and verified
 <!-- AC:END -->
+
+## Implementation Notes
+
+- LoRA cleanup now runs only after a successful `/api/lora` catalog response.
+- Image desktop, unified image create state, and video create use functional `setParameterValues` sanitization so a delayed catalog response validates the latest hydrated/reused values instead of an older empty closure.
+- Failed catalog requests can clear the temporary catalog list but do not clear restored LoRA parameter values.

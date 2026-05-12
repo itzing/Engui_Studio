@@ -231,14 +231,15 @@ export function useImageCreateState() {
           const nextLoras = data.success && Array.isArray(data.loras) ? data.loras : [];
           setAvailableLoras(nextLoras);
           if (data.success && currentModel && hasLoRAParameter) {
-            const sanitized = sanitizeHydratedLoraParameterValues(
-              currentModel.id,
-              parameterValues,
-              nextLoras.map((lora) => lora.s3Path),
-            );
-            if (sanitized.changed) {
-              setParameterValues(sanitized.parameterValues || {});
-            }
+            const availableLoraPaths = nextLoras.map((lora) => lora.s3Path);
+            setParameterValues((prev) => {
+              const sanitized = sanitizeHydratedLoraParameterValues(
+                currentModel.id,
+                prev,
+                availableLoraPaths,
+              );
+              return sanitized.changed ? sanitized.parameterValues || {} : prev;
+            });
           }
         }
       } catch {
