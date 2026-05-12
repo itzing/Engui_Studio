@@ -855,6 +855,11 @@ export default function ImageGenerationForm() {
         const url = previewOverride || URL.createObjectURL(file);
         setPreviewUrl(url);
 
+        if (isZImageModel && zImageMode === 'i2i') {
+            setPrompt('');
+            replaceImagePromptFile(file);
+        }
+
         // Auto-set dimensions in React state so draft persistence sees them
         const img = new Image();
         img.onload = () => {
@@ -866,7 +871,7 @@ export default function ImageGenerationForm() {
             console.log('✅ Auto-set image dimensions:', img.width, 'x', img.height);
         };
         img.src = url;
-    }, []);
+    }, [isZImageModel, zImageMode]);
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1196,17 +1201,34 @@ export default function ImageGenerationForm() {
                                         alt="Preview"
                                         className="max-w-full max-h-48 mx-auto rounded-lg"
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setPreviewUrl('');
-                                            setImageFile(null);
-                                        }}
-                                        className="text-xs text-red-400 hover:text-red-300"
-                                    >
-                                        Remove
-                                    </button>
+                                    <div className="flex flex-wrap items-center justify-center gap-3">
+                                        {isZImageModel && zImageMode === 'i2i' && imagePromptFile ? (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsImagePromptOpen(true);
+                                                    setImagePromptResult('');
+                                                    setHasCopiedImagePromptResult(false);
+                                                }}
+                                                disabled={!isVisionPromptHelperConfigured || isVisionPromptLoading}
+                                                className="text-xs text-primary hover:text-primary/80 disabled:text-muted-foreground"
+                                            >
+                                                Extract prompt
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPreviewUrl('');
+                                                setImageFile(null);
+                                            }}
+                                            className="text-xs text-red-400 hover:text-red-300"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center text-muted-foreground">

@@ -29,6 +29,7 @@ Ctrl+V image paste does not populate the Z-Image image-to-image init image field
 - Added a shared primary image setter for upload, drag/drop, and paste so all paths populate the init image preview and dimensions consistently.
 - Added a paste handler to the primary image dropzone plus a Z-Image I2I-only window paste listener that ignores prompt/input fields.
 - Manual live generation was not run.
+- Follow-up: I2I init image upload/drop/paste now clears the current prompt, primes the same image for Image → Prompt extraction, and shows an inline `Extract prompt` action under the init image preview.
 
 ## Rollback
 
