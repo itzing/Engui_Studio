@@ -18,7 +18,7 @@ import {
     mergeImageDraftParameterValues,
     normalizeRandomizeSeed,
 } from '@/lib/create/imageDraft';
-import { requestImagePromptImprovement, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
+import { requestImagePromptImprovement, requestZImagePromptRewrite, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
@@ -75,6 +75,7 @@ export default function ImageGenerationForm() {
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
+    const [isZImageRewriteLoading, setIsZImageRewriteLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
     const [promptEditorDraft, setPromptEditorDraft] = useState('');
@@ -482,6 +483,28 @@ export default function ImageGenerationForm() {
             closeOnSuccess: false,
             animatePromptOnSuccess: true,
         });
+    };
+
+    const runZImagePromptRewrite = async () => {
+        if (!isZImageModel || !prompt.trim() || isZImageRewriteLoading || isPromptHelperLoading || isVisionPromptLoading || isPromptDraftSelected || isPromptDraftSyncing) {
+            return;
+        }
+
+        setPromptHelperError(null);
+        setPromptHelperDebug(null);
+        setIsZImageRewriteLoading(true);
+
+        try {
+            const rewrittenPrompt = await requestZImagePromptRewrite({ prompt });
+            setPrompt(rewrittenPrompt);
+            setIsPromptHelperQuickAnimating(true);
+            window.setTimeout(() => setIsPromptHelperQuickAnimating(false), 1200);
+            setMessage({ type: 'success', text: 'Rewritten for Z-Image' });
+        } catch (error) {
+            setPromptHelperError(error instanceof Error ? error.message : 'Z-Image prompt rewrite failed');
+        } finally {
+            setIsZImageRewriteLoading(false);
+        }
     };
 
     const readFileAsDataUrl = async (file: File) => {
@@ -1346,7 +1369,7 @@ export default function ImageGenerationForm() {
                         {!isPhoneLayout && !isPromptDraftSelected && (
                             <div className="text-[11px] text-muted-foreground">Focus the prompt to edit it in a larger window. Press Ctrl+Enter there to save.</div>
                         )}
-                        <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'}`}>
+                        <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : isZImageModel ? 'sm:grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1fr)]' : 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'}`}>
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1380,6 +1403,19 @@ export default function ImageGenerationForm() {
                             >
                                 {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                             </Button>
+                            {isZImageModel && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => void runZImagePromptRewrite()}
+                                    disabled={!isPromptHelperConfigured || !prompt.trim() || isZImageRewriteLoading || isPromptHelperLoading || isVisionPromptLoading || isPromptDraftSelected || isPromptDraftSyncing}
+                                    className={isPhoneLayout ? 'h-11 w-full shrink-0 font-bold' : 'h-10 w-10 shrink-0 font-bold'}
+                                    title="Rewrite prompt for Z-Image"
+                                >
+                                    {isZImageRewriteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Z'}
+                                </Button>
+                            )}
                             <Button
                                 type="button"
                                 variant="outline"

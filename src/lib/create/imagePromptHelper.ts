@@ -40,6 +40,23 @@ export const requestImagePromptImprovement = async (payload: {
   };
 };
 
+export const requestZImagePromptRewrite = async (payload: {
+  prompt: string;
+}): Promise<string> => {
+  const response = await fetch('/api/prompt-helper/z-image-rewrite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success || typeof data.prompt !== 'string' || !data.prompt.trim()) {
+    throw new Error(data.error || 'Z-Image prompt rewrite failed');
+  }
+
+  return data.prompt.trim();
+};
+
 export const extractImagePromptFromDataUrl = async (payload: {
   imageDataUrl: string;
   modelId: string;

@@ -1,16 +1,22 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, WandSparkles, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
+import { useToast } from '@/components/ui/toast';
+import { requestZImagePromptRewrite } from '@/lib/create/imagePromptHelper';
 
 export default function MobilePromptScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
+  const [isZImageRewriteLoading, setIsZImageRewriteLoading] = useState(false);
+  const [zImageRewriteError, setZImageRewriteError] = useState<string | null>(null);
   const {
+    currentModel,
     prompt,
     setPrompt,
     promptHelperInstruction,
@@ -22,6 +28,7 @@ export default function MobilePromptScreen() {
     selectedPromptDocumentTitle,
     runSavedPromptHelperInstruction,
   } = useMobileCreate();
+  const isZImageModel = currentModel?.id === 'z-image';
   const initialPromptRef = useRef(prompt);
   const initialPromptHelperInstructionRef = useRef(promptHelperInstruction);
 
@@ -53,6 +60,25 @@ export default function MobilePromptScreen() {
 
   const handleSave = () => {
     navigateBackToCreate();
+  };
+
+  const runZImagePromptRewrite = async () => {
+    if (!isZImageModel || !prompt.trim() || isZImageRewriteLoading || isPromptHelperLoading || isPromptDraftSelected) {
+      return;
+    }
+
+    setZImageRewriteError(null);
+    setIsZImageRewriteLoading(true);
+
+    try {
+      const rewrittenPrompt = await requestZImagePromptRewrite({ prompt });
+      setPrompt(rewrittenPrompt);
+      showToast('Rewritten for Z-Image', 'success', 2200);
+    } catch (error) {
+      setZImageRewriteError(error instanceof Error ? error.message : 'Z-Image prompt rewrite failed');
+    } finally {
+      setIsZImageRewriteLoading(false);
+    }
   };
 
   return (
@@ -110,16 +136,36 @@ export default function MobilePromptScreen() {
               />
             </div>
 
-            {promptHelperError ? (
+            {promptHelperError || zImageRewriteError ? (
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {promptHelperError}
+                {zImageRewriteError || promptHelperError}
               </div>
             ) : null}
 
             <div className="flex flex-col gap-3">
+              {isZImageModel ? (
+                <Button
+                  variant="outline"
+                  disabled={!isPromptHelperConfigured || !prompt.trim() || isZImageRewriteLoading || isPromptHelperLoading}
+                  onClick={() => void runZImagePromptRewrite()}
+                  className="font-semibold"
+                >
+                  {isZImageRewriteLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Rewriting for Z-Image...
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2 text-base font-black leading-none">Z</span>
+                      Rewrite for Z-Image
+                    </>
+                  )}
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
-                disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading}
+                disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isZImageRewriteLoading}
                 onClick={() => void runSavedPromptHelperInstruction()}
               >
                 {isPromptHelperLoading ? (
