@@ -238,7 +238,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       body: JSON.stringify({
         model: this.model,
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: 8000,
         stream: false,
         messages: [
           {
