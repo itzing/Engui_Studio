@@ -90,14 +90,14 @@ export async function POST(request: NextRequest) {
     const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
 
     if (!prompt) {
-      return NextResponse.json({ success: false, error: 'Prompt is required' }, { status: 400 });
+      return new NextResponse('Prompt is required', { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
     const settingsResult = await settingsService.getSettings(userId);
     const local = settingsResult.settings.promptHelper?.local;
 
     if (settingsResult.settings.promptHelper?.provider !== 'local') {
-      return NextResponse.json({ success: false, error: 'Prompt Helper provider is disabled' }, { status: 400 });
+      return new NextResponse('Prompt Helper provider is disabled', { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
     const baseUrl = local?.baseUrl?.trim();
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     const apiKey = local?.apiKey?.trim();
 
     if (!baseUrl || !model) {
-      return NextResponse.json({ success: false, error: 'Prompt Helper local baseUrl and model are required' }, { status: 400 });
+      return new NextResponse('Prompt Helper local baseUrl and model are required', { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
     await ensureHelperMode('text');
@@ -135,26 +135,29 @@ export async function POST(request: NextRequest) {
     const rewrittenPrompt = normalizePlainPrompt(contentText || reasoningText);
 
     if (!response.ok) {
-      return NextResponse.json(
-        { success: false, error: data?.error?.message || `Prompt Helper provider request failed with status ${response.status}` },
-        { status: 502 }
-      );
+      return new NextResponse(data?.error?.message || `Prompt Helper provider request failed with status ${response.status}`, {
+        status: 502,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
 
     if (choice?.finish_reason === 'length') {
-      return NextResponse.json(
-        { success: false, error: 'Z-Image rewrite was truncated by max_tokens' },
-        { status: 502 }
-      );
+      return new NextResponse('Z-Image rewrite was truncated by max_tokens', {
+        status: 502,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
 
     if (!rewrittenPrompt) {
-      return NextResponse.json({ success: false, error: 'Prompt Helper returned empty rewrite' }, { status: 502 });
+      return new NextResponse('Prompt Helper returned empty rewrite', { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
-    return NextResponse.json({ success: true, prompt: rewrittenPrompt });
+    return new NextResponse(rewrittenPrompt, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Z-Image prompt rewrite failed';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return new NextResponse(message, { status: 500, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
 }

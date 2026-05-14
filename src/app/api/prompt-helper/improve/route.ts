@@ -25,27 +25,19 @@ export async function POST(request: NextRequest) {
     const provider = getPromptHelperProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
     const result = await provider.improve({ prompt, negativePrompt, instruction, modelId, helperProfile });
 
-    return NextResponse.json({
-      success: true,
-      improvedPrompt: result.improvedPrompt,
-      improvedNegativePrompt: result.improvedNegativePrompt,
+    return new NextResponse(result.improvedPrompt, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Prompt Helper request failed';
     const isProviderError = error instanceof PromptHelperProviderError;
     const isInvalidJson = isProviderError && error.code === 'invalid_json';
     const status = /disabled|required/i.test(message) ? 400 : isInvalidJson ? 422 : 500;
-    const debug = isProviderError ? error.debug : undefined;
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: isInvalidJson ? 'Prompt Helper returned invalid JSON. No retry was attempted.' : message,
-        code: isProviderError ? error.code : undefined,
-        retryable: isInvalidJson ? false : undefined,
-        debug,
-      },
-      { status }
-    );
+    return new NextResponse(isInvalidJson ? 'Prompt Helper returned invalid JSON. No retry was attempted.' : message, {
+      status,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 }

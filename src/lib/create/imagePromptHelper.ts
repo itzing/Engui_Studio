@@ -23,20 +23,14 @@ export const requestImagePromptImprovement = async (payload: {
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json();
+  const text = await response.text();
 
-  if (!response.ok || !data.success || !data.improvedPrompt) {
-    const error = new Error(data.error || 'Prompt Helper request failed') as Error & {
-      debug?: PromptHelperDebug;
-    };
-    error.debug = data.debug;
-    throw error;
+  if (!response.ok || !text.trim()) {
+    throw new Error(text.trim() || 'Prompt Helper request failed');
   }
 
   return {
-    improvedPrompt: data.improvedPrompt,
-    improvedNegativePrompt: data.improvedNegativePrompt,
-    debug: data.debug,
+    improvedPrompt: text.trim(),
   };
 };
 
@@ -49,12 +43,12 @@ export const requestZImagePromptRewrite = async (payload: {
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success || typeof data.prompt !== 'string' || !data.prompt.trim()) {
-    throw new Error(data.error || 'Z-Image prompt rewrite failed');
+  const text = await response.text();
+  if (!response.ok || !text.trim()) {
+    throw new Error(text.trim() || 'Z-Image prompt rewrite failed');
   }
 
-  return data.prompt.trim();
+  return text.trim();
 };
 
 export const extractImagePromptFromDataUrl = async (payload: {

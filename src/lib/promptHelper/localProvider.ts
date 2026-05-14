@@ -49,16 +49,12 @@ function normalizeModelText(value: string): string {
   return unwrapQuotedText(stripCodeFences(value)).trim();
 }
 
-function extractJsonObject(value: string): string {
-  const trimmed = stripCodeFences(value).trim();
-  const firstBrace = trimmed.indexOf('{');
-  const lastBrace = trimmed.lastIndexOf('}');
+function removePromptLabel(value: string): string {
+  return value.replace(/^\s*(final\s+)?(rewritten\s+)?(positive\s+)?prompt\s*:\s*/i, '').trim();
+}
 
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    return trimmed;
-  }
-
-  return trimmed.slice(firstBrace, lastBrace + 1);
+function normalizePlainPrompt(value: string): string {
+  return removePromptLabel(normalizeModelText(value)).trim();
 }
 
 function sanitizePromptHelperText(value: string): string {
@@ -119,8 +115,9 @@ function buildDefaultUserMessage(request: PromptHelperRequest): string {
     framingHint,
     'If the instruction asks to improve, expand, rewrite, or generate prompts, then you may make broader prompt-engineering improvements.',
     '',
-    'Return JSON with exactly these keys:',
-    '{"prompt":"...","negativePrompt":"..."}'
+    'Return only the final edited positive prompt text.',
+    'Do not return JSON.',
+    'Do not include markdown, labels, explanations, or surrounding text.',
   ].filter(Boolean).join('\n');
 }
 
@@ -163,10 +160,11 @@ function buildWan22UserMessage(request: PromptHelperRequest): string {
     'If the instruction asks to improve, optimize, rewrite, or generate, you may make broader WAN-aware prompt-engineering improvements.',
     'Use target dimensions, aspect ratio, and framing guidance only when they help composition or when the instruction asks for prompt improvement or new prompt creation.',
     framingHint,
-    'Default negative prompt direction: keep it compact and focused on artifacts like blurry, flicker, jitter, distortion, warped face, extra fingers, extra limbs, identity drift, text, watermark, logo, low quality.',
+    'Do not edit or return the negative prompt.',
     '',
-    'Return JSON with exactly these keys:',
-    '{"prompt":"...","negativePrompt":"..."}'
+    'Return only the final edited positive prompt text.',
+    'Do not return JSON.',
+    'Do not include markdown, labels, explanations, or surrounding text.',
   ].filter(Boolean).join('\n');
 }
 
@@ -179,13 +177,13 @@ function buildPromptHelperMessages(request: PromptHelperRequest): { systemPrompt
 
   if (profile === 'wan22-video') {
     return {
-      systemPrompt: 'You are an instruction-following prompt editor for WAN 2.2 image-to-video prompting. Your first priority is to apply the user instruction exactly. If the current prompt is non-empty and the instruction is narrow, preserve the existing prompt and make only the requested change. If the instruction asks for improvement, optimization, rewriting, or if the current prompt is empty, produce one balanced WAN 2.2-friendly result. Focus on motion, secondary motion, one simple camera move, atmosphere, and realism. Avoid re-describing static appearance unless required by the instruction. Avoid multiple sequential actions, stacked camera moves, scene reinvention, and verbose style soups unless explicitly requested. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.',
+      systemPrompt: 'You are an instruction-following prompt editor for WAN 2.2 image-to-video prompting. Your first priority is to apply the user instruction exactly. If the current prompt is non-empty and the instruction is narrow, preserve the existing prompt and make only the requested change. If the instruction asks for improvement, optimization, rewriting, or if the current prompt is empty, produce one balanced WAN 2.2-friendly result. Focus on motion, secondary motion, one simple camera move, atmosphere, and realism. Avoid re-describing static appearance unless required by the instruction. Avoid multiple sequential actions, stacked camera moves, scene reinvention, and verbose style soups unless explicitly requested. Reply in English only. Return only the final edited positive prompt text. Do not return JSON, markdown, explanations, labels, or surrounding text.',
       userMessage: buildWan22UserMessage(request)
     };
   }
 
   return {
-    systemPrompt: 'You are an instruction-following prompt editor for image generation. Your first priority is to apply the user instruction exactly. Preserve the existing positive and negative prompts unless the instruction explicitly asks you to change, improve, expand, shorten, or rewrite them. If the user asks for a narrow edit, formatting change, or substitution, make only that change and keep everything else intact. Only perform broader prompt-engineering improvements when the instruction explicitly requests improvement, rewriting, generation, or optimization. Reply in English only. Return only valid JSON with exactly these keys: {"prompt":"...","negativePrompt":"..."}. Do not return markdown, explanations, labels, or surrounding text.',
+    systemPrompt: 'You are an instruction-following prompt editor for image generation. Your first priority is to apply the user instruction exactly. Preserve the existing positive prompt unless the instruction explicitly asks you to change, improve, expand, shorten, or rewrite it. Do not edit or return the negative prompt. If the user asks for a narrow edit, formatting change, or substitution, make only that change and keep everything else intact. Only perform broader prompt-engineering improvements when the instruction explicitly requests improvement, rewriting, generation, or optimization. Reply in English only. Return only the final edited positive prompt text. Do not return JSON, markdown, explanations, labels, or surrounding text.',
     userMessage: buildDefaultUserMessage(request)
   };
 }
@@ -275,19 +273,10 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
     }
 
     if (choice?.finish_reason === 'length') {
-      throw new PromptHelperProviderError('Prompt Helper response was truncated by max_tokens before completing valid JSON', debug, 'truncated_response');
+      throw new PromptHelperProviderError('Prompt Helper response was truncated by max_tokens', debug, 'truncated_response');
     }
 
-    let parsed: { prompt?: unknown; negativePrompt?: unknown };
-    try {
-      parsed = JSON.parse(extractJsonObject(normalizedText));
-    } catch {
-      // Invalid JSON is terminal for this request: do not retry, surface the first bad model response to the UI.
-      throw new PromptHelperProviderError('Prompt Helper provider returned invalid JSON', debug, 'invalid_json');
-    }
-
-    const improvedPrompt = typeof parsed.prompt === 'string' ? normalizeModelText(parsed.prompt) : '';
-    const improvedNegativePrompt = typeof parsed.negativePrompt === 'string' ? normalizeModelText(parsed.negativePrompt) : '';
+    const improvedPrompt = normalizePlainPrompt(normalizedText);
 
     if (!improvedPrompt) {
       throw new PromptHelperProviderError('Prompt Helper provider returned empty prompt text', debug, 'empty_prompt');
@@ -295,7 +284,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
 
     return {
       improvedPrompt,
-      improvedNegativePrompt,
+      improvedNegativePrompt: request.negativePrompt || '',
     };
   }
 }
