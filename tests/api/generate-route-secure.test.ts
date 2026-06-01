@@ -170,7 +170,6 @@ describe('POST /api/generate secure RunPod flow', () => {
     mockSubmitJob.mockResolvedValue('rp-job-1');
     mockUuid.mockReset();
     mockUuid
-      .mockReturnValueOnce('file-uuid')
       .mockReturnValueOnce('job-1')
       .mockReturnValueOnce('attempt-1');
   });
@@ -281,6 +280,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(payload.prompt).toBeUndefined();
     expect(payload.negative_prompt).toBeUndefined();
     expect(payload.image_path).toBeUndefined();
+    expect(mockProcessFileUpload).not.toHaveBeenCalled();
 
     expect(mockCreateStructuredEnvelope).toHaveBeenCalledWith(
       expect.any(Buffer),
@@ -303,5 +303,76 @@ describe('POST /api/generate secure RunPod flow', () => {
       kind: 'image',
     }));
     expect(mockStartRunPodSupervisor).toHaveBeenCalledTimes(1);
+  });
+
+  it('submits Z-Image I2I init image only through secure media_inputs', async () => {
+    mockGetModelById.mockReturnValue({
+      id: 'z-image',
+      name: 'Z-Image',
+      type: 'image',
+      api: {
+        type: 'runpod',
+        endpoint: 'z-image',
+      },
+      inputs: ['text', 'image'],
+      imageInputKey: 'condition_image',
+      parameters: [
+        { name: 'task_type', type: 'string' },
+        { name: 'denoise', type: 'number', default: 0.35 },
+      ],
+    });
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { 'z-image': 'endpoint-z' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+    mockUploadEncryptedMediaInput.mockResolvedValue({
+      role: 'init_image',
+      kind: 'image',
+      mime: 'image/png',
+      storage_path: '/runpod-volume/secure-jobs/job-1__attempt-1__input__init_image.bin',
+      envelope: { v: 1 },
+    });
+
+    const formData = new FormData();
+    formData.set('modelId', 'z-image');
+    formData.set('prompt', 'use this init image');
+    formData.set('task_type', 'image_to_image');
+    formData.set('denoise', '0.42');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'init.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+
+    expect(response.status).toBe(200);
+    expect(mockProcessFileUpload).not.toHaveBeenCalled();
+    expect(mockUploadEncryptedMediaInput).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'job-1',
+      modelId: 'z-image',
+      attemptId: 'attempt-1',
+      role: 'init_image',
+      kind: 'image',
+    }));
+
+    const [payload, submittedModelId] = mockSubmitJob.mock.calls[0];
+    expect(submittedModelId).toBe('z-image');
+    expect(payload.media_inputs).toHaveLength(1);
+    expect(payload.condition_image).toBeUndefined();
+    expect(payload.init_image).toBeUndefined();
+    expect(payload.source_image).toBeUndefined();
+    expect(payload.mode).toBe('i2i');
+    expect(payload.task_type).toBe('image_to_image');
+    expect(payload.__encryptSensitiveZImage).toBe(true);
   });
 });

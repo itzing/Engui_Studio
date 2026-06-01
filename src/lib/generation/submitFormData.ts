@@ -113,6 +113,9 @@ export async function submitGenerationFormData(formData: FormData) {
             })()
             : null;
 
+        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'];
+        const usesSecureTransport = secureModelIds.includes(modelId);
+
         // Process input files based on model.inputs
         const inputData: Record<string, any> = {};
 
@@ -133,7 +136,9 @@ export async function submitGenerationFormData(formData: FormData) {
             console.log(`🔍 Checking for image input (key: ${imageKey})`);
             console.log(`📁 Image file from formData:`, imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'null');
 
-            if (imageFile && imageFile.size > 0) {
+            if (imageFile && imageFile.size > 0 && usesSecureTransport) {
+                console.log(`🔒 Deferring image upload to secure media input pipeline for ${modelId}`);
+            } else if (imageFile && imageFile.size > 0) {
                 const imageFileName = `image_${uuidv4()}_${imageFile.name}`;
                 console.log(`📤 Uploading image: ${imageFileName}`);
                 try {
@@ -164,7 +169,9 @@ export async function submitGenerationFormData(formData: FormData) {
             const imageFile2 = formData.get('image2') as File;
             secondaryImageFile = imageFile2 && imageFile2.size > 0 ? imageFile2 : undefined;
 
-            if (model.inputs.includes('image2') && image2Key && imageFile2 && imageFile2.size > 0) {
+            if (model.inputs.includes('image2') && image2Key && imageFile2 && imageFile2.size > 0 && usesSecureTransport) {
+                console.log(`🔒 Deferring second image upload to secure media input pipeline for ${modelId}`);
+            } else if (model.inputs.includes('image2') && image2Key && imageFile2 && imageFile2.size > 0) {
                 console.log(`🔍 Checking for second image input (key: ${image2Key})`);
                 console.log(`📁 Second image file from formData:`, `${imageFile2.name} (${imageFile2.size} bytes)`);
 
@@ -199,7 +206,9 @@ export async function submitGenerationFormData(formData: FormData) {
             console.log(`🔍 Checking for video input (key: ${videoKey})`);
             console.log(`📁 Video file from formData:`, videoFile ? `${videoFile.name} (${videoFile.size} bytes)` : 'null');
 
-            if (videoFile && videoFile.size > 0) {
+            if (videoFile && videoFile.size > 0 && usesSecureTransport) {
+                console.log(`🔒 Deferring video upload to secure media input pipeline for ${modelId}`);
+            } else if (videoFile && videoFile.size > 0) {
                 const videoFileName = `video_${uuidv4()}_${videoFile.name}`;
                 console.log(`📤 Uploading video: ${videoFileName}`);
                 try {
@@ -421,7 +430,6 @@ export async function submitGenerationFormData(formData: FormData) {
             inputData.prompt = prompt;
         }
 
-        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'];
         const buildPersistedOptions = (params: Record<string, any>, input: Record<string, any>, extra: Record<string, any> = {}) => {
             const merged = { ...params, ...input, ...extra } as Record<string, any>;
 

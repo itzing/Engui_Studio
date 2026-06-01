@@ -132,30 +132,34 @@ async function cleanupSecureTransportArtifacts(params: {
   resultStoragePath?: string | null;
 }) {
   const cleanupWarnings: string[] = [];
+  const attemptedKeys: string[] = [];
+  const deletedKeys: string[] = [];
+  const failedKeys: string[] = [];
   const mediaInputs = params.secureState?.activeAttempt?.request?.mediaInputs || [];
+  const storagePaths = [
+    ...mediaInputs.map((media: any) => media?.storagePath).filter(Boolean),
+    ...(params.resultStoragePath ? [params.resultStoragePath] : []),
+  ];
 
-  for (const media of mediaInputs) {
-    const storagePath = media?.storagePath;
-    if (!storagePath) continue;
+  for (const storagePath of Array.from(new Set(storagePaths))) {
+    const key = normalizeS3KeyOrPrefix(storagePath);
+    attemptedKeys.push(key);
 
     try {
-      await params.s3.deleteFile(normalizeS3KeyOrPrefix(storagePath));
+      await params.s3.deleteFile(key);
+      deletedKeys.push(key);
     } catch (error: any) {
-      cleanupWarnings.push(`input:${storagePath}:${error.message}`);
-    }
-  }
-
-  if (params.resultStoragePath) {
-    try {
-      await params.s3.deleteFile(normalizeS3KeyOrPrefix(params.resultStoragePath));
-    } catch (error: any) {
-      cleanupWarnings.push(`result:${params.resultStoragePath}:${error.message}`);
+      failedKeys.push(key);
+      cleanupWarnings.push(`${key}:${error.message}`);
     }
   }
 
   return {
     transportStatus: cleanupWarnings.length === 0 ? 'completed' : 'warning',
     warning: cleanupWarnings.length > 0 ? cleanupWarnings.join(' | ') : null,
+    attemptedKeys,
+    deletedKeys,
+    failedKeys,
     completedAt: new Date().toISOString(),
   };
 }
@@ -676,7 +680,7 @@ async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, setti
     return null;
   }
 
-  if (secureState?.cleanup?.transportStatus === 'completed' || secureState?.cleanup?.transportStatus === 'warning') {
+  if (secureState?.cleanup?.transportStatus === 'completed') {
     return secureState.cleanup;
   }
 
@@ -765,6 +769,7 @@ async function finalizeSecureTransportResult(params: {
         ...normalizedSecureState.activeAttempt?.response,
         transportResultSecureReceived: true,
         transportResultStatus: transportResult.status,
+        resultMediaStoragePath: transportResult?.result_media?.storage_path || null,
       },
     },
   };
@@ -1099,6 +1104,8 @@ export async function processRunPodJobsOnce() {
     }
   }
 
+  await retryTerminalSecureCleanupsOnce();
+
   try {
     await recoverJobMaterializationTasks({ limit: 200 });
   } catch (error) {
@@ -1109,6 +1116,45 @@ export async function processRunPodJobsOnce() {
     await recoverStudioSessionMaterializationTasks({ limit: 200 });
   } catch (error) {
     console.error('RunPod supervisor failed Studio Session materialization recovery sweep', error);
+  }
+}
+
+async function retryTerminalSecureCleanupsOnce() {
+  const jobs = await prisma.job.findMany({
+    where: {
+      status: { in: ['completed', 'failed'] },
+      OR: [
+        { secureState: { contains: '"transportStatus":"pending"' } },
+        { secureState: { contains: '"transportStatus":"warning"' } },
+      ],
+    },
+    orderBy: { completedAt: 'asc' },
+    take: 50,
+  });
+
+  for (const job of jobs) {
+    const secureState = parseSecureState(job.secureState);
+    if (!secureState) continue;
+    if (secureState.cleanup?.transportStatus === 'completed') continue;
+
+    try {
+      const { settings } = await settingsService.getSettings(job.userId || 'user-with-settings');
+      const resultStoragePath = secureState?.activeAttempt?.response?.resultMediaStoragePath || null;
+      const cleanup = await maybeCleanupSecureArtifacts(secureState, settings, resultStoragePath);
+      if (!cleanup) continue;
+
+      await persistJobUpdate(job.id, {
+        secureState: JSON.stringify({
+          ...secureState,
+          cleanup,
+        }),
+      });
+    } catch (error) {
+      console.error('RunPod supervisor failed to retry secure cleanup', {
+        jobId: job.id,
+        error,
+      });
+    }
   }
 }
 

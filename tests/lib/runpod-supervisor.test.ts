@@ -104,12 +104,13 @@ vi.mock('fs', () => ({
   writeFileSync: mockWriteFileSync,
 }));
 
-import { processRunPodJob } from '@/lib/runpodSupervisor';
+import { processRunPodJob, processRunPodJobsOnce } from '@/lib/runpodSupervisor';
 
 describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPrisma.job.update.mockImplementation(async ({ where, data }: any) => ({ id: where.id, ...data }));
+    mockPrisma.job.findMany.mockResolvedValue([]);
     mockMaybeGenerateJobThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
     mockMaybeAutoSaveUpscaleResult.mockResolvedValue(undefined);
     mockMaterializeStudioSessionCompletedJob.mockResolvedValue(null);
@@ -199,7 +200,83 @@ describe('runpod supervisor', () => {
     const secureState = JSON.parse(finalUpdate.data.secureState);
     expect(secureState.activeAttempt.finalization.localThumbnailUrl).toBe('/generations/job-previews/wan22-job-thumb.webp');
     expect(secureState.cleanup.transportStatus).toBe('warning');
-    expect(secureState.cleanup.warning).toContain('cannot delete input');
+    expect(secureState.cleanup.warning).toContain('secure-jobs/job-1/attempt-1/inputs/source_image.bin:cannot delete input');
+    expect(secureState.cleanup.attemptedKeys).toEqual([
+      'secure-jobs/job-1/attempt-1/inputs/source_image.bin',
+      'secure-jobs/job-1/attempt-1/outputs/result.bin',
+    ]);
+    expect(secureState.cleanup.deletedKeys).toEqual([
+      'secure-jobs/job-1/attempt-1/outputs/result.bin',
+    ]);
+    expect(secureState.cleanup.failedKeys).toEqual([
+      'secure-jobs/job-1/attempt-1/inputs/source_image.bin',
+    ]);
+  });
+
+  it('deletes every secure media input and encrypted result after completed finalization', async () => {
+    const job = {
+      id: 'job-clean',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'processing',
+      createdAt: new Date('2026-04-18T21:00:00Z'),
+      runpodJobId: 'rp-clean',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'runpod_processing',
+        activeAttempt: {
+          attemptId: 'attempt-clean',
+          runpodJobId: 'rp-clean',
+          request: {
+            mediaInputs: [
+              { storagePath: '/runpod-volume/secure-jobs/job-clean__attempt-clean__input__source_image.bin' },
+              { storagePath: '/runpod-volume/secure-jobs/job-clean__attempt-clean__input__secondary_image.bin' },
+            ],
+          },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockGetJobStatus.mockResolvedValue({
+      status: 'COMPLETED',
+      executionTime: 1234,
+      output: {
+        transport_result: {
+          status: 'completed',
+          result_media: {
+            mime: 'image/png',
+            kind: 'image',
+            storage_path: '/runpod-volume/secure-jobs/job-clean__attempt-clean__output__result.bin',
+            envelope: { v: 1 },
+          },
+        },
+      },
+    });
+    mockDownloadAndDecryptResultMedia.mockResolvedValue(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJob(job);
+
+    expect(mockDeleteFile).toHaveBeenNthCalledWith(1, 'secure-jobs/job-clean__attempt-clean__input__source_image.bin');
+    expect(mockDeleteFile).toHaveBeenNthCalledWith(2, 'secure-jobs/job-clean__attempt-clean__input__secondary_image.bin');
+    expect(mockDeleteFile).toHaveBeenNthCalledWith(3, 'secure-jobs/job-clean__attempt-clean__output__result.bin');
+
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(secureState.cleanup.transportStatus).toBe('completed');
+    expect(secureState.cleanup.warning).toBeNull();
+    expect(secureState.cleanup.attemptedKeys).toEqual([
+      'secure-jobs/job-clean__attempt-clean__input__source_image.bin',
+      'secure-jobs/job-clean__attempt-clean__input__secondary_image.bin',
+      'secure-jobs/job-clean__attempt-clean__output__result.bin',
+    ]);
+    expect(secureState.cleanup.deletedKeys).toEqual(secureState.cleanup.attemptedKeys);
+    expect(secureState.cleanup.failedKeys).toEqual([]);
   });
 
   it('records normalized failed state and keeps cleanup warning without changing terminal failure', async () => {
@@ -245,6 +322,55 @@ describe('runpod supervisor', () => {
     expect(secureState.failure.source).toBe('runpod.execution');
     expect(secureState.failure.error.code).toBe('Error');
     expect(secureState.cleanup.transportStatus).toBe('warning');
-    expect(secureState.cleanup.warning).toContain('cleanup blocked');
+    expect(secureState.cleanup.warning).toContain('secure-jobs/job-2/attempt-2/inputs/source_image.bin:cleanup blocked');
+  });
+
+  it('retries secure cleanup warnings on terminal jobs', async () => {
+    const terminalJob = {
+      id: 'job-retry',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'completed',
+      completedAt: new Date('2026-04-18T21:05:00Z'),
+      secureState: JSON.stringify({
+        phase: 'completed',
+        activeAttempt: {
+          attemptId: 'attempt-retry',
+          request: {
+            mediaInputs: [
+              { storagePath: '/runpod-volume/secure-jobs/job-retry__attempt-retry__input__source_image.bin' },
+            ],
+          },
+          response: {
+            resultMediaStoragePath: '/runpod-volume/secure-jobs/job-retry__attempt-retry__output__result.bin',
+          },
+        },
+        cleanup: {
+          transportStatus: 'warning',
+          warning: 'previous cleanup failed',
+        },
+      }),
+    };
+
+    mockPrisma.job.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([terminalJob]);
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJobsOnce();
+
+    expect(mockGetJobStatus).not.toHaveBeenCalled();
+    expect(mockDeleteFile).toHaveBeenNthCalledWith(1, 'secure-jobs/job-retry__attempt-retry__input__source_image.bin');
+    expect(mockDeleteFile).toHaveBeenNthCalledWith(2, 'secure-jobs/job-retry__attempt-retry__output__result.bin');
+
+    const retryUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(retryUpdate.where.id).toBe('job-retry');
+    const secureState = JSON.parse(retryUpdate.data.secureState);
+    expect(secureState.cleanup.transportStatus).toBe('completed');
+    expect(secureState.cleanup.deletedKeys).toEqual([
+      'secure-jobs/job-retry__attempt-retry__input__source_image.bin',
+      'secure-jobs/job-retry__attempt-retry__output__result.bin',
+    ]);
   });
 });
