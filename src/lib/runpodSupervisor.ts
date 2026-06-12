@@ -17,6 +17,11 @@ const GENERATIONS_DIR = path.join(process.cwd(), 'public', 'generations');
 const STALE_NOT_FOUND_THRESHOLD_MS = 5 * 60 * 1000;
 const QUEUEING_UP_GRACE_MS = 30 * 1000;
 const DEFAULT_SUPERVISOR_INTERVAL_MS = 5000;
+const DEFAULT_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS = 8;
+const DEFAULT_FINALIZATION_DOWNLOAD_RETRY_BASE_MS = 2000;
+const DEFAULT_FINALIZATION_DOWNLOAD_RETRY_MAX_MS = 30000;
+const FAILED_FINALIZATION_RECOVERY_LIMIT = 20;
+const FAILED_FINALIZATION_RECOVERY_MAX_ATTEMPTS = 6;
 const ACTIVE_JOB_STATUSES = ['queueing_up', 'queued', 'processing', 'finalizing'] as const;
 
 type LocalStatus = 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
@@ -44,6 +49,69 @@ function parseJson(value: unknown): JsonObject {
     }
   }
   return typeof value === 'object' ? (value as JsonObject) : {};
+}
+
+function parsePositiveIntegerEnv(name: string, fallback: number) {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+function sleep(ms: number) {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getFinalizationDownloadRetryConfig() {
+  return {
+    attempts: Math.max(1, parsePositiveIntegerEnv(
+      'RUNPOD_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS',
+      DEFAULT_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS,
+    )),
+    baseDelayMs: parsePositiveIntegerEnv(
+      'RUNPOD_FINALIZATION_DOWNLOAD_RETRY_BASE_MS',
+      DEFAULT_FINALIZATION_DOWNLOAD_RETRY_BASE_MS,
+    ),
+    maxDelayMs: Math.max(0, parsePositiveIntegerEnv(
+      'RUNPOD_FINALIZATION_DOWNLOAD_RETRY_MAX_MS',
+      DEFAULT_FINALIZATION_DOWNLOAD_RETRY_MAX_MS,
+    )),
+  };
+}
+
+function getFinalizationDownloadRetryDelayMs(attemptIndex: number) {
+  const { baseDelayMs, maxDelayMs } = getFinalizationDownloadRetryConfig();
+  if (baseDelayMs <= 0 || maxDelayMs <= 0) return 0;
+  return Math.min(maxDelayMs, baseDelayMs * Math.max(1, attemptIndex * attemptIndex));
+}
+
+function isTransientSecureResultDownloadError(error: any) {
+  const raw = [
+    error?.code,
+    error?.name,
+    error?.message,
+    error?.stderr,
+    error?.error?.code,
+    error?.error?.message,
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+
+  if (!raw) return false;
+
+  return [
+    'headobject',
+    '403',
+    'forbidden',
+    'accessdenied',
+    'nosuchkey',
+    'not found',
+    '404',
+    'aws cli exited',
+    '파일 다운로드에 실패',
+  ].some(marker => raw.includes(marker));
 }
 
 function parseSecureState(value: unknown): JsonObject | null {
@@ -743,6 +811,48 @@ function reconstructSecureStateFromTransportResult(job: any, transportResult: an
   };
 }
 
+async function downloadAndDecryptResultMediaWithRetry(params: {
+  s3: S3Service;
+  masterKey: Buffer;
+  job: any;
+  attemptId: string;
+  media: any;
+}) {
+  const { attempts } = getFinalizationDownloadRetryConfig();
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await downloadAndDecryptResultMedia({
+        s3: params.s3,
+        masterKey: params.masterKey,
+        jobId: params.job.id,
+        modelId: params.job.modelId,
+        attemptId: params.attemptId,
+        media: params.media,
+      });
+    } catch (error: any) {
+      lastError = error;
+      const canRetry = attempt < attempts && isTransientSecureResultDownloadError(error);
+      if (!canRetry) {
+        throw error;
+      }
+
+      const delayMs = getFinalizationDownloadRetryDelayMs(attempt);
+      console.warn('Secure result download failed transiently; retrying finalization', {
+        jobId: params.job.id,
+        attempt,
+        attempts,
+        delayMs,
+        error: error?.message || error,
+      });
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError || new Error('Secure result download failed');
+}
+
 async function finalizeSecureTransportResult(params: {
   job: any;
   output: any;
@@ -770,6 +880,7 @@ async function finalizeSecureTransportResult(params: {
         transportResultSecureReceived: true,
         transportResultStatus: transportResult.status,
         resultMediaStoragePath: transportResult?.result_media?.storage_path || null,
+        resultMedia: transportResult?.result_media || null,
       },
     },
   };
@@ -820,11 +931,10 @@ async function finalizeSecureTransportResult(params: {
 
   try {
     const masterKey = decodeMasterKey(settings.runpod.fieldEncKeyB64);
-    const resultBuffer = await downloadAndDecryptResultMedia({
+    const resultBuffer = await downloadAndDecryptResultMediaWithRetry({
       s3,
       masterKey,
-      jobId: job.id,
-      modelId: job.modelId,
+      job,
       attemptId,
       media: transportResult.result_media,
     });
@@ -1104,6 +1214,7 @@ export async function processRunPodJobsOnce() {
     }
   }
 
+  await retryFailedSecureFinalizationsOnce();
   await retryTerminalSecureCleanupsOnce();
 
   try {
@@ -1151,6 +1262,115 @@ async function retryTerminalSecureCleanupsOnce() {
       });
     } catch (error) {
       console.error('RunPod supervisor failed to retry secure cleanup', {
+        jobId: job.id,
+        error,
+      });
+    }
+  }
+}
+
+function shouldRetryFailedSecureFinalization(job: any, secureState: JsonObject | null) {
+  if (!secureState) return false;
+  if (job.status !== 'failed') return false;
+  if (secureState?.activeAttempt?.response?.transportResultStatus !== 'completed') return false;
+  if (secureState?.activeAttempt?.finalization?.status !== 'failed') return false;
+  if (secureState?.failure?.source !== 'engui.finalization') return false;
+
+  const recovery = secureState.finalizationRecovery || {};
+  const attempts = Number(recovery.attempts || 0);
+  if (attempts >= FAILED_FINALIZATION_RECOVERY_MAX_ATTEMPTS) return false;
+
+  const nextAttemptAt = recovery.nextAttemptAt ? new Date(recovery.nextAttemptAt).getTime() : 0;
+  return !Number.isFinite(nextAttemptAt) || nextAttemptAt <= Date.now();
+}
+
+function getNextFailedFinalizationRecoveryAt(attempts: number) {
+  const delayMs = Math.min(30 * 60 * 1000, 60 * 1000 * Math.max(1, 2 ** Math.max(0, attempts - 1)));
+  return new Date(Date.now() + delayMs).toISOString();
+}
+
+function buildRecoveredSecureTransportOutput(secureState: JsonObject | null) {
+  const resultMedia = secureState?.activeAttempt?.response?.resultMedia;
+  if (!resultMedia || typeof resultMedia !== 'object') {
+    return null;
+  }
+
+  return {
+    transport_result: {
+      status: 'completed',
+      result_media: resultMedia,
+    },
+  };
+}
+
+async function retryFailedSecureFinalizationsOnce() {
+  const jobs = await prisma.job.findMany({
+    where: {
+      status: 'failed',
+      secureState: { contains: '"transportResultStatus":"completed"' },
+    },
+    orderBy: { completedAt: 'asc' },
+    take: FAILED_FINALIZATION_RECOVERY_LIMIT,
+  });
+
+  for (const job of jobs) {
+    const secureState = parseSecureState(job.secureState);
+    if (!shouldRetryFailedSecureFinalization(job, secureState)) continue;
+
+    const attempts = Number(secureState?.finalizationRecovery?.attempts || 0) + 1;
+    const recoveredOutput = buildRecoveredSecureTransportOutput(secureState);
+    const finalizationRecovery = recoveredOutput
+      ? {
+          attempts,
+          lastAttemptAt: new Date().toISOString(),
+          nextAttemptAt: getNextFailedFinalizationRecoveryAt(attempts),
+        }
+      : {
+          attempts: FAILED_FINALIZATION_RECOVERY_MAX_ATTEMPTS,
+          lastAttemptAt: new Date().toISOString(),
+          nextAttemptAt: getNextFailedFinalizationRecoveryAt(attempts),
+          skippedReason: 'result_media_metadata_missing',
+        };
+    const secureStateWithRecovery = {
+      ...secureState,
+      phase: 'finalizing',
+      finalizationRecovery,
+    };
+
+    try {
+      if (!recoveredOutput) {
+        await persistJobUpdate(job.id, {
+          secureState: JSON.stringify({
+            ...secureStateWithRecovery,
+            phase: 'failed',
+          }),
+        });
+        continue;
+      }
+
+      await persistJobUpdate(job.id, {
+        status: 'finalizing',
+        error: null,
+        secureState: JSON.stringify(secureStateWithRecovery),
+      });
+
+      const options = parseJson(job.options);
+      const { settings } = await settingsService.getSettings(job.userId || 'user-with-settings');
+      await finalizeSecureTransportResult({
+        job: {
+          ...job,
+          status: 'finalizing',
+          error: null,
+          secureState: JSON.stringify(secureStateWithRecovery),
+        },
+        output: recoveredOutput,
+        options,
+        secureState: secureStateWithRecovery,
+        settings,
+        executionMs: typeof job.executionMs === 'number' ? job.executionMs : null,
+      });
+    } catch (error) {
+      console.error('RunPod supervisor failed to retry secure finalization', {
         jobId: job.id,
         error,
       });

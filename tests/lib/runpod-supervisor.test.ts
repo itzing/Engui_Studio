@@ -109,6 +109,9 @@ import { processRunPodJob, processRunPodJobsOnce } from '@/lib/runpodSupervisor'
 describe('runpod supervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.RUNPOD_FINALIZATION_DOWNLOAD_RETRY_BASE_MS = '0';
+    process.env.RUNPOD_FINALIZATION_DOWNLOAD_RETRY_MAX_MS = '0';
+    delete process.env.RUNPOD_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS;
     mockPrisma.job.update.mockImplementation(async ({ where, data }: any) => ({ id: where.id, ...data }));
     mockPrisma.job.findMany.mockResolvedValue([]);
     mockMaybeGenerateJobThumbnail.mockResolvedValue('/generations/job-previews/wan22-job-thumb.webp');
@@ -211,6 +214,63 @@ describe('runpod supervisor', () => {
     expect(secureState.cleanup.failedKeys).toEqual([
       'secure-jobs/job-1/attempt-1/inputs/source_image.bin',
     ]);
+  });
+
+  it('retries transient secure result download failures before failing finalization', async () => {
+    const job = {
+      id: 'job-download-retry',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'processing',
+      createdAt: new Date('2026-06-12T09:00:00Z'),
+      runpodJobId: 'rp-download-retry',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'runpod_processing',
+        activeAttempt: {
+          attemptId: 'attempt-download-retry',
+          runpodJobId: 'rp-download-retry',
+          request: { mediaInputs: [] },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockGetJobStatus.mockResolvedValue({
+      status: 'COMPLETED',
+      executionTime: 2222,
+      output: {
+        transport_result: {
+          status: 'completed',
+          result_media: {
+            mime: 'image/png',
+            kind: 'image',
+            storage_path: '/runpod-volume/secure-jobs/job-download-retry__attempt-download-retry__output__result.bin',
+            envelope: { v: 1 },
+          },
+        },
+      },
+    });
+    mockDownloadAndDecryptResultMedia
+      .mockRejectedValueOnce(new Error('AWS CLI exited with code 1: An error occurred (403) when calling the HeadObject operation: Forbidden'))
+      .mockResolvedValueOnce(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJob(job);
+
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(2);
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(secureState.activeAttempt.response.resultMedia).toMatchObject({
+      storage_path: '/runpod-volume/secure-jobs/job-download-retry__attempt-download-retry__output__result.bin',
+      mime: 'image/png',
+      kind: 'image',
+    });
   });
 
   it('deletes every secure media input and encrypted result after completed finalization', async () => {
@@ -355,6 +415,7 @@ describe('runpod supervisor', () => {
 
     mockPrisma.job.findMany
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([terminalJob]);
     mockDeleteFile.mockResolvedValue(undefined);
 
@@ -372,5 +433,78 @@ describe('runpod supervisor', () => {
       'secure-jobs/job-retry__attempt-retry__input__source_image.bin',
       'secure-jobs/job-retry__attempt-retry__output__result.bin',
     ]);
+  });
+
+  it('recovers failed jobs when secure transport completed but final download failed', async () => {
+    const failedJob = {
+      id: 'job-finalization-recovery',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'failed',
+      createdAt: new Date('2026-06-12T09:00:00Z'),
+      completedAt: new Date('2026-06-12T09:02:00Z'),
+      executionMs: 3333,
+      runpodJobId: 'rp-finalization-recovery',
+      options: JSON.stringify({
+        secureMode: true,
+        transportResultStatus: 'completed',
+        error: 'HeadObject 403 Forbidden',
+      }),
+      secureState: JSON.stringify({
+        phase: 'failed',
+        activeAttempt: {
+          attemptId: 'attempt-finalization-recovery',
+          runpodJobId: 'rp-finalization-recovery',
+          request: { mediaInputs: [] },
+          response: {
+            transportResultSecureReceived: true,
+            transportResultStatus: 'completed',
+            resultMediaStoragePath: '/runpod-volume/secure-jobs/job-finalization-recovery__attempt-finalization-recovery__output__result.bin',
+            resultMedia: {
+              mime: 'image/png',
+              kind: 'image',
+              storage_path: '/runpod-volume/secure-jobs/job-finalization-recovery__attempt-finalization-recovery__output__result.bin',
+              envelope: { v: 1 },
+            },
+          },
+          finalization: {
+            status: 'failed',
+            failedAt: '2026-06-12T09:02:00.000Z',
+            error: { code: 'Error', message: 'HeadObject 403 Forbidden' },
+          },
+        },
+        failure: {
+          source: 'engui.finalization',
+          error: { code: 'Error', message: 'HeadObject 403 Forbidden' },
+          recordedAt: '2026-06-12T09:02:00.000Z',
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockPrisma.job.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([failedJob])
+      .mockResolvedValueOnce([]);
+    mockDownloadAndDecryptResultMedia.mockResolvedValue(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJobsOnce();
+
+    expect(mockGetJobStatus).not.toHaveBeenCalled();
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(1);
+
+    const recoveryUpdate = mockPrisma.job.update.mock.calls[0][0];
+    expect(recoveryUpdate.where.id).toBe('job-finalization-recovery');
+    expect(recoveryUpdate.data.status).toBe('finalizing');
+    expect(JSON.parse(recoveryUpdate.data.secureState).finalizationRecovery.attempts).toBe(1);
+
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    expect(finalUpdate.data.error).toBeNull();
   });
 });
