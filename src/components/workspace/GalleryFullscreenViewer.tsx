@@ -622,6 +622,7 @@ export function GalleryFullscreenViewer({
                     poster={customSlide.poster}
                     className="block max-h-[calc(100dvh-8rem)] max-w-full object-contain sm:max-h-[calc(100dvh-6rem)]"
                     controls
+                    loop
                     playsInline
                     preload="metadata"
                   />
