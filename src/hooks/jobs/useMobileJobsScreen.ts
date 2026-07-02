@@ -48,6 +48,7 @@ type LoadedJobsPage = {
 type MobileJobViewerItem = {
   id: string;
   url: string;
+  posterUrl?: string | null;
   favorited: false;
   type: 'image' | 'video';
   absoluteIndex: number;
@@ -106,6 +107,7 @@ export function useMobileJobsScreen() {
       .map(({ job, absoluteIndex }) => ({
         id: job.id,
         url: job.resultUrl,
+        posterUrl: job.type === 'video' ? (job.thumbnailUrl || null) : null,
         favorited: false,
         type: job.type,
         absoluteIndex,

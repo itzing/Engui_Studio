@@ -14,6 +14,7 @@ export type GalleryViewerBucket = 'common' | 'draft' | 'upscale';
 export type GalleryFullscreenViewerItem = {
   id: string;
   url: string;
+  posterUrl?: string | null;
   favorited?: boolean;
   type?: 'image' | 'video' | 'audio';
   bucket?: GalleryViewerBucket;
@@ -92,6 +93,7 @@ export function GalleryFullscreenViewer({
     src: item.url,
     alt: 'Gallery fullscreen preview',
     type: item.type ?? 'image',
+    poster: item.posterUrl || undefined,
   })), [items]);
 
   const resetVideoElement = useCallback((video: HTMLVideoElement | null) => {
@@ -617,6 +619,7 @@ export function GalleryFullscreenViewer({
                       }
                     }}
                     src={customSlide.src}
+                    poster={customSlide.poster}
                     className="block max-h-[calc(100dvh-8rem)] max-w-full object-contain sm:max-h-[calc(100dvh-6rem)]"
                     controls
                     playsInline

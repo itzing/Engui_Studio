@@ -363,6 +363,7 @@ export default function MobileGalleryScreen() {
         items={loadedViewerItems.map((asset) => ({
           id: asset.id,
           url: asset.url,
+          posterUrl: asset.posterUrl,
           favorited: asset.favorited,
           type: Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === asset.id)?.type,
           bucket: Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === asset.id)?.bucket,

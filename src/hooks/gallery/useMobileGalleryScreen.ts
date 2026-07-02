@@ -146,6 +146,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     () => loadedAssets.map((entry) => ({
       id: entry.asset.id,
       url: entry.asset.originalUrl,
+      posterUrl: entry.asset.type === 'video' ? (entry.asset.thumbnailUrl || entry.asset.previewUrl || null) : null,
       favorited: entry.asset.favorited,
       absoluteIndex: entry.absoluteIndex,
     })),

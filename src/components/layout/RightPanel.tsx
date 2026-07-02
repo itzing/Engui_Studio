@@ -2414,6 +2414,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 items={galleryViewerItems.map(asset => ({
                     id: asset.id,
                     url: asset.originalUrl,
+                    posterUrl: asset.type === 'video' ? (asset.thumbnailUrl || asset.previewUrl || null) : null,
                     favorited: asset.favorited,
                     type: asset.type,
                     bucket: asset.bucket,

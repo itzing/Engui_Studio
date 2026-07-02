@@ -20,6 +20,7 @@ Fix video handling in the gallery so portrait video thumbnails keep the correct 
 - Allow the desktop fullscreen viewer to toggle the active video with Space when focus is not inside another control.
 - Stop and rewind the active video when leaving it by gallery navigation or closing the viewer.
 - Serve generated media files with byte-range support so mobile browsers can play MP4 gallery videos reliably.
+- Pass available video thumbnails/previews into the fullscreen viewer as explicit video posters.
 - Keep image and audio gallery behavior unchanged.
 
 ## Validation
