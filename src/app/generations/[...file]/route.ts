@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 
 function contentType(filePath: string): string {
   const f = filePath.toLowerCase();
@@ -19,7 +20,72 @@ function sanitizeSegments(segments: string[]): string[] {
   return segments.filter(segment => segment && segment !== '.' && segment !== '..');
 }
 
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ file: string[] }> }) {
+function streamFileResponse(request: NextRequest, filePath: string): NextResponse {
+  const stats = fs.statSync(filePath);
+  const size = stats.size;
+  const type = contentType(filePath);
+  const range = request.headers.get('range');
+
+  const baseHeaders = {
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Content-Type': type,
+  };
+
+  if (!range) {
+    return new NextResponse(Readable.toWeb(fs.createReadStream(filePath)) as ReadableStream, {
+      status: 200,
+      headers: {
+        ...baseHeaders,
+        'Content-Length': String(size),
+      },
+    });
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (!match) {
+    return new NextResponse(null, {
+      status: 416,
+      headers: {
+        ...baseHeaders,
+        'Content-Range': `bytes */${size}`,
+      },
+    });
+  }
+
+  const [, rawStart, rawEnd] = match;
+  let start = rawStart ? Number.parseInt(rawStart, 10) : 0;
+  let end = rawEnd ? Number.parseInt(rawEnd, 10) : size - 1;
+
+  if (!rawStart && rawEnd) {
+    const suffixLength = Number.parseInt(rawEnd, 10);
+    start = Math.max(size - suffixLength, 0);
+    end = size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= size) {
+    return new NextResponse(null, {
+      status: 416,
+      headers: {
+        ...baseHeaders,
+        'Content-Range': `bytes */${size}`,
+      },
+    });
+  }
+
+  end = Math.min(end, size - 1);
+
+  return new NextResponse(Readable.toWeb(fs.createReadStream(filePath, { start, end })) as ReadableStream, {
+    status: 206,
+    headers: {
+      ...baseHeaders,
+      'Content-Length': String(end - start + 1),
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+    },
+  });
+}
+
+export async function GET(req: NextRequest, ctx: { params: Promise<{ file: string[] }> }) {
   const { file } = await ctx.params;
   const safeSegments = sanitizeSegments(Array.isArray(file) ? file : [file]);
 
@@ -35,14 +101,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ file: stri
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-      const buf = fs.readFileSync(candidate);
-      return new NextResponse(buf, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType(candidate),
-          'Cache-Control': 'public, max-age=31536000, immutable',
-        },
-      });
+      return streamFileResponse(req, candidate);
     }
   }
 
