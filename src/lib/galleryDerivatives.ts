@@ -122,7 +122,7 @@ export async function generateGalleryDerivatives(assetId: string) {
 
     if (asset.type === 'video') {
       previewUrl = previewUrl || asset.originalUrl;
-      thumbnailUrl = thumbnailUrl || await buildVideoThumbnail(asset);
+      thumbnailUrl = await buildVideoThumbnail(asset) || thumbnailUrl;
     }
 
     if (asset.type === 'audio') {
