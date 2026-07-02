@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeftRight, Loader2, Sparkles, WandSparkles } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
+import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
@@ -19,6 +20,7 @@ import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflo
 
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
+    const pathname = usePathname();
     const { t } = useI18n();
     const { setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [videoSelectedModel, setVideoSelectedModel] = useState<string>('wan22');
@@ -213,6 +215,8 @@ export default function VideoGenerationForm() {
     const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
     const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
     const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+    const isMobileCreateRoute = pathname?.startsWith('/m/');
+    const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
         return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
@@ -498,6 +502,15 @@ export default function VideoGenerationForm() {
         if (!param.dependsOn) return true;
         const dependentValue = parameterValues[param.dependsOn.parameter];
         return dependentValue === param.dependsOn.value;
+    };
+
+    const isAdvancedParameterVisible = (param: any) => {
+        const isDesktopWanSteps = currentModel.id === 'wan22'
+            && param.name === 'steps'
+            && isDesktopCreateSurface;
+
+        return ((!param.group || param.group === 'advanced') || isDesktopWanSteps)
+            && isParameterVisible(param);
     };
 
     const handleImageDrop = async (e: React.DragEvent) => {
@@ -1236,7 +1249,7 @@ export default function VideoGenerationForm() {
                             if (p.name === 'width' || p.name === 'height') {
                                 return false;
                             }
-                            return (!p.group || p.group === 'advanced') && isParameterVisible(p);
+                            return isAdvancedParameterVisible(p);
                         }).map(param => (
                             <div key={`${param.name}-${param.default}`} className="space-y-2">
                                 {param.type === 'lora-selector' ? (
