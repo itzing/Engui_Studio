@@ -34,6 +34,7 @@ interface GalleryFullscreenViewerProps {
 type SlideshowMode = 'stop' | 'loop' | 'random';
 
 type ViewerSlide = {
+  id: string;
   src: string;
   alt: string;
   type?: 'image' | 'video' | 'audio';
@@ -63,6 +64,8 @@ export function GalleryFullscreenViewer({
   const slideshowTimeoutRef = useRef<number | null>(null);
   const mobileGestureStartRef = useRef<{ x: number; y: number } | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRefsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const previousVideoItemIdRef = useRef<string | null>(null);
   const zoomRef = useRef<ZoomRef | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
@@ -85,10 +88,32 @@ export function GalleryFullscreenViewer({
   const canGoNext = safeIndex < items.length - 1;
 
   const slides = useMemo<ViewerSlide[]>(() => items.map((item) => ({
+    id: item.id,
     src: item.url,
     alt: 'Gallery fullscreen preview',
     type: item.type ?? 'image',
   })), [items]);
+
+  const resetVideoElement = useCallback((video: HTMLVideoElement | null) => {
+    if (!video) return;
+    video.pause();
+    try {
+      video.currentTime = 0;
+    } catch {
+      // Some browsers can reject seeking before metadata is ready.
+    }
+  }, []);
+
+  const resetVideoByItemId = useCallback((itemId: string | null) => {
+    if (!itemId) return;
+    resetVideoElement(videoRefsRef.current.get(itemId) || null);
+  }, [resetVideoElement]);
+
+  const resetCurrentVideo = useCallback(() => {
+    if (currentItem?.type !== 'video') return;
+    resetVideoByItemId(currentItem.id);
+    resetVideoElement(activeVideoRef.current);
+  }, [currentItem?.id, currentItem?.type, resetVideoByItemId, resetVideoElement]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -124,6 +149,9 @@ export function GalleryFullscreenViewer({
     }
 
     if (!open) {
+      resetVideoByItemId(previousVideoItemIdRef.current);
+      resetCurrentVideo();
+      previousVideoItemIdRef.current = null;
       setCurrentImageLoaded(false);
       setImageNaturalSize(null);
       setIsSlideshowPlaying(false);
@@ -134,6 +162,17 @@ export function GalleryFullscreenViewer({
 
     previousOpenRef.current = open;
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousVideoItemId = previousVideoItemIdRef.current;
+    if (previousVideoItemId && previousVideoItemId !== currentItem?.id) {
+      resetVideoByItemId(previousVideoItemId);
+    }
+
+    previousVideoItemIdRef.current = currentItem?.type === 'video' ? currentItem.id : null;
+  }, [currentItem?.id, currentItem?.type, open, resetVideoByItemId]);
 
   useEffect(() => {
     if (!open || !currentItem) {
@@ -306,13 +345,15 @@ export function GalleryFullscreenViewer({
 
   const goToPrevious = useCallback(() => {
     if (items.length <= 1 || !canGoPrevious) return;
+    resetCurrentVideo();
     onIndexChange(safeIndex - 1);
-  }, [canGoPrevious, items.length, onIndexChange, safeIndex]);
+  }, [canGoPrevious, items.length, onIndexChange, resetCurrentVideo, safeIndex]);
 
   const goToNext = useCallback(() => {
     if (items.length <= 1 || !canGoNext) return;
+    resetCurrentVideo();
     onIndexChange(safeIndex + 1);
-  }, [canGoNext, items.length, onIndexChange, safeIndex]);
+  }, [canGoNext, items.length, onIndexChange, resetCurrentVideo, safeIndex]);
 
   const isEffectivelyZoomed = useCallback(() => {
     const liveZoom = zoomRef.current?.zoom;
@@ -418,6 +459,7 @@ export function GalleryFullscreenViewer({
         setShowControls(true);
         return;
       }
+      resetCurrentVideo();
       onIndexChange(nextIndex);
     }, slideshowIntervalSeconds * 1000);
 
@@ -428,7 +470,7 @@ export function GalleryFullscreenViewer({
         slideshowTimeoutRef.current = null;
       }
     };
-  }, [currentImageLoaded, getNextSlideshowIndex, isSlideshowPlaying, onIndexChange, open, safeIndex, slideshowEnabled, slideshowIntervalSeconds]);
+  }, [currentImageLoaded, getNextSlideshowIndex, isSlideshowPlaying, onIndexChange, open, resetCurrentVideo, safeIndex, slideshowEnabled, slideshowIntervalSeconds]);
 
   const canMarkUpscale = currentItem?.type === 'image'
     && !!imageNaturalSize
@@ -491,6 +533,7 @@ export function GalleryFullscreenViewer({
       <Lightbox
         open={open}
         close={() => {
+          resetCurrentVideo();
           stopSlideshow();
           onClose();
         }}
@@ -537,6 +580,7 @@ export function GalleryFullscreenViewer({
           view: ({ index }) => {
             setCurrentZoom(1);
             if (index !== currentIndex) {
+              resetCurrentVideo();
               onIndexChange(index);
             }
           },
@@ -562,7 +606,13 @@ export function GalleryFullscreenViewer({
                 >
                   <video
                     ref={(element) => {
-                      if (customSlide.src === currentItem?.url) {
+                      if (element) {
+                        videoRefsRef.current.set(customSlide.id, element);
+                      } else {
+                        videoRefsRef.current.delete(customSlide.id);
+                      }
+
+                      if (customSlide.id === currentItem?.id) {
                         activeVideoRef.current = element;
                       }
                     }}

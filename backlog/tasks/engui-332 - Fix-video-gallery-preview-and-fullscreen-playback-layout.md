@@ -18,6 +18,7 @@ Fix video handling in the gallery so portrait video thumbnails keep the correct 
 - Render fullscreen gallery video in a centered, bounded media container on desktop and mobile.
 - Keep fullscreen gallery navigation available for video items on desktop and mobile.
 - Allow the desktop fullscreen viewer to toggle the active video with Space when focus is not inside another control.
+- Stop and rewind the active video when leaving it by gallery navigation or closing the viewer.
 - Keep image and audio gallery behavior unchanged.
 
 ## Validation
