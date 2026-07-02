@@ -16,7 +16,8 @@ Fix video handling in the gallery so portrait video thumbnails keep the correct 
 
 - Generate square video thumbnails with cover/crop behavior instead of distorting source aspect ratio.
 - Render fullscreen gallery video in a centered, bounded media container on desktop and mobile.
-- Disable invisible desktop previous/next click zones while the active item is a video so native video controls receive pointer input.
+- Keep fullscreen gallery navigation available for video items on desktop and mobile.
+- Allow the desktop fullscreen viewer to toggle the active video with Space when focus is not inside another control.
 - Keep image and audio gallery behavior unchanged.
 
 ## Validation

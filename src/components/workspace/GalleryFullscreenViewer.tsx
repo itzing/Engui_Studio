@@ -62,6 +62,7 @@ export function GalleryFullscreenViewer({
   const overlayTimeoutRef = useRef<number | null>(null);
   const slideshowTimeoutRef = useRef<number | null>(null);
   const mobileGestureStartRef = useRef<{ x: number; y: number } | null>(null);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const zoomRef = useRef<ZoomRef | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
@@ -82,10 +83,6 @@ export function GalleryFullscreenViewer({
   const slideshowEnabled = isDesktop && items.length > 1;
   const canGoPrevious = safeIndex > 0;
   const canGoNext = safeIndex < items.length - 1;
-  const showDesktopNavigationZones = isDesktop
-    && items.length > 1
-    && currentItem?.type !== 'video'
-    && currentItem?.type !== 'audio';
 
   const slides = useMemo<ViewerSlide[]>(() => items.map((item) => ({
     src: item.url,
@@ -142,12 +139,16 @@ export function GalleryFullscreenViewer({
     if (!open || !currentItem) {
       setCurrentImageLoaded(false);
       setImageNaturalSize(null);
+      activeVideoRef.current = null;
       return;
     }
 
     if (currentItem.type && currentItem.type !== 'image') {
       setCurrentImageLoaded(true);
       setImageNaturalSize(null);
+      if (currentItem.type !== 'video') {
+        activeVideoRef.current = null;
+      }
       return;
     }
 
@@ -177,6 +178,38 @@ export function GalleryFullscreenViewer({
       cancelled = true;
     };
   }, [currentItem, open]);
+
+  useEffect(() => {
+    if (!open || !isDesktop || currentItem?.type !== 'video') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+
+      const activeElement = document.activeElement;
+      const activeTag = activeElement?.tagName;
+      if (
+        activeElement instanceof HTMLElement
+        && (activeElement.isContentEditable || activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || activeTag === 'BUTTON')
+      ) {
+        return;
+      }
+
+      const video = activeVideoRef.current;
+      if (!video) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (video.paused) {
+        void video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentItem?.type, isDesktop, open]);
 
   useEffect(() => {
     return () => {
@@ -526,12 +559,13 @@ export function GalleryFullscreenViewer({
                 <div
                   className="flex h-full w-full items-center justify-center px-0 py-16 sm:px-16 sm:py-12"
                   onClick={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onTouchStart={(event) => event.stopPropagation()}
-                  onTouchMove={(event) => event.stopPropagation()}
-                  onTouchEnd={(event) => event.stopPropagation()}
                 >
                   <video
+                    ref={(element) => {
+                      if (customSlide.src === currentItem?.url) {
+                        activeVideoRef.current = element;
+                      }
+                    }}
                     src={customSlide.src}
                     className="block max-h-[calc(100dvh-8rem)] max-w-full object-contain sm:max-h-[calc(100dvh-6rem)]"
                     controls
@@ -577,7 +611,7 @@ export function GalleryFullscreenViewer({
                 </div>
               ) : null}
 
-              {showDesktopNavigationZones ? (
+              {isDesktop && items.length > 1 ? (
                 <>
                   <button
                     type="button"
