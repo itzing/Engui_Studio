@@ -48,7 +48,7 @@ export class FFmpegService {
   }
 
   /**
-   * 비디오에서 첫 번째 프레임을 추출하여 썸네일 생성
+   * Extract a representative frame from a video.
    */
   async extractThumbnail(
     inputPath: string,
@@ -62,13 +62,13 @@ export class FFmpegService {
       format = 'jpg'
     } = options;
 
-    // 출력 디렉토리 생성
+    // Create the output directory.
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // FFmpeg 경로 결정 (로컬 우선)
+    // Prefer a local FFmpeg binary when one is bundled.
     let ffmpegCommand = this.ffmpegPath;
     const localPath = path.join(process.cwd(), 'ffmpeg', 'ffmpeg.exe');
     if (fs.existsSync(localPath)) {
@@ -76,8 +76,8 @@ export class FFmpegService {
       console.log(`[FFmpeg] Using local FFmpeg for thumbnail: ${localPath}`);
     }
 
-    // FFmpeg 명령어 구성 (-y 옵션으로 자동 덮어쓰기)
-    const command = `"${ffmpegCommand}" -y -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "scale=${width}:${height}" -q:v ${quality} "${outputPath}"`;
+    const scaleFilter = `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`;
+    const command = `"${ffmpegCommand}" -y -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "${scaleFilter}" -q:v ${quality} "${outputPath}"`;
 
     try {
       console.log(`[FFmpeg] Extracting thumbnail: ${inputPath} -> ${outputPath}`);
@@ -92,7 +92,7 @@ export class FFmpegService {
         console.warn(`[FFmpeg] Warning: ${stderr}`);
       }
 
-      // 출력 파일이 생성되었는지 확인
+      // Verify that FFmpeg actually created the output file.
       if (fs.existsSync(outputPath)) {
         console.log(`[FFmpeg] Thumbnail created successfully: ${outputPath}`);
         return outputPath;

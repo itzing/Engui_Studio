@@ -82,6 +82,10 @@ export function GalleryFullscreenViewer({
   const slideshowEnabled = isDesktop && items.length > 1;
   const canGoPrevious = safeIndex > 0;
   const canGoNext = safeIndex < items.length - 1;
+  const showDesktopNavigationZones = isDesktop
+    && items.length > 1
+    && currentItem?.type !== 'video'
+    && currentItem?.type !== 'audio';
 
   const slides = useMemo<ViewerSlide[]>(() => items.map((item) => ({
     src: item.url,
@@ -519,13 +523,22 @@ export function GalleryFullscreenViewer({
 
             if (customSlide.type === 'video') {
               return (
-                <video
-                  src={customSlide.src}
-                  className="max-h-full max-w-full object-contain"
-                  controls
-                  playsInline
-                  preload="metadata"
-                />
+                <div
+                  className="flex h-full w-full items-center justify-center px-0 py-16 sm:px-16 sm:py-12"
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onTouchStart={(event) => event.stopPropagation()}
+                  onTouchMove={(event) => event.stopPropagation()}
+                  onTouchEnd={(event) => event.stopPropagation()}
+                >
+                  <video
+                    src={customSlide.src}
+                    className="block max-h-[calc(100dvh-8rem)] max-w-full object-contain sm:max-h-[calc(100dvh-6rem)]"
+                    controls
+                    playsInline
+                    preload="metadata"
+                  />
+                </div>
               );
             }
 
@@ -564,7 +577,7 @@ export function GalleryFullscreenViewer({
                 </div>
               ) : null}
 
-              {isDesktop && items.length > 1 ? (
+              {showDesktopNavigationZones ? (
                 <>
                   <button
                     type="button"

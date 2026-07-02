@@ -195,8 +195,25 @@ export async function backfillGalleryDerivatives(workspaceId: string, limit = 50
     },
   });
 
+  const staleVideoAssets = await prisma.galleryAsset.findMany({
+    where: {
+      workspaceId,
+      type: 'video',
+      derivativeStatus: 'completed',
+    },
+    orderBy: { addedToGalleryAt: 'desc' },
+    take: limit,
+    select: {
+      id: true,
+      type: true,
+      originalUrl: true,
+      previewUrl: true,
+      thumbnailUrl: true,
+    },
+  });
+
   const candidates = new Map();
-  for (const asset of [...assets, ...staleImageAssets.filter(needsGeneratedImageDerivatives)]) {
+  for (const asset of [...assets, ...staleImageAssets.filter(needsGeneratedImageDerivatives), ...staleVideoAssets]) {
     candidates.set(asset.id, asset);
   }
 
