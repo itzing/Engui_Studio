@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, File, Folder, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowUp, File, Folder, RefreshCw, Trash2, Upload } from 'lucide-react';
 
 type VolumeInfo = {
   name: string;
@@ -26,6 +26,32 @@ type DeleteLogEntry = {
   timestamp: string;
 };
 
+type MultipartUploadPart = {
+  partNumber: number;
+  eTag?: string | null;
+};
+
+type MultipartUploadInitResponse = {
+  success: boolean;
+  uploadId: string;
+  key: string;
+  partSize: number;
+  error?: string;
+};
+
+type UploadState = {
+  active: boolean;
+  fileName: string;
+  key: string;
+  uploadedBytes: number;
+  totalBytes: number;
+  fileIndex: number;
+  totalFiles: number;
+  startedAt: number;
+  status: 'idle' | 'initializing' | 'uploading' | 'completing' | 'completed' | 'cancelling' | 'failed';
+  error?: string;
+};
+
 interface S3BucketViewerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +59,7 @@ interface S3BucketViewerDialogProps {
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv']);
+const UPLOAD_CONCURRENCY = 3;
 
 function getExtension(key: string): string {
   const fileName = key.split('/').filter(Boolean).pop() || '';
@@ -63,6 +90,11 @@ function formatDate(value: string | Date): string {
   return date.toLocaleString();
 }
 
+function formatRate(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '—';
+  return `${formatSize(bytesPerSecond)}/s`;
+}
+
 function normalizePrefix(prefix: string): string {
   if (!prefix) return '';
   return prefix.endsWith('/') ? prefix : `${prefix}/`;
@@ -78,6 +110,14 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialogProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeUploadRef = useRef<{
+    aborted: boolean;
+    requests: Set<XMLHttpRequest>;
+    uploadId?: string;
+    key?: string;
+    volume?: string;
+  } | null>(null);
   const [volumes, setVolumes] = useState<VolumeInfo[]>([]);
   const [activeVolume, setActiveVolume] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>('');
@@ -95,6 +135,14 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   const [deleteLogs, setDeleteLogs] = useState<DeleteLogEntry[]>([]);
   const [copiedDeleteLog, setCopiedDeleteLog] = useState(false);
   const [error, setError] = useState<string>('');
+  const [uploadState, setUploadState] = useState<UploadState | null>(null);
+
+  const uploadActive = uploadState?.active === true;
+  const uploadPercent = uploadState && uploadState.totalBytes > 0
+    ? Math.min(100, Math.round((uploadState.uploadedBytes / uploadState.totalBytes) * 100))
+    : 0;
+  const uploadElapsedSeconds = uploadState ? Math.max(1, (Date.now() - uploadState.startedAt) / 1000) : 1;
+  const uploadRate = uploadState ? uploadState.uploadedBytes / uploadElapsedSeconds : 0;
 
   function appendDeleteLog(entry: Omit<DeleteLogEntry, 'timestamp'>) {
     setDeleteLogs((previous) => [...previous, { ...entry, timestamp: makeTimestamp() }]);
@@ -223,6 +271,249 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function postJson<T>(url: string, body: Record<string, unknown>): Promise<T> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || `Request failed: ${url}`);
+    }
+
+    return data as T;
+  }
+
+  async function uploadPartWithProgress(input: {
+    url: string;
+    blob: Blob;
+    partNumber: number;
+    partProgress: number[];
+    uploadContext: NonNullable<typeof activeUploadRef.current>;
+  }): Promise<MultipartUploadPart> {
+    return new Promise((resolve, reject) => {
+      if (input.uploadContext.aborted) {
+        reject(new Error('Upload cancelled.'));
+        return;
+      }
+
+      const xhr = new XMLHttpRequest();
+      input.uploadContext.requests.add(xhr);
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        input.partProgress[input.partNumber - 1] = event.loaded;
+        const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
+        setUploadState((previous) => previous ? { ...previous, uploadedBytes } : previous);
+      };
+
+      xhr.onload = () => {
+        input.uploadContext.requests.delete(xhr);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          input.partProgress[input.partNumber - 1] = input.blob.size;
+          const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
+          setUploadState((previous) => previous ? { ...previous, uploadedBytes } : previous);
+          resolve({
+            partNumber: input.partNumber,
+            eTag: xhr.getResponseHeader('ETag'),
+          });
+          return;
+        }
+        reject(new Error(`Part ${input.partNumber} upload failed with HTTP ${xhr.status}.`));
+      };
+
+      xhr.onerror = () => {
+        input.uploadContext.requests.delete(xhr);
+        reject(new Error(`Part ${input.partNumber} upload failed.`));
+      };
+
+      xhr.onabort = () => {
+        input.uploadContext.requests.delete(xhr);
+        reject(new Error('Upload cancelled.'));
+      };
+
+      xhr.open('PUT', input.url);
+      xhr.send(input.blob);
+    });
+  }
+
+  async function uploadSingleFile(file: File, fileIndex: number, totalFiles: number) {
+    if (!activeVolume) {
+      throw new Error('Select a bucket before uploading.');
+    }
+
+    setUploadState({
+      active: true,
+      fileName: file.name,
+      key: '',
+      uploadedBytes: 0,
+      totalBytes: file.size,
+      fileIndex,
+      totalFiles,
+      startedAt: Date.now(),
+      status: 'initializing',
+    });
+
+    const init = await postJson<MultipartUploadInitResponse>('/api/s3-storage/multipart/init', {
+      volume: activeVolume,
+      path: currentPath,
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+    });
+
+    const uploadContext = {
+      aborted: false,
+      requests: new Set<XMLHttpRequest>(),
+      uploadId: init.uploadId,
+      key: init.key,
+      volume: activeVolume,
+    };
+    activeUploadRef.current = uploadContext;
+
+    setUploadState((previous) => previous ? {
+      ...previous,
+      key: init.key,
+      status: 'uploading',
+    } : previous);
+
+    const partSize = init.partSize;
+    const totalParts = Math.ceil(file.size / partSize);
+    const partProgress = Array.from({ length: totalParts }, () => 0);
+    const completedParts: MultipartUploadPart[] = [];
+    let nextPartNumber = 1;
+
+    const uploadPart = async (partNumber: number): Promise<MultipartUploadPart> => {
+      const start = (partNumber - 1) * partSize;
+      const end = Math.min(start + partSize, file.size);
+      const blob = file.slice(start, end);
+      let lastError: unknown;
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        if (uploadContext.aborted) {
+          throw new Error('Upload cancelled.');
+        }
+
+        try {
+          const signed = await postJson<{ success: boolean; url: string }>('/api/s3-storage/multipart/part', {
+            volume: activeVolume,
+            key: init.key,
+            uploadId: init.uploadId,
+            partNumber,
+          });
+
+          return await uploadPartWithProgress({
+            url: signed.url,
+            blob,
+            partNumber,
+            partProgress,
+            uploadContext,
+          });
+        } catch (partError) {
+          lastError = partError;
+          partProgress[partNumber - 1] = 0;
+          if (attempt < 3) {
+            await sleep(attempt * 1000);
+          }
+        }
+      }
+
+      throw lastError instanceof Error ? lastError : new Error(`Part ${partNumber} upload failed.`);
+    };
+
+    const worker = async () => {
+      while (nextPartNumber <= totalParts) {
+        const partNumber = nextPartNumber;
+        nextPartNumber += 1;
+        const part = await uploadPart(partNumber);
+        completedParts.push(part);
+      }
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalParts) }, () => worker())
+      );
+
+      if (uploadContext.aborted) {
+        throw new Error('Upload cancelled.');
+      }
+
+      setUploadState((previous) => previous ? { ...previous, status: 'completing' } : previous);
+      await postJson('/api/s3-storage/multipart/complete', {
+        volume: activeVolume,
+        key: init.key,
+        uploadId: init.uploadId,
+        parts: completedParts.sort((a, b) => a.partNumber - b.partNumber),
+      });
+
+      setUploadState((previous) => previous ? {
+        ...previous,
+        uploadedBytes: file.size,
+        status: 'completed',
+        active: false,
+      } : previous);
+    } catch (uploadError) {
+      if (uploadContext.uploadId && uploadContext.key) {
+        try {
+          await postJson('/api/s3-storage/multipart/abort', {
+            volume: activeVolume,
+            key: uploadContext.key,
+            uploadId: uploadContext.uploadId,
+          });
+        } catch {
+          // Best-effort cleanup only. Keep the original upload failure visible.
+        }
+      }
+      throw uploadError;
+    } finally {
+      if (activeUploadRef.current === uploadContext) {
+        activeUploadRef.current = null;
+      }
+    }
+  }
+
+  async function handleUploadFiles(files: File[]) {
+    if (!activeVolume || files.length === 0 || uploadActive) return;
+
+    setError('');
+
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        await uploadSingleFile(files[index], index + 1, files.length);
+      }
+      await loadItems(activeVolume, currentPath);
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Upload failed.';
+      setUploadState((previous) => previous ? {
+        ...previous,
+        active: false,
+        status: message.includes('cancelled') ? 'cancelling' : 'failed',
+        error: message,
+      } : {
+        active: false,
+        fileName: '',
+        key: '',
+        uploadedBytes: 0,
+        totalBytes: 0,
+        fileIndex: 0,
+        totalFiles: files.length,
+        startedAt: Date.now(),
+        status: 'failed',
+        error: message,
+      });
+      setError(message);
+    }
+  }
+
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    void handleUploadFiles(files);
   }
 
   function handleVolumeChange(nextVolume: string) {
@@ -469,6 +760,30 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     }));
   }
 
+  async function handleCancelUpload() {
+    const context = activeUploadRef.current;
+    if (!context) return;
+
+    context.aborted = true;
+    setUploadState((previous) => previous ? { ...previous, status: 'cancelling' } : previous);
+
+    for (const request of context.requests) {
+      request.abort();
+    }
+
+    if (context.volume && context.key && context.uploadId) {
+      try {
+        await postJson('/api/s3-storage/multipart/abort', {
+          volume: context.volume,
+          key: context.key,
+          uploadId: context.uploadId,
+        });
+      } catch {
+        // Best effort. The active upload path will also try to abort.
+      }
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
@@ -480,16 +795,32 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 variant="outline"
                 size="sm"
                 onClick={() => activeVolume && loadItems(activeVolume, currentPath)}
-                disabled={!activeVolume || isLoading || isDeleting}
+                disabled={!activeVolume || isLoading || isDeleting || uploadActive}
               >
                 <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!activeVolume || isDeleting || uploadActive}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Upload
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileInputChange}
+              />
+              <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleDeleteSelected}
-                disabled={selectedKeys.length === 0 || isDeleting}
+                disabled={selectedKeys.length === 0 || isDeleting || uploadActive}
               >
                 <Trash2 className="w-4 h-4 mr-1" />
                 Delete ({selectedKeys.length})
@@ -556,13 +887,58 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 </div>
               </div>
             )}
+            {uploadState && (
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate">
+                    Upload {uploadState.fileIndex}/{uploadState.totalFiles}: {uploadState.fileName || 'file'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="whitespace-nowrap">
+                      {uploadState.status === 'completed'
+                        ? 'Completed'
+                        : uploadState.status === 'failed'
+                          ? 'Failed'
+                          : uploadState.status === 'cancelling'
+                            ? 'Cancelling'
+                            : uploadState.status}
+                    </span>
+                    {uploadActive && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => void handleCancelUpload()}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-background">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${uploadPercent}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                  <span className="break-all">{uploadState.key || normalizePrefix(currentPath) || 'root'}</span>
+                  <span>
+                    {formatSize(uploadState.uploadedBytes)} / {formatSize(uploadState.totalBytes)} · {uploadPercent}% · {formatRate(uploadRate)}
+                  </span>
+                </div>
+                {uploadState.error && (
+                  <div className="text-red-500">{uploadState.error}</div>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span>Bucket:</span>
               <select
                 value={activeVolume}
                 onChange={(event) => handleVolumeChange(event.target.value)}
                 className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-                disabled={isDeleting}
+                disabled={isDeleting || uploadActive}
               >
                 {volumes.map((volume) => (
                   <option key={volume.name} value={volume.name}>
@@ -581,7 +957,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   setSelectedKeys([]);
                   setPreviewKey('');
                 }}
-                disabled={!activeVolume || isDeleting}
+                disabled={!activeVolume || isDeleting || uploadActive}
               >
                 Root
               </Button>
@@ -597,7 +973,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                       setSelectedKeys([]);
                       setPreviewKey('');
                     }}
-                    disabled={isDeleting}
+                    disabled={isDeleting || uploadActive}
                   >
                     {segment.label}
                   </Button>
@@ -620,7 +996,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={handleToggleSelectAllVisible}
-                  disabled={visibleKeys.length === 0 || isDeleting}
+                  disabled={visibleKeys.length === 0 || isDeleting || uploadActive}
                 >
                   {allVisibleSelected ? 'Clear visible' : 'Select visible'}
                 </Button>
@@ -629,7 +1005,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   size="sm"
                   className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                   onClick={handleDeleteCurrentFolder}
-                  disabled={!currentPath || isDeleting}
+                  disabled={!currentPath || isDeleting || uploadActive}
                 >
                   <Trash2 className="w-3 h-3 mr-1" />
                   Delete folder
@@ -639,7 +1015,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={handleGoUp}
-                  disabled={!currentPath || isDeleting}
+                  disabled={!currentPath || isDeleting || uploadActive}
                 >
                   <ArrowUp className="w-3 h-3 mr-1" />
                   Up
@@ -673,14 +1049,14 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                           checked={isChecked}
                           onChange={(event) => toggleSelect(item.key, event.target.checked)}
                           className="h-3.5 w-3.5 rounded border-border"
-                          disabled={isDeleting}
+                          disabled={isDeleting || uploadActive}
                         />
 
                         <button
                           type="button"
                           className="flex items-center gap-2 flex-1 min-w-0 text-left"
                           onClick={() => {
-                            if (isDeleting) return;
+                            if (isDeleting || uploadActive) return;
                             if (item.type === 'directory') {
                               handleOpenFolder(item.key);
                             } else {
