@@ -16,8 +16,9 @@ The immediate target is uploading Wan/DaSiWa LoRA or checkpoint-style files arou
 
 - Desktop Bucket Viewer exposes an `Upload` action for the current folder.
 - The browser slices the selected local file into large parts.
-- The backend creates an S3 multipart upload and signs individual upload-part URLs.
-- The browser sends each part directly to the RunPod S3 endpoint.
+- The backend creates an S3 multipart upload.
+- If the RunPod endpoint allows browser CORS, the browser can send each part directly to the RunPod S3 endpoint.
+- If the RunPod endpoint blocks browser CORS, the browser sends each part to a same-origin streaming proxy route and Engui relays the part stream to RunPod S3 without buffering the full file.
 - The backend completes or aborts the multipart upload.
 - Bucket Viewer refreshes the current folder when upload completes.
 
@@ -28,7 +29,8 @@ Included:
 - Desktop Bucket Viewer UI only.
 - Local file upload from the user's browser.
 - Single or multiple selected local files uploaded sequentially.
-- Direct multipart upload to the selected volume/current folder.
+- Multipart upload to the selected volume/current folder.
+- Same-origin streaming multipart-part proxy for S3-compatible endpoints that do not expose CORS headers.
 - Progress display, speed, retry, and cancel.
 
 Excluded:
@@ -48,6 +50,10 @@ Add routes under `/api/s3-storage/multipart`:
 - `POST /part`
   - Input: `volume`, `key`, `uploadId`, `partNumber`
   - Output: signed `url`
+- `PUT /proxy-part`
+  - Query: `volume`, `key`, `uploadId`, `partNumber`
+  - Body: raw file part stream
+  - Output: `partNumber`, optional `eTag`
 - `POST /complete`
   - Input: `volume`, `key`, `uploadId`, optional uploaded `parts`
   - Output: final `key`, `filePath`, `s3Url`
@@ -55,11 +61,12 @@ Add routes under `/api/s3-storage/multipart`:
   - Input: `volume`, `key`, `uploadId`
   - Output: success
 
-The backend must only sign/control multipart state. It must not receive the large file body.
+The preferred backend path only signs/controls multipart state. For RunPod endpoints that block browser CORS, the fallback backend path may receive one file part at a time as a stream, but must not call `arrayBuffer()` or buffer the full file.
 
 ## Notes
 
 - Use path-style S3 addressing for RunPod-compatible endpoints.
+- RunPod network volume S3 endpoints may not answer browser CORS preflight requests. In that case, the same-origin streaming proxy is required.
 - Do not require reading the `ETag` response header in the browser; some S3-compatible CORS setups do not expose it. The complete route can list uploaded parts when ETags are missing.
 - Use a conservative part size, initially 64 MiB, to keep a 14 GB upload far below the S3 10,000 part limit.
 - If the selected path is `loras/`, the user should run the existing LoRA Manager "Sync from S3" action after upload so records are created with the correct workspace context.

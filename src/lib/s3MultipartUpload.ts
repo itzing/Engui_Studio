@@ -7,6 +7,7 @@ import {
   UploadPartCommand,
   type CompletedPart,
 } from '@aws-sdk/client-s3';
+import type { Readable } from 'stream';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import SettingsService from '@/lib/settingsService';
 
@@ -82,6 +83,7 @@ export async function getMultipartUploadTarget(volume: string): Promise<Multipar
     endpoint: multipartSettings.endpointUrl,
     region: multipartSettings.region,
     forcePathStyle: true,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
     credentials: {
       accessKeyId: multipartSettings.accessKeyId,
       secretAccessKey: multipartSettings.secretAccessKey,
@@ -149,6 +151,36 @@ export async function createUploadPartUrl(input: {
   });
 
   return { url };
+}
+
+export async function uploadMultipartPartStream(input: {
+  volume: string;
+  key: string;
+  uploadId: string;
+  partNumber: number;
+  body: Readable;
+  contentLength?: number;
+}) {
+  if (!Number.isInteger(input.partNumber) || input.partNumber < 1 || input.partNumber > 10000) {
+    throw new Error('Part number must be between 1 and 10000.');
+  }
+
+  const target = await getMultipartUploadTarget(input.volume);
+  const result = await target.client.send(
+    new UploadPartCommand({
+      Bucket: target.bucketName,
+      Key: input.key,
+      UploadId: input.uploadId,
+      PartNumber: input.partNumber,
+      Body: input.body,
+      ContentLength: input.contentLength,
+    })
+  );
+
+  return {
+    partNumber: input.partNumber,
+    eTag: result.ETag || null,
+  };
 }
 
 async function listCompletedParts(input: {

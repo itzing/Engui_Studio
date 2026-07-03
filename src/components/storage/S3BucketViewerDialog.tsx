@@ -314,12 +314,19 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       xhr.onload = () => {
         input.uploadContext.requests.delete(xhr);
         if (xhr.status >= 200 && xhr.status < 300) {
+          const responseBody = (() => {
+            try {
+              return xhr.responseText ? JSON.parse(xhr.responseText) as { eTag?: string | null } : {};
+            } catch {
+              return {};
+            }
+          })();
           input.partProgress[input.partNumber - 1] = input.blob.size;
           const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
           setUploadState((previous) => previous ? { ...previous, uploadedBytes } : previous);
           resolve({
             partNumber: input.partNumber,
-            eTag: xhr.getResponseHeader('ETag'),
+            eTag: responseBody.eTag || xhr.getResponseHeader('ETag'),
           });
           return;
         }
@@ -337,6 +344,7 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
       };
 
       xhr.open('PUT', input.url);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.send(input.blob);
     });
   }
@@ -399,15 +407,15 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
         }
 
         try {
-          const signed = await postJson<{ success: boolean; url: string }>('/api/s3-storage/multipart/part', {
+          const params = new URLSearchParams({
             volume: activeVolume,
             key: init.key,
             uploadId: init.uploadId,
-            partNumber,
+            partNumber: String(partNumber),
           });
 
           return await uploadPartWithProgress({
-            url: signed.url,
+            url: `/api/s3-storage/multipart/proxy-part?${params.toString()}`,
             blob,
             partNumber,
             partProgress,
