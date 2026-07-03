@@ -59,7 +59,7 @@ interface S3BucketViewerDialogProps {
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv']);
-const UPLOAD_CONCURRENCY = 3;
+const UPLOAD_CONCURRENCY = 1;
 
 function getExtension(key: string): string {
   const fileName = key.split('/').filter(Boolean).pop() || '';

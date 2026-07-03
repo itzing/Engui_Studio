@@ -183,6 +183,35 @@ export async function uploadMultipartPartStream(input: {
   };
 }
 
+export async function uploadMultipartPartBuffer(input: {
+  volume: string;
+  key: string;
+  uploadId: string;
+  partNumber: number;
+  body: Buffer;
+}) {
+  if (!Number.isInteger(input.partNumber) || input.partNumber < 1 || input.partNumber > 10000) {
+    throw new Error('Part number must be between 1 and 10000.');
+  }
+
+  const target = await getMultipartUploadTarget(input.volume);
+  const result = await target.client.send(
+    new UploadPartCommand({
+      Bucket: target.bucketName,
+      Key: input.key,
+      UploadId: input.uploadId,
+      PartNumber: input.partNumber,
+      Body: input.body,
+      ContentLength: input.body.byteLength,
+    })
+  );
+
+  return {
+    partNumber: input.partNumber,
+    eTag: result.ETag || null,
+  };
+}
+
 async function listCompletedParts(input: {
   client: S3Client;
   bucketName: string;

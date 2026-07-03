@@ -18,7 +18,7 @@ The immediate target is uploading Wan/DaSiWa LoRA or checkpoint-style files arou
 - The browser slices the selected local file into large parts.
 - The backend creates an S3 multipart upload.
 - If the RunPod endpoint allows browser CORS, the browser can send each part directly to the RunPod S3 endpoint.
-- If the RunPod endpoint blocks browser CORS, the browser sends each part to a same-origin streaming proxy route and Engui relays the part stream to RunPod S3 without buffering the full file.
+- If the RunPod endpoint blocks browser CORS, the browser sends each part to a same-origin proxy route and Engui relays that single part to RunPod S3 without buffering the full file.
 - The backend completes or aborts the multipart upload.
 - Bucket Viewer refreshes the current folder when upload completes.
 
@@ -30,7 +30,7 @@ Included:
 - Local file upload from the user's browser.
 - Single or multiple selected local files uploaded sequentially.
 - Multipart upload to the selected volume/current folder.
-- Same-origin streaming multipart-part proxy for S3-compatible endpoints that do not expose CORS headers.
+- Same-origin multipart-part proxy for S3-compatible endpoints that do not expose CORS headers.
 - Progress display, speed, retry, and cancel.
 
 Excluded:
@@ -52,7 +52,7 @@ Add routes under `/api/s3-storage/multipart`:
   - Output: signed `url`
 - `PUT /proxy-part`
   - Query: `volume`, `key`, `uploadId`, `partNumber`
-  - Body: raw file part stream
+  - Body: raw file part bytes
   - Output: `partNumber`, optional `eTag`
 - `POST /complete`
   - Input: `volume`, `key`, `uploadId`, optional uploaded `parts`
@@ -61,7 +61,7 @@ Add routes under `/api/s3-storage/multipart`:
   - Input: `volume`, `key`, `uploadId`
   - Output: success
 
-The preferred backend path only signs/controls multipart state. For RunPod endpoints that block browser CORS, the fallback backend path may receive one file part at a time as a stream, but must not call `arrayBuffer()` or buffer the full file.
+The preferred backend path only signs/controls multipart state. For RunPod endpoints that block browser CORS, the fallback backend path may receive and buffer one file part at a time so AWS SDK retries remain safe, but it must never buffer the full selected file.
 
 ## Notes
 
@@ -69,4 +69,5 @@ The preferred backend path only signs/controls multipart state. For RunPod endpo
 - RunPod network volume S3 endpoints may not answer browser CORS preflight requests. In that case, the same-origin streaming proxy is required.
 - Do not require reading the `ETag` response header in the browser; some S3-compatible CORS setups do not expose it. The complete route can list uploaded parts when ETags are missing.
 - Use a conservative part size, initially 64 MiB, to keep a 14 GB upload far below the S3 10,000 part limit.
+- Use conservative upload concurrency through the proxy. Sequential part upload is slower, but avoids compounding transient RunPod/Next streaming failures.
 - If the selected path is `loras/`, the user should run the existing LoRA Manager "Sync from S3" action after upload so records are created with the correct workspace context.

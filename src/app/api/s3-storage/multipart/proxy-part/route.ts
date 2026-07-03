@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Readable } from 'stream';
-import { uploadMultipartPartStream } from '@/lib/s3MultipartUpload';
+import { uploadMultipartPartBuffer } from '@/lib/s3MultipartUpload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,20 +14,19 @@ export async function PUT(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const contentLengthHeader = request.headers.get('content-length');
-    const contentLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
+    const body = Buffer.from(await request.arrayBuffer());
 
-    const result = await uploadMultipartPartStream({
+    const result = await uploadMultipartPartBuffer({
       volume: searchParams.get('volume') || '',
       key: searchParams.get('key') || '',
       uploadId: searchParams.get('uploadId') || '',
       partNumber: Number(searchParams.get('partNumber') || 0),
-      body: Readable.fromWeb(request.body as unknown as import('stream/web').ReadableStream),
-      contentLength: Number.isFinite(contentLength) && contentLength && contentLength > 0 ? contentLength : undefined,
+      body,
     });
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
+    console.error('[s3-storage] multipart proxy part failed', error);
     return NextResponse.json(
       {
         success: false,
