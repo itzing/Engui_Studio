@@ -68,6 +68,7 @@ interface RunPodConfig {
     'flux-kontext': string; // FLUX KONTEXT endpoint 추가
     'flux-krea': string; // FLUX KREA endpoint 추가
     wan22: string; // WAN 2.2 endpoint 추가
+    'wan22-t2v': string; // WAN 2.2 T2V endpoint
     'wan-animate': string; // WAN Animate endpoint 추가
     'infinite-talk': string; // Infinite Talk endpoint 추가
     upscale: string; // Upscale endpoint
@@ -160,6 +161,7 @@ class SettingsService {
             'flux-kontext': '', // FLUX KONTEXT endpoint 추가
             'flux-krea': '', // FLUX KREA endpoint 추가
             wan22: '', // WAN 2.2 endpoint 추가
+            'wan22-t2v': '', // WAN 2.2 T2V endpoint
             'wan-animate': '', // WAN Animate endpoint 추가
             'infinite-talk': '', // Infinite Talk endpoint 추가
             upscale: '', // Upscale endpoint
@@ -248,7 +250,7 @@ class SettingsService {
               settings.runpod.apiKey = value;
             } else if (setting.configKey.startsWith('endpoints.')) {
               const endpointType = setting.configKey.split('.')[1];
-              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
+              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan22-t2v', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
                 settings.runpod.endpoints[endpointType as keyof typeof settings.runpod.endpoints] = value;
               }
             } else if (setting.configKey === 'generateTimeout') {
@@ -732,6 +734,7 @@ class SettingsService {
       'endpoints.flux-kontext',
       'endpoints.flux-krea',
       'endpoints.wan22',
+      'endpoints.wan22-t2v',
       'endpoints.wan-animate',
       'endpoints.infinite-talk',
       'endpoints.video-upscale',

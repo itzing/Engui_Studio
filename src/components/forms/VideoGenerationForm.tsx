@@ -204,7 +204,7 @@ export default function VideoGenerationForm() {
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
         && !!settings.promptHelper?.local?.model?.trim();
-    const isWanPromptHelperVisible = currentModel?.id === 'wan22' && currentModel.inputs.includes('text');
+    const isWanPromptHelperVisible = ['wan22', 'wan22-t2v'].includes(currentModel?.id || '') && currentModel.inputs.includes('text');
     const negativePromptParameterName = currentModel?.parameters.find(
         (param) => param.name === 'negativePrompt' || param.name === 'negative_prompt'
     )?.name;

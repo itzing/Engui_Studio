@@ -113,7 +113,7 @@ export async function submitGenerationFormData(formData: FormData) {
             })()
             : null;
 
-        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'];
+        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'];
         const usesSecureTransport = secureModelIds.includes(modelId);
 
         // Process input files based on model.inputs
@@ -519,7 +519,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 }, { status: 400 });
             }
 
-            const requiresSecureKey = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan-animate', 'qwen-image-edit'].includes(modelId);
+            const requiresSecureKey = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'].includes(modelId);
             if (requiresSecureKey && !settings.runpod.fieldEncKeyB64?.trim()) {
                 return NextResponse.json({
                     error: 'RunPod field encryption key is not configured',

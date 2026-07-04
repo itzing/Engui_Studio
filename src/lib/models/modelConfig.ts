@@ -150,6 +150,27 @@ export const MODELS: ModelConfig[] = [
         ]
     },
     {
+        id: 'wan22-t2v',
+        name: 'Wan 2.2 T2V',
+        provider: 'Wan',
+        type: 'video',
+        inputs: ['text'],
+        api: {
+            type: 'runpod',
+            endpoint: 'wan22-t2v'
+        },
+        capabilities: {},
+        parameters: [
+            { name: 'width', label: 'Width', type: 'number', default: 832, min: 256, max: 2048, step: 64, group: 'basic' },
+            { name: 'height', label: 'Height', type: 'number', default: 480, min: 256, max: 2048, step: 64, group: 'basic' },
+            { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },
+            { name: 'seed', label: 'Seed', type: 'number', default: 42, group: 'advanced' },
+            { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
+            { name: 'steps', label: 'Steps', type: 'number', default: 4, min: 4, max: 12, group: 'advanced' },
+            { name: 'length', label: 'Length', type: 'number', default: 81, min: 81, max: 161, group: 'advanced' },
+        ]
+    },
+    {
         id: 'wan-animate',
         name: 'Wan Animate',
         provider: 'Wan',

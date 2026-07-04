@@ -261,6 +261,23 @@ class RunPodService {
         
         return { input: wan22Input };
 
+      case 'wan22-t2v':
+        return {
+          input: {
+            mode: 't2v',
+            ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
+            ...(!input._secure && input.negativePrompt ? { negativePrompt: input.negativePrompt } : {}),
+            ...(input._secure && { _secure: input._secure }),
+            ...(input.transport_request && { transport_request: input.transport_request }),
+            width: input.width,
+            height: input.height,
+            seed: input.seed,
+            cfg: input.cfg,
+            length: input.length,
+            steps: input.steps,
+          }
+        };
+
       case 'wan-animate':
         return {
           input: {
