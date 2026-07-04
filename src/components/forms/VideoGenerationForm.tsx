@@ -505,11 +505,11 @@ export default function VideoGenerationForm() {
     };
 
     const isAdvancedParameterVisible = (param: any) => {
-        const isDesktopWanSteps = currentModel.id === 'wan22'
+        const isWanSteps = currentModel.id === 'wan22'
             && param.name === 'steps'
-            && isDesktopCreateSurface;
+            && (isDesktopCreateSurface || isPhoneLayout || isMobileCreateRoute);
 
-        return ((!param.group || param.group === 'advanced') || isDesktopWanSteps)
+        return ((!param.group || param.group === 'advanced') || isWanSteps)
             && isParameterVisible(param);
     };
 
