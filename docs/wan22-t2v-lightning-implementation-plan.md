@@ -17,6 +17,7 @@ The new model must be independent from the current Wan 2.2 I2V endpoint so that 
 - Live RunPod generation jobs are excluded unless explicitly approved.
 - First model candidate: `lightx2v/Wan2.2-Lightning`, folder `Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1`.
 - First provider image tag: `itzing/wan22-t2v-models:v1`.
+- First provider image digest: `sha256:5ff45f7b58261dae85f9492d816c82a4684226973a202ed5f1b5e9104b079875`.
 
 ## Model Choice
 

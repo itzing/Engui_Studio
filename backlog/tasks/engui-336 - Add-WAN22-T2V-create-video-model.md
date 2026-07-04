@@ -1,7 +1,7 @@
 ---
 id: engui-336
 title: Add WAN22 T2V Create Video model
-status: pending
+status: done
 created: 2026-07-04T20:11:00Z
 labels: [video, runpod, wan22, t2v, desktop, mobile]
 ---
@@ -23,4 +23,6 @@ Add a separate `Wan 2.2 T2V` model to Create Video, backed by a separate `wan22-
 ## Notes
 
 - Implementation plan: `docs/wan22-t2v-lightning-implementation-plan.md`.
+- Engui commit: `fb465ed`
+- Validation completed: production build, service restart, `/` 200, `/m/create` 200.
 - Rollback: revert the Engui integration commit, rebuild, and restart `engui-studio.service`.
