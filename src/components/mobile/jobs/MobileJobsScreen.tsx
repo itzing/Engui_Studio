@@ -55,6 +55,26 @@ function PlaceholderRow() {
   return <div className="h-[92px] rounded-xl border border-border/60 bg-muted/10 animate-pulse" />;
 }
 
+function JobRowThumbnail({ job }: { job: MobileJobsScreenItem }) {
+  if (job.thumbnailUrl) {
+    return (
+      <img
+        src={job.thumbnailUrl}
+        alt={job.modelId}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+
+  if (job.type === 'image') {
+    return <ImageIcon className="h-5 w-5 text-muted-foreground" />;
+  }
+
+  return <Rows3 className="h-5 w-5 text-muted-foreground" />;
+}
+
 function SelectedJobActions({
   job,
   onDelete,
@@ -154,15 +174,7 @@ const JobRow = React.memo(function JobRow({
       className={`relative flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${isSelected ? 'border-primary/40 bg-primary/10 ring-1 ring-inset ring-primary/40' : 'border-border/60 bg-background/40'}`}
     >
       <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/20">
-        {job.thumbnailUrl || job.resultUrl ? (
-          job.type === 'video' ? (
-            <video src={job.resultUrl || undefined} className="h-full w-full object-cover" muted playsInline />
-          ) : job.type === 'image' ? (
-            <img src={job.thumbnailUrl || job.resultUrl || ''} alt={job.modelId} className="h-full w-full object-cover" />
-          ) : (
-            <Rows3 className="h-5 w-5 text-muted-foreground" />
-          )
-        ) : job.type === 'image' ? <ImageIcon className="h-5 w-5 text-muted-foreground" /> : <Rows3 className="h-5 w-5 text-muted-foreground" />}
+        <JobRowThumbnail job={job} />
       </div>
 
       <div className="min-w-0 flex-1 pr-16">
