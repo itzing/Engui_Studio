@@ -8,8 +8,16 @@ export type LoraFileLike = {
 
 type LoraComponent = 'high' | 'low' | null;
 
+export type LoraPair<T extends LoraFileLike> = {
+  key: string;
+  baseName: string;
+  high?: T;
+  low?: T;
+  isComplete: boolean;
+};
+
 function stripExtension(value: string) {
-  return value.replace(/\.[^.]+$/, '');
+  return value.replace(/\.(safetensors|ckpt)$/i, '');
 }
 
 function normalizeToken(value: string) {
@@ -28,12 +36,22 @@ function getParentPath(lora: LoraFileLike) {
   return parts.slice(0, -1).join('/');
 }
 
+function getParentName(lora: LoraFileLike) {
+  const parentPath = getParentPath(lora);
+  const parts = parentPath.split('/').filter(Boolean);
+  return parts[parts.length - 1] || '';
+}
+
 function getLoraComponent(lora: LoraFileLike): LoraComponent {
   const text = normalizeToken(`${getFileStem(lora)} ${lora.name || ''}`);
   const tokens = text.split(/\s+/).filter(Boolean);
-  if (tokens.includes('high')) return 'high';
-  if (tokens.includes('low')) return 'low';
+  if (tokens.some((token) => token === 'high' || token === 'highnoise')) return 'high';
+  if (tokens.some((token) => token === 'low' || token === 'lownoise')) return 'low';
   return null;
+}
+
+function isPairComponentToken(token: string) {
+  return token === 'high' || token === 'low' || token === 'highnoise' || token === 'lownoise' || token === 'noise';
 }
 
 function getLoraPairKey(lora: LoraFileLike) {
@@ -41,27 +59,45 @@ function getLoraPairKey(lora: LoraFileLike) {
   const stem = getFileStem(lora);
   const stemWithoutComponent = normalizeToken(stem)
     .split(/\s+/)
-    .filter((token) => token !== 'high' && token !== 'low')
+    .filter((token) => !isPairComponentToken(token))
     .join(' ');
 
   if (parentPath) {
     return `${parentPath.toLowerCase()}::${stemWithoutComponent}`;
   }
 
-  const nameWithoutComponent = normalizeToken(lora.name || '')
+  const nameWithoutComponent = normalizeToken(stripExtension(lora.name || ''))
     .split(/\s+/)
-    .filter((token) => token !== 'high' && token !== 'low')
+    .filter((token) => !isPairComponentToken(token))
     .join(' ');
 
   return nameWithoutComponent || stemWithoutComponent;
+}
+
+function getLoraPairBaseName(lora: LoraFileLike) {
+  const parentName = getParentName(lora);
+  if (parentName && parentName.toLowerCase() !== 'loras') {
+    return parentName;
+  }
+
+  const nameWithoutComponent = normalizeToken(stripExtension(lora.name || ''))
+    .split(/\s+/)
+    .filter((token) => !isPairComponentToken(token))
+    .join(' ');
+  if (nameWithoutComponent) return nameWithoutComponent;
+
+  return normalizeToken(getFileStem(lora))
+    .split(/\s+/)
+    .filter((token) => !isPairComponentToken(token))
+    .join(' ');
 }
 
 export function getLoraSearchText(lora: LoraFileLike) {
   return `${lora.fileName || ''} ${lora.name || ''} ${lora.s3Path || ''}`.toLowerCase();
 }
 
-export function getVideoLoraPathSet(loras: LoraFileLike[]) {
-  const groups = new Map<string, { high: LoraFileLike[]; low: LoraFileLike[] }>();
+export function buildLoraPairs<T extends LoraFileLike>(loras: T[]) {
+  const pairs = new Map<string, LoraPair<T>>();
 
   for (const lora of loras) {
     const component = getLoraComponent(lora);
@@ -70,15 +106,32 @@ export function getVideoLoraPathSet(loras: LoraFileLike[]) {
     const key = getLoraPairKey(lora);
     if (!key) continue;
 
-    const group = groups.get(key) || { high: [], low: [] };
-    group[component].push(lora);
-    groups.set(key, group);
+    const pair = pairs.get(key) || {
+      key,
+      baseName: getLoraPairBaseName(lora),
+      high: undefined,
+      low: undefined,
+      isComplete: false,
+    };
+
+    pair[component] = lora;
+    pair.isComplete = !!(pair.high && pair.low);
+    pairs.set(key, pair);
   }
 
+  return Array.from(pairs.values()).sort((a, b) => {
+    if (a.isComplete && !b.isComplete) return -1;
+    if (!a.isComplete && b.isComplete) return 1;
+    return a.baseName.localeCompare(b.baseName);
+  });
+}
+
+export function getVideoLoraPathSet(loras: LoraFileLike[]) {
   const videoPaths = new Set<string>();
-  for (const group of groups.values()) {
-    if (group.high.length === 0 || group.low.length === 0) continue;
-    [...group.high, ...group.low].forEach((lora) => videoPaths.add(lora.s3Path));
+  for (const pair of buildLoraPairs(loras)) {
+    if (!pair.high || !pair.low) continue;
+    videoPaths.add(pair.high.s3Path);
+    videoPaths.add(pair.low.s3Path);
   }
 
   return videoPaths;

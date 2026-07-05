@@ -7,9 +7,8 @@ import { Search, Package, ChevronDown, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n/context';
-import { getLoraSearchText } from '@/lib/lora/modelFilters';
+import { buildLoraPairs, getLoraSearchText } from '@/lib/lora/modelFilters';
 
 export interface LoRAFile {
   id: string;
@@ -23,13 +22,6 @@ export interface LoRAFile {
   uploadedAt: string;
   workspaceId?: string;
   lastUsed?: string;
-}
-
-interface LoRAPair {
-  baseName: string;
-  high?: LoRAFile;
-  low?: LoRAFile;
-  isComplete: boolean;
 }
 
 export interface LoRAPairSelectorProps {
@@ -65,45 +57,7 @@ export function LoRAPairSelector({
 
   // Group LoRAs into pairs
   const loraPairs = useMemo(() => {
-    const pairs = new Map<string, LoRAPair>();
-
-    availableLoras.forEach((lora) => {
-      const fileName = lora.fileName.toLowerCase();
-      let baseName = lora.name;
-      let type: 'high' | 'low' | null = null;
-
-      if (fileName.includes('_high') || fileName.includes('-high')) {
-        baseName = lora.name.replace(/_high|_High|-high|-High/gi, '');
-        type = 'high';
-      } else if (fileName.includes('_low') || fileName.includes('-low')) {
-        baseName = lora.name.replace(/_low|_Low|-low|-Low/gi, '');
-        type = 'low';
-      }
-
-      if (!pairs.has(baseName)) {
-        pairs.set(baseName, {
-          baseName,
-          high: undefined,
-          low: undefined,
-          isComplete: false,
-        });
-      }
-
-      const pair = pairs.get(baseName)!;
-      if (type === 'high') {
-        pair.high = lora;
-      } else if (type === 'low') {
-        pair.low = lora;
-      }
-
-      pair.isComplete = !!(pair.high && pair.low);
-    });
-
-    return Array.from(pairs.values()).sort((a, b) => {
-      if (a.isComplete && !b.isComplete) return -1;
-      if (!a.isComplete && b.isComplete) return 1;
-      return a.baseName.localeCompare(b.baseName);
-    });
+    return buildLoraPairs(availableLoras).filter((pair) => pair.isComplete);
   }, [availableLoras]);
 
   // Filter pairs based on search query
@@ -169,7 +123,7 @@ export function LoRAPairSelector({
   }, [isDropdownOpen]);
 
   // Handle pair selection
-  const handleSelectPair = (pair: LoRAPair) => {
+  const handleSelectPair = (pair: typeof loraPairs[number]) => {
     if (pair.high) onHighChange(pair.high.s3Path);
     if (pair.low) onLowChange(pair.low.s3Path);
     setIsDropdownOpen(false);

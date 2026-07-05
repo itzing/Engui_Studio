@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterLorasForModel, filterLorasForTarget, getLoraSearchText, getVideoLoraPathSet } from '@/lib/lora/modelFilters';
+import { buildLoraPairs, filterLorasForModel, filterLorasForTarget, getLoraSearchText, getVideoLoraPathSet } from '@/lib/lora/modelFilters';
 
 const lora = (fileName: string, s3Path: string, name = fileName) => ({
   id: s3Path,
@@ -55,6 +55,34 @@ describe('LoRA model filters', () => {
     ]);
     expect(filterLorasForModel(loras, 'z-image').map((entry) => entry.fileName)).toEqual([
       'z_style.safetensors',
+    ]);
+  });
+
+  it('builds complete picker pairs with the same low/high rules as target filtering', () => {
+    const loras = [
+      lora('high_noise_model.safetensors', '/runpod-volume/loras/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors'),
+      lora('low_noise_model.safetensors', '/runpod-volume/loras/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors'),
+      lora('YummyHD_HighNoise.safetensors', '/runpod-volume/loras/YummyHD_HighNoise.safetensors', 'YummyHD_HighNoise'),
+      lora('YummyHD_LowNoise.safetensors', '/runpod-volume/loras/YummyHD_LowNoise.safetensors', 'YummyHD_LowNoise'),
+      lora('dramatic_high.safetensors', '/runpod-volume/loras/dramatic_high.safetensors'),
+      lora('dramatic_low.safetensors', '/runpod-volume/loras/dramatic_low.safetensors'),
+      lora('lonely_high.safetensors', '/runpod-volume/loras/lonely_high.safetensors'),
+      lora('portrait_style.safetensors', '/runpod-volume/loras/portrait_style.safetensors'),
+    ];
+
+    const pairs = buildLoraPairs(filterLorasForModel(loras, 'wan22'));
+
+    expect(pairs).toHaveLength(3);
+    expect(pairs.map((pair) => pair.baseName)).toEqual([
+      'dramatic',
+      'Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1',
+      'yummyhd',
+    ]);
+    expect(pairs.every((pair) => pair.isComplete)).toBe(true);
+    expect(pairs.map((pair) => [pair.high?.fileName, pair.low?.fileName])).toEqual([
+      ['dramatic_high.safetensors', 'dramatic_low.safetensors'],
+      ['high_noise_model.safetensors', 'low_noise_model.safetensors'],
+      ['YummyHD_HighNoise.safetensors', 'YummyHD_LowNoise.safetensors'],
     ]);
   });
 
