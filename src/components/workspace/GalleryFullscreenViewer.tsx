@@ -117,6 +117,11 @@ export function GalleryFullscreenViewer({
     resetVideoElement(activeVideoRef.current);
   }, [currentItem?.id, currentItem?.type, resetVideoByItemId, resetVideoElement]);
 
+  const playVideoElement = useCallback((video: HTMLVideoElement | null) => {
+    if (!video) return;
+    void video.play().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -219,6 +224,16 @@ export function GalleryFullscreenViewer({
       cancelled = true;
     };
   }, [currentItem, open]);
+
+  useEffect(() => {
+    if (!open || currentItem?.type !== 'video') return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      playVideoElement(videoRefsRef.current.get(currentItem.id) || activeVideoRef.current);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentItem?.id, currentItem?.type, open, playVideoElement]);
 
   useEffect(() => {
     if (!open || !isDesktop || currentItem?.type !== 'video') return;
@@ -601,9 +616,10 @@ export function GalleryFullscreenViewer({
             const customSlide = slide as unknown as ViewerSlide;
 
             if (customSlide.type === 'video') {
+              const isActiveVideo = customSlide.id === currentItem?.id;
               return (
                 <div
-                  className="flex h-full w-full items-center justify-center px-0 py-16 sm:px-16 sm:py-12"
+                  className={`flex h-full w-full items-center justify-center ${isDesktop ? 'p-0' : 'px-0 py-16'}`}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <video
@@ -616,15 +632,21 @@ export function GalleryFullscreenViewer({
 
                       if (customSlide.id === currentItem?.id) {
                         activeVideoRef.current = element;
+                        if (open && element) {
+                          playVideoElement(element);
+                        }
                       }
                     }}
                     src={customSlide.src}
                     poster={customSlide.poster}
-                    className="block max-h-[calc(100dvh-8rem)] max-w-full object-contain sm:max-h-[calc(100dvh-6rem)]"
+                    className={isDesktop
+                      ? 'block h-full w-full object-contain'
+                      : 'block max-h-[calc(100dvh-8rem)] max-w-full object-contain'}
                     controls
+                    autoPlay={isActiveVideo}
                     loop
                     playsInline
-                    preload="metadata"
+                    preload={isActiveVideo ? 'auto' : 'metadata'}
                   />
                 </div>
               );
