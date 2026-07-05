@@ -16,6 +16,7 @@ import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
+import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function VideoGenerationForm() {
@@ -327,9 +328,12 @@ export default function VideoGenerationForm() {
             const data = await response.json();
 
             if (data.success && data.loras) {
-                setAvailableLoras(data.loras);
+                const nextLoras = currentModel
+                    ? filterLorasForModel(data.loras, currentModel.id)
+                    : data.loras;
+                setAvailableLoras(nextLoras);
                 if (currentModel && hasLoRAParameter(currentModel)) {
-                    const availableLoraPaths = data.loras.map((lora: LoRAFile) => lora.s3Path);
+                    const availableLoraPaths = nextLoras.map((lora: LoRAFile) => lora.s3Path);
                     setParameterValues((prev) => {
                         const sanitized = sanitizeHydratedLoraParameterValues(
                             currentModel.id,

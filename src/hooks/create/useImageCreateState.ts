@@ -13,6 +13,7 @@ import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { useStudio } from '@/lib/context/StudioContext';
+import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getModelById, getModelsByType, isInputVisible, type ModelParameter } from '@/lib/models/modelConfig';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
@@ -229,9 +230,10 @@ export function useImageCreateState() {
 
         if (!cancelled) {
           const nextLoras = data.success && Array.isArray(data.loras) ? data.loras : [];
-          setAvailableLoras(nextLoras);
+          const modelLoras = currentModel ? filterLorasForModel(nextLoras, currentModel.id) : nextLoras;
+          setAvailableLoras(modelLoras);
           if (data.success && currentModel && hasLoRAParameter) {
-            const availableLoraPaths = nextLoras.map((lora) => lora.s3Path);
+            const availableLoraPaths = modelLoras.map((lora) => lora.s3Path);
             setParameterValues((prev) => {
               const sanitized = sanitizeHydratedLoraParameterValues(
                 currentModel.id,
@@ -257,7 +259,7 @@ export function useImageCreateState() {
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspaceId, hasLoRAParameter]);
+  }, [activeWorkspaceId, currentModel, hasLoRAParameter]);
 
 
   const setTimedMessage = useCallback((nextMessage: FlashMessage) => {

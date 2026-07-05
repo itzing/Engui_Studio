@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n/context';
+import { getLoraSearchText } from '@/lib/lora/modelFilters';
 
 export interface LoRAFile {
   id: string;
@@ -111,9 +112,14 @@ export function LoRAPairSelector({
       return loraPairs;
     }
     const query = searchQuery.toLowerCase();
-    return loraPairs.filter((pair) =>
-      pair.baseName.toLowerCase().includes(query)
-    );
+    return loraPairs.filter((pair) => {
+      const searchText = [
+        pair.baseName,
+        pair.high ? getLoraSearchText(pair.high) : '',
+        pair.low ? getLoraSearchText(pair.low) : '',
+      ].join(' ').toLowerCase();
+      return searchText.includes(query);
+    });
   }, [loraPairs, searchQuery]);
 
   // Find selected pair

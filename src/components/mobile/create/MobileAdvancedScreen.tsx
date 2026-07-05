@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
+import { getLoraSearchText } from '@/lib/lora/modelFilters';
 import { MODELS } from '@/lib/models/modelConfig';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 
@@ -29,6 +30,7 @@ export default function MobileAdvancedScreen() {
     isLoadingLoras,
   } = useMobileCreate();
   const [showLoraSelector, setShowLoraSelector] = useState(false);
+  const [loraSearchQuery, setLoraSearchQuery] = useState('');
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
   const [weightToast, setWeightToast] = useState<string | null>(null);
   const initialEndpointDraftsRef = useRef<Record<string, string>>({});
@@ -36,6 +38,7 @@ export default function MobileAdvancedScreen() {
   const latestEndpointDraftsRef = useRef<Record<string, string>>({});
   const latestSettingsRef = useRef(settings);
   const weightToastTimerRef = useRef<number | null>(null);
+  const loraSearchInputRef = useRef<HTMLInputElement>(null);
 
   const runpodModels = useMemo(() => {
     return MODELS.filter((model) => model.api.type === 'runpod');
@@ -150,6 +153,24 @@ export default function MobileAdvancedScreen() {
     }
     return null;
   }, [parameterValues]);
+  const filteredLoras = useMemo(() => {
+    const query = loraSearchQuery.trim().toLowerCase();
+    if (!query) return availableLoras;
+    return availableLoras.filter((lora) => getLoraSearchText(lora).includes(query));
+  }, [availableLoras, loraSearchQuery]);
+
+  useEffect(() => {
+    if (!showLoraSelector) {
+      setLoraSearchQuery('');
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      loraSearchInputRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [showLoraSelector]);
 
   const persistEndpointDrafts = (drafts: Record<string, string>, showSavedToast = false) => {
     const currentSettings = latestSettingsRef.current;
@@ -362,14 +383,26 @@ export default function MobileAdvancedScreen() {
               </DialogHeader>
               <div className="max-h-[65dvh] overflow-y-auto px-4 py-4">
                 <div className="space-y-2">
+                  <div className="sticky top-0 z-10 bg-background pb-2">
+                    <Input
+                      ref={loraSearchInputRef}
+                      value={loraSearchQuery}
+                      onChange={(event) => setLoraSearchQuery(event.target.value)}
+                      placeholder="Search LoRAs"
+                    />
+                  </div>
                   {isLoadingLoras ? (
                     <div className="rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground">Loading LoRAs...</div>
                   ) : availableLoras.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                       No LoRAs installed yet.
                     </div>
+                  ) : filteredLoras.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                      No LoRAs match your search.
+                    </div>
                   ) : (
-                    availableLoras.map((lora) => (
+                    filteredLoras.map((lora) => (
                       <button
                         key={lora.id}
                         type="button"

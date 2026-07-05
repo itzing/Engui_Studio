@@ -21,6 +21,7 @@ import {
 import { requestImagePromptImprovement, requestZImagePromptRewrite, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
+import { filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
 import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
@@ -94,8 +95,10 @@ export default function ImageGenerationForm() {
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     const [showDesktopLoraSelector, setShowDesktopLoraSelector] = useState(false);
+    const [desktopLoraSearchQuery, setDesktopLoraSearchQuery] = useState('');
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
+    const desktopLoraSearchInputRef = useRef<HTMLInputElement>(null);
 
     const imageModels = getModelsByType('image');
     const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
@@ -270,6 +273,11 @@ export default function ImageGenerationForm() {
             })
             .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
     }, [availableLoras, parameterValues, zImageDynamicLoraParamNames, zImageLoraWeightByName]);
+    const filteredDesktopLoras = useMemo(() => {
+        const query = desktopLoraSearchQuery.trim().toLowerCase();
+        if (!query) return availableLoras;
+        return availableLoras.filter((lora) => getLoraSearchText(lora).includes(query));
+    }, [availableLoras, desktopLoraSearchQuery]);
     const nextEmptyZImageLoraParam = useMemo(() => {
         for (let i = 1; i <= zImageAddCap; i += 1) {
             const name = i === 1 ? 'lora' : `lora${i}`;
@@ -663,9 +671,12 @@ export default function ImageGenerationForm() {
             const data = await response.json();
 
             if (data.success && data.loras) {
-                setAvailableLoras(data.loras);
+                const nextLoras = currentModel
+                    ? filterLorasForModel(data.loras, currentModel.id)
+                    : data.loras;
+                setAvailableLoras(nextLoras);
                 if (currentModel && hasLoRAParameter(currentModel)) {
-                    const availableLoraPaths = data.loras.map((lora: LoRAFile) => lora.s3Path);
+                    const availableLoraPaths = nextLoras.map((lora: LoRAFile) => lora.s3Path);
                     setParameterValues((prev) => {
                         const sanitized = sanitizeHydratedLoraParameterValues(
                             currentModel.id,
@@ -700,8 +711,11 @@ export default function ImageGenerationForm() {
             const response = await fetch(`/api/lora?workspaceId=${activeWorkspaceId}`);
             const data = await response.json();
             if (data.success && Array.isArray(data.loras)) {
-                setAvailableLoras(data.loras);
-                return data.loras;
+                const nextLoras = currentModel
+                    ? filterLorasForModel(data.loras, currentModel.id)
+                    : data.loras;
+                setAvailableLoras(nextLoras);
+                return nextLoras;
             }
         } catch (error) {
             console.error('Error fetching LoRAs for reuse:', error);
@@ -716,6 +730,19 @@ export default function ImageGenerationForm() {
             fetchAvailableLoras();
         }
     }, [currentModel, showLoRADialog, activeWorkspaceId]);
+
+    useEffect(() => {
+        if (!showDesktopLoraSelector) {
+            setDesktopLoraSearchQuery('');
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            desktopLoraSearchInputRef.current?.focus();
+        }, 0);
+
+        return () => window.clearTimeout(timeout);
+    }, [showDesktopLoraSelector]);
 
 
     // Handler for parameter changes
@@ -1932,14 +1959,26 @@ export default function ImageGenerationForm() {
                     </DialogHeader>
                     <div className="max-h-[65vh] overflow-y-auto px-6 py-4">
                         <div className="space-y-2">
+                            <div className="sticky top-0 z-10 bg-background pb-2">
+                                <Input
+                                    ref={desktopLoraSearchInputRef}
+                                    value={desktopLoraSearchQuery}
+                                    onChange={(event) => setDesktopLoraSearchQuery(event.target.value)}
+                                    placeholder="Search LoRAs"
+                                />
+                            </div>
                             {isLoadingLoras ? (
                                 <div className="rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground">Loading LoRAs...</div>
                             ) : availableLoras.length === 0 ? (
                                 <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                                     No LoRAs installed yet.
                                 </div>
+                            ) : filteredDesktopLoras.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                                    No LoRAs match your search.
+                                </div>
                             ) : (
-                                availableLoras.map((lora) => (
+                                filteredDesktopLoras.map((lora) => (
                                     <button
                                         key={lora.id}
                                         type="button"
