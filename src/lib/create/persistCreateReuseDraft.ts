@@ -11,6 +11,7 @@ type ReuseDetail = {
   prompt?: string | null;
   options?: unknown;
   imageInputPath?: string | null;
+  preserveVideoDraftFields?: boolean | null;
   sceneSnapshot?: Record<string, any> | null;
   sourcePromptDocumentId?: string | null;
   sourcePromptDocumentTitle?: string | null;
@@ -186,13 +187,40 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
 
   if (detail.type === 'video') {
     const modelId = detail.modelId || defaults.videoModelId;
+    const currentDraft = getWorkflowDraft<{
+      prompt?: string;
+      showAdvanced?: boolean;
+      parameterValues?: Record<string, any>;
+      imagePreviewUrl?: string;
+      videoPreviewUrl?: string;
+    }>('video', modelId);
+    const nextImagePreviewUrl = detail.imageInputPath || parsedOptions.image_path || currentDraft?.imagePreviewUrl || '';
+
+    if (detail.preserveVideoDraftFields) {
+      const snapshot = {
+        prompt: typeof currentDraft?.prompt === 'string' ? currentDraft.prompt : '',
+        showAdvanced: typeof currentDraft?.showAdvanced === 'boolean' ? currentDraft.showAdvanced : false,
+        parameterValues: currentDraft?.parameterValues && typeof currentDraft.parameterValues === 'object'
+          ? currentDraft.parameterValues
+          : {},
+        imagePreviewUrl: nextImagePreviewUrl,
+        videoPreviewUrl: typeof currentDraft?.videoPreviewUrl === 'string' ? currentDraft.videoPreviewUrl : '',
+      };
+
+      setActiveMode('video');
+      setWorkflowActiveModel('video', modelId);
+      saveWorkflowDraft('video', modelId, snapshot);
+
+      return { workflow: 'video' as const, modelId, snapshot };
+    }
+
     const snapshot = {
       prompt: detail.prompt || '',
       showAdvanced: true,
       parameterValues: Object.fromEntries(
         Object.entries(parsedOptions).filter(([key]) => !key.includes('_path') && key !== 'runpodJobId' && key !== 'error')
       ),
-      imagePreviewUrl: detail.imageInputPath || parsedOptions.image_path || '',
+      imagePreviewUrl: nextImagePreviewUrl,
       videoPreviewUrl: typeof parsedOptions.video_path === 'string' ? parsedOptions.video_path : '',
     };
 

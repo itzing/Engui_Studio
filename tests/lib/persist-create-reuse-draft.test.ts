@@ -274,4 +274,56 @@ describe('persistCreateReuseDraft', () => {
       parameterValues: expect.objectContaining({ width: 768, height: 512 }),
     }));
   });
+
+  it('preserves the existing WAN22 video draft when gallery img2vid only supplies a new image', async () => {
+    getWorkflowDraft.mockReturnValue({
+      prompt: 'existing video prompt',
+      showAdvanced: true,
+      parameterValues: {
+        width: 1280,
+        height: 720,
+        seed: 1234,
+        cfg: 1,
+        steps: 6,
+        length: 81,
+        negativePrompt: 'blur',
+        lora_high_1: '/runpod-volume/loras/high.safetensors',
+        lora_low_1: '/runpod-volume/loras/low.safetensors',
+      },
+      imagePreviewUrl: '/generations/old-frame.png',
+      videoPreviewUrl: '',
+    });
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    const result = persistCreateReuseDraft({
+      type: 'video',
+      modelId: 'wan22',
+      action: 'img2vid',
+      prompt: 'gallery source prompt should not win',
+      imageInputPath: '/generations/gallery/new-frame.png',
+      preserveVideoDraftFields: true,
+      options: { width: 768, height: 512, image_path: '/generations/gallery/new-frame.png' },
+    });
+
+    expect(result?.workflow).toBe('video');
+    expect(setActiveMode).toHaveBeenCalledWith('video');
+    expect(setWorkflowActiveModel).toHaveBeenCalledWith('video', 'wan22');
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('video', 'wan22', {
+      prompt: 'existing video prompt',
+      showAdvanced: true,
+      parameterValues: {
+        width: 1280,
+        height: 720,
+        seed: 1234,
+        cfg: 1,
+        steps: 6,
+        length: 81,
+        negativePrompt: 'blur',
+        lora_high_1: '/runpod-volume/loras/high.safetensors',
+        lora_low_1: '/runpod-volume/loras/low.safetensors',
+      },
+      imagePreviewUrl: '/generations/gallery/new-frame.png',
+      videoPreviewUrl: '',
+    });
+  });
 });

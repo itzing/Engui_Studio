@@ -76,6 +76,7 @@ function buildReusePayload(action: ReuseAction, asset: { originalUrl: string; ty
     modelId: 'wan22',
     prompt,
     imageInputPath: asset.originalUrl,
+    preserveVideoDraftFields: true,
     options: {
       width: typeof snapshot.width === 'number' ? snapshot.width : 768,
       height: typeof snapshot.height === 'number' ? snapshot.height : 512,
