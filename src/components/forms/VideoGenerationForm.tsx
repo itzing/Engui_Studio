@@ -66,6 +66,35 @@ export default function VideoGenerationForm() {
     const [loraHigh4Weight, setLoraHigh4Weight] = useState(0.8);
     const [loraLow4Weight, setLoraLow4Weight] = useState(0.8);
 
+    const getWanLoraWeight = (values: Record<string, any>, key: string, fallback = 0.8) => {
+        const value = Number(values[key]);
+        return Number.isFinite(value) ? value : fallback;
+    };
+
+    const getParameterValuesWithWanLoraWeights = (values: Record<string, any>) => {
+        if (videoSelectedModel !== 'wan22') return values;
+
+        return {
+            ...values,
+            lora_high_1_weight: loraHigh1Weight,
+            lora_low_1_weight: loraLow1Weight,
+            lora_high_2_weight: loraHigh2Weight,
+            lora_low_2_weight: loraLow2Weight,
+            lora_high_3_weight: loraHigh3Weight,
+            lora_low_3_weight: loraLow3Weight,
+            lora_high_4_weight: loraHigh4Weight,
+            lora_low_4_weight: loraLow4Weight,
+        };
+    };
+
+    const handleWanLoraWeightChange = (paramName: string, weight: number, setter: React.Dispatch<React.SetStateAction<number>>) => {
+        setter(weight);
+        setParameterValues(prev => ({
+            ...prev,
+            [paramName]: weight,
+        }));
+    };
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const mediaQuery = window.matchMedia('(max-width: 767px)');
@@ -120,6 +149,14 @@ export default function VideoGenerationForm() {
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
                 const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
                 setParameterValues(restoredParameterValues);
+                setLoraHigh1Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_1_weight'));
+                setLoraLow1Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_1_weight'));
+                setLoraHigh2Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_2_weight'));
+                setLoraLow2Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_2_weight'));
+                setLoraHigh3Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_3_weight'));
+                setLoraLow3Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_3_weight'));
+                setLoraHigh4Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_4_weight'));
+                setLoraLow4Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_4_weight'));
                 setImageFile(null);
                 setVideoFile(null);
                 setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
@@ -155,11 +192,27 @@ export default function VideoGenerationForm() {
         saveWorkflowDraft('video', videoSelectedModel || DEFAULT_VIDEO_MODEL, {
             prompt,
             showAdvanced,
-            parameterValues,
+            parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
             imagePreviewUrl,
             videoPreviewUrl,
         });
-    }, [DEFAULT_VIDEO_MODEL, imagePreviewUrl, parameterValues, prompt, showAdvanced, videoPreviewUrl, videoSelectedModel]);
+    }, [
+        DEFAULT_VIDEO_MODEL,
+        imagePreviewUrl,
+        loraHigh1Weight,
+        loraHigh2Weight,
+        loraHigh3Weight,
+        loraHigh4Weight,
+        loraLow1Weight,
+        loraLow2Weight,
+        loraLow3Weight,
+        loraLow4Weight,
+        parameterValues,
+        prompt,
+        showAdvanced,
+        videoPreviewUrl,
+        videoSelectedModel,
+    ]);
 
     useEffect(() => {
         try {
@@ -1195,8 +1248,8 @@ export default function VideoGenerationForm() {
                                     lowWeight={loraLow1Weight}
                                     onHighChange={(value) => handleParameterChange('lora_high_1', value)}
                                     onLowChange={(value) => handleParameterChange('lora_low_1', value)}
-                                    onHighWeightChange={setLoraHigh1Weight}
-                                    onLowWeightChange={setLoraLow1Weight}
+                                    onHighWeightChange={(weight) => handleWanLoraWeightChange('lora_high_1_weight', weight, setLoraHigh1Weight)}
+                                    onLowWeightChange={(weight) => handleWanLoraWeightChange('lora_low_1_weight', weight, setLoraLow1Weight)}
                                     availableLoras={availableLoras}
                                     onManageClick={() => setShowLoRADialog(true)}
                                 />
@@ -1207,8 +1260,8 @@ export default function VideoGenerationForm() {
                                     lowWeight={loraLow2Weight}
                                     onHighChange={(value) => handleParameterChange('lora_high_2', value)}
                                     onLowChange={(value) => handleParameterChange('lora_low_2', value)}
-                                    onHighWeightChange={setLoraHigh2Weight}
-                                    onLowWeightChange={setLoraLow2Weight}
+                                    onHighWeightChange={(weight) => handleWanLoraWeightChange('lora_high_2_weight', weight, setLoraHigh2Weight)}
+                                    onLowWeightChange={(weight) => handleWanLoraWeightChange('lora_low_2_weight', weight, setLoraLow2Weight)}
                                     availableLoras={availableLoras}
                                     onManageClick={() => setShowLoRADialog(true)}
                                 />
@@ -1219,8 +1272,8 @@ export default function VideoGenerationForm() {
                                     lowWeight={loraLow3Weight}
                                     onHighChange={(value) => handleParameterChange('lora_high_3', value)}
                                     onLowChange={(value) => handleParameterChange('lora_low_3', value)}
-                                    onHighWeightChange={setLoraHigh3Weight}
-                                    onLowWeightChange={setLoraLow3Weight}
+                                    onHighWeightChange={(weight) => handleWanLoraWeightChange('lora_high_3_weight', weight, setLoraHigh3Weight)}
+                                    onLowWeightChange={(weight) => handleWanLoraWeightChange('lora_low_3_weight', weight, setLoraLow3Weight)}
                                     availableLoras={availableLoras}
                                     onManageClick={() => setShowLoRADialog(true)}
                                 />
@@ -1231,8 +1284,8 @@ export default function VideoGenerationForm() {
                                     lowWeight={loraLow4Weight}
                                     onHighChange={(value) => handleParameterChange('lora_high_4', value)}
                                     onLowChange={(value) => handleParameterChange('lora_low_4', value)}
-                                    onHighWeightChange={setLoraHigh4Weight}
-                                    onLowWeightChange={setLoraLow4Weight}
+                                    onHighWeightChange={(weight) => handleWanLoraWeightChange('lora_high_4_weight', weight, setLoraHigh4Weight)}
+                                    onLowWeightChange={(weight) => handleWanLoraWeightChange('lora_low_4_weight', weight, setLoraLow4Weight)}
                                     availableLoras={availableLoras}
                                     onManageClick={() => setShowLoRADialog(true)}
                                 />
