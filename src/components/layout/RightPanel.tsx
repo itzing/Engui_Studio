@@ -42,6 +42,7 @@ type GalleryAsset = {
     derivativeStatus?: string;
     enrichmentStatus?: string;
     prompt?: string | null;
+    modelId?: string | null;
     addedToGalleryAt: string;
     updatedAt?: string;
 };

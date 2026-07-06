@@ -3,6 +3,17 @@ import { prisma } from '@/lib/prisma';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
+type GalleryReuseAsset = {
+  id?: string;
+  type: string;
+  originKind?: string | null;
+  originalUrl: string;
+  thumbnailUrl?: string | null;
+  generationSnapshot?: string | null;
+  sourceJobId?: string | null;
+  sourceOutputId?: string | null;
+  workspaceId?: string | null;
+};
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   if (!raw) return {};
@@ -20,10 +31,17 @@ function parseSceneSnapshot(snapshot: unknown): SceneSnapshot | null {
     : null;
 }
 
-function buildAvailableActions(asset: { type: string; originKind: string | null }, snapshot: Record<string, any>) {
+function isWan22VideoAsset(asset: { type: string }, snapshot: Record<string, any>) {
+  return asset.type === 'video' && snapshot.modelId === 'wan22';
+}
+
+function buildAvailableActions(asset: { type: string; originKind?: string | null }, snapshot: Record<string, any>) {
   const actions: ReuseAction[] = [];
   if (asset.type === 'image') {
     actions.push('txt2img', 'img2img', 'img2vid');
+  }
+  if (isWan22VideoAsset(asset, snapshot)) {
+    actions.push('img2vid');
   }
   if (parseSceneSnapshot(snapshot.sceneSnapshot)) {
     actions.push('scene-template-v2');
@@ -31,7 +49,29 @@ function buildAvailableActions(asset: { type: string; originKind: string | null 
   return actions;
 }
 
-function buildReusePayload(action: ReuseAction, asset: { originalUrl: string; type: string }, snapshot: Record<string, any>) {
+function normalizeReusableImagePath(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+}
+
+function resolveImg2VidImageInput(asset: GalleryReuseAsset, snapshot: Record<string, any>, sourceJobImageInputPath?: string | null) {
+  if (asset.type === 'image') {
+    return asset.originalUrl;
+  }
+
+  return normalizeReusableImagePath(snapshot.image_path)
+    || normalizeReusableImagePath(snapshot.imageInputPath)
+    || normalizeReusableImagePath(snapshot.sourceImageUrl)
+    || normalizeReusableImagePath(snapshot.source_image)
+    || normalizeReusableImagePath(sourceJobImageInputPath)
+    || normalizeReusableImagePath(asset.thumbnailUrl);
+}
+
+function buildReusePayload(
+  action: ReuseAction,
+  asset: GalleryReuseAsset,
+  snapshot: Record<string, any>,
+  sourceJobImageInputPath?: string | null,
+) {
   const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
   const baseOptions = { ...snapshot };
@@ -70,18 +110,22 @@ function buildReusePayload(action: ReuseAction, asset: { originalUrl: string; ty
     };
   }
 
+  const imageInputPath = resolveImg2VidImageInput(asset, snapshot, sourceJobImageInputPath);
+  const videoOptions = {
+    ...baseOptions,
+    width: typeof snapshot.width === 'number' ? snapshot.width : 768,
+    height: typeof snapshot.height === 'number' ? snapshot.height : 512,
+    ...(imageInputPath ? { image_path: imageInputPath } : {}),
+  };
+
   return {
     action,
     type: 'video',
     modelId: 'wan22',
     prompt,
-    imageInputPath: asset.originalUrl,
-    preserveVideoDraftFields: true,
-    options: {
-      width: typeof snapshot.width === 'number' ? snapshot.width : 768,
-      height: typeof snapshot.height === 'number' ? snapshot.height : 512,
-      image_path: asset.originalUrl,
-    },
+    imageInputPath,
+    ...(asset.type === 'image' ? { preserveVideoDraftFields: true } : {}),
+    options: videoOptions,
   };
 }
 
@@ -94,6 +138,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         id: true,
         type: true,
         originKind: true,
+        originalUrl: true,
+        thumbnailUrl: true,
+        generationSnapshot: true,
       },
     });
 
@@ -131,7 +178,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         type: true,
         originKind: true,
         originalUrl: true,
+        thumbnailUrl: true,
         generationSnapshot: true,
+        sourceJobId: true,
+        sourceOutputId: true,
+        workspaceId: true,
       },
     });
 
@@ -164,7 +215,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
-    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot);
+    let sourceJobImageInputPath: string | null = null;
+    if (action === 'img2vid' && asset.type === 'video' && asset.sourceJobId) {
+      const sourceJob = await prisma.job.findUnique({
+        where: { id: asset.sourceJobId },
+        select: { imageInputPath: true },
+      });
+      sourceJobImageInputPath = sourceJob?.imageInputPath || null;
+    }
+
+    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot, sourceJobImageInputPath);
 
     return NextResponse.json({
       success: true,

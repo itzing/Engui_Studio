@@ -70,6 +70,10 @@ export async function GET(request: NextRequest) {
         const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
         return typeof snapshot.prompt === 'string' && snapshot.prompt.trim().length > 0 ? snapshot.prompt : null;
       })(),
+      modelId: (() => {
+        const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+        return typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null;
+      })(),
       addedToGalleryAt: asset.addedToGalleryAt,
       updatedAt: asset.updatedAt,
     }));
