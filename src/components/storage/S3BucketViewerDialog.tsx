@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, File, Folder, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { ArrowUp, File, Folder, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react';
 
 type VolumeInfo = {
   name: string;
@@ -49,6 +49,13 @@ type UploadState = {
   totalFiles: number;
   startedAt: number;
   status: 'idle' | 'initializing' | 'uploading' | 'completing' | 'completed' | 'cancelling' | 'failed';
+  error?: string;
+};
+
+type RenameResponse = {
+  success: boolean;
+  sourceKey: string;
+  destinationKey: string;
   error?: string;
 };
 
@@ -136,6 +143,9 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   const [copiedDeleteLog, setCopiedDeleteLog] = useState(false);
   const [error, setError] = useState<string>('');
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const uploadActive = uploadState?.active === true;
   const uploadPercent = uploadState && uploadState.totalBytes > 0
@@ -176,6 +186,11 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   }, [items]);
 
   const previewItem = useMemo(() => sortedItems.find((item) => item.key === previewKey), [sortedItems, previewKey]);
+  const selectedSingleItem = useMemo(() => {
+    if (selectedKeys.length !== 1) return null;
+    return sortedItems.find((item) => item.key === selectedKeys[0]) || null;
+  }, [selectedKeys, sortedItems]);
+  const selectedRenameFile = selectedSingleItem?.type === 'file' ? selectedSingleItem : null;
   const visibleKeys = useMemo(() => sortedItems.map((item) => item.key), [sortedItems]);
   const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedSet.has(key));
 
@@ -761,6 +776,57 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
     await executeDeletePlan(targets, currentPath || activeVolume, currentPath);
   }
 
+  function handleOpenRename() {
+    if (!selectedRenameFile) return;
+    setRenameValue(getFileName(selectedRenameFile.key));
+    setError('');
+    setRenameOpen(true);
+  }
+
+  async function handleConfirmRename() {
+    if (!activeVolume || !selectedRenameFile || isRenaming) return;
+
+    const nextName = renameValue.trim();
+    if (!nextName) {
+      setError('Enter a file name.');
+      return;
+    }
+
+    setIsRenaming(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/s3-storage/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          volume: activeVolume,
+          key: selectedRenameFile.key,
+          newName: nextName,
+        }),
+      });
+      const data: RenameResponse = await response.json().catch(() => ({
+        success: false,
+        sourceKey: selectedRenameFile.key,
+        destinationKey: selectedRenameFile.key,
+        error: 'Failed to rename file.',
+      }));
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || 'Failed to rename file.');
+      }
+
+      await loadItems(activeVolume, currentPath);
+      setSelectedKeys([data.destinationKey]);
+      setPreviewKey((previous) => previous === selectedRenameFile.key ? data.destinationKey : previous);
+      setRenameOpen(false);
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : 'Failed to rename file.');
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
   function handleCancelDelete() {
     setDeleteProgress((previous) => ({
       ...previous,
@@ -824,6 +890,17 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 className="hidden"
                 onChange={handleFileInputChange}
               />
+              {selectedRenameFile && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenRename}
+                  disabled={isDeleting || uploadActive || isRenaming}
+                >
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Rename
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 size="sm"
@@ -1118,6 +1195,51 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
           </div>
         </div>
       </DialogContent>
+      <Dialog open={renameOpen} onOpenChange={(nextOpen) => {
+        if (isRenaming) return;
+        setRenameOpen(nextOpen);
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Rename file</DialogTitle>
+            <DialogDescription className="text-xs">
+              Enter a new name for the selected S3 object.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <input
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleConfirmRename();
+                }
+              }}
+              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+              autoFocus
+              disabled={isRenaming}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRenameOpen(false)}
+                disabled={isRenaming}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleConfirmRename()}
+                disabled={isRenaming || !renameValue.trim()}
+              >
+                {isRenaming ? 'Renaming...' : 'Rename'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

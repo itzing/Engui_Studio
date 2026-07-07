@@ -605,6 +605,90 @@ class S3Service {
     return this.deleteFiles(keys);
   }
 
+  async renameObject(sourceKey: string, destinationKey: string): Promise<{ sourceKey: string; destinationKey: string }> {
+    const normalizedSourceKey = sourceKey.replace(/^\/+/, '');
+    const normalizedDestinationKey = destinationKey.replace(/^\/+/, '');
+
+    if (!normalizedSourceKey || !normalizedDestinationKey) {
+      throw new Error('Source and destination keys are required.');
+    }
+
+    if (normalizedSourceKey.endsWith('/') || normalizedDestinationKey.endsWith('/')) {
+      throw new Error('Only files can be renamed.');
+    }
+
+    if (normalizedSourceKey === normalizedDestinationKey) {
+      throw new Error('Choose a different file name.');
+    }
+
+    return executeWithRetry(
+      async () => {
+        try {
+          await this.runAwsCommand([
+            's3api',
+            'head-object',
+            '--bucket',
+            this.config.bucketName,
+            '--key',
+            normalizedDestinationKey,
+            '--region',
+            this.config.region,
+            '--endpoint-url',
+            this.config.endpointUrl,
+          ], { silent: true });
+          throw new Error(`Destination already exists: ${normalizedDestinationKey}`);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('Destination already exists')) {
+            throw error;
+          }
+          if (error instanceof Error && (error.message.includes('404') || error.message.includes('NoSuchKey') || error.message.includes('Not Found'))) {
+            logger.emoji.search(`✅ Rename destination is available: ${normalizedDestinationKey}`);
+          } else {
+            throw error;
+          }
+        }
+
+        const encodedCopySource = `${this.config.bucketName}/${normalizedSourceKey.split('/').map(encodeURIComponent).join('/')}`;
+        const copyArgs = [
+          's3api',
+          'copy-object',
+          '--bucket',
+          this.config.bucketName,
+          '--copy-source',
+          encodedCopySource,
+          '--key',
+          normalizedDestinationKey,
+          '--region',
+          this.config.region,
+          '--endpoint-url',
+          this.config.endpointUrl,
+        ];
+
+        logger.emoji.search(`Renaming file: ${normalizedSourceKey} -> ${normalizedDestinationKey}`);
+        await this.runAwsCommand(copyArgs, { silent: true });
+        await this.deleteFile(normalizedSourceKey);
+
+        logger.info(`✅ File renamed successfully: ${normalizedSourceKey} -> ${normalizedDestinationKey}`);
+        return { sourceKey: normalizedSourceKey, destinationKey: normalizedDestinationKey };
+      },
+      this.config.maxRetries || 3,
+      this.config.retryDelay || 1000,
+      '파일 이름 변경'
+    ).catch(async error => {
+      logger.error('Failed to rename file after retries:', error);
+
+      if (error instanceof Error && error.message.includes('502')) {
+        throw new Error(`RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)`);
+      }
+
+      if (error instanceof Error) {
+        throw new Error(`파일 이름 변경에 실패했습니다: ${error.message}`);
+      }
+
+      throw new Error(`파일 이름 변경에 실패했습니다: ${error}`);
+    });
+  }
+
   // 폴더 생성
   async createFolder(folderKey: string): Promise<void> {
     try {
