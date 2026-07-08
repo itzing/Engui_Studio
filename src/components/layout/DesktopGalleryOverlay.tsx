@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -166,14 +166,23 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !viewerOpen) {
+      if (event.key !== 'Escape') return;
+
+      if (viewerOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeViewer();
+        return;
+      }
+
+      if (!detailsOpen) {
         event.preventDefault();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, open, viewerOpen]);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [closeViewer, detailsOpen, onClose, open, viewerOpen]);
 
   useEffect(() => {
     if (!open) return;
