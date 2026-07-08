@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useStudio, Job } from '@/lib/context/StudioContext';
 import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ArrowUpCircle, FolderPlus, Images, Info } from 'lucide-react';
+import { ArrowUpCircle, FolderPlus, Images, Info, Waypoints } from 'lucide-react';
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 
 type CenterMode = 'image' | 'video';
@@ -506,14 +507,22 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
         <div className={`flex items-center gap-2 ${mobile ? 'justify-between' : ''}`}>
           {!mobile && (
-            <Button
-              variant={desktopGalleryOpen ? 'default' : 'outline'}
-              className="h-9 px-6 text-sm font-medium"
-              onClick={() => setDesktopGalleryOpen(true)}
-            >
-              <Images className="w-4 h-4 mr-2" />
-              Gallery
-            </Button>
+            <>
+              <Button asChild variant="outline" className="h-9 px-5 text-sm font-medium">
+                <Link href="/video-sequences">
+                  <Waypoints className="w-4 h-4 mr-2" />
+                  Sequences
+                </Link>
+              </Button>
+              <Button
+                variant={desktopGalleryOpen ? 'default' : 'outline'}
+                className="h-9 px-6 text-sm font-medium"
+                onClick={() => setDesktopGalleryOpen(true)}
+              >
+                <Images className="w-4 h-4 mr-2" />
+                Gallery
+              </Button>
+            </>
           )}
           <div className="inline-flex rounded-md border border-border overflow-hidden">
             <button
