@@ -64,7 +64,45 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     expect(response.status).toBe(200);
     expect(json).toMatchObject({ success: true, alreadyInGallery: false, autoTags: [] });
     expect(mockPrisma.galleryAsset.create).toHaveBeenCalledTimes(1);
+    const generationSnapshot = JSON.parse(mockPrisma.galleryAsset.create.mock.calls[0][0].data.generationSnapshot);
+    expect(generationSnapshot.stylePreset).toBe('studio');
     expect(queueGalleryDerivativesMock).toHaveBeenCalledWith('asset-new');
     expect(queueGalleryEnrichmentMock).toHaveBeenCalledWith('asset-new');
+  });
+
+  it('carries WAN22 source image metadata into gallery video snapshots', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-video-1',
+      workspaceId: 'ws-1',
+      type: 'video',
+      resultUrl: '/generations/video.mp4',
+      thumbnailUrl: '/thumb.jpg',
+      prompt: 'video prompt',
+      modelId: 'wan22',
+      endpointId: 'wan22',
+      options: JSON.stringify({
+        sourceImageGenerationSnapshot: {
+          prompt: 'original image prompt',
+          modelId: 'z-image',
+          seed: 77,
+        },
+      }),
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
+    mockPrisma.galleryAsset.create.mockResolvedValue({ id: 'asset-video', enrichmentStatus: 'pending' });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
+      method: 'POST',
+      body: JSON.stringify({ jobId: 'job-video-1', outputId: 'output-1' }),
+      headers: { 'Content-Type': 'application/json' },
+    }) as any);
+
+    expect(response.status).toBe(200);
+    const generationSnapshot = JSON.parse(mockPrisma.galleryAsset.create.mock.calls[0][0].data.generationSnapshot);
+    expect(generationSnapshot.sourceImageGenerationSnapshot).toEqual({
+      prompt: 'original image prompt',
+      modelId: 'z-image',
+      seed: 77,
+    });
   });
 });

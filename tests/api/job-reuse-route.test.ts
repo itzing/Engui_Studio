@@ -53,10 +53,68 @@ describe('job reuse route', () => {
       modelId: 'wan22',
       prompt: '',
       imageInputPath: '/generations/job-output.png',
+      sourceImageGenerationSnapshot: {
+        prompt: 'source image prompt should not replace video prompt',
+        modelId: 'z-image',
+        endpointId: 'z-image',
+        width: 1536,
+        height: 1024,
+        seed: 1234,
+        image_path: '/generations/source-input.png',
+      },
       preserveVideoDraftFields: true,
       options: {
         image_path: '/generations/job-output.png',
       },
     });
+  });
+
+  it('builds txt2img payloads for video jobs from source image metadata', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'video-job-1',
+      type: 'video',
+      prompt: 'video prompt',
+      resultUrl: '/generations/video-output.mp4',
+      modelId: 'wan22',
+      endpointId: 'wan22',
+      options: JSON.stringify({
+        sourceImageGenerationSnapshot: {
+          prompt: 'original image prompt',
+          modelId: 'z-image',
+          endpointId: 'z-image',
+          width: 1024,
+          height: 1024,
+          seed: 99,
+          image_path: '/generations/init.png',
+          use_controlnet: true,
+          task_type: 'image_to_image',
+        },
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/jobs/video-job-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img', outputId: 'output-1' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'video-job-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'original image prompt',
+      options: {
+        width: 1024,
+        height: 1024,
+        seed: 99,
+        use_controlnet: false,
+        task_type: '',
+      },
+    });
+    expect(json.payload.options.image_path).toBeUndefined();
   });
 });

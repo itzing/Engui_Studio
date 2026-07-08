@@ -5,7 +5,7 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ChevronLeft, ChevronRight, Download, Trash2, Copy, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Trash2, Copy, Sparkles, Type, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -315,6 +315,35 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
             showToast('Failed to create upscale job', 'error');
         } finally {
             setIsUpscaling(false);
+        }
+    };
+
+    const handleOpenInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid') => {
+        if (!job || !selectedOutput) return;
+        if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && action === 'txt2img')) return;
+
+        try {
+            const response = await fetch(`/api/jobs/${job.id}/reuse`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, outputId: selectedOutput.outputId }),
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.success || !data.payload) {
+                throw new Error(data.error || 'Failed to prepare reuse payload');
+            }
+
+            const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+            const { announceCreateModeChange } = await import('@/lib/create/createModeEvents');
+            const result = persistCreateReuseDraft(data.payload);
+            if (result?.workflow) {
+                announceCreateModeChange(result.workflow);
+            }
+            showToast(`Opened in ${action}`, 'success');
+        } catch (error) {
+            console.error('Failed to reuse job output:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to reuse job output', 'error');
         }
     };
 
@@ -695,6 +724,16 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 >
                                     <Sparkles className="w-4 h-4 mr-2" />
                                     {isUpscaling ? 'Starting...' : 'Upscale'}
+                                </Button>
+                            )}
+                            {job?.type === 'video' && selectedOutput?.type === 'video' && (
+                                <Button
+                                    className="flex-1"
+                                    variant="outline"
+                                    onClick={() => void handleOpenInCreate('txt2img')}
+                                >
+                                    <Type className="w-4 h-4 mr-2" />
+                                    To txt2img
                                 </Button>
                             )}
                             {isFinished && (

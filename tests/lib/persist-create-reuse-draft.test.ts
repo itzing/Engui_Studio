@@ -302,6 +302,11 @@ describe('persistCreateReuseDraft', () => {
       prompt: 'gallery source prompt should not win',
       imageInputPath: '/generations/gallery/new-frame.png',
       preserveVideoDraftFields: true,
+      sourceImageGenerationSnapshot: {
+        prompt: 'gallery source prompt should restore later',
+        modelId: 'z-image',
+        width: 1024,
+      },
       options: { width: 768, height: 512, image_path: '/generations/gallery/new-frame.png' },
     });
 
@@ -321,6 +326,11 @@ describe('persistCreateReuseDraft', () => {
         negativePrompt: 'blur',
         lora_high_1: '/runpod-volume/loras/high.safetensors',
         lora_low_1: '/runpod-volume/loras/low.safetensors',
+        sourceImageGenerationSnapshot: {
+          prompt: 'gallery source prompt should restore later',
+          modelId: 'z-image',
+          width: 1024,
+        },
       },
       imagePreviewUrl: '/generations/gallery/new-frame.png',
       videoPreviewUrl: '',

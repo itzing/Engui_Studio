@@ -305,6 +305,51 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(mockStartRunPodSupervisor).toHaveBeenCalledTimes(1);
   });
 
+  it('persists source image generation metadata on WAN22 jobs', async () => {
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { wan22: 'endpoint-1' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+
+    const sourceImageGenerationSnapshot = {
+      prompt: 'original image prompt',
+      modelId: 'z-image',
+      width: 1024,
+      seed: 77,
+    };
+    const formData = new FormData();
+    formData.set('modelId', 'wan22');
+    formData.set('prompt', 'animate this frame');
+    formData.set('sourceImageGenerationSnapshot', JSON.stringify(sourceImageGenerationSnapshot));
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.job.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        options: expect.any(String),
+      }),
+    }));
+    const createdOptions = JSON.parse(mockPrisma.job.create.mock.calls[0][0].data.options);
+    expect(createdOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
+    const updatedOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
+    expect(updatedOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
+  });
+
   it('submits Z-Image I2I init image only through secure media_inputs', async () => {
     mockGetModelById.mockReturnValue({
       id: 'z-image',

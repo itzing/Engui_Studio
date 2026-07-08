@@ -35,6 +35,18 @@ function parseSceneSnapshot(value: FormDataEntryValue | null): SceneSnapshot | n
     return null;
 }
 
+function parseSourceImageGenerationSnapshot(value: FormDataEntryValue | null): Record<string, any> | null {
+    if (typeof value !== 'string' || !value.trim()) return null;
+
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null;
+    } catch (error) {
+        console.warn('Failed to parse source image generation snapshot from generation request:', error);
+        return null;
+    }
+}
+
 // Local storage directory
 const LOCAL_STORAGE_DIR = join(process.cwd(), 'public', 'results');
 
@@ -101,6 +113,7 @@ export async function submitGenerationFormData(formData: FormData) {
         // Extract prompt
         const prompt = formData.get('prompt') as string;
         const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
+        const sourceImageGenerationSnapshot = parseSourceImageGenerationSnapshot(formData.get('sourceImageGenerationSnapshot'));
         const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
         const sourcePromptDocumentTitle = typeof formData.get('sourcePromptDocumentTitle') === 'string' ? (formData.get('sourcePromptDocumentTitle') as string).trim() : '';
         const studioSessionContext = typeof formData.get('studioSessionContext') === 'string'
@@ -463,6 +476,7 @@ export async function submitGenerationFormData(formData: FormData) {
         const persistedOptions = JSON.stringify(buildPersistedOptions(parameters, inputData, {
             randomizeSeed,
             studioSessionContext,
+            sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
         }));
         const job = await prisma.job.create({
             data: {
@@ -706,6 +720,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             attemptId: requiresSecureKey ? attemptId : undefined,
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
+                            sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
                         })),
                         secureState: secureState ? JSON.stringify({
                             ...secureState,
@@ -739,6 +754,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             error: error.message,
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
+                            sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
                         }))
                     },
                 });

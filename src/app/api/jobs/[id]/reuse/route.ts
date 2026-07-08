@@ -27,6 +27,10 @@ function normalizeUrlCandidate(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
+function normalizeSnapshot(value: unknown): Record<string, any> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : null;
+}
+
 function parseSceneSnapshot(rawValue: unknown): SceneSnapshot | null {
   if (!rawValue) return null;
   if (typeof rawValue === 'string') {
@@ -83,7 +87,43 @@ function buildNormalizedOutputs(job: any): NormalizedJobOutput[] {
   }));
 }
 
-function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Record<string, any>) {
+function buildSourceImageSnapshot(snapshot: Record<string, any>) {
+  return {
+    ...snapshot,
+    prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : '',
+    modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined,
+    endpointId: typeof snapshot.endpointId === 'string' ? snapshot.endpointId : undefined,
+  };
+}
+
+function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, any>) {
+  const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
+  const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
+  const baseOptions = { ...snapshot };
+  delete baseOptions.prompt;
+  delete baseOptions.modelId;
+  delete baseOptions.endpointId;
+  delete baseOptions.sourceImageGenerationSnapshot;
+
+  const txt2imgOptions = { ...baseOptions };
+  delete txt2imgOptions.image_path;
+  delete txt2imgOptions.image_path_2;
+
+  if (modelId === 'z-image') {
+    txt2imgOptions.use_controlnet = false;
+    txt2imgOptions.task_type = '';
+  }
+
+  return {
+    action,
+    type: 'image',
+    modelId,
+    prompt,
+    options: txt2imgOptions,
+  };
+}
+
+function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, snapshot: Record<string, any>) {
   const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
   const baseOptions = { ...snapshot };
@@ -92,22 +132,13 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
   delete baseOptions.endpointId;
 
   if (action === 'txt2img') {
-    const txt2imgOptions = { ...baseOptions };
-    delete txt2imgOptions.image_path;
-    delete txt2imgOptions.image_path_2;
-
-    if (modelId === 'z-image') {
-      txt2imgOptions.use_controlnet = false;
-      txt2imgOptions.task_type = '';
+    const sourceSnapshot = output.type === 'video'
+      ? normalizeSnapshot(snapshot.sourceImageGenerationSnapshot)
+      : snapshot;
+    if (!sourceSnapshot) {
+      return null;
     }
-
-    return {
-      action,
-      type: 'image',
-      modelId,
-      prompt,
-      options: txt2imgOptions,
-    };
+    return buildImageTxt2ImgPayload(action, sourceSnapshot);
   }
 
   if (action === 'img2img') {
@@ -116,24 +147,26 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
       type: 'image',
       modelId,
       prompt,
-      imageInputPath: outputUrl,
+      imageInputPath: output.url,
       options: {
         ...baseOptions,
         ...(modelId === 'z-image' ? { use_controlnet: true, task_type: 'image_to_image' } : {}),
-        image_path: outputUrl,
+        image_path: output.url,
       },
     };
   }
 
+  const sourceImageGenerationSnapshot = buildSourceImageSnapshot(snapshot);
   return {
     action,
     type: 'video',
     modelId: 'wan22',
     prompt: '',
-    imageInputPath: outputUrl,
+    imageInputPath: output.url,
+    sourceImageGenerationSnapshot,
     preserveVideoDraftFields: true,
     options: {
-      image_path: outputUrl,
+      image_path: output.url,
     },
   };
 }
@@ -178,17 +211,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Output not found' }, { status: 404 });
     }
 
-    if (selectedOutput.type !== 'image') {
+    if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && action === 'txt2img')) {
       return NextResponse.json({ success: false, error: 'Reuse actions are only supported for image outputs' }, { status: 400 });
     }
 
     const snapshot = parseJobOptions(job.options);
-    const payload = buildReusePayload(action, selectedOutput.url, {
+    const payload = buildReusePayload(action, selectedOutput, {
       ...snapshot,
       prompt: job.prompt || snapshot.prompt || '',
       modelId: (job as any).modelId || snapshot.modelId,
       endpointId: (job as any).endpointId || snapshot.endpointId,
     });
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'Source image metadata is not available for this video' }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,

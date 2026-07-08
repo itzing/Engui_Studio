@@ -41,7 +41,7 @@ function buildAvailableActions(asset: { type: string; originKind?: string | null
     actions.push('txt2img', 'img2img', 'img2vid');
   }
   if (isWan22VideoAsset(asset, snapshot)) {
-    actions.push('img2vid');
+    actions.push('txt2img', 'img2vid');
   }
   if (parseSceneSnapshot(snapshot.sceneSnapshot)) {
     actions.push('scene-template-v2');
@@ -51,6 +51,10 @@ function buildAvailableActions(asset: { type: string; originKind?: string | null
 
 function normalizeReusableImagePath(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+}
+
+function normalizeSnapshot(value: unknown): Record<string, any> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : null;
 }
 
 function resolveImg2VidImageInput(asset: GalleryReuseAsset, snapshot: Record<string, any>, sourceJobImageInputPath?: string | null) {
@@ -80,17 +84,34 @@ function buildReusePayload(
   delete baseOptions.endpointId;
 
   if (action === 'txt2img') {
-    const txt2imgOptions = { ...baseOptions };
-    if (modelId === 'z-image') {
+    const sourceSnapshot = asset.type === 'video'
+      ? normalizeSnapshot(snapshot.sourceImageGenerationSnapshot)
+      : snapshot;
+    if (!sourceSnapshot) {
+      return null;
+    }
+    const sourcePrompt = typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
+    const sourceModelId = typeof sourceSnapshot.modelId === 'string' ? sourceSnapshot.modelId : undefined;
+    const sourceOptions = { ...sourceSnapshot };
+    delete sourceOptions.prompt;
+    delete sourceOptions.modelId;
+    delete sourceOptions.endpointId;
+    delete sourceOptions.sourceImageGenerationSnapshot;
+
+    const txt2imgOptions = asset.type === 'video' ? { ...sourceOptions } : { ...baseOptions };
+    delete txt2imgOptions.image_path;
+    delete txt2imgOptions.image_path_2;
+
+    if (sourceModelId === 'z-image') {
       txt2imgOptions.use_controlnet = false;
-      delete txt2imgOptions.image_path;
+      txt2imgOptions.task_type = '';
     }
 
     return {
       action,
       type: 'image',
-      modelId,
-      prompt,
+      modelId: sourceModelId,
+      prompt: sourcePrompt,
       options: txt2imgOptions,
     };
   }
@@ -124,6 +145,7 @@ function buildReusePayload(
     modelId: 'wan22',
     prompt,
     imageInputPath,
+    ...(asset.type === 'image' ? { sourceImageGenerationSnapshot: { ...snapshot, prompt, modelId } } : {}),
     ...(asset.type === 'image' ? { preserveVideoDraftFields: true } : {}),
     options: videoOptions,
   };
@@ -225,6 +247,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot, sourceJobImageInputPath);
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'Source image metadata is not available for this video' }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,

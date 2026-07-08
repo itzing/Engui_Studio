@@ -770,6 +770,11 @@ export default function VideoGenerationForm() {
                 formData.append('lora_low_4_weight', loraLow4Weight.toString());
             }
 
+            const sourceImageGenerationSnapshot = parameterValues.sourceImageGenerationSnapshot;
+            if (sourceImageGenerationSnapshot && typeof sourceImageGenerationSnapshot === 'object') {
+                formData.append('sourceImageGenerationSnapshot', JSON.stringify(sourceImageGenerationSnapshot));
+            }
+
             // Handle Dimensions and Duration if supported
             if (currentModel.capabilities.dimensions?.length) {
                 const form = e.target as HTMLFormElement;

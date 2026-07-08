@@ -12,6 +12,7 @@ type ReuseDetail = {
   options?: unknown;
   imageInputPath?: string | null;
   preserveVideoDraftFields?: boolean | null;
+  sourceImageGenerationSnapshot?: Record<string, any> | null;
   sceneSnapshot?: Record<string, any> | null;
   sourcePromptDocumentId?: string | null;
   sourcePromptDocumentTitle?: string | null;
@@ -27,6 +28,10 @@ function parseReuseOptions(options: unknown): Record<string, any> {
   }
 
   return options && typeof options === 'object' ? options as Record<string, any> : {};
+}
+
+function normalizeSourceImageGenerationSnapshot(value: unknown): Record<string, any> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : null;
 }
 
 function normalizeZImageLoraPath(value: unknown): string {
@@ -195,14 +200,20 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       videoPreviewUrl?: string;
     }>('video', modelId);
     const nextImagePreviewUrl = detail.imageInputPath || parsedOptions.image_path || currentDraft?.imagePreviewUrl || '';
+    const sourceImageGenerationSnapshot = normalizeSourceImageGenerationSnapshot(detail.sourceImageGenerationSnapshot)
+      || normalizeSourceImageGenerationSnapshot(parsedOptions.sourceImageGenerationSnapshot);
 
     if (detail.preserveVideoDraftFields) {
+      const parameterValues = currentDraft?.parameterValues && typeof currentDraft.parameterValues === 'object'
+        ? { ...currentDraft.parameterValues }
+        : {};
+      if (sourceImageGenerationSnapshot) {
+        parameterValues.sourceImageGenerationSnapshot = sourceImageGenerationSnapshot;
+      }
       const snapshot = {
         prompt: typeof currentDraft?.prompt === 'string' ? currentDraft.prompt : '',
         showAdvanced: typeof currentDraft?.showAdvanced === 'boolean' ? currentDraft.showAdvanced : false,
-        parameterValues: currentDraft?.parameterValues && typeof currentDraft.parameterValues === 'object'
-          ? currentDraft.parameterValues
-          : {},
+        parameterValues,
         imagePreviewUrl: nextImagePreviewUrl,
         videoPreviewUrl: typeof currentDraft?.videoPreviewUrl === 'string' ? currentDraft.videoPreviewUrl : '',
       };

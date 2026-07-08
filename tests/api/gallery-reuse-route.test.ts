@@ -68,6 +68,40 @@ describe('gallery reuse route', () => {
     expect(json.payload.options.use_controlnet).toBe(true);
   });
 
+  it('adds source image metadata to gallery image img2vid payloads', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      type: 'image',
+      originKind: 'job_output',
+      originalUrl: '/generations/gallery/ws-1/file.png',
+      generationSnapshot: JSON.stringify({ prompt: 'forest temple', modelId: 'z-image', width: 1024, seed: 44 }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'img2vid' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'img2vid',
+      type: 'video',
+      modelId: 'wan22',
+      imageInputPath: '/generations/gallery/ws-1/file.png',
+      preserveVideoDraftFields: true,
+      sourceImageGenerationSnapshot: {
+        prompt: 'forest temple',
+        modelId: 'z-image',
+        width: 1024,
+        seed: 44,
+      },
+    });
+  });
+
   it('returns img2vid for WAN22 video assets', async () => {
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'asset-video-1',
@@ -84,7 +118,7 @@ describe('gallery reuse route', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.actions).toEqual(['img2vid']);
+    expect(json.actions).toEqual(['txt2img', 'img2vid']);
   });
 
   it('builds full WAN22 img2vid payload from video gallery metadata', async () => {
@@ -140,5 +174,56 @@ describe('gallery reuse route', () => {
       lora_low_1: '/runpod-volume/loras/low.safetensors',
       image_path: '/generations/gallery/ws-1/derived/video-thumb.jpg',
     });
+  });
+
+  it('builds txt2img payload from WAN22 video source image metadata', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-video-1',
+      type: 'video',
+      originKind: 'job_output',
+      originalUrl: '/generations/gallery/ws-1/video.mp4',
+      thumbnailUrl: '/generations/gallery/ws-1/derived/video-thumb.jpg',
+      sourceJobId: 'job-1',
+      generationSnapshot: JSON.stringify({
+        prompt: 'video prompt',
+        modelId: 'wan22',
+        sourceImageGenerationSnapshot: {
+          prompt: 'forest temple',
+          modelId: 'z-image',
+          endpointId: 'z-image',
+          width: 1024,
+          height: 1024,
+          seed: 12,
+          image_path: '/generations/init.png',
+          use_controlnet: true,
+          task_type: 'image_to_image',
+        },
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-video-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'forest temple',
+      options: {
+        width: 1024,
+        height: 1024,
+        seed: 12,
+        use_controlnet: false,
+        task_type: '',
+      },
+    });
+    expect(json.payload.options.image_path).toBeUndefined();
   });
 });

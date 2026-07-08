@@ -194,6 +194,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {asset.type === 'image' ? <Button onClick={() => void reuse('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
+                {asset.type === 'video' && asset.modelId === 'wan22' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {asset.type === 'video' && asset.modelId === 'wan22' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
                 {(asset.type === 'image' || asset.type === 'video') ? <Button variant="outline" onClick={() => void upscale()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 <Button variant="destructive" onClick={() => void toggleTrash()}><Trash2 className="mr-2 h-4 w-4" />{asset.trashed ? 'Restore' : 'Move to trash'}</Button>
