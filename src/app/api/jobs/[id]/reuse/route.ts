@@ -129,11 +129,10 @@ function buildReusePayload(action: ReuseAction, outputUrl: string, snapshot: Rec
     action,
     type: 'video',
     modelId: 'wan22',
-    prompt,
+    prompt: '',
     imageInputPath: outputUrl,
+    preserveVideoDraftFields: true,
     options: {
-      width: typeof snapshot.width === 'number' ? snapshot.width : 768,
-      height: typeof snapshot.height === 'number' ? snapshot.height : 512,
       image_path: outputUrl,
     },
   };
