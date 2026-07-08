@@ -1,0 +1,270 @@
+import { NextRequest } from 'next/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockPrisma } = vi.hoisted(() => ({
+  mockPrisma: {
+    videoSequence: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    videoSequenceSegment: {
+      count: vi.fn(),
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      findMany: vi.fn(),
+    },
+    videoSegmentTemplate: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    $transaction: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: mockPrisma,
+}));
+
+import { POST as createSequence } from '@/app/api/video-sequences/route';
+import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
+import { PATCH as updateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/route';
+import { POST as insertFromTemplate } from '@/app/api/video-sequences/[id]/segments/from-template/route';
+import { POST as saveSegmentTemplate } from '@/app/api/video-sequences/[id]/segments/[segmentId]/save-template/route';
+
+function request(url: string, body: Record<string, unknown>) {
+  return new NextRequest(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function patchRequest(url: string, body: Record<string, unknown>) {
+  return new NextRequest(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+describe('video sequence APIs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('creates a persisted video sequence with generation defaults', async () => {
+    mockPrisma.videoSequence.create.mockImplementation(async ({ data, include }: any) => ({
+      id: 'seq-1',
+      ...data,
+      finalVideoUrl: null,
+      finalRenderJobId: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+      segments: include.segments ? [] : undefined,
+    }));
+
+    const response = await createSequence(request('http://localhost/api/video-sequences', {
+      workspaceId: 'ws-1',
+      title: 'Long take',
+      width: 832,
+      height: 1216,
+      defaultGenerationOptions: { steps: 8, cfg: 1.5 },
+    }) as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSequence.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        workspaceId: 'ws-1',
+        title: 'Long take',
+        width: 832,
+        height: 1216,
+        defaultModelId: 'wan22',
+        defaultGenerationOptionsJson: JSON.stringify({ steps: 8, cfg: 1.5 }),
+      }),
+    }));
+    expect(json.sequence).toMatchObject({
+      id: 'seq-1',
+      title: 'Long take',
+      defaultGenerationOptions: { steps: 8, cfg: 1.5 },
+      segments: [],
+    });
+  });
+
+  it('creates the first segment as an initial-source draft', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({ id: 'seq-1' });
+    mockPrisma.videoSequenceSegment.count.mockResolvedValue(0);
+    mockPrisma.videoSequenceSegment.create.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      ...data,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    }));
+
+    const response = await createSegment(request('http://localhost/api/video-sequences/seq-1/segments', {
+      prompt: 'slow push in',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSequenceSegment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sequenceId: 'seq-1',
+        orderIndex: 0,
+        title: 'Segment 1',
+        sourceMode: 'initial',
+        prompt: 'slow push in',
+        status: 'draft',
+      }),
+    });
+    expect(json.segment).toMatchObject({
+      id: 'seg-1',
+      orderIndex: 0,
+      sourceMode: 'initial',
+      loraConfig: {},
+      generationOptions: {},
+    });
+  });
+
+  it('inserts a draft segment from a saved template', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({ id: 'seq-1' });
+    mockPrisma.videoSegmentTemplate.findUnique.mockResolvedValue({
+      id: 'tpl-1',
+      workspaceId: 'ws-1',
+      name: 'Camera orbit',
+      category: 'Camera',
+      description: '',
+      promptTemplate: 'orbit around the subject',
+      negativePromptTemplate: 'jitter',
+      motionTemplate: 'smooth orbit',
+      continuityTemplate: 'keep clothing stable',
+      variablesJson: '[]',
+      loraConfigJson: '{"high":0.8}',
+      generationOptionsJson: '{"steps":8}',
+      defaultDurationSeconds: 6,
+      thumbnailUrl: null,
+      sourceSegmentId: 'seg-source',
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    });
+    mockPrisma.videoSequenceSegment.count.mockResolvedValue(1);
+    mockPrisma.videoSequenceSegment.create.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-2',
+      ...data,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      generationSnapshotJson: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    }));
+
+    const response = await insertFromTemplate(request('http://localhost/api/video-sequences/seq-1/segments/from-template', {
+      templateId: 'tpl-1',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSequenceSegment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sequenceId: 'seq-1',
+        orderIndex: 1,
+        title: 'Camera orbit',
+        sourceMode: 'previous_last_frame',
+        prompt: 'orbit around the subject',
+        templateId: 'tpl-1',
+        loraConfigJson: '{"high":0.8}',
+      }),
+    });
+    expect(json.segment).toMatchObject({
+      id: 'seg-2',
+      title: 'Camera orbit',
+      loraConfig: { high: 0.8 },
+      generationOptions: { steps: 8 },
+    });
+  });
+
+  it('saves a selected segment as a reusable template', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      title: 'Slow push',
+      prompt: 'slow push in',
+      negativePrompt: 'jitter',
+      motionPrompt: 'camera push',
+      continuityPrompt: 'keep subject stable',
+      loraConfigJson: '{"high":0.8}',
+      generationOptionsJson: '{"steps":8}',
+      durationSeconds: 6,
+      firstFrameUrl: '/first.jpg',
+      lastFrameUrl: '/last.jpg',
+      sequence: { workspaceId: 'ws-1' },
+    });
+    mockPrisma.videoSegmentTemplate.create.mockImplementation(async ({ data }: any) => ({
+      id: 'tpl-1',
+      ...data,
+      variablesJson: data.variablesJson ?? '[]',
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    }));
+
+    const response = await saveSegmentTemplate(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/save-template', {
+      name: 'Slow push template',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSegmentTemplate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workspaceId: 'ws-1',
+        name: 'Slow push template',
+        promptTemplate: 'slow push in',
+        thumbnailUrl: '/last.jpg',
+        sourceSegmentId: 'seg-1',
+      }),
+    });
+    expect(json.template).toMatchObject({
+      id: 'tpl-1',
+      name: 'Slow push template',
+      loraConfig: { high: 0.8 },
+      generationOptions: { steps: 8 },
+    });
+  });
+
+  it('rejects invalid segment JSON fields before updating', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({ id: 'seg-1' });
+
+    const response = await updateSegment(patchRequest('http://localhost/api/video-sequences/seq-1/segments/seg-1', {
+      loraConfigJson: '{broken',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({ success: false, error: 'JSON fields must contain valid JSON' });
+    expect(mockPrisma.videoSequenceSegment.update).not.toHaveBeenCalled();
+  });
+});

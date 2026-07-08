@@ -151,6 +151,8 @@ model Workspace {
   studioPoses                StudioPose[]
   studioPoseLibrarySettings  StudioPoseLibrarySettings?
   studioFramingPresets       StudioFramingPreset[]
+  videoSequences             VideoSequence[]
+  videoSegmentTemplates      VideoSegmentTemplate[]
 
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
@@ -188,6 +190,102 @@ model GalleryAsset {
   @@index([workspaceId, contentHash])
   @@index([sourceJobId])
   @@map("gallery_assets")
+}
+
+model VideoSequence {
+  id                           String   @id @default(uuid())
+  workspaceId                  String
+  title                        String
+  description                  String   @default("")
+  status                       String   @default("draft")
+  aspectRatio                  String   @default("16:9")
+  width                        Int      @default(1280)
+  height                       Int      @default(720)
+  targetFps                    Int      @default(24)
+  defaultModelId               String   @default("wan22")
+  defaultGenerationOptionsJson String   @default("{}")
+  finalVideoUrl                String?
+  finalRenderJobId             String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  segments  VideoSequenceSegment[]
+
+  @@index([workspaceId, updatedAt(sort: Desc)])
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@map("video_sequences")
+}
+
+model VideoSequenceSegment {
+  id                     String   @id @default(uuid())
+  sequenceId             String
+  orderIndex             Int
+  title                  String
+  status                 String   @default("draft")
+  sourceMode             String   @default("previous_last_frame")
+  sourceImageUrl         String?
+  sourceImageAssetId     String?
+  sourceJobId            String?
+  sourceSegmentId        String?
+  sourceFrameRole        String   @default("last")
+  sourceFrozen           Boolean  @default(false)
+  prompt                 String   @default("")
+  negativePrompt         String   @default("")
+  motionPrompt           String   @default("")
+  continuityPrompt       String   @default("")
+  modelId                String   @default("wan22")
+  endpointId             String?
+  loraConfigJson         String   @default("{}")
+  generationOptionsJson  String   @default("{}")
+  seed                   Int?
+  randomizeSeed          Boolean  @default(true)
+  durationSeconds        Int      @default(6)
+  generationJobId        String?
+  outputVideoUrl         String?
+  firstFrameUrl          String?
+  lastFrameUrl           String?
+  templateId             String?
+  templateSnapshotJson   String?
+  generationSnapshotJson String?
+  error                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  sequence VideoSequence         @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template VideoSegmentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([sequenceId, orderIndex])
+  @@index([generationJobId])
+  @@index([templateId])
+  @@map("video_sequence_segments")
+}
+
+model VideoSegmentTemplate {
+  id                     String   @id @default(uuid())
+  workspaceId            String
+  name                   String
+  category               String   @default("General")
+  description            String   @default("")
+  promptTemplate         String   @default("")
+  negativePromptTemplate String   @default("")
+  motionTemplate         String   @default("")
+  continuityTemplate     String   @default("")
+  variablesJson          String   @default("[]")
+  loraConfigJson         String   @default("{}")
+  generationOptionsJson  String   @default("{}")
+  defaultDurationSeconds Int      @default(6)
+  thumbnailUrl           String?
+  sourceSegmentId        String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  segments  VideoSequenceSegment[]
+
+  @@index([workspaceId, category, updatedAt(sort: Desc)])
+  @@index([workspaceId, updatedAt(sort: Desc)])
+  @@map("video_segment_templates")
 }
 
 model VideoProject {
