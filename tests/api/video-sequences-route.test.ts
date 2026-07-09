@@ -64,6 +64,7 @@ vi.mock('@/lib/ffmpegService', () => ({
 }));
 
 import { POST as createSequence } from '@/app/api/video-sequences/route';
+import { DELETE as deleteSequence } from '@/app/api/video-sequences/[id]/route';
 import { POST as generateFromSegment } from '@/app/api/video-sequences/[id]/generate-from/route';
 import { POST as renderSequence } from '@/app/api/video-sequences/[id]/render/route';
 import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
@@ -156,6 +157,21 @@ describe('video sequence APIs', () => {
       defaultGenerationOptions: { steps: 8, cfg: 1.5 },
       segments: [],
     });
+  });
+
+  it('deletes a video sequence', async () => {
+    mockPrisma.videoSequence.delete.mockResolvedValue({ id: 'seq-1' });
+
+    const response = await deleteSequence(new NextRequest('http://localhost/api/video-sequences/seq-1', {
+      method: 'DELETE',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.videoSequence.delete).toHaveBeenCalledWith({ where: { id: 'seq-1' } });
+    expect(json).toEqual({ success: true, deleted: true });
   });
 
   it('creates the first segment as an initial-source draft', async () => {

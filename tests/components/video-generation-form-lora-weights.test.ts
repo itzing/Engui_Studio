@@ -64,6 +64,7 @@ vi.mock('@/components/lora/LoRAManagementDialog', () => ({
 }));
 
 import VideoGenerationForm from '@/components/forms/VideoGenerationForm';
+import { getModelById } from '@/lib/models/modelConfig';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
   return Promise.resolve({
@@ -125,5 +126,12 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       expect(restoredHighInputs[0].value).toBe('1');
       expect(restoredLowInputs[0].value).toBe('1');
     });
+  });
+
+  it('keeps WAN22 Create Video defaults at 4 steps and 80 frames', () => {
+    const model = getModelById('wan22');
+    expect(model?.parameters.find((param) => param.name === 'steps')?.default).toBe(4);
+    expect(model?.parameters.find((param) => param.name === 'length')?.default).toBe(80);
+    expect(model?.parameters.find((param) => param.name === 'length')?.min).toBeLessThanOrEqual(80);
   });
 });

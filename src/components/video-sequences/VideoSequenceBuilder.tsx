@@ -456,10 +456,12 @@ export function getRenderBlocker(sequence: VideoSequence | null) {
   return null;
 }
 
-export function getHeaderActionTooltip(action: 'save' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
+export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
   switch (action) {
     case 'save':
       return 'Save sequence title, description, and selected segment changes';
+    case 'deleteSequence':
+      return 'Delete the active sequence after confirmation';
     case 'generate':
       return 'Generate only the selected segment';
     case 'generateFrom':
@@ -1068,6 +1070,21 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function deleteActiveSequence() {
+    if (!activeSequence || !workspaceId) return;
+    const confirmed = window.confirm(`Delete sequence "${activeSequence.title}"? This removes its segments too.`);
+    if (!confirmed) return;
+
+    await runAction('delete-sequence', async () => {
+      await fetchJson<{ success: true; deleted: true }>(`/api/video-sequences/${activeSequence.id}`, {
+        method: 'DELETE',
+      });
+      setSelectedSegmentId(null);
+      await loadWorkspaceData(workspaceId);
+      setNotice('Sequence deleted');
+    });
+  }
+
   async function addSegment() {
     if (!activeSequence) return;
     await runAction('segment', async () => {
@@ -1338,6 +1355,14 @@ export default function VideoSequenceBuilder() {
               disabled={!activeSequence || !!busy}
             >
               <Save className="h-4 w-4" />
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Delete active sequence"
+              tooltip={getHeaderActionTooltip('deleteSequence')}
+              onClick={deleteActiveSequence}
+              disabled={!activeSequence || !!busy}
+            >
+              {busy === 'delete-sequence' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </ToolbarIconButton>
             <ToolbarIconButton
               label="Generate selected segment"
