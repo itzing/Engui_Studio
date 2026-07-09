@@ -71,6 +71,7 @@ import { POST as applyGalleryAsset } from '@/app/api/video-sequences/[id]/segmen
 import { POST as insertFromTemplate } from '@/app/api/video-sequences/[id]/segments/from-template/route';
 import { POST as saveSegmentTemplate } from '@/app/api/video-sequences/[id]/segments/[segmentId]/save-template/route';
 import { POST as extractSegmentFrames } from '@/app/api/video-sequences/[id]/segments/[segmentId]/extract-frames/route';
+import { POST as pickManualFrame } from '@/app/api/video-sequences/[id]/segments/[segmentId]/pick-frame/route';
 import { POST as generateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/generate/route';
 import { POST as syncSegmentStatus } from '@/app/api/video-sequences/[id]/segments/[segmentId]/sync-status/route';
 import { buildVideoSegmentGenerationFormData } from '@/lib/video-sequences/server';
@@ -831,6 +832,92 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(400);
     expect(json.error).toBe('Segment output video is required before extracting frames');
     expect(mockFfmpegService.extractVideoFrame).not.toHaveBeenCalled();
+  });
+
+  it('picks a manual source frame from the previous segment output video', async () => {
+    const videoPath = path.join(process.cwd(), 'public', 'generations', 'video-sequence-picker-test.mp4');
+    fs.mkdirSync(path.dirname(videoPath), { recursive: true });
+    fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
+    createdFiles.add(videoPath);
+
+    mockPrisma.videoSequenceSegment.findFirst
+      .mockResolvedValueOnce({
+        id: 'seg-2',
+        sequenceId: 'seq-1',
+        orderIndex: 1,
+        status: 'draft',
+        outputVideoUrl: null,
+        firstFrameUrl: null,
+        lastFrameUrl: null,
+        generationJobId: null,
+        generationSnapshotJson: '{"draft":true}',
+        loraConfigJson: '{}',
+        generationOptionsJson: '{}',
+        templateSnapshotJson: null,
+        sequence: { workspaceId: 'ws-1' },
+      })
+      .mockResolvedValueOnce({
+        id: 'seg-1',
+        outputVideoUrl: '/generations/video-sequence-picker-test.mp4',
+      });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-2',
+      sequenceId: 'seq-1',
+      orderIndex: 1,
+      title: 'Segment 2',
+      status: data.status ?? 'draft',
+      sourceMode: data.sourceMode,
+      sourceImageUrl: data.sourceImageUrl,
+      sourceImageAssetId: data.sourceImageAssetId,
+      sourceJobId: data.sourceJobId,
+      sourceSegmentId: data.sourceSegmentId,
+      sourceFrameRole: data.sourceFrameRole,
+      sourceFrozen: data.sourceFrozen,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: null,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await pickManualFrame(request('http://localhost/api/video-sequences/seq-1/segments/seg-2/pick-frame', {
+      timeSeconds: 1.25,
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-2' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledWith(
+      videoPath,
+      expect.stringContaining('/manual-'),
+      expect.objectContaining({ time: '1.250', format: 'jpg', quality: 3 }),
+    );
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith({
+      where: { id: 'seg-2' },
+      data: expect.objectContaining({
+        sourceMode: 'manual_frame',
+        sourceImageUrl: expect.stringMatching(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-2\/frames\/manual-[a-f0-9]{10}\.jpg$/),
+        sourceSegmentId: 'seg-1',
+        sourceFrameRole: 'custom',
+      }),
+    });
+    expect(json.segment.sourceMode).toBe('manual_frame');
+    expect(json.segment.sourceImageUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-2\/frames\/manual-[a-f0-9]{10}\.jpg$/);
   });
 
   it('generate-from queues the first eligible segment after a completed previous segment', async () => {

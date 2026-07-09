@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -137,6 +137,10 @@ function jsonText(value: unknown, fallback: unknown) {
   return JSON.stringify(value ?? fallback, null, 2);
 }
 
+function formatSeconds(value: number) {
+  return `${value.toFixed(2)}s`;
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: 'no-store',
@@ -233,8 +237,8 @@ export function getHeaderActionTooltip(action: 'save' | 'generate' | 'generateFr
 }
 
 export function getSegmentInspectorActionTooltip(
-  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'frames' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo',
-  context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean },
+  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'frames' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
+  context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean; hasPreviousOutput?: boolean },
 ) {
   switch (action) {
     case 'saveSegment':
@@ -261,6 +265,10 @@ export function getSegmentInspectorActionTooltip(
       return context?.isFirstSegment
         ? 'Choose a Gallery video and seed segment 1 as an already completed segment'
         : 'Gallery video can only seed segment 1; use Previous last frame for chained follow-up segments';
+    case 'manualFramePicker':
+      return context?.hasPreviousOutput
+        ? 'Open the previous segment video and pick a custom source frame for this segment'
+        : 'Manual frame picker becomes available after the previous segment has an output video';
   }
 }
 
@@ -281,10 +289,20 @@ export default function VideoSequenceBuilder() {
   const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState('');
+  const [framePickerOpen, setFramePickerOpen] = useState(false);
+  const [framePickerTime, setFramePickerTime] = useState(0);
+  const [framePickerDuration, setFramePickerDuration] = useState(0);
+  const framePickerVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
   ), [activeSequence, selectedSegmentId]);
+
+  const previousSegment = useMemo(() => (
+    selectedSegment && activeSequence
+      ? activeSequence.segments.find((segment) => segment.orderIndex === selectedSegment.orderIndex - 1) ?? null
+      : null
+  ), [activeSequence, selectedSegment]);
 
   const totalDuration = useMemo(() => (
     activeSequence?.segments.reduce((sum, segment) => sum + (segment.durationSeconds || 0), 0) ?? 0
@@ -296,6 +314,7 @@ export default function VideoSequenceBuilder() {
       ? getSegmentSourcePreviewUrl(selectedSegment, activeSequence.segments)
       : null
   ), [activeSequence, selectedSegment]);
+  const previousSegmentOutputVideoUrl = previousSegment?.outputVideoUrl ?? null;
   const timelineStatus = activeSequence?.finalVideoUrl
     ? 'Final rendered'
     : renderBlocker ?? `00:00 - 00:${String(totalDuration).padStart(2, '0')}`;
@@ -387,6 +406,9 @@ export default function VideoSequenceBuilder() {
     } else {
       setSegmentDraft(emptySegmentDraft());
     }
+    setFramePickerOpen(false);
+    setFramePickerTime(0);
+    setFramePickerDuration(0);
   }, [selectedSegment]);
 
   async function runAction(label: string, action: () => Promise<void>) {
@@ -440,6 +462,37 @@ export default function VideoSequenceBuilder() {
       setGalleryAssets([]);
       await loadSequence(activeSequence.id, selectedSegment.id);
       setNotice(galleryPickerType === 'video' ? 'Gallery video applied as first segment' : 'Gallery image applied as source');
+    });
+  }
+
+  function openManualFramePicker() {
+    if (!selectedSegment || !previousSegmentOutputVideoUrl) return;
+    setSegmentDraft((draft) => ({ ...draft, sourceMode: 'manual_frame' }));
+    setFramePickerTime(0);
+    setFramePickerDuration(0);
+    setFramePickerOpen(true);
+  }
+
+  function seekFramePickerVideo(nextTime: number) {
+    setFramePickerTime(nextTime);
+    if (framePickerVideoRef.current) {
+      framePickerVideoRef.current.currentTime = nextTime;
+    }
+  }
+
+  async function pickManualFrame() {
+    if (!activeSequence || !selectedSegment) return;
+    await runAction('pick-frame', async () => {
+      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/pick-frame`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ timeSeconds: framePickerTime }),
+        },
+      );
+      setFramePickerOpen(false);
+      await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(`Manual frame picked at ${formatSeconds(framePickerTime)}`);
     });
   }
 
@@ -956,6 +1009,19 @@ export default function VideoSequenceBuilder() {
                       className="h-9 border-white/10 bg-zinc-900 text-sm"
                       placeholder="Source image URL"
                     />
+                    <ActionTooltip tooltip={getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: !!previousSegmentOutputVideoUrl })}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 w-full gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                        onClick={openManualFramePicker}
+                        disabled={!previousSegmentOutputVideoUrl || !!busy}
+                        aria-label="Pick manual frame from previous segment video"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Pick frame from previous video
+                      </Button>
+                    </ActionTooltip>
                     <div className="grid grid-cols-2 gap-2">
                       <ActionTooltip tooltip={getSegmentInspectorActionTooltip('galleryImage')} className="min-w-0">
                         <Button
@@ -1103,6 +1169,78 @@ export default function VideoSequenceBuilder() {
           )}
         </div>
       </aside>
+      {framePickerOpen && previousSegmentOutputVideoUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+              <div>
+                <div className="text-sm font-semibold">Pick manual source frame</div>
+                <div className="text-xs text-zinc-500">
+                  Previous segment video to custom frame for {selectedSegment?.title ?? 'selected segment'}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                onClick={() => setFramePickerOpen(false)}
+                disabled={busy === 'pick-frame'}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="space-y-4 p-4">
+              <div className="overflow-hidden rounded-md border border-white/10 bg-black">
+                <video
+                  ref={framePickerVideoRef}
+                  src={previousSegmentOutputVideoUrl}
+                  controls
+                  playsInline
+                  className="max-h-[52vh] w-full bg-black"
+                  onLoadedMetadata={(event) => {
+                    const duration = event.currentTarget.duration;
+                    setFramePickerDuration(Number.isFinite(duration) && duration > 0 ? duration : 0);
+                  }}
+                  onTimeUpdate={(event) => {
+                    if (busy !== 'pick-frame') setFramePickerTime(event.currentTarget.currentTime);
+                  }}
+                />
+              </div>
+              <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+                  <span>Frame time</span>
+                  <span className="font-mono text-zinc-300">{formatSeconds(framePickerTime)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(framePickerDuration || previousSegment?.durationSeconds || 6, 0.1)}
+                  step={0.05}
+                  value={Math.min(framePickerTime, Math.max(framePickerDuration || previousSegment?.durationSeconds || 6, 0.1))}
+                  onChange={(event) => seekFramePickerVideo(Number(event.target.value))}
+                  disabled={busy === 'pick-frame'}
+                  className="w-full accent-cyan-400"
+                  aria-label="Manual frame time"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-zinc-500">
+                  `Pick frame` extracts the current timestamp and sets this segment to Manual frame.
+                </div>
+                <Button
+                  type="button"
+                  className="h-9 min-w-32 gap-2"
+                  onClick={pickManualFrame}
+                  disabled={busy === 'pick-frame'}
+                >
+                  {busy === 'pick-frame' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  Pick frame
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {galleryPickerType ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
           <div className="flex max-h-[82vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">

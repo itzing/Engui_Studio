@@ -100,5 +100,6 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getSegmentInspectorActionTooltip('status', { hasJob: false })).toContain('available after');
     expect(getSegmentInspectorActionTooltip('frames', { hasOutput: true })).toContain('first and last frames');
     expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
+    expect(getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: true })).toContain('pick a custom source frame');
   });
 });

@@ -42,6 +42,15 @@ function asOptionalNonNegativeInt(value: unknown, fieldName: string): number | u
   return next;
 }
 
+function asOptionalNonNegativeNumber(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const next = Number(value);
+  if (!Number.isFinite(next) || next < 0) {
+    throw new StudioSessionApiError(400, `${fieldName} must be a non-negative number`);
+  }
+  return next;
+}
+
 function asOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
@@ -1055,6 +1064,86 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   if (previousLastFrameUrl !== lastFrameUrl) {
     await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
   }
+
+  return serializeVideoSegment(updated);
+}
+
+export async function pickManualFrameForVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
+  const timeSeconds = asOptionalNonNegativeNumber(input.timeSeconds, 'timeSeconds');
+  if (timeSeconds === undefined) {
+    throw new StudioSessionApiError(400, 'timeSeconds is required');
+  }
+
+  const segment = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+    include: { sequence: { select: { workspaceId: true } } },
+  });
+  if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+  if (segment.orderIndex <= 0) {
+    throw new StudioSessionApiError(400, 'Manual frame picker requires a previous segment');
+  }
+
+  const previous = await prisma.videoSequenceSegment.findFirst({
+    where: { sequenceId, orderIndex: segment.orderIndex - 1 },
+    select: { id: true, outputVideoUrl: true },
+  });
+  if (!previous?.outputVideoUrl) {
+    throw new StudioSessionApiError(400, 'Previous segment output video is required before picking a manual frame');
+  }
+
+  const inputPath = resolveLocalPublicPath(previous.outputVideoUrl);
+  if (!inputPath || !fs.existsSync(inputPath)) {
+    throw new StudioSessionApiError(400, 'Previous segment output video must be a local /generations or /results file before picking a manual frame');
+  }
+
+  const ffmpegAvailable = await ffmpegService.isFFmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new StudioSessionApiError(500, 'FFmpeg is not available for manual frame picking');
+  }
+
+  const timeKey = timeSeconds.toFixed(3);
+  const hash = crypto.createHash('md5')
+    .update(`${previous.outputVideoUrl}:${timeKey}:${segmentId}`)
+    .digest('hex')
+    .slice(0, 10);
+  const fileName = `manual-${hash}.jpg`;
+  const sourceImageUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, fileName);
+
+  await ffmpegService.extractVideoFrame(
+    inputPath,
+    sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, fileName),
+    { position: 'first', time: timeKey, format: 'jpg', quality: 3 },
+  );
+
+  const existingSnapshot = parseJsonObjectField(segment.generationSnapshotJson);
+  const data: Record<string, unknown> = {
+    sourceMode: 'manual_frame',
+    sourceImageUrl,
+    sourceImageAssetId: null,
+    sourceJobId: null,
+    sourceSegmentId: previous.id,
+    sourceFrameRole: 'custom',
+    sourceFrozen: false,
+    error: null,
+    generationSnapshotJson: JSON.stringify({
+      ...existingSnapshot,
+      manualFramePicker: {
+        sourceSegmentId: previous.id,
+        sourceVideoUrl: previous.outputVideoUrl,
+        sourceImageUrl,
+        timeSeconds,
+        pickedAt: new Date().toISOString(),
+      },
+    }),
+  };
+  if (hasGeneratedSegmentOutput(segment)) {
+    data.status = 'stale';
+  }
+
+  const updated = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data,
+  });
 
   return serializeVideoSegment(updated);
 }
