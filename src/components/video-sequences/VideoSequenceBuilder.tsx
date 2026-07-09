@@ -388,7 +388,7 @@ export function getHeaderActionTooltip(action: 'save' | 'generate' | 'generateFr
 }
 
 export function getSegmentInspectorActionTooltip(
-  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'frames' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
+  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
   context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean; hasPreviousOutput?: boolean },
 ) {
   switch (action) {
@@ -402,10 +402,6 @@ export function getSegmentInspectorActionTooltip(
       return context?.hasJob
         ? 'Refresh this segment job status and import completed output, first frame, and last frame metadata'
         : 'Refresh status becomes available after this segment has a generation job';
-    case 'frames':
-      return context?.hasOutput
-        ? 'Extract and store first and last frames from this segment output video'
-        : 'Extract frames becomes available after this segment has an output video';
     case 'saveTemplate':
       return 'Save this segment prompt, model, and generation settings as a reusable segment template';
     case 'delete':
@@ -943,18 +939,6 @@ export default function VideoSequenceBuilder() {
     });
   }
 
-  async function extractSelectedFrames() {
-    if (!activeSequence || !selectedSegment) return;
-    await runAction('frames', async () => {
-      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
-        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/extract-frames`,
-        { method: 'POST' },
-      );
-      await loadSequence(activeSequence.id, selectedSegment.id);
-      setNotice(`Frames extracted for ${selectedSegment.title}`);
-    });
-  }
-
   async function renderFinalVideo() {
     if (!activeSequence || renderBlocker) return;
     await runAction('render', async () => {
@@ -1195,7 +1179,7 @@ export default function VideoSequenceBuilder() {
                           {segment.status}
                         </span>
                       </div>
-                      <div className="grid grid-cols-[72px_1fr_72px] gap-px bg-white/10">
+                      <div className="grid h-[88px] grid-cols-[72px_1fr_72px] gap-px bg-white/10">
                         <MediaCell type="image" url={getSegmentSourcePreviewUrl(segment, activeSequence.segments)} icon={<Images className="h-5 w-5" />} />
                         <MediaCell type="video" url={segment.outputVideoUrl} icon={<Film className="h-6 w-6" />} />
                         <MediaCell type="image" url={segment.lastFrameUrl} icon={<Images className="h-5 w-5" />} />
@@ -1541,11 +1525,6 @@ export default function VideoSequenceBuilder() {
                     {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   </Button>
                 </ActionTooltip>
-                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('frames', { hasOutput: !!selectedSegment.outputVideoUrl })}>
-                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={extractSelectedFrames} disabled={!selectedSegment.outputVideoUrl || !!busy} aria-label="Extract segment frames">
-                    {busy === 'frames' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                  </Button>
-                </ActionTooltip>
               </div>
 
               <div className="flex items-center justify-between gap-2">
@@ -1809,12 +1788,12 @@ export default function VideoSequenceBuilder() {
 
 function MediaCell({ type, url, icon }: { type: 'image' | 'video'; url: string | null; icon: ReactNode }) {
   return (
-    <div className={cn('bg-zinc-950 p-2', type === 'video' ? 'aspect-video' : 'aspect-[3/4]')}>
+    <div className="min-h-0 bg-zinc-950 p-1.5">
       <div className="flex h-full items-center justify-center overflow-hidden rounded border border-white/10 bg-zinc-900 text-zinc-500">
         {url ? (
           type === 'image'
-            ? <img src={url} alt="" className="h-full w-full object-cover" />
-            : <video src={url} className="h-full w-full object-cover" muted playsInline />
+            ? <img src={url} alt="" className="h-full w-full object-contain" />
+            : <video src={url} className="h-full w-full object-contain" muted playsInline />
         ) : icon}
       </div>
     </div>

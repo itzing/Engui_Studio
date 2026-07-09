@@ -97,7 +97,7 @@ function patchRequest(url: string, body: Record<string, unknown>) {
 
 describe('video sequence APIs', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     mockFfmpegService.isFFmpegAvailable.mockResolvedValue(true);
     mockFfmpegService.extractVideoFrame.mockResolvedValue('/tmp/frame.jpg');
@@ -204,7 +204,7 @@ describe('video sequence APIs', () => {
   });
 
   it('applies a Gallery image as the selected segment source frame', async () => {
-    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+    const existingSegment = {
       id: 'seg-1',
       sequenceId: 'seq-1',
       orderIndex: 0,
@@ -239,7 +239,8 @@ describe('video sequence APIs', () => {
       sequence: { workspaceId: 'ws-1' },
       createdAt: new Date('2026-07-08T22:00:00Z'),
       updatedAt: new Date('2026-07-08T22:00:00Z'),
-    });
+    };
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue(existingSegment);
     mockPrisma.galleryAsset.findFirst.mockResolvedValue({
       id: 'asset-image-1',
       type: 'image',
@@ -313,7 +314,7 @@ describe('video sequence APIs', () => {
     fs.mkdirSync(path.dirname(videoPath), { recursive: true });
     fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
     createdFiles.add(videoPath);
-    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+    const existingSegment = {
       id: 'seg-1',
       sequenceId: 'seq-1',
       orderIndex: 0,
@@ -348,7 +349,22 @@ describe('video sequence APIs', () => {
       sequence: { workspaceId: 'ws-1' },
       createdAt: new Date('2026-07-08T22:00:00Z'),
       updatedAt: new Date('2026-07-08T22:00:00Z'),
-    });
+    };
+    mockPrisma.videoSequenceSegment.findFirst
+      .mockResolvedValueOnce(existingSegment)
+      .mockResolvedValueOnce({
+        ...existingSegment,
+        status: 'completed',
+        sourceMode: 'gallery_asset',
+        sourceImageAssetId: 'asset-video-1',
+        sourceImageUrl: '/generations/gallery/ws-1/video-thumb.jpg',
+        sourceFrozen: true,
+        outputVideoUrl: '/generations/gallery/ws-1/video.mp4',
+        firstFrameUrl: null,
+        lastFrameUrl: null,
+        generationJobId: null,
+        generationSnapshotJson: '{"source":"gallery_asset","assetId":"asset-video-1","originalUrl":"/generations/gallery/ws-1/video.mp4"}',
+      });
     mockPrisma.galleryAsset.findFirst.mockResolvedValue({
       id: 'asset-video-1',
       type: 'video',
@@ -369,30 +385,11 @@ describe('video sequence APIs', () => {
         generationJobId: 'job-2',
       },
     ]);
-    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
-      id: 'seg-1',
-      sequenceId: 'seq-1',
-      orderIndex: 0,
-      title: 'Segment 1',
-      sourceFrameRole: 'last',
-      prompt: '',
-      negativePrompt: '',
-      motionPrompt: '',
-      continuityPrompt: '',
-      modelId: 'wan22',
-      endpointId: null,
-      loraConfigJson: '{}',
-      generationOptionsJson: '{}',
-      seed: null,
-      randomizeSeed: true,
-      durationSeconds: 6,
-      templateId: null,
-      templateSnapshotJson: null,
-      error: null,
-      createdAt: new Date('2026-07-08T22:00:00Z'),
-      updatedAt: new Date('2026-07-08T22:00:00Z'),
-      ...data,
-    }));
+    let currentSegment = { ...existingSegment };
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => {
+      currentSegment = { ...currentSegment, ...data };
+      return currentSegment;
+    });
 
     const response = await applyGalleryAsset(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/gallery-asset', {
       assetId: 'asset-video-1',
@@ -426,13 +423,14 @@ describe('video sequence APIs', () => {
         aspectRatio: '13:19',
       },
     });
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
     expect(mockPrisma.videoSequenceSegment.updateMany).toHaveBeenCalled();
     expect(json.segment).toMatchObject({
       status: 'completed',
       outputVideoUrl: '/generations/gallery/ws-1/video.mp4',
-      firstFrameUrl: null,
-      lastFrameUrl: null,
     });
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
   });
 
   it('inserts a draft segment from a saved template', async () => {
@@ -1496,6 +1494,76 @@ describe('video sequence APIs', () => {
       outputVideoUrl: '/generations/seg-1.mp4',
       lastFrameUrl: '/generations/last.jpg',
     });
+  });
+
+  it('auto-extracts first and last frames when segment output changes', async () => {
+    const videoPath = path.join(process.cwd(), 'public', 'generations', 'video-sequence-new-output.mp4');
+    fs.mkdirSync(path.dirname(videoPath), { recursive: true });
+    fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
+    createdFiles.add(videoPath);
+
+    const existingSegment = {
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'completed',
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: 'job-1',
+      outputVideoUrl: '/generations/old-output.mp4',
+      firstFrameUrl: '/generations/old-first.jpg',
+      lastFrameUrl: '/generations/old-last.jpg',
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: '{"jobId":"job-1"}',
+      error: null,
+      sequence: { workspaceId: 'ws-1' },
+    };
+    mockPrisma.videoSequenceSegment.findFirst
+      .mockResolvedValueOnce(existingSegment)
+      .mockResolvedValueOnce({
+        ...existingSegment,
+        outputVideoUrl: '/generations/video-sequence-new-output.mp4',
+        firstFrameUrl: null,
+        lastFrameUrl: null,
+      });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      ...existingSegment,
+      ...data,
+    }));
+
+    const response = await updateSegment(patchRequest('http://localhost/api/video-sequences/seq-1/segments/seg-1', {
+      outputVideoUrl: '/generations/video-sequence-new-output.mp4',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'seg-1' },
+      data: expect.objectContaining({
+        outputVideoUrl: '/generations/video-sequence-new-output.mp4',
+        firstFrameUrl: null,
+        lastFrameUrl: null,
+      }),
+    });
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
   });
 
   it('marks downstream previous-last-frame outputs stale when extracted last frame changes', async () => {

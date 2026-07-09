@@ -405,6 +405,11 @@ export async function updateVideoSequenceSegment(sequenceId: string, segmentId: 
   if (!existing) throw new StudioSessionApiError(404, 'Video sequence segment not found');
 
   const data = segmentDataFromInput(input, {});
+  const outputVideoChanged = Object.prototype.hasOwnProperty.call(data, 'outputVideoUrl') && data.outputVideoUrl !== existing.outputVideoUrl;
+  if (outputVideoChanged) {
+    if (!Object.prototype.hasOwnProperty.call(data, 'firstFrameUrl')) data.firstFrameUrl = null;
+    if (!Object.prototype.hasOwnProperty.call(data, 'lastFrameUrl')) data.lastFrameUrl = null;
+  }
   const lastFrameChanged = Object.prototype.hasOwnProperty.call(data, 'lastFrameUrl') && data.lastFrameUrl !== existing.lastFrameUrl;
   if (hasGeneratedSegmentOutput(existing) && didGenerationRelevantInputChange(existing as unknown as Record<string, unknown>, data)) {
     data.status = 'stale';
@@ -416,6 +421,9 @@ export async function updateVideoSequenceSegment(sequenceId: string, segmentId: 
   });
   if (lastFrameChanged) {
     await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, existing.orderIndex);
+  }
+  if (outputVideoChanged && segment.outputVideoUrl) {
+    return tryExtractVideoSequenceSegmentFrames(sequenceId, segmentId, segment);
   }
   return serializeVideoSegment(segment);
 }
@@ -511,6 +519,9 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
   });
   if (lastFrameChanged) {
     await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, existing.orderIndex);
+  }
+  if (mode === 'completed_video' && segment.outputVideoUrl) {
+    return tryExtractVideoSequenceSegmentFrames(sequenceId, segmentId, segment);
   }
   return serializeVideoSegment(segment);
 }
@@ -1156,6 +1167,19 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   }
 
   return serializeVideoSegment(updated);
+}
+
+async function tryExtractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string, fallbackSegment: unknown) {
+  try {
+    return await extractVideoSequenceSegmentFrames(sequenceId, segmentId);
+  } catch (error) {
+    console.warn('Failed to auto-extract video sequence segment frames after output update', {
+      sequenceId,
+      segmentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serializeVideoSegment(fallbackSegment as Parameters<typeof serializeVideoSegment>[0]);
+  }
 }
 
 export async function pickManualFrameForVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
