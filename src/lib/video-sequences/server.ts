@@ -155,6 +155,70 @@ function segmentCreateDefaults(orderIndex: number) {
   };
 }
 
+const generationRelevantSegmentFields = [
+  'sourceMode',
+  'sourceImageUrl',
+  'sourceImageAssetId',
+  'sourceJobId',
+  'sourceSegmentId',
+  'sourceFrameRole',
+  'prompt',
+  'negativePrompt',
+  'motionPrompt',
+  'continuityPrompt',
+  'modelId',
+  'endpointId',
+  'loraConfigJson',
+  'generationOptionsJson',
+  'seed',
+  'randomizeSeed',
+  'durationSeconds',
+] as const;
+
+function hasGeneratedSegmentOutput(segment: { outputVideoUrl?: string | null; firstFrameUrl?: string | null; lastFrameUrl?: string | null; generationJobId?: string | null }) {
+  return Boolean(segment.outputVideoUrl || segment.firstFrameUrl || segment.lastFrameUrl || segment.generationJobId);
+}
+
+function didGenerationRelevantInputChange(existing: Record<string, unknown>, data: Record<string, unknown>) {
+  return generationRelevantSegmentFields.some((field) => (
+    Object.prototype.hasOwnProperty.call(data, field) && data[field] !== existing[field]
+  ));
+}
+
+export async function markDownstreamPreviousLastFrameSegmentsStale(sequenceId: string, upstreamOrderIndex: number) {
+  const downstream = await prisma.videoSequenceSegment.findMany({
+    where: { sequenceId, orderIndex: { gt: upstreamOrderIndex } },
+    orderBy: { orderIndex: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      sourceMode: true,
+      sourceFrozen: true,
+      outputVideoUrl: true,
+      firstFrameUrl: true,
+      lastFrameUrl: true,
+      generationJobId: true,
+    },
+  });
+
+  const staleIds: string[] = [];
+  for (const segment of downstream) {
+    if (segment.sourceMode !== 'previous_last_frame' || segment.sourceFrozen) break;
+    if (hasGeneratedSegmentOutput(segment) && segment.status !== 'queued' && segment.status !== 'processing') {
+      staleIds.push(segment.id);
+    }
+  }
+
+  if (staleIds.length) {
+    await prisma.videoSequenceSegment.updateMany({
+      where: { id: { in: staleIds } },
+      data: { status: 'stale' },
+    });
+  }
+
+  return staleIds;
+}
+
 export function serializeVideoSegment(segment: any) {
   return {
     ...segment,
@@ -270,13 +334,22 @@ export async function createVideoSequenceSegment(sequenceId: string, input: Reco
 }
 
 export async function updateVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
-  const existing = await prisma.videoSequenceSegment.findFirst({ where: { id: segmentId, sequenceId }, select: { id: true } });
+  const existing = await prisma.videoSequenceSegment.findFirst({ where: { id: segmentId, sequenceId } });
   if (!existing) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  const data = segmentDataFromInput(input, {});
+  const lastFrameChanged = Object.prototype.hasOwnProperty.call(data, 'lastFrameUrl') && data.lastFrameUrl !== existing.lastFrameUrl;
+  if (hasGeneratedSegmentOutput(existing) && didGenerationRelevantInputChange(existing as unknown as Record<string, unknown>, data)) {
+    data.status = 'stale';
+  }
 
   const segment = await prisma.videoSequenceSegment.update({
     where: { id: segmentId },
-    data: segmentDataFromInput(input, {}),
+    data,
   });
+  if (lastFrameChanged) {
+    await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, existing.orderIndex);
+  }
   return serializeVideoSegment(segment);
 }
 
@@ -611,6 +684,9 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
       }),
     },
   });
+  if (hasGeneratedSegmentOutput(segment)) {
+    await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
+  }
 
   return { segment: serializeVideoSegment(updated), jobId, status: payload.status || 'IN_QUEUE' };
 }
@@ -813,6 +889,7 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   const lastFileName = `last-${hash}.jpg`;
   const firstFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName);
   const lastFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName);
+  const previousLastFrameUrl = segment.lastFrameUrl;
 
   await ffmpegService.extractVideoFrame(
     inputPath,
@@ -842,6 +919,9 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
       }),
     },
   });
+  if (previousLastFrameUrl !== lastFrameUrl) {
+    await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
+  }
 
   return serializeVideoSegment(updated);
 }
@@ -891,7 +971,7 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
     },
   });
 
-  if (nextStatus === 'completed' && outputVideoUrl && (!updated.firstFrameUrl || !updated.lastFrameUrl)) {
+  if (nextStatus === 'completed' && outputVideoUrl && (outputVideoUrl !== segment.outputVideoUrl || !updated.firstFrameUrl || !updated.lastFrameUrl)) {
     try {
       const frameSegment = await extractVideoSequenceSegmentFrames(sequenceId, segmentId);
       return { segment: frameSegment, job };
