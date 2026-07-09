@@ -30,6 +30,16 @@ function parseFraction(value: unknown, fallback: number) {
   return numerator / denominator;
 }
 
+function positiveNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function positiveInteger(value: unknown) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function normalizedRotation(stream: any) {
   const raw = stream?.tags?.rotate ?? stream?.side_data_list?.find((item: any) => item?.rotation !== undefined)?.rotation;
   const parsed = Number(raw);
@@ -49,13 +59,18 @@ export function videoInfoFromFfprobeJson(value: string, inputPath: string) {
   const rotation = normalizedRotation(stream);
   const shouldSwapDimensions = rotation === 90 || rotation === 270;
   const duration = Number(parsed?.format?.duration);
+  const streamDuration = positiveNumber(stream?.duration);
   const fps = parseFraction(stream?.avg_frame_rate, parseFraction(stream?.r_frame_rate, 30));
+  const safeDuration = Number.isFinite(duration) && duration >= 0 ? duration : (streamDuration ?? 0);
+  const explicitFrameCount = positiveInteger(stream?.nb_read_frames) ?? positiveInteger(stream?.nb_frames);
+  const frameCount = explicitFrameCount ?? (safeDuration > 0 && fps > 0 ? Math.round(safeDuration * fps) : null);
 
   return {
-    duration: Number.isFinite(duration) && duration >= 0 ? duration : 0,
+    duration: safeDuration,
     width: shouldSwapDimensions ? height : width,
     height: shouldSwapDimensions ? width : height,
     fps: Number.isFinite(fps) && fps > 0 ? fps : 30,
+    frameCount,
     format: path.extname(inputPath).toLowerCase(),
   };
 }
@@ -72,12 +87,14 @@ export function videoInfoFromFfmpegStderr(value: string, inputPath: string) {
   const [, hours, minutes, seconds] = durationMatch;
   const [, width, height] = streamMatch;
   const duration = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
+  const fps = fpsMatch ? parseFloat(fpsMatch[1]) : 30;
 
   return {
     duration,
     width: parseInt(width),
     height: parseInt(height),
-    fps: fpsMatch ? parseFloat(fpsMatch[1]) : 30,
+    fps,
+    frameCount: duration > 0 && fps > 0 ? Math.round(duration * fps) : null,
     format: path.extname(inputPath).toLowerCase(),
   };
 }
@@ -320,9 +337,10 @@ export class FFmpegService {
     width: number;
     height: number;
     fps: number;
+    frameCount: number | null;
     format: string;
   }> {
-    const ffprobeCommand = `"${this.getFFprobePath()}" -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,r_frame_rate:stream_tags=rotate:stream_side_data=rotation:format=duration -of json "${inputPath}"`;
+    const ffprobeCommand = `"${this.getFFprobePath()}" -v error -count_frames -select_streams v:0 -show_entries stream=width,height,duration,avg_frame_rate,r_frame_rate,nb_frames,nb_read_frames:stream_tags=rotate:stream_side_data=rotation:format=duration -of json "${inputPath}"`;
 
     try {
       const { stdout } = await execAsync(ffprobeCommand, {

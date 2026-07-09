@@ -14,6 +14,7 @@ describe('ffmpeg video info parsing', () => {
       width: 768,
       height: 512,
       fps: 16,
+      frameCount: 81,
       format: '.mp4',
     });
   });
@@ -42,5 +43,6 @@ describe('ffmpeg video info parsing', () => {
     expect(info.width).toBe(768);
     expect(info.height).toBe(512);
     expect(info.fps).toBe(16);
+    expect(info.frameCount).toBe(81);
   });
 });

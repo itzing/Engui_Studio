@@ -138,6 +138,76 @@ function resolveLocalPublicPath(url: string) {
   return resolved;
 }
 
+function outputMetadataFromVideoInfo(outputVideoUrl: string, info: Awaited<ReturnType<typeof ffmpegService.getVideoInfo>>) {
+  const durationSeconds = Number.isFinite(info.duration) && info.duration > 0 ? info.duration : 0;
+  const fps = Number.isFinite(info.fps) && info.fps > 0 ? info.fps : null;
+  const frameCount = Number.isInteger(info.frameCount) && info.frameCount && info.frameCount > 0
+    ? info.frameCount
+    : (durationSeconds > 0 && fps ? Math.round(durationSeconds * fps) : null);
+
+  return {
+    outputVideoUrl,
+    durationSeconds,
+    fps,
+    frameCount,
+    width: info.width,
+    height: info.height,
+    format: info.format,
+  };
+}
+
+function outputMetadataFromSnapshot(snapshot: Record<string, unknown>, outputVideoUrl: string | null | undefined) {
+  const candidates = [
+    snapshot.outputVideoMetadata,
+    (snapshot.frameExtraction && typeof snapshot.frameExtraction === 'object' && !Array.isArray(snapshot.frameExtraction))
+      ? (snapshot.frameExtraction as Record<string, unknown>).outputVideoMetadata
+      : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const metadata = candidate as Record<string, unknown>;
+    if (outputVideoUrl && typeof metadata.outputVideoUrl === 'string' && metadata.outputVideoUrl !== outputVideoUrl) continue;
+    const durationSeconds = Number(metadata.durationSeconds);
+    const fps = Number(metadata.fps);
+    const frameCount = Number(metadata.frameCount);
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) continue;
+
+    return {
+      outputVideoUrl: typeof metadata.outputVideoUrl === 'string' ? metadata.outputVideoUrl : outputVideoUrl ?? null,
+      durationSeconds,
+      fps: Number.isFinite(fps) && fps > 0 ? fps : null,
+      frameCount: Number.isInteger(frameCount) && frameCount > 0 ? frameCount : null,
+      width: Number.isInteger(Number(metadata.width)) && Number(metadata.width) > 0 ? Number(metadata.width) : null,
+      height: Number.isInteger(Number(metadata.height)) && Number(metadata.height) > 0 ? Number(metadata.height) : null,
+      format: typeof metadata.format === 'string' ? metadata.format : null,
+    };
+  }
+
+  return null;
+}
+
+async function readOutputVideoMetadata(segment: { outputVideoUrl?: string | null; generationSnapshotJson?: string | null }) {
+  const snapshot = parseJsonObjectField(segment.generationSnapshotJson);
+  const snapshotMetadata = outputMetadataFromSnapshot(snapshot, segment.outputVideoUrl);
+  const outputVideoUrl = segment.outputVideoUrl;
+  if (!outputVideoUrl) return snapshotMetadata;
+
+  const inputPath = resolveLocalPublicPath(outputVideoUrl);
+  if (!inputPath || !fs.existsSync(inputPath)) return snapshotMetadata;
+
+  try {
+    const info = await ffmpegService.getVideoInfo(inputPath);
+    return outputMetadataFromVideoInfo(outputVideoUrl, info);
+  } catch (error) {
+    console.warn('Failed to read video sequence segment output metadata', {
+      outputVideoUrl,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return snapshotMetadata;
+  }
+}
+
 async function loadSourceImageBlob(sourceImageUrl: string) {
   const localPath = resolveLocalPublicPath(sourceImageUrl);
   if (localPath) {
@@ -296,12 +366,28 @@ export function serializeVideoSegment(segment: any) {
   };
 }
 
+async function serializeVideoSegmentWithOutputMetadata(segment: any) {
+  return {
+    ...serializeVideoSegment(segment),
+    outputVideoMetadata: await readOutputVideoMetadata(segment),
+  };
+}
+
 export function serializeVideoSequence(sequence: any) {
   return {
     ...sequence,
     defaultGenerationOptions: parseJsonField(sequence.defaultGenerationOptionsJson, {}),
     segments: Array.isArray(sequence.segments) ? sequence.segments.map(serializeVideoSegment) : undefined,
     segmentCount: sequence._count?.segments,
+  };
+}
+
+async function serializeVideoSequenceWithOutputMetadata(sequence: any) {
+  return {
+    ...serializeVideoSequence(sequence),
+    segments: Array.isArray(sequence.segments)
+      ? await Promise.all(sequence.segments.map(serializeVideoSegmentWithOutputMetadata))
+      : undefined,
   };
 }
 
@@ -352,7 +438,7 @@ export async function getVideoSequence(id: string) {
       segments: { orderBy: { orderIndex: 'asc' } },
     },
   });
-  return sequence ? serializeVideoSequence(sequence) : null;
+  return sequence ? serializeVideoSequenceWithOutputMetadata(sequence) : null;
 }
 
 export async function updateVideoSequence(id: string, input: Record<string, unknown>) {
@@ -397,7 +483,7 @@ export async function createVideoSequenceSegment(sequenceId: string, input: Reco
       ...segmentDataFromInput(input, defaults),
     },
   });
-  return serializeVideoSegment(segment);
+  return serializeVideoSegmentWithOutputMetadata(segment);
 }
 
 export async function updateVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
@@ -425,7 +511,7 @@ export async function updateVideoSequenceSegment(sequenceId: string, segmentId: 
   if (outputVideoChanged && segment.outputVideoUrl) {
     return tryExtractVideoSequenceSegmentFrames(sequenceId, segmentId, segment);
   }
-  return serializeVideoSegment(segment);
+  return serializeVideoSegmentWithOutputMetadata(segment);
 }
 
 export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
@@ -474,13 +560,13 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
     if (asset.type !== 'video') throw new StudioSessionApiError(400, 'Gallery video asset is required');
     if (existing.orderIndex !== 0) throw new StudioSessionApiError(400, 'Gallery video can only seed the first segment');
     const videoPath = resolveLocalPublicPath(asset.originalUrl);
-    let videoResolution: { width: number; height: number } | null = null;
+    let outputVideoMetadata: ReturnType<typeof outputMetadataFromVideoInfo> | null = null;
     if (videoPath && fs.existsSync(videoPath)) {
       try {
         const videoInfo = await ffmpegService.getVideoInfo(videoPath);
-        videoResolution = { width: videoInfo.width, height: videoInfo.height };
+        outputVideoMetadata = outputMetadataFromVideoInfo(asset.originalUrl, videoInfo);
       } catch (error) {
-        console.warn('Failed to read gallery video dimensions for sequence resolution', {
+        console.warn('Failed to read gallery video metadata for sequence resolution', {
           sequenceId,
           segmentId,
           assetId: asset.id,
@@ -499,14 +585,15 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
       source: 'gallery_asset',
       assetId: asset.id,
       originalUrl: asset.originalUrl,
+      outputVideoMetadata,
     }, {});
-    if (videoResolution) {
+    if (outputVideoMetadata?.width && outputVideoMetadata?.height) {
       await prisma.videoSequence.update({
         where: { id: sequenceId },
         data: {
-          width: videoResolution.width,
-          height: videoResolution.height,
-          aspectRatio: aspectRatioFromDimensions(videoResolution.width, videoResolution.height),
+          width: outputVideoMetadata.width,
+          height: outputVideoMetadata.height,
+          aspectRatio: aspectRatioFromDimensions(outputVideoMetadata.width, outputVideoMetadata.height),
         },
       });
     }
@@ -523,7 +610,7 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
   if (mode === 'completed_video' && segment.outputVideoUrl) {
     return tryExtractVideoSequenceSegmentFrames(sequenceId, segmentId, segment);
   }
-  return serializeVideoSegment(segment);
+  return serializeVideoSegmentWithOutputMetadata(segment);
 }
 
 export async function deleteVideoSequenceSegment(sequenceId: string, segmentId: string) {
@@ -855,7 +942,7 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
         generationSnapshotJson: JSON.stringify({ ...snapshot, error }),
       },
     });
-    return { segment: serializeVideoSegment(failed), jobId: null, status: 'FAILED', error };
+    return { segment: await serializeVideoSegmentWithOutputMetadata(failed), jobId: null, status: 'FAILED', error };
   }
 
   const updated = await prisma.videoSequenceSegment.update({
@@ -876,7 +963,7 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
     await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
   }
 
-  return { segment: serializeVideoSegment(updated), jobId, status: payload.status || 'IN_QUEUE' };
+  return { segment: await serializeVideoSegmentWithOutputMetadata(updated), jobId, status: payload.status || 'IN_QUEUE' };
 }
 
 type GenerateFromResult = {
@@ -930,7 +1017,7 @@ async function ensurePreviousLastFrame(sequenceId: string, segment: any) {
     }
   }
 
-  return serializeVideoSegment(previous);
+  return serializeVideoSegmentWithOutputMetadata(previous);
 }
 
 export async function generateVideoSequenceFrom(sequenceId: string, input: Record<string, unknown> = {}): Promise<GenerateFromResult> {
@@ -995,7 +1082,7 @@ export async function generateVideoSequenceFrom(sequenceId: string, input: Recor
         sequenceId,
         startSegmentId,
         action: 'blocked',
-        segment: serializeVideoSegment(segment),
+        segment: await serializeVideoSegmentWithOutputMetadata(segment),
         jobId: segment.generationJobId,
         message: `Generation stopped at unsupported segment status: ${segment.status}`,
         processedSegmentIds,
@@ -1133,6 +1220,7 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   const firstFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName);
   const lastFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName);
   const previousLastFrameUrl = segment.lastFrameUrl;
+  const outputVideoMetadata = outputMetadataFromVideoInfo(outputVideoUrl, await ffmpegService.getVideoInfo(inputPath));
 
   await ffmpegService.extractVideoFrame(
     inputPath,
@@ -1154,9 +1242,11 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
       error: null,
       generationSnapshotJson: JSON.stringify({
         ...existingSnapshot,
+        outputVideoMetadata,
         frameExtraction: {
           firstFrameUrl,
           lastFrameUrl,
+          outputVideoMetadata,
           extractedAt: new Date().toISOString(),
         },
       }),
@@ -1166,7 +1256,7 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
     await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
   }
 
-  return serializeVideoSegment(updated);
+  return serializeVideoSegmentWithOutputMetadata(updated);
 }
 
 async function tryExtractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string, fallbackSegment: unknown) {
@@ -1178,7 +1268,7 @@ async function tryExtractVideoSequenceSegmentFrames(sequenceId: string, segmentI
       segmentId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return serializeVideoSegment(fallbackSegment as Parameters<typeof serializeVideoSegment>[0]);
+    return serializeVideoSegmentWithOutputMetadata(fallbackSegment as Parameters<typeof serializeVideoSegment>[0]);
   }
 }
 
@@ -1259,7 +1349,7 @@ export async function pickManualFrameForVideoSequenceSegment(sequenceId: string,
     data,
   });
 
-  return serializeVideoSegment(updated);
+  return serializeVideoSegmentWithOutputMetadata(updated);
 }
 
 function segmentStatusFromJob(jobStatus: string) {
@@ -1321,5 +1411,5 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
     }
   }
 
-  return { segment: serializeVideoSegment(updated), job };
+  return { segment: await serializeVideoSegmentWithOutputMetadata(updated), job };
 }

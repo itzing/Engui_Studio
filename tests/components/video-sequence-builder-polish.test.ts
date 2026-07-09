@@ -14,6 +14,7 @@ import {
   hasSyncedVideoSequenceSegmentChange,
   buildSequencePreviewTimeline,
   findSequencePreviewTimelineItem,
+  formatSegmentOutputMetrics,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -39,6 +40,7 @@ function segment(overrides: Record<string, any> = {}) {
     durationSeconds: overrides.durationSeconds ?? 6,
     generationJobId: Object.prototype.hasOwnProperty.call(overrides, 'generationJobId') ? overrides.generationJobId : null,
     outputVideoUrl: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoUrl') ? overrides.outputVideoUrl : '/generations/seg.mp4',
+    outputVideoMetadata: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoMetadata') ? overrides.outputVideoMetadata : null,
     firstFrameUrl: overrides.firstFrameUrl ?? null,
     lastFrameUrl: overrides.lastFrameUrl ?? null,
     templateId: null,
@@ -133,14 +135,22 @@ describe('VideoSequenceBuilder polish helpers', () => {
   it('builds a stitched preview timeline from completed outputs', () => {
     const timeline = buildSequencePreviewTimeline([
       segment({ id: 'seg-2', orderIndex: 1, status: 'completed', outputVideoUrl: '/generations/seg-2.mp4', durationSeconds: 4 }),
-      segment({ id: 'seg-1', orderIndex: 0, status: 'completed', outputVideoUrl: '/generations/seg-1.mp4', durationSeconds: 6 }),
+      segment({
+        id: 'seg-1',
+        orderIndex: 0,
+        status: 'completed',
+        outputVideoUrl: '/generations/seg-1.mp4',
+        durationSeconds: 6,
+        outputVideoMetadata: { durationSeconds: 5.0625, fps: 16, frameCount: 81 },
+      }),
       segment({ id: 'seg-3', orderIndex: 2, status: 'queued', outputVideoUrl: '/generations/seg-3.mp4', durationSeconds: 2 }),
       segment({ id: 'seg-4', orderIndex: 3, status: 'completed', outputVideoUrl: null, durationSeconds: 2 }),
     ]);
 
     expect(timeline.map((item) => item.segment.id)).toEqual(['seg-1', 'seg-2']);
-    expect(timeline.map((item) => [item.start, item.end])).toEqual([[0, 6], [6, 10]]);
-    expect(findSequencePreviewTimelineItem(timeline, 6.2)?.segment.id).toBe('seg-2');
+    expect(timeline.map((item) => [item.start, item.end])).toEqual([[0, 5.0625], [5.0625, 9.0625]]);
+    expect(formatSegmentOutputMetrics(timeline[0].segment)).toBe('81f / 16fps / 5.06s');
+    expect(findSequencePreviewTimelineItem(timeline, 5.2)?.segment.id).toBe('seg-2');
     expect(findSequencePreviewTimelineItem(timeline, 99)?.segment.id).toBe('seg-2');
   });
 

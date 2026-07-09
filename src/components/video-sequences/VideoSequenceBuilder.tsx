@@ -56,6 +56,14 @@ type VideoSequenceSegment = {
   durationSeconds: number;
   generationJobId: string | null;
   outputVideoUrl: string | null;
+  outputVideoMetadata?: {
+    durationSeconds: number;
+    fps: number | null;
+    frameCount: number | null;
+    width?: number | null;
+    height?: number | null;
+    format?: string | null;
+  } | null;
   firstFrameUrl: string | null;
   lastFrameUrl: string | null;
   templateId: string | null;
@@ -151,8 +159,30 @@ function formatSeconds(value: number) {
 function formatPreviewTime(value: number) {
   const safeValue = Number.isFinite(value) && value > 0 ? value : 0;
   const minutes = Math.floor(safeValue / 60);
-  const seconds = Math.floor(safeValue % 60);
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  const seconds = safeValue % 60;
+  return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
+}
+
+function getSegmentOutputDuration(segment: VideoSequenceSegment) {
+  const metadataDuration = Number(segment.outputVideoMetadata?.durationSeconds);
+  if (Number.isFinite(metadataDuration) && metadataDuration > 0) return metadataDuration;
+  return segment.durationSeconds || 0;
+}
+
+function formatFps(value: number | null | undefined) {
+  if (!Number.isFinite(value) || !value || value <= 0) return null;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+export function formatSegmentOutputMetrics(segment: VideoSequenceSegment) {
+  const metadata = segment.outputVideoMetadata;
+  if (!metadata?.durationSeconds) return `${segment.durationSeconds}s`;
+  const duration = formatSeconds(metadata.durationSeconds);
+  const fps = formatFps(metadata.fps);
+  const frameCount = Number.isInteger(metadata.frameCount) && metadata.frameCount && metadata.frameCount > 0
+    ? `${metadata.frameCount}f`
+    : null;
+  return [frameCount, fps ? `${fps}fps` : null, duration].filter(Boolean).join(' / ');
 }
 
 const maxWanLoraPairs = 4;
@@ -390,7 +420,7 @@ export function buildSequencePreviewTimeline(segments: VideoSequenceSegment[]): 
     .filter((segment) => segment.status === 'completed' && Boolean(segment.outputVideoUrl))
     .sort((left, right) => left.orderIndex - right.orderIndex)
     .map((segment) => {
-      const duration = Math.max(0.1, Number.isFinite(segment.durationSeconds) ? segment.durationSeconds : 0);
+      const duration = Math.max(0.1, getSegmentOutputDuration(segment));
       const item = {
         segment,
         start: cursor,
@@ -1399,7 +1429,7 @@ export default function VideoSequenceBuilder() {
                       type="range"
                       min={0}
                       max={Math.max(previewTotalDuration, 0)}
-                      step={0.05}
+                      step={0.01}
                       value={Math.min(previewTime, previewTotalDuration)}
                       onChange={(event) => seekPreview(Number(event.target.value))}
                       disabled={previewTotalDuration <= 0}
@@ -1439,7 +1469,7 @@ export default function VideoSequenceBuilder() {
                           </div>
                           <div className="flex items-center justify-between px-3 py-2 text-xs text-zinc-500">
                             <span className="truncate">{sourceModeLabels[segment.sourceMode] ?? segment.sourceMode}</span>
-                            <span>{segment.durationSeconds}s</span>
+                            <span className="shrink-0 font-mono text-[11px]">{formatSegmentOutputMetrics(segment)}</span>
                           </div>
                         </button>
                         {segmentIndex < activeSequence.segments.length - 1 ? (
