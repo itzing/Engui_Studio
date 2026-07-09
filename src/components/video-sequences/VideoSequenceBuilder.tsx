@@ -357,6 +357,18 @@ export function getSegmentSourcePreviewUrl(segment: VideoSequenceSegment, segmen
   return null;
 }
 
+export function shouldAutoSyncVideoSequenceSegment(segment: Pick<VideoSequenceSegment, 'status' | 'generationJobId'>) {
+  return Boolean(segment.generationJobId && (segment.status === 'queued' || segment.status === 'processing'));
+}
+
+export function hasSyncedVideoSequenceSegmentChange(current: VideoSequenceSegment, next: VideoSequenceSegment) {
+  return current.status !== next.status
+    || current.outputVideoUrl !== next.outputVideoUrl
+    || current.firstFrameUrl !== next.firstFrameUrl
+    || current.lastFrameUrl !== next.lastFrameUrl
+    || current.error !== next.error;
+}
+
 export function getRenderBlocker(sequence: VideoSequence | null) {
   if (!sequence) return 'No sequence selected';
   if (!sequence.segments.length) return 'Add segments before rendering';
@@ -447,6 +459,7 @@ export default function VideoSequenceBuilder() {
   const [loraSearchQuery, setLoraSearchQuery] = useState('');
   const framePickerVideoRef = useRef<HTMLVideoElement | null>(null);
   const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const autoStatusSyncInFlightRef = useRef(false);
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
@@ -634,6 +647,57 @@ export default function VideoSequenceBuilder() {
     setLoraPickerOpen(false);
     setLoraSearchQuery('');
   }, [selectedSegment]);
+
+  useEffect(() => {
+    if (!activeSequence) return;
+    const syncableSegments = activeSequence.segments.filter(shouldAutoSyncVideoSequenceSegment);
+    if (syncableSegments.length === 0) return;
+
+    let cancelled = false;
+
+    async function syncActiveSegmentJobs() {
+      if (!activeSequence || autoStatusSyncInFlightRef.current) return;
+      autoStatusSyncInFlightRef.current = true;
+
+      try {
+        for (const segment of syncableSegments) {
+          if (cancelled) return;
+          try {
+            const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+              `/api/video-sequences/${activeSequence.id}/segments/${segment.id}/sync-status`,
+              { method: 'POST' },
+            );
+            if (cancelled) return;
+            setActiveSequence((current) => {
+              if (!current || current.id !== activeSequence.id) return current;
+              const currentSegment = current.segments.find((item) => item.id === data.segment.id);
+              if (currentSegment && !hasSyncedVideoSequenceSegmentChange(currentSegment, data.segment)) return current;
+              return {
+                ...current,
+                segments: current.segments.map((item) => (
+                  item.id === data.segment.id ? data.segment : item
+                )),
+              };
+            });
+          } catch {
+            // Background sync is best-effort; the manual Refresh action still surfaces errors.
+          }
+        }
+      } finally {
+        autoStatusSyncInFlightRef.current = false;
+      }
+    }
+
+    void syncActiveSegmentJobs();
+    const intervalId = window.setInterval(() => {
+      void syncActiveSegmentJobs();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeSequence]);
 
   async function runAction(label: string, action: () => Promise<void>) {
     setBusy(label);

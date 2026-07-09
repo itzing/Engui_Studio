@@ -10,6 +10,8 @@ import {
   setWanLoraPairInConfig,
   setWanLoraWeightInConfig,
   buildSegmentGenerationOptionsJson,
+  shouldAutoSyncVideoSequenceSegment,
+  hasSyncedVideoSequenceSegmentChange,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -33,7 +35,7 @@ function segment(overrides: Record<string, any> = {}) {
     seed: null,
     randomizeSeed: true,
     durationSeconds: 6,
-    generationJobId: null,
+    generationJobId: Object.prototype.hasOwnProperty.call(overrides, 'generationJobId') ? overrides.generationJobId : null,
     outputVideoUrl: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoUrl') ? overrides.outputVideoUrl : '/generations/seg.mp4',
     firstFrameUrl: overrides.firstFrameUrl ?? null,
     lastFrameUrl: overrides.lastFrameUrl ?? null,
@@ -105,6 +107,25 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getSegmentInspectorActionTooltip('status', { hasJob: false })).toContain('available after');
     expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
     expect(getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: true })).toContain('pick a custom source frame');
+  });
+
+  it('auto-syncs only active generated segments', () => {
+    expect(shouldAutoSyncVideoSequenceSegment(segment({ status: 'queued', generationJobId: 'job-1' }))).toBe(true);
+    expect(shouldAutoSyncVideoSequenceSegment(segment({ status: 'processing', generationJobId: 'job-1' }))).toBe(true);
+    expect(shouldAutoSyncVideoSequenceSegment(segment({ status: 'completed', generationJobId: 'job-1' }))).toBe(false);
+    expect(shouldAutoSyncVideoSequenceSegment(segment({ status: 'queued', generationJobId: null }))).toBe(false);
+  });
+
+  it('ignores no-op auto-sync responses', () => {
+    const current = segment({ status: 'queued', generationJobId: 'job-1', outputVideoUrl: null });
+    expect(hasSyncedVideoSequenceSegmentChange(current, { ...current })).toBe(false);
+    expect(hasSyncedVideoSequenceSegmentChange(current, {
+      ...current,
+      status: 'completed',
+      outputVideoUrl: '/generations/output.mp4',
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
+    })).toBe(true);
   });
 
   it('builds editable WAN LoRA slots while preserving generation config keys', () => {
