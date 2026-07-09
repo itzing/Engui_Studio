@@ -14,6 +14,7 @@ import {
   Layers3,
   Loader2,
   Package,
+  Pause,
   Play,
   Plus,
   RefreshCw,
@@ -145,6 +146,13 @@ function jsonText(value: unknown, fallback: unknown) {
 
 function formatSeconds(value: number) {
   return `${value.toFixed(2)}s`;
+}
+
+function formatPreviewTime(value: number) {
+  const safeValue = Number.isFinite(value) && value > 0 ? value : 0;
+  const minutes = Math.floor(safeValue / 60);
+  const seconds = Math.floor(safeValue % 60);
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 const maxWanLoraPairs = 4;
@@ -369,6 +377,37 @@ export function hasSyncedVideoSequenceSegmentChange(current: VideoSequenceSegmen
     || current.error !== next.error;
 }
 
+export type SequencePreviewTimelineItem = {
+  segment: VideoSequenceSegment;
+  start: number;
+  end: number;
+  duration: number;
+};
+
+export function buildSequencePreviewTimeline(segments: VideoSequenceSegment[]): SequencePreviewTimelineItem[] {
+  let cursor = 0;
+  return segments
+    .filter((segment) => segment.status === 'completed' && Boolean(segment.outputVideoUrl))
+    .sort((left, right) => left.orderIndex - right.orderIndex)
+    .map((segment) => {
+      const duration = Math.max(0.1, Number.isFinite(segment.durationSeconds) ? segment.durationSeconds : 0);
+      const item = {
+        segment,
+        start: cursor,
+        end: cursor + duration,
+        duration,
+      };
+      cursor += duration;
+      return item;
+    });
+}
+
+export function findSequencePreviewTimelineItem(timeline: SequencePreviewTimelineItem[], timeSeconds: number) {
+  if (timeline.length === 0) return null;
+  const safeTime = Math.max(0, timeSeconds);
+  return timeline.find((item) => safeTime >= item.start && safeTime < item.end) ?? timeline[timeline.length - 1];
+}
+
 export function getRenderBlocker(sequence: VideoSequence | null) {
   if (!sequence) return 'No sequence selected';
   if (!sequence.segments.length) return 'Add segments before rendering';
@@ -457,7 +496,10 @@ export default function VideoSequenceBuilder() {
   const [loraLoading, setLoraLoading] = useState(false);
   const [loraPickerOpen, setLoraPickerOpen] = useState(false);
   const [loraSearchQuery, setLoraSearchQuery] = useState('');
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewTime, setPreviewTime] = useState(0);
   const framePickerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
   const autoStatusSyncInFlightRef = useRef(false);
 
@@ -482,9 +524,20 @@ export default function VideoSequenceBuilder() {
       : null
   ), [activeSequence, selectedSegment]);
   const previousSegmentOutputVideoUrl = previousSegment?.outputVideoUrl ?? null;
+  const previewTimeline = useMemo(() => (
+    activeSequence ? buildSequencePreviewTimeline(activeSequence.segments) : []
+  ), [activeSequence]);
+  const previewTotalDuration = previewTimeline.length ? previewTimeline[previewTimeline.length - 1].end : 0;
+  const activePreviewTimelineItem = useMemo(() => (
+    findSequencePreviewTimelineItem(previewTimeline, previewTime)
+  ), [previewTimeline, previewTime]);
+  const activePreviewSegment = activePreviewTimelineItem?.segment ?? null;
+  const activePreviewLocalTime = activePreviewTimelineItem
+    ? Math.max(0, Math.min(activePreviewTimelineItem.duration, previewTime - activePreviewTimelineItem.start))
+    : 0;
   const timelineStatus = activeSequence?.finalVideoUrl
     ? 'Final rendered'
-    : renderBlocker ?? `00:00 - 00:${String(totalDuration).padStart(2, '0')}`;
+    : renderBlocker ?? `${formatPreviewTime(0)} - ${formatPreviewTime(totalDuration)}`;
   const filteredGalleryAssets = useMemo(() => {
     const query = galleryQuery.trim().toLowerCase();
     if (!query) return galleryAssets;
@@ -649,6 +702,47 @@ export default function VideoSequenceBuilder() {
   }, [selectedSegment]);
 
   useEffect(() => {
+    setPreviewPlaying(false);
+    setPreviewTime(0);
+  }, [activeSequence?.id]);
+
+  useEffect(() => {
+    if (previewTotalDuration <= 0) {
+      setPreviewPlaying(false);
+      setPreviewTime(0);
+      return;
+    }
+    if (previewTime > previewTotalDuration) {
+      setPreviewTime(previewTotalDuration);
+    }
+  }, [previewTime, previewTotalDuration]);
+
+  useEffect(() => {
+    const video = previewVideoRef.current;
+    if (!video || !activePreviewSegment) return;
+    const localTime = activePreviewLocalTime;
+
+    const applyLocalTime = () => {
+      if (Number.isFinite(video.duration)) {
+        video.currentTime = Math.min(Math.max(0, localTime), Math.max(0, video.duration - 0.05));
+      } else {
+        video.currentTime = Math.max(0, localTime);
+      }
+    };
+
+    if (video.readyState >= 1) applyLocalTime();
+    else video.addEventListener('loadedmetadata', applyLocalTime, { once: true });
+
+    if (previewPlaying) {
+      void video.play().catch(() => setPreviewPlaying(false));
+    } else {
+      video.pause();
+    }
+
+    return () => video.removeEventListener('loadedmetadata', applyLocalTime);
+  }, [activePreviewSegment?.id, previewPlaying]);
+
+  useEffect(() => {
     if (!activeSequence) return;
     const syncableSegments = activeSequence.segments.filter(shouldAutoSyncVideoSequenceSegment);
     if (syncableSegments.length === 0) return;
@@ -698,6 +792,44 @@ export default function VideoSequenceBuilder() {
       window.clearInterval(intervalId);
     };
   }, [activeSequence]);
+
+  function seekPreview(timeSeconds: number) {
+    const nextTime = Math.max(0, Math.min(timeSeconds, previewTotalDuration));
+    const nextItem = findSequencePreviewTimelineItem(previewTimeline, nextTime);
+    setPreviewTime(nextTime);
+    if (nextItem?.segment.id === activePreviewSegment?.id && previewVideoRef.current) {
+      previewVideoRef.current.currentTime = Math.max(0, nextTime - nextItem.start);
+    }
+  }
+
+  function selectSegment(segmentId: string) {
+    setSelectedSegmentId(segmentId);
+    const previewItem = previewTimeline.find((item) => item.segment.id === segmentId);
+    if (previewItem) seekPreview(previewItem.start);
+  }
+
+  function togglePreviewPlayback() {
+    if (!activePreviewSegment) return;
+    setPreviewPlaying((value) => !value);
+  }
+
+  function handlePreviewTimeUpdate() {
+    const video = previewVideoRef.current;
+    if (!video || !activePreviewTimelineItem) return;
+    setPreviewTime(Math.min(previewTotalDuration, activePreviewTimelineItem.start + video.currentTime));
+  }
+
+  function handlePreviewEnded() {
+    if (!activePreviewTimelineItem) return;
+    const currentIndex = previewTimeline.findIndex((item) => item.segment.id === activePreviewTimelineItem.segment.id);
+    const nextItem = previewTimeline[currentIndex + 1];
+    if (nextItem) {
+      setPreviewTime(nextItem.start);
+      return;
+    }
+    setPreviewPlaying(false);
+    setPreviewTime(previewTotalDuration);
+  }
 
   async function runAction(label: string, action: () => Promise<void>) {
     setBusy(label);
@@ -1214,61 +1346,120 @@ export default function VideoSequenceBuilder() {
         ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden p-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
             {loading ? (
               <div className="flex flex-1 items-center justify-center text-zinc-500">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Loading sequences
               </div>
             ) : activeSequence ? (
-              <div className="flex min-w-max items-center gap-3">
-                {activeSequence.segments.map((segment, segmentIndex) => (
-                  <div key={segment.id} className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSegmentId(segment.id)}
-                      className={cn(
-                        'w-[292px] overflow-hidden rounded-md border bg-zinc-900 text-left transition-colors',
-                        selectedSegment?.id === segment.id ? 'border-cyan-500/50' : 'border-white/10 hover:border-white/20',
-                      )}
-                    >
-                      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white/10 bg-black/30 text-xs text-zinc-300">
-                            {segment.orderIndex + 1}
-                          </span>
-                          <span className="truncate text-sm font-medium">{segment.title}</span>
-                        </div>
-                        <span className={cn('rounded border px-2 py-0.5 text-[10px]', statusStyles[segment.status] ?? statusStyles.draft)}>
-                          {segment.status}
+              <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <section className="flex min-h-0 flex-1 flex-col rounded-md border border-white/10 bg-black">
+                  <button
+                    type="button"
+                    onClick={togglePreviewPlayback}
+                    className="group relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
+                    aria-label={previewPlaying ? 'Pause sequence preview' : 'Play sequence preview'}
+                  >
+                    {activePreviewSegment?.outputVideoUrl ? (
+                      <video
+                        ref={previewVideoRef}
+                        key={activePreviewSegment.id}
+                        src={activePreviewSegment.outputVideoUrl}
+                        className="h-full w-full object-contain"
+                        playsInline
+                        onTimeUpdate={handlePreviewTimeUpdate}
+                        onEnded={handlePreviewEnded}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-zinc-600">
+                        <Film className="h-10 w-10" />
+                        <div className="text-sm">Completed segment outputs will preview here.</div>
+                      </div>
+                    )}
+                    {activePreviewSegment?.outputVideoUrl ? (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/15">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                          {previewPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
                         </span>
                       </div>
-                      <div className="grid h-[88px] grid-cols-[72px_1fr_72px] gap-px bg-white/10">
-                        <MediaCell type="image" url={getSegmentSourcePreviewUrl(segment, activeSequence.segments)} icon={<Images className="h-5 w-5" />} />
-                        <MediaCell type="video" url={segment.outputVideoUrl} icon={<Film className="h-6 w-6" />} />
-                        <MediaCell type="image" url={segment.lastFrameUrl} icon={<Images className="h-5 w-5" />} />
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-2 text-xs text-zinc-500">
-                        <span className="truncate">{sourceModeLabels[segment.sourceMode] ?? segment.sourceMode}</span>
-                        <span>{segment.durationSeconds}s</span>
-                      </div>
-                    </button>
-                    {segmentIndex < activeSequence.segments.length - 1 ? (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-zinc-500">
-                        <Waypoints className="h-4 w-4" />
+                    ) : null}
+                    {activePreviewSegment ? (
+                      <div className="pointer-events-none absolute left-4 top-4 rounded border border-white/10 bg-black/60 px-3 py-1 text-xs text-zinc-200">
+                        Segment {activePreviewSegment.orderIndex + 1} - {activePreviewSegment.title}
                       </div>
                     ) : null}
+                  </button>
+                  <div className="border-t border-white/10 bg-zinc-950 px-4 py-3">
+                    <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+                      <span>{formatPreviewTime(previewTime)}</span>
+                      <span>{formatPreviewTime(previewTotalDuration)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(previewTotalDuration, 0)}
+                      step={0.05}
+                      value={Math.min(previewTime, previewTotalDuration)}
+                      onChange={(event) => seekPreview(Number(event.target.value))}
+                      disabled={previewTotalDuration <= 0}
+                      className="h-2 w-full accent-cyan-400"
+                      aria-label="Sequence preview scrubber"
+                    />
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addSegment}
-                  disabled={!!busy}
-                  className="flex h-[184px] w-[180px] shrink-0 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-white/15 bg-white/[0.02] text-zinc-500 transition-colors hover:border-white/25 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {busy === 'segment' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-                  <span className="text-sm">Add segment</span>
-                </button>
+                </section>
+
+                <div className="h-[184px] shrink-0 overflow-x-auto overflow-y-hidden">
+                  <div className="flex min-w-max items-center gap-3">
+                    {activeSequence.segments.map((segment, segmentIndex) => (
+                      <div key={segment.id} className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => selectSegment(segment.id)}
+                          className={cn(
+                            'w-[292px] overflow-hidden rounded-md border bg-zinc-900 text-left transition-colors',
+                            selectedSegment?.id === segment.id ? 'border-cyan-500/50' : 'border-white/10 hover:border-white/20',
+                          )}
+                        >
+                          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white/10 bg-black/30 text-xs text-zinc-300">
+                                {segment.orderIndex + 1}
+                              </span>
+                              <span className="truncate text-sm font-medium">{segment.title}</span>
+                            </div>
+                            <span className={cn('rounded border px-2 py-0.5 text-[10px]', statusStyles[segment.status] ?? statusStyles.draft)}>
+                              {segment.status}
+                            </span>
+                          </div>
+                          <div className="grid h-[88px] grid-cols-[72px_1fr_72px] gap-px bg-white/10">
+                            <MediaCell type="image" url={getSegmentSourcePreviewUrl(segment, activeSequence.segments)} icon={<Images className="h-5 w-5" />} />
+                            <MediaCell type="video" url={segment.outputVideoUrl} icon={<Film className="h-6 w-6" />} />
+                            <MediaCell type="image" url={segment.lastFrameUrl} icon={<Images className="h-5 w-5" />} />
+                          </div>
+                          <div className="flex items-center justify-between px-3 py-2 text-xs text-zinc-500">
+                            <span className="truncate">{sourceModeLabels[segment.sourceMode] ?? segment.sourceMode}</span>
+                            <span>{segment.durationSeconds}s</span>
+                          </div>
+                        </button>
+                        {segmentIndex < activeSequence.segments.length - 1 ? (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-zinc-500">
+                            <Waypoints className="h-4 w-4" />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addSegment}
+                      disabled={!!busy}
+                      className="flex h-[168px] w-[180px] shrink-0 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-white/15 bg-white/[0.02] text-zinc-500 transition-colors hover:border-white/25 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {busy === 'segment' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                      <span className="text-sm">Add segment</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-zinc-500">
@@ -1291,7 +1482,7 @@ export default function VideoSequenceBuilder() {
                 <button
                   key={segment.id}
                   type="button"
-                  onClick={() => setSelectedSegmentId(segment.id)}
+                  onClick={() => selectSegment(segment.id)}
                   className={cn(
                     'flex min-w-24 flex-1 items-center border-r border-white/10 px-3 last:border-r-0',
                     selectedSegment?.id === segment.id ? 'bg-cyan-500/10' : '',

@@ -12,6 +12,8 @@ import {
   buildSegmentGenerationOptionsJson,
   shouldAutoSyncVideoSequenceSegment,
   hasSyncedVideoSequenceSegmentChange,
+  buildSequencePreviewTimeline,
+  findSequencePreviewTimelineItem,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -34,7 +36,7 @@ function segment(overrides: Record<string, any> = {}) {
     generationOptions: {},
     seed: null,
     randomizeSeed: true,
-    durationSeconds: 6,
+    durationSeconds: overrides.durationSeconds ?? 6,
     generationJobId: Object.prototype.hasOwnProperty.call(overrides, 'generationJobId') ? overrides.generationJobId : null,
     outputVideoUrl: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoUrl') ? overrides.outputVideoUrl : '/generations/seg.mp4',
     firstFrameUrl: overrides.firstFrameUrl ?? null,
@@ -126,6 +128,20 @@ describe('VideoSequenceBuilder polish helpers', () => {
       firstFrameUrl: '/generations/first.jpg',
       lastFrameUrl: '/generations/last.jpg',
     })).toBe(true);
+  });
+
+  it('builds a stitched preview timeline from completed outputs', () => {
+    const timeline = buildSequencePreviewTimeline([
+      segment({ id: 'seg-2', orderIndex: 1, status: 'completed', outputVideoUrl: '/generations/seg-2.mp4', durationSeconds: 4 }),
+      segment({ id: 'seg-1', orderIndex: 0, status: 'completed', outputVideoUrl: '/generations/seg-1.mp4', durationSeconds: 6 }),
+      segment({ id: 'seg-3', orderIndex: 2, status: 'queued', outputVideoUrl: '/generations/seg-3.mp4', durationSeconds: 2 }),
+      segment({ id: 'seg-4', orderIndex: 3, status: 'completed', outputVideoUrl: null, durationSeconds: 2 }),
+    ]);
+
+    expect(timeline.map((item) => item.segment.id)).toEqual(['seg-1', 'seg-2']);
+    expect(timeline.map((item) => [item.start, item.end])).toEqual([[0, 6], [6, 10]]);
+    expect(findSequencePreviewTimelineItem(timeline, 6.2)?.segment.id).toBe('seg-2');
+    expect(findSequencePreviewTimelineItem(timeline, 99)?.segment.id).toBe('seg-2');
   });
 
   it('builds editable WAN LoRA slots while preserving generation config keys', () => {
