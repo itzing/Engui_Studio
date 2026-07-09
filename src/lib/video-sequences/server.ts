@@ -13,6 +13,7 @@ const segmentStatuses = ['draft', 'queued', 'processing', 'completed', 'failed',
 const sourceModes = ['initial', 'previous_last_frame', 'gallery_asset', 'job_output', 'upload', 'manual_frame'] as const;
 const sourceFrameRoles = ['first', 'last', 'custom'] as const;
 const sequenceFrameRoot = path.join(process.cwd(), 'public', 'generations', 'video-sequences');
+const defaultSegmentDurationSeconds = 5;
 
 type JsonFallback = Record<string, unknown> | unknown[];
 
@@ -287,7 +288,7 @@ function segmentCreateDefaults(orderIndex: number) {
     sourceFrameRole: 'last',
     status: 'draft',
     modelId: 'wan22',
-    durationSeconds: 6,
+    durationSeconds: defaultSegmentDurationSeconds,
     generationOptionsJson: JSON.stringify({ steps: 4 }),
   };
 }
@@ -653,7 +654,7 @@ function segmentDataFromInput(input: Record<string, unknown>, defaults: Record<s
   if (input.generationOptions !== undefined || input.generationOptionsJson !== undefined) data.generationOptionsJson = toJsonString(input.generationOptions ?? input.generationOptionsJson, {});
   if (input.seed !== undefined) data.seed = input.seed === null || input.seed === '' ? null : asOptionalNonNegativeInt(input.seed, 'seed');
   if (input.randomizeSeed !== undefined) data.randomizeSeed = asOptionalBoolean(input.randomizeSeed) ?? true;
-  if (input.durationSeconds !== undefined || defaults.durationSeconds !== undefined) data.durationSeconds = asOptionalPositiveInt(input.durationSeconds, 'durationSeconds') ?? defaults.durationSeconds ?? 6;
+  if (input.durationSeconds !== undefined || defaults.durationSeconds !== undefined) data.durationSeconds = asOptionalPositiveInt(input.durationSeconds, 'durationSeconds') ?? defaults.durationSeconds ?? defaultSegmentDurationSeconds;
   if (input.generationJobId !== undefined) data.generationJobId = asOptionalString(input.generationJobId) || null;
   if (input.outputVideoUrl !== undefined) data.outputVideoUrl = asOptionalString(input.outputVideoUrl) || null;
   if (input.firstFrameUrl !== undefined) data.firstFrameUrl = asOptionalString(input.firstFrameUrl) || null;
@@ -706,7 +707,7 @@ function templateCreateDataFromInput(workspaceId: string, input: Record<string, 
     variablesJson: toJsonString(input.variables ?? input.variablesJson, []),
     loraConfigJson: toJsonString(input.loraConfig ?? input.loraConfigJson, {}),
     generationOptionsJson: toJsonString(input.generationOptions ?? input.generationOptionsJson, {}),
-    defaultDurationSeconds: asOptionalPositiveInt(input.defaultDurationSeconds, 'defaultDurationSeconds') ?? 6,
+    defaultDurationSeconds: asOptionalPositiveInt(input.defaultDurationSeconds, 'defaultDurationSeconds') ?? defaultSegmentDurationSeconds,
     thumbnailUrl: asOptionalString(input.thumbnailUrl) || null,
     sourceSegmentId: asOptionalString(input.sourceSegmentId) || null,
   };
@@ -724,7 +725,7 @@ function templateUpdateDataFromInput(input: Record<string, unknown>): Prisma.Vid
   if (input.variables !== undefined || input.variablesJson !== undefined) data.variablesJson = toJsonString(input.variables ?? input.variablesJson, []);
   if (input.loraConfig !== undefined || input.loraConfigJson !== undefined) data.loraConfigJson = toJsonString(input.loraConfig ?? input.loraConfigJson, {});
   if (input.generationOptions !== undefined || input.generationOptionsJson !== undefined) data.generationOptionsJson = toJsonString(input.generationOptions ?? input.generationOptionsJson, {});
-  if (input.defaultDurationSeconds !== undefined) data.defaultDurationSeconds = asOptionalPositiveInt(input.defaultDurationSeconds, 'defaultDurationSeconds') ?? 6;
+  if (input.defaultDurationSeconds !== undefined) data.defaultDurationSeconds = asOptionalPositiveInt(input.defaultDurationSeconds, 'defaultDurationSeconds') ?? defaultSegmentDurationSeconds;
   if (input.thumbnailUrl !== undefined) data.thumbnailUrl = asOptionalString(input.thumbnailUrl) || null;
   if (input.sourceSegmentId !== undefined) data.sourceSegmentId = asOptionalString(input.sourceSegmentId) || null;
   return data;

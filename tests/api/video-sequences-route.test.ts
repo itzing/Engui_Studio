@@ -192,12 +192,14 @@ describe('video sequence APIs', () => {
         sourceMode: 'initial',
         prompt: 'slow push in',
         status: 'draft',
+        durationSeconds: 5,
       }),
     });
     expect(json.segment).toMatchObject({
       id: 'seg-1',
       orderIndex: 0,
       sourceMode: 'initial',
+      durationSeconds: 5,
       loraConfig: {},
       generationOptions: {},
     });

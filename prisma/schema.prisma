@@ -240,7 +240,7 @@ model VideoSequenceSegment {
   generationOptionsJson  String   @default("{}")
   seed                   Int?
   randomizeSeed          Boolean  @default(true)
-  durationSeconds        Int      @default(6)
+  durationSeconds        Int      @default(5)
   generationJobId        String?
   outputVideoUrl         String?
   firstFrameUrl          String?
@@ -274,7 +274,7 @@ model VideoSegmentTemplate {
   variablesJson          String   @default("[]")
   loraConfigJson         String   @default("{}")
   generationOptionsJson  String   @default("{}")
-  defaultDurationSeconds Int      @default(6)
+  defaultDurationSeconds Int      @default(5)
   thumbnailUrl           String?
   sourceSegmentId        String?
   createdAt              DateTime @default(now())

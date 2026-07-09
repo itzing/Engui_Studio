@@ -15,6 +15,7 @@ import {
   buildSequencePreviewTimeline,
   findSequencePreviewTimelineItem,
   formatSegmentOutputMetrics,
+  shouldRestartSequencePreview,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -37,7 +38,7 @@ function segment(overrides: Record<string, any> = {}) {
     generationOptions: {},
     seed: null,
     randomizeSeed: true,
-    durationSeconds: overrides.durationSeconds ?? 6,
+    durationSeconds: overrides.durationSeconds ?? 5,
     generationJobId: Object.prototype.hasOwnProperty.call(overrides, 'generationJobId') ? overrides.generationJobId : null,
     outputVideoUrl: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoUrl') ? overrides.outputVideoUrl : '/generations/seg.mp4',
     outputVideoMetadata: Object.prototype.hasOwnProperty.call(overrides, 'outputVideoMetadata') ? overrides.outputVideoMetadata : null,
@@ -152,6 +153,12 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(formatSegmentOutputMetrics(timeline[0].segment)).toBe('81f / 16fps / 5.06s');
     expect(findSequencePreviewTimelineItem(timeline, 5.2)?.segment.id).toBe('seg-2');
     expect(findSequencePreviewTimelineItem(timeline, 99)?.segment.id).toBe('seg-2');
+  });
+
+  it('restarts stitched preview after it reaches the end', () => {
+    expect(shouldRestartSequencePreview(true, 9.06, 9.06)).toBe(true);
+    expect(shouldRestartSequencePreview(false, 9.06, 9.06)).toBe(true);
+    expect(shouldRestartSequencePreview(false, 3, 9.06)).toBe(false);
   });
 
   it('builds editable WAN LoRA slots while preserving generation config keys', () => {

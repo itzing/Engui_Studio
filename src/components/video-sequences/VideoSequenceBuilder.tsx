@@ -189,6 +189,7 @@ const maxWanLoraPairs = 4;
 const maxWanLoraFiles = maxWanLoraPairs * 2;
 const defaultWanLoraWeight = 0.8;
 const defaultWanSteps = 4;
+const defaultSegmentDurationSeconds = 5;
 
 type WanLoraSlot = {
   index: number;
@@ -356,7 +357,7 @@ function makeSegmentDraft(segment: VideoSequenceSegment): SegmentDraft {
     continuityPrompt: segment.continuityPrompt,
     modelId: segment.modelId,
     endpointId: segment.endpointId ?? '',
-    durationSeconds: String(segment.durationSeconds || 6),
+    durationSeconds: String(segment.durationSeconds || defaultSegmentDurationSeconds),
     seed: segment.seed === null || segment.seed === undefined ? '' : String(segment.seed),
     randomizeSeed: segment.randomizeSeed,
     generationSteps: String(numberFromUnknown(generationOptions.steps, defaultWanSteps)),
@@ -377,7 +378,7 @@ function emptySegmentDraft(): SegmentDraft {
     continuityPrompt: '',
     modelId: 'wan22',
     endpointId: '',
-    durationSeconds: '6',
+    durationSeconds: String(defaultSegmentDurationSeconds),
     seed: '',
     randomizeSeed: true,
     generationSteps: String(defaultWanSteps),
@@ -436,6 +437,10 @@ export function findSequencePreviewTimelineItem(timeline: SequencePreviewTimelin
   if (timeline.length === 0) return null;
   const safeTime = Math.max(0, timeSeconds);
   return timeline.find((item) => safeTime >= item.start && safeTime < item.end) ?? timeline[timeline.length - 1];
+}
+
+export function shouldRestartSequencePreview(previewHasEnded: boolean, previewTime: number, previewTotalDuration: number) {
+  return previewHasEnded || (previewTotalDuration > 0 && previewTime >= previewTotalDuration);
 }
 
 export function getRenderBlocker(sequence: VideoSequence | null) {
@@ -528,6 +533,7 @@ export default function VideoSequenceBuilder() {
   const [loraSearchQuery, setLoraSearchQuery] = useState('');
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewTime, setPreviewTime] = useState(0);
+  const [previewHasEnded, setPreviewHasEnded] = useState(false);
   const framePickerVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -734,6 +740,7 @@ export default function VideoSequenceBuilder() {
   useEffect(() => {
     setPreviewPlaying(false);
     setPreviewTime(0);
+    setPreviewHasEnded(false);
   }, [activeSequence?.id]);
 
   useEffect(() => {
@@ -826,6 +833,7 @@ export default function VideoSequenceBuilder() {
   function seekPreview(timeSeconds: number) {
     const nextTime = Math.max(0, Math.min(timeSeconds, previewTotalDuration));
     const nextItem = findSequencePreviewTimelineItem(previewTimeline, nextTime);
+    setPreviewHasEnded(false);
     setPreviewTime(nextTime);
     if (nextItem?.segment.id === activePreviewSegment?.id && previewVideoRef.current) {
       previewVideoRef.current.currentTime = Math.max(0, nextTime - nextItem.start);
@@ -840,13 +848,20 @@ export default function VideoSequenceBuilder() {
 
   function togglePreviewPlayback() {
     if (!activePreviewSegment) return;
+    if (shouldRestartSequencePreview(previewHasEnded, previewTime, previewTotalDuration)) {
+      seekPreview(0);
+      setPreviewPlaying(true);
+      return;
+    }
     setPreviewPlaying((value) => !value);
   }
 
   function handlePreviewTimeUpdate() {
     const video = previewVideoRef.current;
     if (!video || !activePreviewTimelineItem) return;
-    setPreviewTime(Math.min(previewTotalDuration, activePreviewTimelineItem.start + video.currentTime));
+    const nextTime = Math.min(previewTotalDuration, activePreviewTimelineItem.start + video.currentTime);
+    if (nextTime < previewTotalDuration) setPreviewHasEnded(false);
+    setPreviewTime(nextTime);
   }
 
   function handlePreviewEnded() {
@@ -858,6 +873,7 @@ export default function VideoSequenceBuilder() {
       return;
     }
     setPreviewPlaying(false);
+    setPreviewHasEnded(true);
     setPreviewTime(previewTotalDuration);
   }
 
@@ -987,7 +1003,7 @@ export default function VideoSequenceBuilder() {
       continuityPrompt: segmentDraft.continuityPrompt,
       modelId: segmentDraft.modelId || 'wan22',
       endpointId: segmentDraft.endpointId || null,
-      durationSeconds: Number(segmentDraft.durationSeconds || 6),
+      durationSeconds: Number(segmentDraft.durationSeconds || defaultSegmentDurationSeconds),
       seed: segmentDraft.seed ? Number(segmentDraft.seed) : null,
       randomizeSeed: segmentDraft.randomizeSeed,
       loraConfigJson: segmentDraft.loraConfigJson,
@@ -1646,7 +1662,6 @@ export default function VideoSequenceBuilder() {
                   <Input value={segmentDraft.title} onChange={(event) => setSegmentDraft((draft) => ({ ...draft, title: event.target.value }))} className="h-9 border-white/10 bg-zinc-900 text-sm" />
                 </Field>
                 <TextArea label="Positive" value={segmentDraft.prompt} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, prompt: value }))} rows={5} />
-                <TextArea label="Negative" value={segmentDraft.negativePrompt} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, negativePrompt: value }))} rows={3} />
                 <TextArea label="Motion" value={segmentDraft.motionPrompt} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, motionPrompt: value }))} rows={3} />
                 <TextArea label="Continuity" value={segmentDraft.continuityPrompt} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, continuityPrompt: value }))} rows={3} />
               </InspectorSection>
