@@ -164,6 +164,10 @@ function continuationFrameTimeFromMetadata(metadata: { durationSeconds?: number 
   return Math.max(0, durationSeconds - 3).toFixed(3);
 }
 
+function isLosslessSequenceFrameUrl(value: string | null | undefined) {
+  return typeof value === 'string' && value.toLowerCase().split('?')[0].endsWith('.png');
+}
+
 function outputMetadataFromSnapshot(snapshot: Record<string, unknown>, outputVideoUrl: string | null | undefined) {
   const candidates = [
     snapshot.outputVideoMetadata,
@@ -885,6 +889,10 @@ export async function resolveVideoSegmentSourceFrame(sequenceId: string, segment
         outputVideoUrl: true,
       },
     });
+    if (previous?.outputVideoUrl && !isLosslessSequenceFrameUrl(previous.lastFrameUrl) && resolveLocalPublicPath(previous.outputVideoUrl)) {
+      const extractedPrevious = await extractVideoSequenceSegmentFrames(sequenceId, previous.id);
+      previous.lastFrameUrl = extractedPrevious.lastFrameUrl;
+    }
     if (!previous?.lastFrameUrl) {
       throw new StudioSessionApiError(400, 'Previous segment last frame is required before generating this segment');
     }
