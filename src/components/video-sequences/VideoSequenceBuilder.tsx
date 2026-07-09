@@ -7,6 +7,7 @@ import {
   Clapperboard,
   CopyPlus,
   Film,
+  FastForward,
   ImagePlus,
   Images,
   Layers3,
@@ -416,6 +417,20 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function generateFromSelectedSegment() {
+    if (!activeSequence || !selectedSegment) return;
+    await runAction('generate-from', async () => {
+      await fetchJson<{ success: boolean; segment?: VideoSequenceSegment | null }>(
+        `/api/video-sequences/${activeSequence.id}/generate-from`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ segmentId: selectedSegment.id, userId }),
+        },
+      );
+      await loadSequence(activeSequence.id, selectedSegment.id);
+    });
+  }
+
   async function refreshSelectedStatus() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('status', async () => {
@@ -561,6 +576,15 @@ export default function VideoSequenceBuilder() {
             >
               {busy === 'generate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Generate selected
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+              onClick={generateFromSelectedSegment}
+              disabled={!selectedSegment || !!busy}
+            >
+              {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
+              Generate from here
             </Button>
             <Button
               variant="outline"
@@ -791,6 +815,9 @@ export default function VideoSequenceBuilder() {
                 <Button variant="outline" className="h-9 flex-1 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={generateSelectedSegment} disabled={!!busy}>
                   {busy === 'generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                   Generate
+                </Button>
+                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={generateFromSelectedSegment} disabled={!!busy} aria-label="Generate from selected segment">
+                  {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
                 </Button>
                 <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
                   {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

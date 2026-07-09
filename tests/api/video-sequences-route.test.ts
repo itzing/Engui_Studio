@@ -58,6 +58,7 @@ vi.mock('@/lib/ffmpegService', () => ({
 }));
 
 import { POST as createSequence } from '@/app/api/video-sequences/route';
+import { POST as generateFromSegment } from '@/app/api/video-sequences/[id]/generate-from/route';
 import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
 import { PATCH as updateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/route';
 import { POST as insertFromTemplate } from '@/app/api/video-sequences/[id]/segments/from-template/route';
@@ -601,5 +602,278 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(400);
     expect(json.error).toBe('Segment output video is required before extracting frames');
     expect(mockFfmpegService.extractVideoFrame).not.toHaveBeenCalled();
+  });
+
+  it('generate-from queues the first eligible segment after a completed previous segment', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      workspaceId: 'ws-1',
+      defaultModelId: 'wan22',
+      targetFps: 24,
+      defaultGenerationOptionsJson: '{}',
+      segments: [
+        {
+          id: 'seg-1',
+          sequenceId: 'seq-1',
+          orderIndex: 0,
+          title: 'Segment 1',
+          status: 'completed',
+          sourceMode: 'initial',
+          generationJobId: 'job-1',
+          outputVideoUrl: '/generations/seg-1.mp4',
+          firstFrameUrl: '/generations/first.jpg',
+          lastFrameUrl: 'https://example.com/last.png',
+          loraConfigJson: '{}',
+          generationOptionsJson: '{}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: null,
+        },
+        {
+          id: 'seg-2',
+          sequenceId: 'seq-1',
+          orderIndex: 1,
+          title: 'Segment 2',
+          status: 'draft',
+          sourceMode: 'previous_last_frame',
+          generationJobId: null,
+          outputVideoUrl: null,
+          firstFrameUrl: null,
+          lastFrameUrl: null,
+          loraConfigJson: '{}',
+          generationOptionsJson: '{}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: null,
+        },
+      ],
+    });
+    mockPrisma.videoSequenceSegment.findFirst
+      .mockResolvedValueOnce({
+        id: 'seg-1',
+        title: 'Segment 1',
+        status: 'completed',
+        generationJobId: 'job-1',
+        outputVideoUrl: '/generations/seg-1.mp4',
+        lastFrameUrl: 'https://example.com/last.png',
+      })
+      .mockResolvedValueOnce({
+        id: 'seg-2',
+        sequenceId: 'seq-1',
+        orderIndex: 1,
+        title: 'Segment 2',
+        status: 'draft',
+        sourceMode: 'previous_last_frame',
+        sourceImageUrl: null,
+        sourceSegmentId: null,
+        sourceJobId: null,
+        prompt: 'continue motion',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        modelId: 'wan22',
+        loraConfigJson: '{}',
+        generationOptionsJson: '{}',
+        seed: null,
+        randomizeSeed: true,
+        durationSeconds: 6,
+        sequence: {
+          id: 'seq-1',
+          workspaceId: 'ws-1',
+          defaultModelId: 'wan22',
+          targetFps: 24,
+          defaultGenerationOptionsJson: '{}',
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 'seg-1',
+        lastFrameUrl: 'https://example.com/last.png',
+        outputVideoUrl: '/generations/seg-1.mp4',
+      });
+    (globalThis.fetch as any).mockResolvedValue(new Response(new Blob(['image'], { type: 'image/png' }), {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }));
+    mockSubmitGenerationFormData.mockResolvedValue(Response.json({
+      success: true,
+      jobId: 'job-2',
+      runpodJobId: 'rp-2',
+      status: 'IN_QUEUE',
+    }));
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-2',
+      sequenceId: 'seq-1',
+      orderIndex: 1,
+      title: 'Segment 2',
+      status: data.status,
+      sourceMode: 'previous_last_frame',
+      sourceImageUrl: null,
+      sourceFrozen: false,
+      prompt: 'continue motion',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: data.generationJobId,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
+      segmentId: 'seg-2',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(json).toMatchObject({ success: true, action: 'queued', jobId: 'job-2' });
+    expect(mockSubmitGenerationFormData).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'seg-2' },
+      data: expect.objectContaining({ status: 'queued', generationJobId: 'job-2' }),
+    }));
+  });
+
+  it('generate-from syncs an in-flight selected segment instead of submitting a duplicate job', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      segments: [
+        {
+          id: 'seg-1',
+          sequenceId: 'seq-1',
+          orderIndex: 0,
+          title: 'Segment 1',
+          status: 'queued',
+          sourceMode: 'initial',
+          generationJobId: 'job-1',
+          outputVideoUrl: null,
+          firstFrameUrl: null,
+          lastFrameUrl: null,
+          loraConfigJson: '{}',
+          generationOptionsJson: '{}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: '{"jobId":"job-1"}',
+        },
+      ],
+    });
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      status: 'queued',
+      generationJobId: 'job-1',
+      outputVideoUrl: null,
+      generationSnapshotJson: '{"jobId":"job-1"}',
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      templateSnapshotJson: null,
+    });
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'processing',
+      runpodJobId: 'rp-1',
+      endpointId: 'wan22',
+      resultUrl: null,
+      thumbnailUrl: null,
+      options: '{"runpodJobId":"rp-1"}',
+      executionMs: null,
+      error: null,
+    });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: data.status,
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: 'job-1',
+      outputVideoUrl: data.outputVideoUrl,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
+      segmentId: 'seg-1',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ success: true, action: 'waiting', jobId: 'job-1' });
+    expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
+  });
+
+  it('generate-from waits when a previous_last_frame segment has no previous last frame yet', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      segments: [
+        {
+          id: 'seg-2',
+          sequenceId: 'seq-1',
+          orderIndex: 1,
+          title: 'Segment 2',
+          status: 'draft',
+          sourceMode: 'previous_last_frame',
+          generationJobId: null,
+          outputVideoUrl: null,
+          firstFrameUrl: null,
+          lastFrameUrl: null,
+          loraConfigJson: '{}',
+          generationOptionsJson: '{}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: null,
+        },
+      ],
+    });
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      title: 'Segment 1',
+      status: 'completed',
+      generationJobId: 'job-1',
+      outputVideoUrl: null,
+      lastFrameUrl: null,
+    });
+
+    const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
+      segmentId: 'seg-2',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      success: true,
+      action: 'waiting',
+      message: 'Generation is waiting for the previous segment last frame',
+    });
+    expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
   });
 });

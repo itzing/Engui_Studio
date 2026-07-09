@@ -615,6 +615,177 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
   return { segment: serializeVideoSegment(updated), jobId, status: payload.status || 'IN_QUEUE' };
 }
 
+type GenerateFromResult = {
+  sequenceId: string;
+  startSegmentId: string;
+  action: 'queued' | 'waiting' | 'blocked' | 'failed' | 'completed';
+  segment: ReturnType<typeof serializeVideoSegment> | null;
+  jobId: string | null;
+  message: string;
+  processedSegmentIds: string[];
+};
+
+const generatableSegmentStatuses = new Set(['draft', 'failed', 'stale']);
+
+function generateFromResult(input: GenerateFromResult) {
+  return input;
+}
+
+async function ensurePreviousLastFrame(sequenceId: string, segment: any) {
+  if (segment.sourceMode !== 'previous_last_frame') return null;
+
+  const previous = await prisma.videoSequenceSegment.findFirst({
+    where: { sequenceId, orderIndex: segment.orderIndex - 1 },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      generationJobId: true,
+      outputVideoUrl: true,
+      lastFrameUrl: true,
+    },
+  });
+  if (!previous) {
+    throw new StudioSessionApiError(400, 'Previous segment is required before generating this segment');
+  }
+
+  if ((previous.status === 'queued' || previous.status === 'processing') && previous.generationJobId) {
+    const synced = await syncVideoSequenceSegmentStatus(sequenceId, previous.id);
+    return synced.segment;
+  }
+
+  if (previous.status === 'completed' && previous.outputVideoUrl && !previous.lastFrameUrl) {
+    try {
+      return await extractVideoSequenceSegmentFrames(sequenceId, previous.id);
+    } catch (error) {
+      console.warn('Failed to extract previous segment frames during generate-from', {
+        sequenceId,
+        segmentId: previous.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return serializeVideoSegment(previous);
+}
+
+export async function generateVideoSequenceFrom(sequenceId: string, input: Record<string, unknown> = {}): Promise<GenerateFromResult> {
+  const startSegmentId = asTrimmedString(input.segmentId);
+  if (!startSegmentId) throw new StudioSessionApiError(400, 'segmentId is required');
+
+  const sequence = await prisma.videoSequence.findUnique({
+    where: { id: sequenceId },
+    include: { segments: { orderBy: { orderIndex: 'asc' } } },
+  });
+  if (!sequence) throw new StudioSessionApiError(404, 'Video sequence not found');
+
+  const startIndex = sequence.segments.findIndex((segment) => segment.id === startSegmentId);
+  if (startIndex === -1) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  const processedSegmentIds: string[] = [];
+  for (const segment of sequence.segments.slice(startIndex)) {
+    processedSegmentIds.push(segment.id);
+
+    if (segment.status === 'completed') {
+      if (segment.outputVideoUrl && (!segment.firstFrameUrl || !segment.lastFrameUrl)) {
+        try {
+          await extractVideoSequenceSegmentFrames(sequenceId, segment.id);
+        } catch (error) {
+          console.warn('Failed to extract completed segment frames during generate-from', {
+            sequenceId,
+            segmentId: segment.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      continue;
+    }
+
+    if ((segment.status === 'queued' || segment.status === 'processing') && segment.generationJobId) {
+      const synced = await syncVideoSequenceSegmentStatus(sequenceId, segment.id);
+      if (synced.segment.status === 'completed') continue;
+      if (synced.segment.status === 'failed') {
+        return generateFromResult({
+          sequenceId,
+          startSegmentId,
+          action: 'failed',
+          segment: synced.segment,
+          jobId: synced.segment.generationJobId,
+          message: 'Generation stopped because an in-flight segment failed',
+          processedSegmentIds,
+        });
+      }
+      return generateFromResult({
+        sequenceId,
+        startSegmentId,
+        action: 'waiting',
+        segment: synced.segment,
+        jobId: synced.segment.generationJobId,
+        message: 'Generation is waiting for the current segment job to complete',
+        processedSegmentIds,
+      });
+    }
+
+    if (!generatableSegmentStatuses.has(segment.status)) {
+      return generateFromResult({
+        sequenceId,
+        startSegmentId,
+        action: 'blocked',
+        segment: serializeVideoSegment(segment),
+        jobId: segment.generationJobId,
+        message: `Generation stopped at unsupported segment status: ${segment.status}`,
+        processedSegmentIds,
+      });
+    }
+
+    const previous = await ensurePreviousLastFrame(sequenceId, segment);
+    if (previous && (previous.status !== 'completed' || !previous.lastFrameUrl)) {
+      return generateFromResult({
+        sequenceId,
+        startSegmentId,
+        action: 'waiting',
+        segment: previous,
+        jobId: previous.generationJobId,
+        message: 'Generation is waiting for the previous segment last frame',
+        processedSegmentIds,
+      });
+    }
+
+    const generated = await generateVideoSequenceSegment(sequenceId, segment.id, input);
+    if (generated.error) {
+      return generateFromResult({
+        sequenceId,
+        startSegmentId,
+        action: 'failed',
+        segment: generated.segment,
+        jobId: generated.jobId,
+        message: generated.error,
+        processedSegmentIds,
+      });
+    }
+
+    return generateFromResult({
+      sequenceId,
+      startSegmentId,
+      action: 'queued',
+      segment: generated.segment,
+      jobId: generated.jobId,
+      message: 'Queued the next eligible segment',
+      processedSegmentIds,
+    });
+  }
+
+  return generateFromResult({
+    sequenceId,
+    startSegmentId,
+    action: 'completed',
+    segment: null,
+    jobId: null,
+    message: 'No draft, failed, or stale segments remain from the selected segment',
+    processedSegmentIds,
+  });
+}
+
 export async function extractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string) {
   const segment = await prisma.videoSequenceSegment.findFirst({
     where: { id: segmentId, sequenceId },
