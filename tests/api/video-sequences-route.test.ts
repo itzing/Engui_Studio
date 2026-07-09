@@ -208,6 +208,8 @@ describe('video sequence APIs', () => {
         sourceMode: 'initial',
         prompt: 'slow push in',
         status: 'draft',
+        seed: 40,
+        randomizeSeed: false,
         durationSeconds: 5,
       }),
     });
@@ -501,6 +503,8 @@ describe('video sequence APIs', () => {
         prompt: 'orbit around the subject',
         templateId: 'tpl-1',
         loraConfigJson: '{"high":0.8}',
+        seed: 40,
+        randomizeSeed: false,
       }),
     });
     expect(json.segment).toMatchObject({

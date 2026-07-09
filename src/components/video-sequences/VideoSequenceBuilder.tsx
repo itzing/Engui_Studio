@@ -190,6 +190,7 @@ const maxWanLoraFiles = maxWanLoraPairs * 2;
 const defaultWanLoraWeight = 0.8;
 const defaultWanSteps = 4;
 const defaultSegmentDurationSeconds = 5;
+const defaultSegmentSeed = 40;
 const videoSequenceSelectionStoragePrefix = 'engui:video-sequences:selected';
 
 type WanLoraSlot = {
@@ -414,8 +415,8 @@ function emptySegmentDraft(): SegmentDraft {
     modelId: 'wan22',
     endpointId: '',
     durationSeconds: String(defaultSegmentDurationSeconds),
-    seed: '',
-    randomizeSeed: true,
+    seed: String(defaultSegmentSeed),
+    randomizeSeed: false,
     generationSteps: String(defaultWanSteps),
     loraConfigJson: '{}',
     generationOptionsJson: jsonText({ steps: defaultWanSteps }, {}),

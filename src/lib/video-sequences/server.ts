@@ -14,6 +14,7 @@ const sourceModes = ['initial', 'previous_last_frame', 'gallery_asset', 'job_out
 const sourceFrameRoles = ['first', 'last', 'custom'] as const;
 const sequenceFrameRoot = path.join(process.cwd(), 'public', 'generations', 'video-sequences');
 const defaultSegmentDurationSeconds = 5;
+const defaultSegmentSeed = 40;
 
 type JsonFallback = Record<string, unknown> | unknown[];
 
@@ -296,6 +297,8 @@ function segmentCreateDefaults(orderIndex: number) {
     sourceFrameRole: 'last',
     status: 'draft',
     modelId: 'wan22',
+    seed: defaultSegmentSeed,
+    randomizeSeed: false,
     durationSeconds: defaultSegmentDurationSeconds,
     generationOptionsJson: JSON.stringify({ steps: 4 }),
   };
@@ -660,8 +663,8 @@ function segmentDataFromInput(input: Record<string, unknown>, defaults: Record<s
   if (input.endpointId !== undefined) data.endpointId = asOptionalString(input.endpointId) || null;
   if (input.loraConfig !== undefined || input.loraConfigJson !== undefined) data.loraConfigJson = toJsonString(input.loraConfig ?? input.loraConfigJson, {});
   if (input.generationOptions !== undefined || input.generationOptionsJson !== undefined) data.generationOptionsJson = toJsonString(input.generationOptions ?? input.generationOptionsJson, {});
-  if (input.seed !== undefined) data.seed = input.seed === null || input.seed === '' ? null : asOptionalNonNegativeInt(input.seed, 'seed');
-  if (input.randomizeSeed !== undefined) data.randomizeSeed = asOptionalBoolean(input.randomizeSeed) ?? true;
+  if (input.seed !== undefined || defaults.seed !== undefined) data.seed = input.seed === null || input.seed === '' ? null : asOptionalNonNegativeInt(input.seed, 'seed') ?? defaults.seed ?? null;
+  if (input.randomizeSeed !== undefined || defaults.randomizeSeed !== undefined) data.randomizeSeed = asOptionalBoolean(input.randomizeSeed) ?? Boolean(defaults.randomizeSeed);
   if (input.durationSeconds !== undefined || defaults.durationSeconds !== undefined) data.durationSeconds = asOptionalPositiveInt(input.durationSeconds, 'durationSeconds') ?? defaults.durationSeconds ?? defaultSegmentDurationSeconds;
   if (input.generationJobId !== undefined) data.generationJobId = asOptionalString(input.generationJobId) || null;
   if (input.outputVideoUrl !== undefined) data.outputVideoUrl = asOptionalString(input.outputVideoUrl) || null;
