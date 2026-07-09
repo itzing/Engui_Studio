@@ -9,6 +9,7 @@ import {
   getSelectedWanLoraSlots,
   setWanLoraPairInConfig,
   setWanLoraWeightInConfig,
+  buildSegmentGenerationOptionsJson,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -150,5 +151,13 @@ describe('VideoSequenceBuilder polish helpers', () => {
 
     const cleared = setWanLoraPairInConfig(weighted, 1, null);
     expect(JSON.parse(cleared)).toEqual({});
+  });
+
+  it('merges the visible steps control into segment generation options', () => {
+    expect(JSON.parse(buildSegmentGenerationOptionsJson('{}', ''))).toEqual({ steps: 4 });
+    expect(JSON.parse(buildSegmentGenerationOptionsJson('{"cfg":1.5,"steps":8}', '12'))).toEqual({
+      cfg: 1.5,
+      steps: 12,
+    });
   });
 });

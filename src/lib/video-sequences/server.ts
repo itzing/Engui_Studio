@@ -169,6 +169,7 @@ function segmentCreateDefaults(orderIndex: number) {
     status: 'draft',
     modelId: 'wan22',
     durationSeconds: 6,
+    generationOptionsJson: JSON.stringify({ steps: 4 }),
   };
 }
 
@@ -286,7 +287,7 @@ export async function createVideoSequence(workspaceId: string, input: Record<str
       height: asOptionalPositiveInt(input.height, 'height') ?? 720,
       targetFps: asOptionalPositiveInt(input.targetFps, 'targetFps') ?? 24,
       defaultModelId: asOptionalString(input.defaultModelId) ?? 'wan22',
-      defaultGenerationOptionsJson: toJsonString(input.defaultGenerationOptions ?? input.defaultGenerationOptionsJson, {}),
+      defaultGenerationOptionsJson: toJsonString(input.defaultGenerationOptions ?? input.defaultGenerationOptionsJson, { steps: 4 }),
     },
     include: {
       segments: { orderBy: { orderIndex: 'asc' } },

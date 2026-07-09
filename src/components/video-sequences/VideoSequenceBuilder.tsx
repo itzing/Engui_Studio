@@ -114,6 +114,7 @@ type SegmentDraft = {
   durationSeconds: string;
   seed: string;
   randomizeSeed: boolean;
+  generationSteps: string;
   loraConfigJson: string;
   generationOptionsJson: string;
 };
@@ -149,6 +150,7 @@ function formatSeconds(value: number) {
 const maxWanLoraPairs = 4;
 const maxWanLoraFiles = maxWanLoraPairs * 2;
 const defaultWanLoraWeight = 0.8;
+const defaultWanSteps = 4;
 
 type WanLoraSlot = {
   index: number;
@@ -169,6 +171,19 @@ function parseJsonObjectText(value: string, fallback: Record<string, unknown> = 
       : { ...fallback };
   } catch {
     return { ...fallback };
+  }
+}
+
+function parseRequiredJsonObjectText(value: string, label: string) {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`${label} must contain a JSON object`);
+    }
+    return { ...parsed } as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('must contain')) throw error;
+    throw new Error(`${label} must contain valid JSON`);
   }
 }
 
@@ -253,6 +268,13 @@ export function setWanLoraWeightInConfig(loraConfigJson: string, index: number, 
   return JSON.stringify(config, null, 2);
 }
 
+export function buildSegmentGenerationOptionsJson(generationOptionsJson: string, generationSteps: string) {
+  const steps = Number(generationSteps || defaultWanSteps);
+  const generationOptions = parseRequiredJsonObjectText(generationOptionsJson, 'Options JSON');
+  generationOptions.steps = Number.isFinite(steps) && steps > 0 ? steps : defaultWanSteps;
+  return JSON.stringify(generationOptions, null, 2);
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: 'no-store',
@@ -270,6 +292,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function makeSegmentDraft(segment: VideoSequenceSegment): SegmentDraft {
+  const generationOptions = parseJsonObjectText(jsonText(segment.generationOptions, {}));
   return {
     title: segment.title,
     sourceMode: segment.sourceMode,
@@ -284,6 +307,7 @@ function makeSegmentDraft(segment: VideoSequenceSegment): SegmentDraft {
     durationSeconds: String(segment.durationSeconds || 6),
     seed: segment.seed === null || segment.seed === undefined ? '' : String(segment.seed),
     randomizeSeed: segment.randomizeSeed,
+    generationSteps: String(numberFromUnknown(generationOptions.steps, defaultWanSteps)),
     loraConfigJson: jsonText(segment.loraConfig, {}),
     generationOptionsJson: jsonText(segment.generationOptions, {}),
   };
@@ -304,8 +328,9 @@ function emptySegmentDraft(): SegmentDraft {
     durationSeconds: '6',
     seed: '',
     randomizeSeed: true,
+    generationSteps: String(defaultWanSteps),
     loraConfigJson: '{}',
-    generationOptionsJson: '{}',
+    generationOptionsJson: jsonText({ steps: defaultWanSteps }, {}),
   };
 }
 
@@ -700,6 +725,38 @@ export default function VideoSequenceBuilder() {
     }));
   }
 
+  function buildSegmentDraftPayload() {
+    return {
+      title: segmentDraft.title,
+      sourceMode: segmentDraft.sourceMode,
+      sourceImageUrl: segmentDraft.sourceImageUrl || null,
+      sourceFrozen: segmentDraft.sourceFrozen,
+      prompt: segmentDraft.prompt,
+      negativePrompt: segmentDraft.negativePrompt,
+      motionPrompt: segmentDraft.motionPrompt,
+      continuityPrompt: segmentDraft.continuityPrompt,
+      modelId: segmentDraft.modelId || 'wan22',
+      endpointId: segmentDraft.endpointId || null,
+      durationSeconds: Number(segmentDraft.durationSeconds || 6),
+      seed: segmentDraft.seed ? Number(segmentDraft.seed) : null,
+      randomizeSeed: segmentDraft.randomizeSeed,
+      loraConfigJson: segmentDraft.loraConfigJson,
+      generationOptionsJson: buildSegmentGenerationOptionsJson(segmentDraft.generationOptionsJson, segmentDraft.generationSteps),
+    };
+  }
+
+  async function persistSelectedSegmentDraft() {
+    if (!activeSequence || !selectedSegment) return null;
+    const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+      `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(buildSegmentDraftPayload()),
+      },
+    );
+    return data.segment;
+  }
+
   async function createSequence() {
     if (!workspaceId) return;
     await runAction('sequence', async () => {
@@ -746,29 +803,7 @@ export default function VideoSequenceBuilder() {
   async function saveSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('segment', async () => {
-      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
-        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({
-            title: segmentDraft.title,
-            sourceMode: segmentDraft.sourceMode,
-            sourceImageUrl: segmentDraft.sourceImageUrl || null,
-            sourceFrozen: segmentDraft.sourceFrozen,
-            prompt: segmentDraft.prompt,
-            negativePrompt: segmentDraft.negativePrompt,
-            motionPrompt: segmentDraft.motionPrompt,
-            continuityPrompt: segmentDraft.continuityPrompt,
-            modelId: segmentDraft.modelId || 'wan22',
-            endpointId: segmentDraft.endpointId || null,
-            durationSeconds: Number(segmentDraft.durationSeconds || 6),
-            seed: segmentDraft.seed ? Number(segmentDraft.seed) : null,
-            randomizeSeed: segmentDraft.randomizeSeed,
-            loraConfigJson: segmentDraft.loraConfigJson,
-            generationOptionsJson: segmentDraft.generationOptionsJson,
-          }),
-        },
-      );
+      await persistSelectedSegmentDraft();
       await loadSequence(activeSequence.id, selectedSegment.id);
       setNotice('Segment saved');
     });
@@ -820,6 +855,7 @@ export default function VideoSequenceBuilder() {
   async function generateSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('generate', async () => {
+      await persistSelectedSegmentDraft();
       const data = await fetchJson<{ success: boolean; segment: VideoSequenceSegment; jobId?: string | null }>(
         `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/generate`,
         {
@@ -835,6 +871,7 @@ export default function VideoSequenceBuilder() {
   async function generateFromSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('generate-from', async () => {
+      await persistSelectedSegmentDraft();
       const data = await fetchJson<{ success: boolean; action?: string; message?: string; segment?: VideoSequenceSegment | null }>(
         `/api/video-sequences/${activeSequence.id}/generate-from`,
         {
@@ -1306,6 +1343,9 @@ export default function VideoSequenceBuilder() {
                   </Field>
                   <Field label="Duration">
                     <Input type="number" min={1} value={segmentDraft.durationSeconds} onChange={(event) => setSegmentDraft((draft) => ({ ...draft, durationSeconds: event.target.value }))} className="h-9 border-white/10 bg-zinc-900 text-sm" />
+                  </Field>
+                  <Field label="Steps">
+                    <Input type="number" min={1} value={segmentDraft.generationSteps} onChange={(event) => setSegmentDraft((draft) => ({ ...draft, generationSteps: event.target.value }))} className="h-9 border-white/10 bg-zinc-900 text-sm" />
                   </Field>
                   <Field label="Seed">
                     <Input type="number" min={0} value={segmentDraft.seed} onChange={(event) => setSegmentDraft((draft) => ({ ...draft, seed: event.target.value }))} className="h-9 border-white/10 bg-zinc-900 text-sm" placeholder="random" />

@@ -137,7 +137,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },
             { name: 'seed', label: 'Seed', type: 'number', default: 42, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
-            { name: 'steps', label: 'Steps', type: 'number', default: 6, min: 4, max: 50, group: 'hidden' },
+            { name: 'steps', label: 'Steps', type: 'number', default: 4, min: 4, max: 50, group: 'hidden' },
             { name: 'length', label: 'Length', type: 'number', default: 81, min: 81, max: 161, group: 'advanced' },
             { name: 'lora_high_1', label: 'High LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First LoRA pair - high-level features' },
             { name: 'lora_low_1', label: 'Low LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First LoRA pair - low-level features' },
