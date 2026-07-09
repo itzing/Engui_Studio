@@ -143,6 +143,14 @@ function sequenceFrameOutputPath(workspaceId: string, sequenceId: string, segmen
   return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), safePathSegment(segmentId), 'frames', fileName);
 }
 
+function sequenceRenderPublicUrl(workspaceId: string, sequenceId: string, fileName: string) {
+  return `/generations/video-sequences/${safePathSegment(workspaceId)}/${safePathSegment(sequenceId)}/final/${fileName}`;
+}
+
+function sequenceRenderOutputPath(workspaceId: string, sequenceId: string, fileName: string) {
+  return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), 'final', fileName);
+}
+
 function segmentCreateDefaults(orderIndex: number) {
   return {
     orderIndex,
@@ -860,6 +868,61 @@ export async function generateVideoSequenceFrom(sequenceId: string, input: Recor
     message: 'No draft, failed, or stale segments remain from the selected segment',
     processedSegmentIds,
   });
+}
+
+export async function renderVideoSequenceFinal(sequenceId: string) {
+  const sequence = await prisma.videoSequence.findUnique({
+    where: { id: sequenceId },
+    include: { segments: { orderBy: { orderIndex: 'asc' } } },
+  });
+  if (!sequence) throw new StudioSessionApiError(404, 'Video sequence not found');
+  if (!sequence.segments.length) throw new StudioSessionApiError(400, 'At least one completed segment is required before rendering');
+
+  for (const segment of sequence.segments) {
+    if (segment.status !== 'completed') {
+      throw new StudioSessionApiError(400, `Segment ${segment.orderIndex + 1} is ${segment.status}; render requires every segment to be completed`);
+    }
+    if (!segment.outputVideoUrl) {
+      throw new StudioSessionApiError(400, `Segment ${segment.orderIndex + 1} is missing an output video`);
+    }
+  }
+
+  const inputPaths: string[] = [];
+  for (const segment of sequence.segments) {
+    const outputVideoUrl = segment.outputVideoUrl as string;
+    const inputPath = resolveLocalPublicPath(outputVideoUrl);
+    if (!inputPath || !fs.existsSync(inputPath)) {
+      throw new StudioSessionApiError(400, `Segment ${segment.orderIndex + 1} output video must be a local /generations or /results file`);
+    }
+    inputPaths.push(inputPath);
+  }
+
+  const ffmpegAvailable = await ffmpegService.isFFmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new StudioSessionApiError(500, 'FFmpeg is not available for final sequence rendering');
+  }
+
+  const renderHash = crypto.createHash('md5')
+    .update(sequence.segments.map((segment) => `${segment.id}:${segment.outputVideoUrl}`).join('|'))
+    .digest('hex')
+    .slice(0, 10);
+  const fileName = `final-${renderHash}.mp4`;
+  const finalVideoUrl = sequenceRenderPublicUrl(sequence.workspaceId, sequenceId, fileName);
+  const outputPath = sequenceRenderOutputPath(sequence.workspaceId, sequenceId, fileName);
+
+  await ffmpegService.concatenateVideos(inputPaths, outputPath);
+
+  const updated = await prisma.videoSequence.update({
+    where: { id: sequenceId },
+    data: {
+      status: 'rendered',
+      finalVideoUrl,
+      finalRenderJobId: null,
+    },
+    include: { segments: { orderBy: { orderIndex: 'asc' } } },
+  });
+
+  return serializeVideoSequence(updated);
 }
 
 export async function extractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string) {

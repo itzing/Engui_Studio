@@ -17,6 +17,10 @@ export interface FrameExtractionOptions extends ThumbnailOptions {
   time?: string;
 }
 
+function ffmpegConcatListPath(value: string) {
+  return value.replace(/'/g, "'\\''");
+}
+
 export class FFmpegService {
   private ffmpegPath: string;
 
@@ -168,6 +172,76 @@ export class FFmpegService {
     } catch (error) {
       console.error(`[FFmpeg] Error extracting ${position} frame:`, error);
       throw new Error(`Failed to extract ${position} frame: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Concatenate multiple MP4-compatible clips into one output file.
+   */
+  async concatenateVideos(
+    inputPaths: string[],
+    outputPath: string
+  ): Promise<string> {
+    if (!inputPaths.length) {
+      throw new Error('At least one input video is required');
+    }
+
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    let ffmpegCommand = this.ffmpegPath;
+    const localPath = path.join(process.cwd(), 'ffmpeg', 'ffmpeg.exe');
+    if (fs.existsSync(localPath)) {
+      ffmpegCommand = localPath;
+    }
+
+    const listPath = path.join(outputDir, `concat-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+    fs.writeFileSync(listPath, inputPaths.map((inputPath) => `file '${ffmpegConcatListPath(inputPath)}'`).join('\n'));
+
+    const command = `"${ffmpegCommand}" -y -f concat -safe 0 -i "${listPath}" -c copy -movflags +faststart "${outputPath}"`;
+
+    try {
+      console.log(`[FFmpeg] Concatenating ${inputPaths.length} videos -> ${outputPath}`);
+      const { stderr } = await execAsync(command, {
+        timeout: 300000,
+        maxBuffer: 1024 * 1024 * 20,
+      });
+
+      if (stderr && !stderr.includes('frame=') && !stderr.includes('video:')) {
+        console.warn(`[FFmpeg] Concat warning: ${stderr}`);
+      }
+
+      if (!fs.existsSync(outputPath)) {
+        throw new Error('Concatenated video file was not created');
+      }
+
+      const stats = fs.statSync(outputPath);
+      if (stats.size === 0) {
+        fs.unlinkSync(outputPath);
+        throw new Error('Concatenated video file is empty');
+      }
+
+      return outputPath;
+    } catch (error) {
+      if (fs.existsSync(outputPath)) {
+        try {
+          fs.unlinkSync(outputPath);
+        } catch (cleanupError) {
+          console.warn(`[FFmpeg] Failed to clean up partial concat output: ${cleanupError}`);
+        }
+      }
+      console.error(`[FFmpeg] Error concatenating videos:`, error);
+      throw new Error(`Failed to concatenate videos: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      try {
+        fs.unlinkSync(listPath);
+      } catch (cleanupError: any) {
+        if (cleanupError?.code !== 'ENOENT') {
+          console.warn(`[FFmpeg] Failed to remove concat list: ${cleanupError}`);
+        }
+      }
     }
   }
 

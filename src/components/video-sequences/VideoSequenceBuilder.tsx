@@ -453,6 +453,22 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function renderFinalVideo() {
+    if (!activeSequence) return;
+    await runAction('render', async () => {
+      const data = await fetchJson<{ success: true; sequence: VideoSequence }>(
+        `/api/video-sequences/${activeSequence.id}/render`,
+        { method: 'POST' },
+      );
+      setActiveSequence(data.sequence);
+      setSequences((current) => current.map((sequence) => (
+        sequence.id === data.sequence.id
+          ? { ...sequence, status: data.sequence.status, title: data.sequence.title, segmentCount: data.sequence.segments.length }
+          : sequence
+      )));
+    });
+  }
+
   return (
     <main className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-100">
       <aside className="flex w-[320px] shrink-0 flex-col border-r border-white/10 bg-zinc-950">
@@ -595,10 +611,23 @@ export default function VideoSequenceBuilder() {
               {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Refresh status
             </Button>
-            <Button variant="outline" className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" disabled>
-              <Scissors className="h-4 w-4" />
+            <Button
+              variant="outline"
+              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+              onClick={renderFinalVideo}
+              disabled={!activeSequence?.segments.length || !!busy}
+            >
+              {busy === 'render' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
               Render final
             </Button>
+            {activeSequence?.finalVideoUrl ? (
+              <Button asChild variant="outline" className="h-9 gap-2 border-emerald-500/30 bg-transparent text-emerald-200 hover:bg-emerald-500/10">
+                <a href={activeSequence.finalVideoUrl} target="_blank" rel="noreferrer">
+                  <Film className="h-4 w-4" />
+                  Final
+                </a>
+              </Button>
+            ) : null}
           </div>
         </header>
 
@@ -677,7 +706,7 @@ export default function VideoSequenceBuilder() {
           <div className="h-28 shrink-0 border-t border-white/10 bg-zinc-950 px-5 py-3">
             <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
               <span>Sequence timeline</span>
-              <span>00:00 - 00:{String(totalDuration).padStart(2, '0')}</span>
+              <span>{activeSequence?.finalVideoUrl ? 'Final rendered' : `00:00 - 00:${String(totalDuration).padStart(2, '0')}`}</span>
             </div>
             <div className="flex h-12 overflow-hidden rounded-md border border-white/10 bg-zinc-900">
               {activeSequence?.segments.length ? activeSequence.segments.map((segment) => (
