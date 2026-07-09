@@ -582,6 +582,106 @@ describe('video sequence APIs', () => {
     expect(snapshot.sourceFrameUrl).toBe('/generations/source.png');
   });
 
+  it('uses sequence dimensions when segment generation options do not override them', () => {
+    const { formData, snapshot } = buildVideoSegmentGenerationFormData({
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 832,
+        height: 1216,
+        targetFps: 24,
+        defaultGenerationOptionsJson: '{"steps":4}',
+      },
+      segment: {
+        id: 'seg-2',
+        modelId: 'wan22',
+        prompt: 'portrait follow-up',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        generationOptionsJson: '{}',
+        loraConfigJson: '{}',
+        seed: null,
+        randomizeSeed: true,
+        durationSeconds: 6,
+      },
+      sourceFrameUrl: '/generations/manual.jpg',
+      sourceImage: { blob: new Blob(['image'], { type: 'image/jpeg' }), filename: 'manual.jpg' },
+    });
+
+    expect(formData.get('width')).toBe('832');
+    expect(formData.get('height')).toBe('1216');
+    expect(formData.get('steps')).toBe('4');
+    expect(snapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
+  });
+
+  it('uses source frame dimensions when a sequence is still on the landscape default size', () => {
+    const { formData, snapshot } = buildVideoSegmentGenerationFormData({
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 1280,
+        height: 720,
+        targetFps: 24,
+        defaultGenerationOptionsJson: '{"steps":4}',
+      },
+      segment: {
+        id: 'seg-2',
+        modelId: 'wan22',
+        prompt: 'portrait follow-up',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        generationOptionsJson: '{}',
+        loraConfigJson: '{}',
+        seed: null,
+        randomizeSeed: true,
+        durationSeconds: 6,
+      },
+      sourceFrameUrl: '/generations/manual.jpg',
+      sourceImage: { blob: new Blob(['image'], { type: 'image/jpeg' }), filename: 'manual.jpg', width: 832, height: 1216 },
+    });
+
+    expect(formData.get('width')).toBe('832');
+    expect(formData.get('height')).toBe('1216');
+    expect(snapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
+  });
+
+  it('keeps explicit generation dimensions even when the source frame has a different size', () => {
+    const { formData, snapshot } = buildVideoSegmentGenerationFormData({
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 1280,
+        height: 720,
+        targetFps: 24,
+        defaultGenerationOptionsJson: '{"width":1024,"height":576,"steps":4}',
+      },
+      segment: {
+        id: 'seg-2',
+        modelId: 'wan22',
+        prompt: 'landscape override',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        generationOptionsJson: '{}',
+        loraConfigJson: '{}',
+        seed: null,
+        randomizeSeed: true,
+        durationSeconds: 6,
+      },
+      sourceFrameUrl: '/generations/manual.jpg',
+      sourceImage: { blob: new Blob(['image'], { type: 'image/jpeg' }), filename: 'manual.jpg', width: 832, height: 1216 },
+    });
+
+    expect(formData.get('width')).toBe('1024');
+    expect(formData.get('height')).toBe('576');
+    expect(snapshot.generationOptions).toMatchObject({ width: 1024, height: 576, steps: 4 });
+  });
+
   it('rejects segment generation when no source frame can be resolved', async () => {
     mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
       id: 'seg-1',
@@ -686,6 +786,111 @@ describe('video sequence APIs', () => {
         generationJobId: 'job-1',
       }),
     }));
+  });
+
+  it('queues manual frame generation with the picked frame and sequence portrait size', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-2',
+      sequenceId: 'seq-1',
+      orderIndex: 1,
+      title: 'Segment 2',
+      sourceMode: 'manual_frame',
+      sourceImageUrl: 'https://example.com/manual-picked.jpg',
+      sourceImageAssetId: null,
+      sourceSegmentId: 'seg-1',
+      sourceJobId: null,
+      sourceFrameRole: 'custom',
+      sourceFrozen: false,
+      prompt: 'continue from picked portrait frame',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: null,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      error: null,
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 832,
+        height: 1216,
+        targetFps: 24,
+        defaultGenerationOptionsJson: '{"steps":4}',
+      },
+    });
+    (globalThis.fetch as any).mockResolvedValue(new Response(new Blob(['manual-image'], { type: 'image/jpeg' }), {
+      status: 200,
+      headers: { 'content-type': 'image/jpeg' },
+    }));
+    mockSubmitGenerationFormData.mockResolvedValue(Response.json({
+      success: true,
+      jobId: 'job-2',
+      runpodJobId: 'rp-2',
+      status: 'IN_QUEUE',
+    }));
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-2',
+      sequenceId: 'seq-1',
+      orderIndex: 1,
+      title: 'Segment 2',
+      status: data.status,
+      sourceMode: 'manual_frame',
+      sourceImageUrl: 'https://example.com/manual-picked.jpg',
+      sourceImageAssetId: null,
+      sourceSegmentId: 'seg-1',
+      sourceJobId: null,
+      sourceFrameRole: 'custom',
+      sourceFrozen: false,
+      prompt: 'continue from picked portrait frame',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: data.generationJobId,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await generateSegment(request('http://localhost/api/video-sequences/seq-1/segments/seg-2/generate', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-2' }),
+    });
+    const json = await response.json();
+    const submittedFormData = mockSubmitGenerationFormData.mock.calls[0][0] as FormData;
+    const generationSnapshotJson = mockPrisma.videoSequenceSegment.update.mock.calls[0][0].data.generationSnapshotJson;
+    const generationSnapshot = JSON.parse(generationSnapshotJson);
+
+    expect(response.status).toBe(202);
+    expect(json.jobId).toBe('job-2');
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://example.com/manual-picked.jpg');
+    expect(submittedFormData.get('width')).toBe('832');
+    expect(submittedFormData.get('height')).toBe('1216');
+    expect(submittedFormData.get('steps')).toBe('4');
+    expect(generationSnapshot.sourceFrameUrl).toBe('https://example.com/manual-picked.jpg');
+    expect(generationSnapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
+    expect(mockPrisma.videoSequenceSegment.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('syncs a completed generation job back onto the segment without submitting a new job', async () => {

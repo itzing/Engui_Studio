@@ -99,6 +99,35 @@ function inferMimeFromPath(value: string) {
   return 'image/png';
 }
 
+function readImageDimensions(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes.length >= 24 && bytes.toString('ascii', 1, 4) === 'PNG') {
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = bytes[offset + 1];
+      const length = bytes.readUInt16BE(offset + 2);
+      if (!length || offset + 2 + length > bytes.length) return null;
+      if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+        const height = bytes.readUInt16BE(offset + 5);
+        const width = bytes.readUInt16BE(offset + 7);
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+      offset += 2 + length;
+    }
+  }
+
+  return null;
+}
+
 function resolveLocalPublicPath(url: string) {
   if (!url.startsWith('/')) return null;
   const normalized = url.split('?')[0].split('#')[0];
@@ -114,7 +143,7 @@ async function loadSourceImageBlob(sourceImageUrl: string) {
   if (localPath) {
     if (!fs.existsSync(localPath)) throw new StudioSessionApiError(400, `Source image does not exist: ${sourceImageUrl}`);
     const bytes = fs.readFileSync(localPath);
-    return { blob: new Blob([bytes], { type: inferMimeFromPath(sourceImageUrl) }), filename: path.basename(localPath) || 'source.png' };
+    return { blob: new Blob([bytes], { type: inferMimeFromPath(sourceImageUrl) }), filename: path.basename(localPath) || 'source.png', ...readImageDimensions(bytes) };
   }
 
   if (!/^https?:\/\//i.test(sourceImageUrl)) {
@@ -125,7 +154,8 @@ async function loadSourceImageBlob(sourceImageUrl: string) {
   if (!response.ok) throw new StudioSessionApiError(400, `Failed to fetch source image: ${response.status}`);
   const contentType = response.headers.get('content-type') || inferMimeFromPath(sourceImageUrl);
   const blob = await response.blob();
-  return { blob: new Blob([await blob.arrayBuffer()], { type: contentType }), filename: path.basename(new URL(sourceImageUrl).pathname) || 'source.png' };
+  const bytes = Buffer.from(await blob.arrayBuffer());
+  return { blob: new Blob([bytes], { type: contentType }), filename: path.basename(new URL(sourceImageUrl).pathname) || 'source.png', ...readImageDimensions(bytes) };
 }
 
 function appendScalarFormValue(formData: FormData, key: string, value: unknown) {
@@ -133,6 +163,11 @@ function appendScalarFormValue(formData: FormData, key: string, value: unknown) 
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     formData.append(key, String(value));
   }
+}
+
+function positiveNumber(value: unknown) {
+  const next = Number(value);
+  return Number.isFinite(next) && next > 0 ? next : null;
 }
 
 function parseJsonObjectField(value: string | null | undefined): Record<string, unknown> {
@@ -647,6 +682,17 @@ export async function resolveVideoSegmentSourceFrame(sequenceId: string, segment
     return { segment, sequence: segment.sequence, sourceFrameUrl: previous.lastFrameUrl, sourceSegmentId: previous.id };
   }
 
+  if (segment.sourceMode === 'manual_frame') {
+    if (segment.sourceImageUrl) {
+      return { segment, sequence: segment.sequence, sourceFrameUrl: segment.sourceImageUrl, sourceSegmentId: segment.sourceSegmentId ?? null };
+    }
+    throw new StudioSessionApiError(400, 'Manual frame source image is required before generating this segment');
+  }
+
+  if (segment.sourceImageUrl && segment.sourceMode !== 'job_output') {
+    return { segment, sequence: segment.sequence, sourceFrameUrl: segment.sourceImageUrl, sourceSegmentId: segment.sourceSegmentId ?? null };
+  }
+
   if (segment.sourceSegmentId) {
     const sourceSegment = await prisma.videoSequenceSegment.findFirst({
       where: { id: segment.sourceSegmentId },
@@ -676,15 +722,29 @@ export function buildVideoSegmentGenerationFormData(input: {
   sequence: any;
   segment: any;
   sourceFrameUrl: string;
-  sourceImage: { blob: Blob; filename: string };
+  sourceImage: { blob: Blob; filename: string; width?: number; height?: number };
   userId?: string;
 }) {
   const { sequence, segment, sourceFrameUrl, sourceImage, userId = 'user-with-settings' } = input;
   const formData = new FormData();
+  const sequenceGenerationOptions = parseJsonObjectField(sequence.defaultGenerationOptionsJson);
+  const segmentGenerationOptions = parseJsonObjectField(segment.generationOptionsJson);
   const generationOptions = {
-    ...parseJsonObjectField(sequence.defaultGenerationOptionsJson),
-    ...parseJsonObjectField(segment.generationOptionsJson),
+    ...sequenceGenerationOptions,
+    ...segmentGenerationOptions,
   };
+  const sequenceWidth = positiveNumber(sequence.width);
+  const sequenceHeight = positiveNumber(sequence.height);
+  const sourceWidth = positiveNumber(sourceImage.width);
+  const sourceHeight = positiveNumber(sourceImage.height);
+  const sequenceUsesLandscapeDefault = sequenceWidth === 1280 && sequenceHeight === 720;
+  const canUseSourceDimensions = sequenceUsesLandscapeDefault && sourceWidth !== null && sourceHeight !== null;
+  if (generationOptions.width === undefined) {
+    generationOptions.width = canUseSourceDimensions ? sourceWidth : sequenceWidth ?? undefined;
+  }
+  if (generationOptions.height === undefined) {
+    generationOptions.height = canUseSourceDimensions ? sourceHeight : sequenceHeight ?? undefined;
+  }
   const loraConfig = parseJsonObjectField(segment.loraConfigJson);
   const prompt = [segment.prompt, segment.motionPrompt, segment.continuityPrompt]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
