@@ -15,7 +15,7 @@ Fix desktop Video Sequence Builder generation so a segment using `manual_frame` 
 - [x] Manual frame generation resolves `sourceImageUrl` before any linked `sourceSegmentId` frame fallback.
 - [x] WAN22 segment generation includes sequence `width` and `height` when generation options do not explicitly override them.
 - [x] Regression coverage proves a manual frame with a linked source segment sends the picked frame and portrait dimensions.
-- [ ] Production build passes and `engui-studio.service` is restarted.
+- [x] Production build passes and `engui-studio.service` is restarted.
 
 ## Result
 
