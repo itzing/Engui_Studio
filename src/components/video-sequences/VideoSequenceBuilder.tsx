@@ -1378,9 +1378,9 @@ export default function VideoSequenceBuilder() {
                       </div>
                     )}
                     {activePreviewSegment?.outputVideoUrl ? (
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/15">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                          {previewPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+                      <div className="pointer-events-none absolute right-4 top-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg shadow-black/30 opacity-80 transition-opacity group-hover:opacity-100">
+                          {previewPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                         </span>
                       </div>
                     ) : null}
