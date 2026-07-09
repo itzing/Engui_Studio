@@ -4,6 +4,7 @@ import {
   getHeaderActionTooltip,
   getRenderBlocker,
   getSegmentSourcePreviewUrl,
+  getSegmentInspectorActionTooltip,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -91,5 +92,13 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getHeaderActionTooltip('generateFrom')).toContain('selected segment forward');
     expect(getHeaderActionTooltip('render', 'Segment 2 is stale')).toContain('Segment 2 is stale');
     expect(getHeaderActionTooltip('final')).toContain('new tab');
+  });
+
+  it('keeps segment inspector actions discoverable with detailed tooltips', () => {
+    expect(getSegmentInspectorActionTooltip('saveSegment')).toContain('source, prompt, model');
+    expect(getSegmentInspectorActionTooltip('generate')).toContain('source frame');
+    expect(getSegmentInspectorActionTooltip('status', { hasJob: false })).toContain('available after');
+    expect(getSegmentInspectorActionTooltip('frames', { hasOutput: true })).toContain('first and last frames');
+    expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
   });
 });

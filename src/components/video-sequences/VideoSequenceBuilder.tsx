@@ -232,6 +232,38 @@ export function getHeaderActionTooltip(action: 'save' | 'generate' | 'generateFr
   }
 }
 
+export function getSegmentInspectorActionTooltip(
+  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'frames' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo',
+  context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean },
+) {
+  switch (action) {
+    case 'saveSegment':
+      return 'Save the selected segment draft: source, prompt, model, seed, duration, LoRA JSON, and generation options';
+    case 'generate':
+      return 'Generate only this selected segment from its current source frame and prompt settings';
+    case 'generateFrom':
+      return 'Generate this segment, then continue forward through chained segments until one blocks or fails';
+    case 'status':
+      return context?.hasJob
+        ? 'Refresh this segment job status and import completed output, first frame, and last frame metadata'
+        : 'Refresh status becomes available after this segment has a generation job';
+    case 'frames':
+      return context?.hasOutput
+        ? 'Extract and store first and last frames from this segment output video'
+        : 'Extract frames becomes available after this segment has an output video';
+    case 'saveTemplate':
+      return 'Save this segment prompt, model, and generation settings as a reusable segment template';
+    case 'delete':
+      return 'Delete this segment from the sequence and renumber the remaining timeline';
+    case 'galleryImage':
+      return 'Choose a Gallery image and use it as this segment source frame';
+    case 'galleryVideo':
+      return context?.isFirstSegment
+        ? 'Choose a Gallery video and seed segment 1 as an already completed segment'
+        : 'Gallery video can only seed segment 1; use Previous last frame for chained follow-up segments';
+  }
+}
+
 export default function VideoSequenceBuilder() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sequences, setSequences] = useState<VideoSequence[]>([]);
@@ -873,12 +905,30 @@ export default function VideoSequenceBuilder() {
             <div className="truncate text-xs text-zinc-500">{selectedSegment?.title ?? 'No segment selected'}</div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={saveSelectedAsTemplate} disabled={!selectedSegment || !!busy}>
-              <Sparkles className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={saveSegment} disabled={!selectedSegment || !!busy}>
-              {busy === 'segment' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            </Button>
+            <ActionTooltip tooltip={getSegmentInspectorActionTooltip('saveTemplate')}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10"
+                onClick={saveSelectedAsTemplate}
+                disabled={!selectedSegment || !!busy}
+                aria-label="Save selected segment as template"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip tooltip={getSegmentInspectorActionTooltip('saveSegment')}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10"
+                onClick={saveSegment}
+                disabled={!selectedSegment || !!busy}
+                aria-label="Save selected segment"
+              >
+                {busy === 'segment' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              </Button>
+            </ActionTooltip>
           </div>
         </div>
 
@@ -907,27 +957,32 @@ export default function VideoSequenceBuilder() {
                       placeholder="Source image URL"
                     />
                     <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
-                        onClick={() => openGalleryPicker('image')}
-                        disabled={!workspaceId || !!busy}
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                        Image
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
-                        onClick={() => openGalleryPicker('video')}
-                        disabled={!workspaceId || selectedSegment.orderIndex !== 0 || !!busy}
-                        title={selectedSegment.orderIndex === 0 ? 'Use a Gallery video as the first completed segment' : 'Gallery video can only seed segment 1'}
-                      >
-                        <Film className="h-4 w-4" />
-                        Video
-                      </Button>
+                      <ActionTooltip tooltip={getSegmentInspectorActionTooltip('galleryImage')} className="min-w-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 w-full gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                          onClick={() => openGalleryPicker('image')}
+                          disabled={!workspaceId || !!busy}
+                          aria-label="Choose Gallery image as segment source"
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                          Image
+                        </Button>
+                      </ActionTooltip>
+                      <ActionTooltip tooltip={getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: selectedSegment.orderIndex === 0 })} className="min-w-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 w-full gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                          onClick={() => openGalleryPicker('video')}
+                          disabled={!workspaceId || selectedSegment.orderIndex !== 0 || !!busy}
+                          aria-label="Choose Gallery video as first completed segment"
+                        >
+                          <Film className="h-4 w-4" />
+                          Video
+                        </Button>
+                      </ActionTooltip>
                     </div>
                     <label className="flex items-center gap-2 text-xs text-zinc-400">
                       <input
@@ -999,30 +1054,42 @@ export default function VideoSequenceBuilder() {
               </InspectorSection>
 
               <div className="flex items-center justify-between gap-2">
-                <Button variant="outline" className="h-9 flex-1 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={generateSelectedSegment} disabled={!!busy}>
-                  {busy === 'generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                  Generate
-                </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={generateFromSelectedSegment} disabled={!!busy} aria-label="Generate from selected segment">
-                  {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
-                </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
-                  {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={extractSelectedFrames} disabled={!selectedSegment.outputVideoUrl || !!busy} aria-label="Extract segment frames">
-                  {busy === 'frames' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                </Button>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('generate')} className="min-w-0 flex-1">
+                  <Button variant="outline" className="h-9 w-full border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={generateSelectedSegment} disabled={!!busy} aria-label="Generate selected segment">
+                    {busy === 'generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                    Generate
+                  </Button>
+                </ActionTooltip>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('generateFrom')}>
+                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={generateFromSelectedSegment} disabled={!!busy} aria-label="Generate from selected segment">
+                    {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
+                  </Button>
+                </ActionTooltip>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('status', { hasJob: !!selectedSegment.generationJobId })}>
+                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
+                    {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </ActionTooltip>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('frames', { hasOutput: !!selectedSegment.outputVideoUrl })}>
+                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={extractSelectedFrames} disabled={!selectedSegment.outputVideoUrl || !!busy} aria-label="Extract segment frames">
+                    {busy === 'frames' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  </Button>
+                </ActionTooltip>
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <Button variant="outline" className="h-9 flex-1 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={saveSelectedAsTemplate} disabled={!!busy}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Save template
-                </Button>
-                <Button variant="outline" className="h-9 border-rose-500/30 bg-transparent text-rose-200 hover:bg-rose-500/10" onClick={deleteSegment} disabled={!!busy}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('saveTemplate')} className="min-w-0 flex-1">
+                  <Button variant="outline" className="h-9 w-full border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={saveSelectedAsTemplate} disabled={!!busy} aria-label="Save selected segment as template">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Save template
+                  </Button>
+                </ActionTooltip>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('delete')}>
+                  <Button variant="outline" className="h-9 border-rose-500/30 bg-transparent text-rose-200 hover:bg-rose-500/10" onClick={deleteSegment} disabled={!!busy} aria-label="Delete selected segment">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </ActionTooltip>
               </div>
             </div>
           ) : (
@@ -1142,6 +1209,15 @@ function InspectorSection({ icon, title, children }: { icon: ReactNode; title: s
   );
 }
 
+function ActionTooltip({ tooltip, className, children }: { tooltip: string; className?: string; children: ReactNode }) {
+  return (
+    <div className={cn('group relative flex', className)} title={tooltip}>
+      {children}
+      <ToolbarTooltip>{tooltip}</ToolbarTooltip>
+    </div>
+  );
+}
+
 function ToolbarIconButton({
   label,
   tooltip,
@@ -1156,7 +1232,7 @@ function ToolbarIconButton({
   children: ReactNode;
 }) {
   return (
-    <div className="group relative flex" title={tooltip}>
+    <ActionTooltip tooltip={tooltip}>
       <Button
         type="button"
         variant="outline"
@@ -1168,8 +1244,7 @@ function ToolbarIconButton({
       >
         {children}
       </Button>
-      <ToolbarTooltip>{tooltip}</ToolbarTooltip>
-    </div>
+    </ActionTooltip>
   );
 }
 
@@ -1187,7 +1262,7 @@ function ToolbarIconLink({
   children: ReactNode;
 }) {
   return (
-    <div className="group relative flex" title={tooltip}>
+    <ActionTooltip tooltip={tooltip}>
       <Button
         asChild
         variant="outline"
@@ -1201,8 +1276,7 @@ function ToolbarIconLink({
           {children}
         </a>
       </Button>
-      <ToolbarTooltip>{tooltip}</ToolbarTooltip>
-    </div>
+    </ActionTooltip>
   );
 }
 
