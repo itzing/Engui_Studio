@@ -180,6 +180,28 @@ function emptySegmentDraft(): SegmentDraft {
   };
 }
 
+export function getSegmentSourcePreviewUrl(segment: VideoSequenceSegment, segments: VideoSequenceSegment[]) {
+  if (segment.sourceImageUrl) return segment.sourceImageUrl;
+  if (segment.sourceMode === 'previous_last_frame') {
+    const previous = segments.find((item) => item.orderIndex === segment.orderIndex - 1);
+    return previous?.lastFrameUrl ?? null;
+  }
+  return null;
+}
+
+export function getRenderBlocker(sequence: VideoSequence | null) {
+  if (!sequence) return 'No sequence selected';
+  if (!sequence.segments.length) return 'Add segments before rendering';
+
+  const incomplete = sequence.segments.find((segment) => segment.status !== 'completed');
+  if (incomplete) return `Segment ${incomplete.orderIndex + 1} is ${incomplete.status}`;
+
+  const missingOutput = sequence.segments.find((segment) => !segment.outputVideoUrl);
+  if (missingOutput) return `Segment ${missingOutput.orderIndex + 1} is missing output`;
+
+  return null;
+}
+
 export default function VideoSequenceBuilder() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sequences, setSequences] = useState<VideoSequence[]>([]);
@@ -192,6 +214,7 @@ export default function VideoSequenceBuilder() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
@@ -200,6 +223,16 @@ export default function VideoSequenceBuilder() {
   const totalDuration = useMemo(() => (
     activeSequence?.segments.reduce((sum, segment) => sum + (segment.durationSeconds || 0), 0) ?? 0
   ), [activeSequence]);
+
+  const renderBlocker = useMemo(() => getRenderBlocker(activeSequence), [activeSequence]);
+  const selectedSourcePreviewUrl = useMemo(() => (
+    selectedSegment && activeSequence
+      ? getSegmentSourcePreviewUrl(selectedSegment, activeSequence.segments)
+      : null
+  ), [activeSequence, selectedSegment]);
+  const timelineStatus = activeSequence?.finalVideoUrl
+    ? 'Final rendered'
+    : renderBlocker ?? `00:00 - 00:${String(totalDuration).padStart(2, '0')}`;
 
   const loadSequence = useCallback(async (sequenceId: string, preferredSegmentId?: string | null) => {
     const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${sequenceId}`);
@@ -283,6 +316,7 @@ export default function VideoSequenceBuilder() {
   async function runAction(label: string, action: () => Promise<void>) {
     setBusy(label);
     setError(null);
+    setNotice(null);
     try {
       await action();
     } catch (nextError) {
@@ -314,6 +348,7 @@ export default function VideoSequenceBuilder() {
       setSequences((current) => current.map((sequence) => (
         sequence.id === data.sequence.id ? { ...sequence, title: data.sequence.title, description: data.sequence.description } : sequence
       )));
+      setNotice('Sequence saved');
     });
   }
 
@@ -330,6 +365,7 @@ export default function VideoSequenceBuilder() {
       });
       setSelectedSegmentId(data.segment.id);
       await loadSequence(activeSequence.id, data.segment.id);
+      setNotice(`Added ${data.segment.title}`);
     });
   }
 
@@ -360,6 +396,7 @@ export default function VideoSequenceBuilder() {
         },
       );
       await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice('Segment saved');
     });
   }
 
@@ -371,6 +408,7 @@ export default function VideoSequenceBuilder() {
       });
       setSelectedSegmentId(null);
       await loadSequence(activeSequence.id);
+      setNotice('Segment deleted');
     });
   }
 
@@ -388,6 +426,7 @@ export default function VideoSequenceBuilder() {
       );
       const data = await fetchJson<{ success: true; templates: VideoSegmentTemplate[] }>(`/api/video-segment-templates?workspaceId=${encodeURIComponent(workspaceId)}`);
       setTemplates(data.templates);
+      setNotice('Template saved');
     });
   }
 
@@ -400,13 +439,14 @@ export default function VideoSequenceBuilder() {
       });
       setSelectedSegmentId(data.segment.id);
       await loadSequence(activeSequence.id, data.segment.id);
+      setNotice(`Inserted ${data.segment.title}`);
     });
   }
 
   async function generateSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('generate', async () => {
-      await fetchJson<{ success: boolean; segment: VideoSequenceSegment }>(
+      const data = await fetchJson<{ success: boolean; segment: VideoSequenceSegment; jobId?: string | null }>(
         `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/generate`,
         {
           method: 'POST',
@@ -414,13 +454,14 @@ export default function VideoSequenceBuilder() {
         },
       );
       await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(data.jobId ? `Queued ${selectedSegment.title}` : `Updated ${selectedSegment.title}`);
     });
   }
 
   async function generateFromSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('generate-from', async () => {
-      await fetchJson<{ success: boolean; segment?: VideoSequenceSegment | null }>(
+      const data = await fetchJson<{ success: boolean; action?: string; message?: string; segment?: VideoSequenceSegment | null }>(
         `/api/video-sequences/${activeSequence.id}/generate-from`,
         {
           method: 'POST',
@@ -428,6 +469,7 @@ export default function VideoSequenceBuilder() {
         },
       );
       await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(data.message ?? (data.action ? `Generate from here: ${data.action}` : 'Generate from here updated'));
     });
   }
 
@@ -439,6 +481,7 @@ export default function VideoSequenceBuilder() {
         { method: 'POST' },
       );
       await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(`Status refreshed for ${selectedSegment.title}`);
     });
   }
 
@@ -450,11 +493,12 @@ export default function VideoSequenceBuilder() {
         { method: 'POST' },
       );
       await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(`Frames extracted for ${selectedSegment.title}`);
     });
   }
 
   async function renderFinalVideo() {
-    if (!activeSequence) return;
+    if (!activeSequence || renderBlocker) return;
     await runAction('render', async () => {
       const data = await fetchJson<{ success: true; sequence: VideoSequence }>(
         `/api/video-sequences/${activeSequence.id}/render`,
@@ -466,6 +510,7 @@ export default function VideoSequenceBuilder() {
           ? { ...sequence, status: data.sequence.status, title: data.sequence.title, segmentCount: data.sequence.segments.length }
           : sequence
       )));
+      setNotice('Final video rendered');
     });
   }
 
@@ -615,7 +660,8 @@ export default function VideoSequenceBuilder() {
               variant="outline"
               className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
               onClick={renderFinalVideo}
-              disabled={!activeSequence?.segments.length || !!busy}
+              disabled={!!renderBlocker || !!busy}
+              title={renderBlocker ?? 'Render final video'}
             >
               {busy === 'render' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
               Render final
@@ -633,6 +679,9 @@ export default function VideoSequenceBuilder() {
 
         {error ? (
           <div className="border-b border-rose-500/30 bg-rose-500/10 px-5 py-2 text-sm text-rose-200">{error}</div>
+        ) : null}
+        {!error && notice ? (
+          <div className="border-b border-emerald-500/20 bg-emerald-500/10 px-5 py-2 text-sm text-emerald-200">{notice}</div>
         ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -666,7 +715,7 @@ export default function VideoSequenceBuilder() {
                         </span>
                       </div>
                       <div className="grid grid-cols-[72px_1fr_72px] gap-px bg-white/10">
-                        <MediaCell type="image" url={segment.sourceImageUrl} icon={<Images className="h-5 w-5" />} />
+                        <MediaCell type="image" url={getSegmentSourcePreviewUrl(segment, activeSequence.segments)} icon={<Images className="h-5 w-5" />} />
                         <MediaCell type="video" url={segment.outputVideoUrl} icon={<Film className="h-6 w-6" />} />
                         <MediaCell type="image" url={segment.lastFrameUrl} icon={<Images className="h-5 w-5" />} />
                       </div>
@@ -706,7 +755,7 @@ export default function VideoSequenceBuilder() {
           <div className="h-28 shrink-0 border-t border-white/10 bg-zinc-950 px-5 py-3">
             <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
               <span>Sequence timeline</span>
-              <span>{activeSequence?.finalVideoUrl ? 'Final rendered' : `00:00 - 00:${String(totalDuration).padStart(2, '0')}`}</span>
+              <span className={cn(renderBlocker && !activeSequence?.finalVideoUrl ? 'text-amber-300' : '')}>{timelineStatus}</span>
             </div>
             <div className="flex h-12 overflow-hidden rounded-md border border-white/10 bg-zinc-900">
               {activeSequence?.segments.length ? activeSequence.segments.map((segment) => (
@@ -753,7 +802,7 @@ export default function VideoSequenceBuilder() {
               <InspectorSection icon={<Images className="h-4 w-4" />} title="Source">
                 <div className="grid grid-cols-[96px_1fr] gap-3">
                   <div className="aspect-[3/4] overflow-hidden rounded border border-white/10 bg-zinc-900">
-                    {segmentDraft.sourceImageUrl ? <img src={segmentDraft.sourceImageUrl} alt="" className="h-full w-full object-cover" /> : null}
+                    {selectedSourcePreviewUrl ? <img src={selectedSourcePreviewUrl} alt="" className="h-full w-full object-cover" /> : null}
                   </div>
                   <div className="space-y-2">
                     <select
