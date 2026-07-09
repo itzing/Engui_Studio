@@ -224,6 +224,78 @@ describe('video sequence APIs', () => {
     });
   });
 
+  it('copies generation settings from the previous segment when creating a follow-up segment', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({ id: 'seq-1' });
+    mockPrisma.videoSequenceSegment.count.mockResolvedValue(1);
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      prompt: 'same scene, slow push in',
+      negativePrompt: 'low quality',
+      motionPrompt: 'camera glides forward',
+      continuityPrompt: 'keep lighting and wardrobe',
+      modelId: 'wan22',
+      endpointId: 'endpoint-1',
+      loraConfigJson: '{"lora_high_1":"high.safetensors","lora_low_1":"low.safetensors","lora_weight_1":0.75}',
+      generationOptionsJson: '{"steps":8,"width":768,"height":512}',
+      seed: 12345,
+      randomizeSeed: false,
+      durationSeconds: 4,
+    });
+    mockPrisma.videoSequenceSegment.create.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-2',
+      ...data,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    }));
+
+    const response = await createSegment(request('http://localhost/api/video-sequences/seq-1/segments', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSequenceSegment.findFirst).toHaveBeenCalledWith({
+      where: { sequenceId: 'seq-1', orderIndex: 0 },
+      select: expect.any(Object),
+    });
+    expect(mockPrisma.videoSequenceSegment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sequenceId: 'seq-1',
+        orderIndex: 1,
+        title: 'Segment 2',
+        sourceMode: 'previous_last_frame',
+        prompt: 'same scene, slow push in',
+        negativePrompt: 'low quality',
+        motionPrompt: 'camera glides forward',
+        continuityPrompt: 'keep lighting and wardrobe',
+        modelId: 'wan22',
+        endpointId: 'endpoint-1',
+        loraConfigJson: '{"lora_high_1":"high.safetensors","lora_low_1":"low.safetensors","lora_weight_1":0.75}',
+        generationOptionsJson: '{"steps":8,"width":768,"height":512}',
+        seed: 12345,
+        randomizeSeed: false,
+        durationSeconds: 4,
+      }),
+    });
+    expect(json.segment).toMatchObject({
+      sourceMode: 'previous_last_frame',
+      prompt: 'same scene, slow push in',
+      generationOptions: { steps: 8, width: 768, height: 512 },
+      loraConfig: {
+        lora_high_1: 'high.safetensors',
+        lora_low_1: 'low.safetensors',
+        lora_weight_1: 0.75,
+      },
+      seed: 12345,
+      durationSeconds: 4,
+    });
+  });
+
   it('applies a Gallery image as the selected segment source frame', async () => {
     const existingSegment = {
       id: 'seg-1',

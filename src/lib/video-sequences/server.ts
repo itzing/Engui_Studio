@@ -304,6 +304,44 @@ function segmentCreateDefaults(orderIndex: number) {
   };
 }
 
+async function segmentCreateDefaultsWithPreviousSettings(sequenceId: string, orderIndex: number) {
+  const defaults: Record<string, unknown> = segmentCreateDefaults(orderIndex);
+  if (orderIndex <= 0) return defaults;
+
+  const previous = await prisma.videoSequenceSegment.findFirst({
+    where: { sequenceId, orderIndex: orderIndex - 1 },
+    select: {
+      prompt: true,
+      negativePrompt: true,
+      motionPrompt: true,
+      continuityPrompt: true,
+      modelId: true,
+      endpointId: true,
+      loraConfigJson: true,
+      generationOptionsJson: true,
+      seed: true,
+      randomizeSeed: true,
+      durationSeconds: true,
+    },
+  });
+  if (!previous) return defaults;
+
+  return {
+    ...defaults,
+    prompt: previous.prompt,
+    negativePrompt: previous.negativePrompt,
+    motionPrompt: previous.motionPrompt,
+    continuityPrompt: previous.continuityPrompt,
+    modelId: previous.modelId,
+    endpointId: previous.endpointId,
+    loraConfigJson: previous.loraConfigJson,
+    generationOptionsJson: previous.generationOptionsJson,
+    seed: previous.seed,
+    randomizeSeed: previous.randomizeSeed,
+    durationSeconds: previous.durationSeconds,
+  };
+}
+
 const generationRelevantSegmentFields = [
   'sourceMode',
   'sourceImageUrl',
@@ -487,7 +525,7 @@ export async function createVideoSequenceSegment(sequenceId: string, input: Reco
   if (!sequence) throw new StudioSessionApiError(404, 'Video sequence not found');
 
   const count = await prisma.videoSequenceSegment.count({ where: { sequenceId } });
-  const defaults = segmentCreateDefaults(count);
+  const defaults = await segmentCreateDefaultsWithPreviousSettings(sequenceId, count);
   const segment = await prisma.videoSequenceSegment.create({
     data: {
       sequenceId,
