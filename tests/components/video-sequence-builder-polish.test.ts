@@ -5,6 +5,10 @@ import {
   getRenderBlocker,
   getSegmentSourcePreviewUrl,
   getSegmentInspectorActionTooltip,
+  getNextWanLoraSlotIndex,
+  getSelectedWanLoraSlots,
+  setWanLoraPairInConfig,
+  setWanLoraWeightInConfig,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -101,5 +105,50 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getSegmentInspectorActionTooltip('frames', { hasOutput: true })).toContain('first and last frames');
     expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
     expect(getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: true })).toContain('pick a custom source frame');
+  });
+
+  it('builds editable WAN LoRA slots while preserving generation config keys', () => {
+    const availableLoras = [
+      {
+        id: 'high-1',
+        name: 'Drama High',
+        fileName: 'dramatic_high.safetensors',
+        s3Path: '/runpod-volume/loras/dramatic_high.safetensors',
+        s3Url: '',
+        fileSize: '1024',
+        extension: '.safetensors',
+        uploadedAt: '2026-07-09T00:00:00Z',
+      },
+      {
+        id: 'low-1',
+        name: 'Drama Low',
+        fileName: 'dramatic_low.safetensors',
+        s3Path: '/runpod-volume/loras/dramatic_low.safetensors',
+        s3Url: '',
+        fileSize: '1024',
+        extension: '.safetensors',
+        uploadedAt: '2026-07-09T00:00:00Z',
+      },
+    ];
+
+    const added = setWanLoraPairInConfig('{}', 1, {
+      highPath: '/runpod-volume/loras/dramatic_high.safetensors',
+      lowPath: '/runpod-volume/loras/dramatic_low.safetensors',
+    });
+    const weighted = setWanLoraWeightInConfig(added, 1, 'high', 1.25);
+    const parsed = JSON.parse(weighted);
+
+    expect(parsed.lora_high_1).toBe('/runpod-volume/loras/dramatic_high.safetensors');
+    expect(parsed.lora_low_1).toBe('/runpod-volume/loras/dramatic_low.safetensors');
+    expect(parsed.lora_high_1_weight).toBe(1.25);
+    expect(parsed.lora_low_1_weight).toBe(0.8);
+
+    const slots = getSelectedWanLoraSlots(weighted, availableLoras);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].highLoRA?.fileName).toBe('dramatic_high.safetensors');
+    expect(getNextWanLoraSlotIndex(weighted)).toBe(2);
+
+    const cleared = setWanLoraPairInConfig(weighted, 1, null);
+    expect(JSON.parse(cleared)).toEqual({});
   });
 });

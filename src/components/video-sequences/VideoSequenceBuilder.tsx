@@ -13,18 +13,23 @@ import {
   Images,
   Layers3,
   Loader2,
+  Package,
   Play,
   Plus,
   RefreshCw,
   Save,
   Scissors,
+  Search,
   Sparkles,
   Trash2,
   Waypoints,
+  X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { LoRAFile } from '@/components/lora/LoRASelector';
+import { buildLoraPairs, filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
 import { cn } from '@/lib/utils';
 
 type VideoSequenceSegment = {
@@ -141,6 +146,113 @@ function formatSeconds(value: number) {
   return `${value.toFixed(2)}s`;
 }
 
+const maxWanLoraPairs = 4;
+const maxWanLoraFiles = maxWanLoraPairs * 2;
+const defaultWanLoraWeight = 0.8;
+
+type WanLoraSlot = {
+  index: number;
+  highPath: string;
+  lowPath: string;
+  highWeight: number;
+  lowWeight: number;
+  highLoRA?: LoRAFile;
+  lowLoRA?: LoRAFile;
+  label: string;
+};
+
+function parseJsonObjectText(value: string, fallback: Record<string, unknown> = {}) {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? { ...parsed } as Record<string, unknown>
+      : { ...fallback };
+  } catch {
+    return { ...fallback };
+  }
+}
+
+function numberFromUnknown(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatLoraFileSize(sizeStr: string) {
+  const bytes = Number.parseInt(sizeStr, 10);
+  if (!Number.isFinite(bytes)) return sizeStr;
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+export function getSelectedWanLoraSlots(loraConfigJson: string, availableLoras: LoRAFile[]): WanLoraSlot[] {
+  const config = parseJsonObjectText(loraConfigJson);
+
+  return Array.from({ length: maxWanLoraPairs }, (_, offset) => offset + 1)
+    .map((index) => {
+      const highPath = typeof config[`lora_high_${index}`] === 'string' ? String(config[`lora_high_${index}`]).trim() : '';
+      const lowPath = typeof config[`lora_low_${index}`] === 'string' ? String(config[`lora_low_${index}`]).trim() : '';
+      if (!highPath && !lowPath) return null;
+
+      const highLoRA = availableLoras.find((lora) => lora.s3Path === highPath);
+      const lowLoRA = availableLoras.find((lora) => lora.s3Path === lowPath);
+      return {
+        index,
+        highPath,
+        lowPath,
+        highWeight: numberFromUnknown(config[`lora_high_${index}_weight`], defaultWanLoraWeight),
+        lowWeight: numberFromUnknown(config[`lora_low_${index}_weight`], defaultWanLoraWeight),
+        highLoRA,
+        lowLoRA,
+        label: highLoRA?.name || lowLoRA?.name || highLoRA?.fileName || lowLoRA?.fileName || `LoRA pair ${index}`,
+      };
+    })
+    .filter((slot): slot is WanLoraSlot => slot !== null);
+}
+
+export function getNextWanLoraSlotIndex(loraConfigJson: string) {
+  const config = parseJsonObjectText(loraConfigJson);
+  for (let index = 1; index <= maxWanLoraPairs; index += 1) {
+    const highPath = typeof config[`lora_high_${index}`] === 'string' ? String(config[`lora_high_${index}`]).trim() : '';
+    const lowPath = typeof config[`lora_low_${index}`] === 'string' ? String(config[`lora_low_${index}`]).trim() : '';
+    if (!highPath && !lowPath) return index;
+  }
+  return null;
+}
+
+export function setWanLoraPairInConfig(
+  loraConfigJson: string,
+  index: number,
+  pair: { highPath: string; lowPath: string; highWeight?: number; lowWeight?: number } | null,
+) {
+  const config = parseJsonObjectText(loraConfigJson);
+  const highKey = `lora_high_${index}`;
+  const lowKey = `lora_low_${index}`;
+  const highWeightKey = `lora_high_${index}_weight`;
+  const lowWeightKey = `lora_low_${index}_weight`;
+
+  if (!pair) {
+    delete config[highKey];
+    delete config[lowKey];
+    delete config[highWeightKey];
+    delete config[lowWeightKey];
+    return JSON.stringify(config, null, 2);
+  }
+
+  config[highKey] = pair.highPath;
+  config[lowKey] = pair.lowPath;
+  config[highWeightKey] = pair.highWeight ?? defaultWanLoraWeight;
+  config[lowWeightKey] = pair.lowWeight ?? defaultWanLoraWeight;
+  return JSON.stringify(config, null, 2);
+}
+
+export function setWanLoraWeightInConfig(loraConfigJson: string, index: number, component: 'high' | 'low', weight: number) {
+  const config = parseJsonObjectText(loraConfigJson);
+  config[`lora_${component}_${index}_weight`] = weight;
+  return JSON.stringify(config, null, 2);
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: 'no-store',
@@ -242,7 +354,7 @@ export function getSegmentInspectorActionTooltip(
 ) {
   switch (action) {
     case 'saveSegment':
-      return 'Save the selected segment draft: source, prompt, model, seed, duration, LoRA JSON, and generation options';
+      return 'Save the selected segment draft: source, prompt, model, seed, duration, LoRAs, and generation options';
     case 'generate':
       return 'Generate only this selected segment from its current source frame and prompt settings';
     case 'generateFrom':
@@ -292,7 +404,12 @@ export default function VideoSequenceBuilder() {
   const [framePickerOpen, setFramePickerOpen] = useState(false);
   const [framePickerTime, setFramePickerTime] = useState(0);
   const [framePickerDuration, setFramePickerDuration] = useState(0);
+  const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
+  const [loraLoading, setLoraLoading] = useState(false);
+  const [loraPickerOpen, setLoraPickerOpen] = useState(false);
+  const [loraSearchQuery, setLoraSearchQuery] = useState('');
   const framePickerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
@@ -328,6 +445,34 @@ export default function VideoSequenceBuilder() {
       asset.originalUrl,
     ].join(' ').toLowerCase().includes(query));
   }, [galleryAssets, galleryQuery]);
+  const modelLoras = useMemo(() => (
+    filterLorasForModel(availableLoras, segmentDraft.modelId || 'wan22')
+  ), [availableLoras, segmentDraft.modelId]);
+  const selectedLoraSlots = useMemo(() => (
+    getSelectedWanLoraSlots(segmentDraft.loraConfigJson, modelLoras)
+  ), [modelLoras, segmentDraft.loraConfigJson]);
+  const nextLoraSlotIndex = useMemo(() => (
+    getNextWanLoraSlotIndex(segmentDraft.loraConfigJson)
+  ), [segmentDraft.loraConfigJson]);
+  const selectedLoraPathSet = useMemo(() => new Set(selectedLoraSlots.flatMap((slot) => [slot.highPath, slot.lowPath]).filter(Boolean)), [selectedLoraSlots]);
+  const loraPairs = useMemo(() => (
+    buildLoraPairs(modelLoras).filter((pair) => pair.isComplete && pair.high && pair.low)
+  ), [modelLoras]);
+  const filteredLoraPairs = useMemo(() => {
+    const query = loraSearchQuery.trim().toLowerCase();
+    return loraPairs.filter((pair) => {
+      if ((pair.high && selectedLoraPathSet.has(pair.high.s3Path)) || (pair.low && selectedLoraPathSet.has(pair.low.s3Path))) {
+        return false;
+      }
+      if (!query) return true;
+      const searchText = [
+        pair.baseName,
+        pair.high ? getLoraSearchText(pair.high) : '',
+        pair.low ? getLoraSearchText(pair.low) : '',
+      ].join(' ').toLowerCase();
+      return searchText.includes(query);
+    });
+  }, [loraPairs, loraSearchQuery, selectedLoraPathSet]);
 
   const loadSequence = useCallback(async (sequenceId: string, preferredSegmentId?: string | null) => {
     const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${sequenceId}`);
@@ -400,6 +545,34 @@ export default function VideoSequenceBuilder() {
     };
   }, [loadWorkspaceData]);
 
+  const fetchAvailableLoras = useCallback(async () => {
+    if (!workspaceId) {
+      setAvailableLoras([]);
+      return;
+    }
+
+    setLoraLoading(true);
+    try {
+      const data = await fetchJson<{ success: boolean; loras?: LoRAFile[] }>(`/api/lora?workspaceId=${encodeURIComponent(workspaceId)}`);
+      setAvailableLoras(Array.isArray(data.loras) ? data.loras : []);
+    } catch (nextError) {
+      setAvailableLoras([]);
+      setError(nextError instanceof Error ? nextError.message : 'Failed to load LoRAs');
+    } finally {
+      setLoraLoading(false);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchAvailableLoras();
+  }, [fetchAvailableLoras]);
+
+  useEffect(() => {
+    if (!loraPickerOpen) return;
+    const timeout = window.setTimeout(() => loraSearchInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [loraPickerOpen]);
+
   useEffect(() => {
     if (selectedSegment) {
       setSegmentDraft(makeSegmentDraft(selectedSegment));
@@ -409,6 +582,8 @@ export default function VideoSequenceBuilder() {
     setFramePickerOpen(false);
     setFramePickerTime(0);
     setFramePickerDuration(0);
+    setLoraPickerOpen(false);
+    setLoraSearchQuery('');
   }, [selectedSegment]);
 
   async function runAction(label: string, action: () => Promise<void>) {
@@ -494,6 +669,35 @@ export default function VideoSequenceBuilder() {
       await loadSequence(activeSequence.id, selectedSegment.id);
       setNotice(`Manual frame picked at ${formatSeconds(framePickerTime)}`);
     });
+  }
+
+  function addLoraPair(pair: { high?: LoRAFile; low?: LoRAFile }) {
+    if (!nextLoraSlotIndex || !pair.high || !pair.low) return;
+    setSegmentDraft((draft) => ({
+      ...draft,
+      loraConfigJson: setWanLoraPairInConfig(draft.loraConfigJson, nextLoraSlotIndex, {
+        highPath: pair.high!.s3Path,
+        lowPath: pair.low!.s3Path,
+      }),
+    }));
+    setLoraPickerOpen(false);
+    setLoraSearchQuery('');
+  }
+
+  function clearLoraSlot(index: number) {
+    setSegmentDraft((draft) => ({
+      ...draft,
+      loraConfigJson: setWanLoraPairInConfig(draft.loraConfigJson, index, null),
+    }));
+  }
+
+  function updateLoraSlotWeight(index: number, component: 'high' | 'low', value: string) {
+    const nextWeight = Number(value);
+    if (!Number.isFinite(nextWeight)) return;
+    setSegmentDraft((draft) => ({
+      ...draft,
+      loraConfigJson: setWanLoraWeightInConfig(draft.loraConfigJson, index, component, nextWeight),
+    }));
   }
 
   async function createSequence() {
@@ -1115,7 +1319,100 @@ export default function VideoSequenceBuilder() {
                   />
                   Randomize seed
                 </label>
-                <TextArea label="LoRA JSON" value={segmentDraft.loraConfigJson} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, loraConfigJson: value }))} rows={4} mono />
+                <div className="space-y-3 rounded-md border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-zinc-100">LoRAs</div>
+                      <div className="text-xs text-zinc-500">Only selected LoRAs are shown here.</div>
+                    </div>
+                    <div className="text-xs text-zinc-400">
+                      {selectedLoraSlots.length * 2}/{maxWanLoraFiles}
+                    </div>
+                  </div>
+
+                  {selectedLoraSlots.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedLoraSlots.map((slot) => (
+                        <div key={slot.index} className="rounded-md border border-white/10 bg-zinc-950/70 p-3">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-zinc-100">
+                                {slot.label}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                Slot {slot.index} - High {slot.highWeight.toFixed(2)} / Low {slot.lowWeight.toFixed(2)}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-zinc-400 hover:bg-white/10 hover:text-white"
+                              onClick={() => clearLoraSlot(slot.index)}
+                              aria-label={`Clear LoRA slot ${slot.index}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="min-w-0 space-y-2">
+                              <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">High</div>
+                              <div className="truncate text-xs text-zinc-300" title={slot.highLoRA?.fileName ?? slot.highPath}>
+                                {slot.highLoRA?.fileName ?? slot.highPath}
+                              </div>
+                              <Input
+                                type="number"
+                                min="-5"
+                                max="5"
+                                step="0.05"
+                                value={slot.highWeight}
+                                onChange={(event) => updateLoraSlotWeight(slot.index, 'high', event.target.value)}
+                                className="h-8 border-white/10 bg-zinc-900 text-xs"
+                                aria-label={`High LoRA ${slot.index} weight`}
+                              />
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                              <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Low</div>
+                              <div className="truncate text-xs text-zinc-300" title={slot.lowLoRA?.fileName ?? slot.lowPath}>
+                                {slot.lowLoRA?.fileName ?? slot.lowPath}
+                              </div>
+                              <Input
+                                type="number"
+                                min="-5"
+                                max="5"
+                                step="0.05"
+                                value={slot.lowWeight}
+                                onChange={(event) => updateLoraSlotWeight(slot.index, 'low', event.target.value)}
+                                className="h-8 border-white/10 bg-zinc-900 text-xs"
+                                aria-label={`Low LoRA ${slot.index} weight`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed border-white/10 px-4 py-6 text-sm text-zinc-500">
+                      No LoRAs selected yet.
+                    </div>
+                  )}
+
+                  {nextLoraSlotIndex ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 w-full gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                      onClick={() => {
+                        setLoraSearchQuery('');
+                        setLoraPickerOpen(true);
+                      }}
+                      disabled={loraLoading || !!busy}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add LoRA
+                    </Button>
+                  ) : null}
+                </div>
                 <TextArea label="Options JSON" value={segmentDraft.generationOptionsJson} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, generationOptionsJson: value }))} rows={4} mono />
               </InspectorSection>
 
@@ -1237,6 +1534,87 @@ export default function VideoSequenceBuilder() {
                   Pick frame
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {loraPickerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="flex max-h-[82vh] w-full max-w-xl flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+              <div>
+                <div className="text-sm font-semibold">Select LoRA</div>
+                <div className="text-xs text-zinc-500">
+                  Pick a complete High/Low pair for slot {nextLoraSlotIndex ?? '-'}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                onClick={() => setLoraPickerOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="border-b border-white/10 p-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Input
+                  ref={loraSearchInputRef}
+                  value={loraSearchQuery}
+                  onChange={(event) => setLoraSearchQuery(event.target.value)}
+                  className="h-9 border-white/10 bg-zinc-900 pl-9 text-sm"
+                  placeholder="Search LoRAs"
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {loraLoading ? (
+                <div className="flex h-40 items-center justify-center text-sm text-zinc-500">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading LoRAs
+                </div>
+              ) : loraPairs.length === 0 ? (
+                <div className="rounded-md border border-dashed border-white/10 px-4 py-8 text-sm text-zinc-500">
+                  No complete High/Low video LoRA pairs found.
+                </div>
+              ) : filteredLoraPairs.length === 0 ? (
+                <div className="rounded-md border border-dashed border-white/10 px-4 py-8 text-sm text-zinc-500">
+                  No LoRAs match your search.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredLoraPairs.map((pair) => (
+                    <button
+                      key={pair.key}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/10"
+                      onClick={() => addLoraPair(pair)}
+                    >
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2">
+                          <Package className="h-4 w-4 shrink-0 text-cyan-300" />
+                          <span className="truncate text-sm font-medium text-zinc-100">{pair.baseName}</span>
+                        </span>
+                        <span className="mt-2 grid grid-cols-2 gap-3 text-xs text-zinc-500">
+                          <span className="min-w-0">
+                            <span className="block font-medium text-zinc-400">High</span>
+                            <span className="block truncate" title={pair.high?.fileName}>{pair.high?.fileName}</span>
+                            <span>{pair.high ? formatLoraFileSize(pair.high.fileSize) : ''}</span>
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-medium text-zinc-400">Low</span>
+                            <span className="block truncate" title={pair.low?.fileName}>{pair.low?.fileName}</span>
+                            <span>{pair.low ? formatLoraFileSize(pair.low.fileSize) : ''}</span>
+                          </span>
+                        </span>
+                      </span>
+                      <Plus className="h-4 w-4 shrink-0 text-zinc-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
