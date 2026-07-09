@@ -1168,9 +1168,65 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(200);
     expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
     expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(1, videoPath, expect.stringContaining('/first-'), expect.objectContaining({ position: 'first', format: 'png' }));
-    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), expect.objectContaining({ position: 'first', time: '1.000', format: 'png' }));
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), expect.objectContaining({ position: 'first', time: '3.875', format: 'png' }));
     expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.png$/);
     expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.png$/);
+  });
+
+  it('falls back to the true last frame when continuation FPS metadata is unavailable', async () => {
+    mockFfmpegService.getVideoInfo.mockResolvedValueOnce({ duration: 4, width: 832, height: 1216, fps: 0, format: '.mp4' });
+    const videoPath = path.join(process.cwd(), 'public', 'generations', 'video-sequence-no-fps-test.mp4');
+    fs.mkdirSync(path.dirname(videoPath), { recursive: true });
+    fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
+    createdFiles.add(videoPath);
+
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      status: 'completed',
+      outputVideoUrl: '/generations/video-sequence-no-fps-test.mp4',
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      generationSnapshotJson: null,
+      sequence: { workspaceId: 'ws-1' },
+    });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'completed',
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: 'job-1',
+      outputVideoUrl: '/generations/video-sequence-no-fps-test.mp4',
+      firstFrameUrl: data.firstFrameUrl,
+      lastFrameUrl: data.lastFrameUrl,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await extractSegmentFrames(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/extract-frames', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), { position: 'last', format: 'png' });
   });
 
   it('rejects frame extraction before the segment has an output video', async () => {

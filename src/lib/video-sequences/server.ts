@@ -158,10 +158,13 @@ function outputMetadataFromVideoInfo(outputVideoUrl: string, info: Awaited<Retur
   };
 }
 
-function continuationFrameTimeFromMetadata(metadata: { durationSeconds?: number | null }) {
+function continuationFrameTimeFromMetadata(metadata: { durationSeconds?: number | null; fps?: number | null }) {
   const durationSeconds = Number(metadata.durationSeconds);
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 3) return null;
-  return Math.max(0, durationSeconds - 3).toFixed(3);
+  const fps = Number(metadata.fps);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || !Number.isFinite(fps) || fps <= 0) return null;
+  const frameOffsetSeconds = 3 / fps;
+  if (durationSeconds <= frameOffsetSeconds) return null;
+  return Math.max(0, durationSeconds - frameOffsetSeconds).toFixed(3);
 }
 
 function isLosslessSequenceFrameUrl(value: string | null | undefined) {
@@ -1330,6 +1333,7 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
           firstFrameUrl,
           lastFrameUrl,
           continuationFrameTime,
+          continuationFrameOffsetFrames: continuationFrameTime ? 3 : null,
           outputVideoMetadata,
           extractedAt: new Date().toISOString(),
         },
