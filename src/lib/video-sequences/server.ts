@@ -165,9 +165,23 @@ function appendScalarFormValue(formData: FormData, key: string, value: unknown) 
   }
 }
 
-function positiveNumber(value: unknown) {
+function positiveInteger(value: unknown) {
   const next = Number(value);
-  return Number.isFinite(next) && next > 0 ? next : null;
+  return Number.isInteger(next) && next > 0 ? next : null;
+}
+
+function aspectRatioFromDimensions(width: number, height: number) {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(width, height);
+  return `${width / divisor}:${height / divisor}`;
+}
+
+function stripResolutionOptions(options: Record<string, unknown>) {
+  const next = { ...options };
+  delete next.width;
+  delete next.height;
+  delete next.aspectRatio;
+  return next;
 }
 
 function parseJsonObjectField(value: string | null | undefined): Record<string, unknown> {
@@ -451,6 +465,21 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
   } else {
     if (asset.type !== 'video') throw new StudioSessionApiError(400, 'Gallery video asset is required');
     if (existing.orderIndex !== 0) throw new StudioSessionApiError(400, 'Gallery video can only seed the first segment');
+    const videoPath = resolveLocalPublicPath(asset.originalUrl);
+    let videoResolution: { width: number; height: number } | null = null;
+    if (videoPath && fs.existsSync(videoPath)) {
+      try {
+        const videoInfo = await ffmpegService.getVideoInfo(videoPath);
+        videoResolution = { width: videoInfo.width, height: videoInfo.height };
+      } catch (error) {
+        console.warn('Failed to read gallery video dimensions for sequence resolution', {
+          sequenceId,
+          segmentId,
+          assetId: asset.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     data.status = 'completed';
     data.sourceImageUrl = asset.thumbnailUrl || asset.previewUrl || null;
     data.sourceFrozen = true;
@@ -463,6 +492,16 @@ export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string
       assetId: asset.id,
       originalUrl: asset.originalUrl,
     }, {});
+    if (videoResolution) {
+      await prisma.videoSequence.update({
+        where: { id: sequenceId },
+        data: {
+          width: videoResolution.width,
+          height: videoResolution.height,
+          aspectRatio: aspectRatioFromDimensions(videoResolution.width, videoResolution.height),
+        },
+      });
+    }
   }
 
   const lastFrameChanged = Object.prototype.hasOwnProperty.call(data, 'lastFrameUrl') && data.lastFrameUrl !== existing.lastFrameUrl;
@@ -727,24 +766,14 @@ export function buildVideoSegmentGenerationFormData(input: {
 }) {
   const { sequence, segment, sourceFrameUrl, sourceImage, userId = 'user-with-settings' } = input;
   const formData = new FormData();
-  const sequenceGenerationOptions = parseJsonObjectField(sequence.defaultGenerationOptionsJson);
-  const segmentGenerationOptions = parseJsonObjectField(segment.generationOptionsJson);
+  const sequenceGenerationOptions = stripResolutionOptions(parseJsonObjectField(sequence.defaultGenerationOptionsJson));
+  const segmentGenerationOptions = stripResolutionOptions(parseJsonObjectField(segment.generationOptionsJson));
   const generationOptions = {
     ...sequenceGenerationOptions,
     ...segmentGenerationOptions,
   };
-  const sequenceWidth = positiveNumber(sequence.width);
-  const sequenceHeight = positiveNumber(sequence.height);
-  const sourceWidth = positiveNumber(sourceImage.width);
-  const sourceHeight = positiveNumber(sourceImage.height);
-  const sequenceUsesLandscapeDefault = sequenceWidth === 1280 && sequenceHeight === 720;
-  const canUseSourceDimensions = sequenceUsesLandscapeDefault && sourceWidth !== null && sourceHeight !== null;
-  if (generationOptions.width === undefined) {
-    generationOptions.width = canUseSourceDimensions ? sourceWidth : sequenceWidth ?? undefined;
-  }
-  if (generationOptions.height === undefined) {
-    generationOptions.height = canUseSourceDimensions ? sourceHeight : sequenceHeight ?? undefined;
-  }
+  generationOptions.width = positiveInteger(sequence.width) ?? 1280;
+  generationOptions.height = positiveInteger(sequence.height) ?? 720;
   const loraConfig = parseJsonObjectField(segment.loraConfigJson);
   const prompt = [segment.prompt, segment.motionPrompt, segment.continuityPrompt]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))

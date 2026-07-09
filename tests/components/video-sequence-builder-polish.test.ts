@@ -155,7 +155,7 @@ describe('VideoSequenceBuilder polish helpers', () => {
 
   it('merges the visible steps control into segment generation options', () => {
     expect(JSON.parse(buildSegmentGenerationOptionsJson('{}', ''))).toEqual({ steps: 4 });
-    expect(JSON.parse(buildSegmentGenerationOptionsJson('{"cfg":1.5,"steps":8}', '12'))).toEqual({
+    expect(JSON.parse(buildSegmentGenerationOptionsJson('{"cfg":1.5,"steps":8,"width":1024,"height":576,"aspectRatio":"16:9"}', '12'))).toEqual({
       cfg: 1.5,
       steps: 12,
     });

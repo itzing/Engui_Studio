@@ -55,6 +55,7 @@ const { mockFfmpegService } = vi.hoisted(() => ({
     isFFmpegAvailable: vi.fn(),
     extractVideoFrame: vi.fn(),
     concatenateVideos: vi.fn(),
+    getVideoInfo: vi.fn(),
   },
 }));
 
@@ -101,6 +102,7 @@ describe('video sequence APIs', () => {
     mockFfmpegService.isFFmpegAvailable.mockResolvedValue(true);
     mockFfmpegService.extractVideoFrame.mockResolvedValue('/tmp/frame.jpg');
     mockFfmpegService.concatenateVideos.mockResolvedValue('/tmp/final.mp4');
+    mockFfmpegService.getVideoInfo.mockResolvedValue({ duration: 4, width: 832, height: 1216, fps: 24, format: '.mp4' });
     mockPrisma.videoSequenceSegment.findMany.mockResolvedValue([]);
     mockPrisma.videoSequenceSegment.updateMany.mockResolvedValue({ count: 0 });
   });
@@ -307,6 +309,10 @@ describe('video sequence APIs', () => {
   });
 
   it('applies a Gallery video as the first completed segment output', async () => {
+    const videoPath = path.join(process.cwd(), 'public', 'generations', 'gallery', 'ws-1', 'video.mp4');
+    fs.mkdirSync(path.dirname(videoPath), { recursive: true });
+    fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
+    createdFiles.add(videoPath);
     mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
       id: 'seg-1',
       sequenceId: 'seq-1',
@@ -410,6 +416,15 @@ describe('video sequence APIs', () => {
         lastFrameUrl: null,
         generationJobId: null,
       }),
+    });
+    expect(mockFfmpegService.getVideoInfo).toHaveBeenCalledWith(videoPath);
+    expect(mockPrisma.videoSequence.update).toHaveBeenCalledWith({
+      where: { id: 'seq-1' },
+      data: {
+        width: 832,
+        height: 1216,
+        aspectRatio: '13:19',
+      },
     });
     expect(mockPrisma.videoSequenceSegment.updateMany).toHaveBeenCalled();
     expect(json.segment).toMatchObject({
@@ -550,6 +565,8 @@ describe('video sequence APIs', () => {
         id: 'seq-1',
         workspaceId: 'ws-1',
         defaultModelId: 'wan22',
+        width: 1280,
+        height: 720,
         targetFps: 24,
         defaultGenerationOptionsJson: '{"width":832,"height":480,"steps":6}',
       },
@@ -574,7 +591,8 @@ describe('video sequence APIs', () => {
     expect(formData.get('workspaceId')).toBe('ws-1');
     expect(formData.get('prompt')).toBe('slow push in\n\ncamera glides forward\n\nkeep the outfit consistent');
     expect(formData.get('negativePrompt')).toBe('jitter');
-    expect(formData.get('width')).toBe('832');
+    expect(formData.get('width')).toBe('1280');
+    expect(formData.get('height')).toBe('720');
     expect(formData.get('steps')).toBe('8');
     expect(formData.get('seed')).toBe('123');
     expect(formData.get('lora_high_1')).toBe('high.safetensors');
@@ -616,7 +634,7 @@ describe('video sequence APIs', () => {
     expect(snapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
   });
 
-  it('uses source frame dimensions when a sequence is still on the landscape default size', () => {
+  it('ignores source frame dimensions and keeps the sequence resolution', () => {
     const { formData, snapshot } = buildVideoSegmentGenerationFormData({
       sequence: {
         id: 'seq-1',
@@ -644,12 +662,12 @@ describe('video sequence APIs', () => {
       sourceImage: { blob: new Blob(['image'], { type: 'image/jpeg' }), filename: 'manual.jpg', width: 832, height: 1216 },
     });
 
-    expect(formData.get('width')).toBe('832');
-    expect(formData.get('height')).toBe('1216');
-    expect(snapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
+    expect(formData.get('width')).toBe('1280');
+    expect(formData.get('height')).toBe('720');
+    expect(snapshot.generationOptions).toMatchObject({ width: 1280, height: 720, steps: 4 });
   });
 
-  it('keeps explicit generation dimensions even when the source frame has a different size', () => {
+  it('ignores generation option resolution overrides and keeps the sequence resolution', () => {
     const { formData, snapshot } = buildVideoSegmentGenerationFormData({
       sequence: {
         id: 'seq-1',
@@ -677,9 +695,9 @@ describe('video sequence APIs', () => {
       sourceImage: { blob: new Blob(['image'], { type: 'image/jpeg' }), filename: 'manual.jpg', width: 832, height: 1216 },
     });
 
-    expect(formData.get('width')).toBe('1024');
-    expect(formData.get('height')).toBe('576');
-    expect(snapshot.generationOptions).toMatchObject({ width: 1024, height: 576, steps: 4 });
+    expect(formData.get('width')).toBe('1280');
+    expect(formData.get('height')).toBe('720');
+    expect(snapshot.generationOptions).toMatchObject({ width: 1280, height: 720, steps: 4 });
   });
 
   it('rejects segment generation when no source frame can be resolved', async () => {

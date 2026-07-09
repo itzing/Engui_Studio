@@ -271,8 +271,22 @@ export function setWanLoraWeightInConfig(loraConfigJson: string, index: number, 
 export function buildSegmentGenerationOptionsJson(generationOptionsJson: string, generationSteps: string) {
   const steps = Number(generationSteps || defaultWanSteps);
   const generationOptions = parseRequiredJsonObjectText(generationOptionsJson, 'Options JSON');
+  delete generationOptions.width;
+  delete generationOptions.height;
+  delete generationOptions.aspectRatio;
   generationOptions.steps = Number.isFinite(steps) && steps > 0 ? steps : defaultWanSteps;
   return JSON.stringify(generationOptions, null, 2);
+}
+
+function aspectRatioFromDimensions(width: number, height: number) {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(width, height);
+  return `${width / divisor}:${height / divisor}`;
+}
+
+function parseSequenceDimension(value: string, fallback: number) {
+  const next = Number(value);
+  return Number.isInteger(next) && next > 0 ? next : fallback;
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -418,6 +432,8 @@ export default function VideoSequenceBuilder() {
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraft>(emptySegmentDraft);
   const [sequenceTitle, setSequenceTitle] = useState('');
   const [sequenceDescription, setSequenceDescription] = useState('');
+  const [sequenceWidth, setSequenceWidth] = useState('1280');
+  const [sequenceHeight, setSequenceHeight] = useState('720');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -504,13 +520,23 @@ export default function VideoSequenceBuilder() {
     setActiveSequence(data.sequence);
     setSequenceTitle(data.sequence.title);
     setSequenceDescription(data.sequence.description ?? '');
+    setSequenceWidth(String(data.sequence.width || 1280));
+    setSequenceHeight(String(data.sequence.height || 720));
     const nextSelected = preferredSegmentId && data.sequence.segments.some((segment) => segment.id === preferredSegmentId)
       ? preferredSegmentId
       : data.sequence.segments[0]?.id ?? null;
     setSelectedSegmentId(nextSelected);
     setSequences((current) => current.map((sequence) => (
       sequence.id === data.sequence.id
-        ? { ...sequence, title: data.sequence.title, description: data.sequence.description, segmentCount: data.sequence.segments.length }
+        ? {
+            ...sequence,
+            title: data.sequence.title,
+            description: data.sequence.description,
+            aspectRatio: data.sequence.aspectRatio,
+            width: data.sequence.width,
+            height: data.sequence.height,
+            segmentCount: data.sequence.segments.length,
+          }
         : sequence
     )));
   }, []);
@@ -530,6 +556,8 @@ export default function VideoSequenceBuilder() {
       setSelectedSegmentId(null);
       setSequenceTitle('');
       setSequenceDescription('');
+      setSequenceWidth('1280');
+      setSequenceHeight('720');
     }
   }, [loadSequence]);
 
@@ -771,13 +799,32 @@ export default function VideoSequenceBuilder() {
   async function saveSequence() {
     if (!activeSequence) return;
     await runAction('sequence', async () => {
+      const width = parseSequenceDimension(sequenceWidth, activeSequence.width || 1280);
+      const height = parseSequenceDimension(sequenceHeight, activeSequence.height || 720);
       const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${activeSequence.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ title: sequenceTitle, description: sequenceDescription }),
+        body: JSON.stringify({
+          title: sequenceTitle,
+          description: sequenceDescription,
+          width,
+          height,
+          aspectRatio: aspectRatioFromDimensions(width, height),
+        }),
       });
       setActiveSequence(data.sequence);
+      setSequenceWidth(String(data.sequence.width || width));
+      setSequenceHeight(String(data.sequence.height || height));
       setSequences((current) => current.map((sequence) => (
-        sequence.id === data.sequence.id ? { ...sequence, title: data.sequence.title, description: data.sequence.description } : sequence
+        sequence.id === data.sequence.id
+          ? {
+              ...sequence,
+              title: data.sequence.title,
+              description: data.sequence.description,
+              aspectRatio: data.sequence.aspectRatio,
+              width: data.sequence.width,
+              height: data.sequence.height,
+            }
+          : sequence
       )));
       setNotice('Sequence saved');
     });
@@ -967,7 +1014,9 @@ export default function VideoSequenceBuilder() {
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{sequence.title}</span>
-                  <span className="block truncate text-xs text-zinc-500">{sequence.segmentCount ?? sequence.segments?.length ?? 0} segments</span>
+                  <span className="block truncate text-xs text-zinc-500">
+                    {sequence.segmentCount ?? sequence.segments?.length ?? 0} segments - {sequence.width}x{sequence.height}
+                  </span>
                 </span>
                 <span className={cn('rounded border px-2 py-0.5 text-[10px]', statusStyles[sequence.status] ?? statusStyles.draft)}>
                   {sequence.status}
@@ -1013,12 +1062,12 @@ export default function VideoSequenceBuilder() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-zinc-950 px-5">
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-zinc-950 px-5 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
               <Waypoints className="h-4 w-4" />
             </div>
-            <div className="grid min-w-0 flex-1 grid-cols-[minmax(160px,320px)_minmax(140px,1fr)] gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(160px,300px)_minmax(140px,1fr)_88px_88px] gap-2">
               <Input
                 value={sequenceTitle}
                 onChange={(event) => setSequenceTitle(event.target.value)}
@@ -1032,6 +1081,26 @@ export default function VideoSequenceBuilder() {
                 className="h-9 border-white/10 bg-zinc-900 text-sm"
                 placeholder="Description"
                 disabled={!activeSequence}
+              />
+              <Input
+                type="number"
+                min={1}
+                value={sequenceWidth}
+                onChange={(event) => setSequenceWidth(event.target.value)}
+                className="h-9 border-white/10 bg-zinc-900 text-sm"
+                placeholder="Width"
+                disabled={!activeSequence}
+                aria-label="Sequence width"
+              />
+              <Input
+                type="number"
+                min={1}
+                value={sequenceHeight}
+                onChange={(event) => setSequenceHeight(event.target.value)}
+                className="h-9 border-white/10 bg-zinc-900 text-sm"
+                placeholder="Height"
+                disabled={!activeSequence}
+                aria-label="Sequence height"
               />
             </div>
           </div>
@@ -1453,7 +1522,6 @@ export default function VideoSequenceBuilder() {
                     </Button>
                   ) : null}
                 </div>
-                <TextArea label="Options JSON" value={segmentDraft.generationOptionsJson} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, generationOptionsJson: value }))} rows={4} mono />
               </InspectorSection>
 
               <div className="flex items-center justify-between gap-2">
