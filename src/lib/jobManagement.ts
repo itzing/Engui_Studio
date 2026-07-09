@@ -107,6 +107,28 @@ async function isUrlReferencedByStudioSessionVersion(url: string): Promise<boole
   return count > 0;
 }
 
+async function isUrlReferencedByVideoSequence(url: string): Promise<boolean> {
+  const [segmentCount, sequenceCount] = await Promise.all([
+    prisma.videoSequenceSegment.count({
+      where: {
+        OR: [
+          { outputVideoUrl: url },
+          { firstFrameUrl: url },
+          { lastFrameUrl: url },
+          { sourceImageUrl: url },
+        ],
+      },
+    }),
+    prisma.videoSequence.count({
+      where: {
+        finalVideoUrl: url,
+      },
+    }),
+  ]);
+
+  return segmentCount > 0 || sequenceCount > 0;
+}
+
 async function assertStudioSessionJobDeletionAllowed(job: any): Promise<void> {
   const options = parseJobOptions(job.options);
   const context = options.studioSessionContext && typeof options.studioSessionContext === 'object'
@@ -137,7 +159,7 @@ export async function cleanupJobArtifacts(job: any): Promise<{ deletedFiles: str
       continue;
     }
 
-    if (await isUrlReferencedByGallery(url) || await isUrlReferencedByStudioSessionVersion(url)) {
+    if (await isUrlReferencedByGallery(url) || await isUrlReferencedByStudioSessionVersion(url) || await isUrlReferencedByVideoSequence(url)) {
       keptFiles.push(url);
       continue;
     }

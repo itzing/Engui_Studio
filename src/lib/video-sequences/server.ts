@@ -272,6 +272,14 @@ function sequenceFrameOutputPath(workspaceId: string, sequenceId: string, segmen
   return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), safePathSegment(segmentId), 'frames', fileName);
 }
 
+function sequenceSegmentOutputPublicUrl(workspaceId: string, sequenceId: string, segmentId: string, fileName: string) {
+  return `/generations/video-sequences/${safePathSegment(workspaceId)}/${safePathSegment(sequenceId)}/${safePathSegment(segmentId)}/output/${fileName}`;
+}
+
+function sequenceSegmentOutputPath(workspaceId: string, sequenceId: string, segmentId: string, fileName: string) {
+  return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), safePathSegment(segmentId), 'output', fileName);
+}
+
 function sequenceRenderPublicUrl(workspaceId: string, sequenceId: string, fileName: string) {
   return `/generations/video-sequences/${safePathSegment(workspaceId)}/${safePathSegment(sequenceId)}/final/${fileName}`;
 }
@@ -1273,6 +1281,58 @@ async function tryExtractVideoSequenceSegmentFrames(sequenceId: string, segmentI
   }
 }
 
+async function materializeVideoSequenceSegmentOutput(input: {
+  workspaceId: string;
+  sequenceId: string;
+  segmentId: string;
+  sourceUrl: string;
+  jobId: string;
+}) {
+  if (input.sourceUrl.startsWith(`/generations/video-sequences/${safePathSegment(input.workspaceId)}/${safePathSegment(input.sequenceId)}/`)) {
+    return {
+      outputVideoUrl: input.sourceUrl,
+      materialization: {
+        copied: false,
+        outputVideoUrl: input.sourceUrl,
+        sourceOutputVideoUrl: input.sourceUrl,
+        reason: 'already_sequence_owned',
+      },
+    };
+  }
+
+  const extension = path.extname(input.sourceUrl.split('?')[0].split('#')[0]) || '.mp4';
+  const hash = crypto.createHash('md5').update(`${input.jobId}:${input.sourceUrl}`).digest('hex').slice(0, 12);
+  const fileName = `job-${safePathSegment(input.jobId)}-${hash}${extension}`;
+  const outputVideoUrl = sequenceSegmentOutputPublicUrl(input.workspaceId, input.sequenceId, input.segmentId, fileName);
+  const outputPath = sequenceSegmentOutputPath(input.workspaceId, input.sequenceId, input.segmentId, fileName);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+  const localSourcePath = resolveLocalPublicPath(input.sourceUrl);
+  if (localSourcePath && fs.existsSync(localSourcePath)) {
+    if (path.resolve(localSourcePath) !== path.resolve(outputPath)) {
+      fs.copyFileSync(localSourcePath, outputPath);
+    }
+  } else if (/^https?:\/\//i.test(input.sourceUrl)) {
+    const response = await fetch(input.sourceUrl);
+    if (!response.ok) throw new StudioSessionApiError(400, `Failed to copy segment output: ${response.status}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(outputPath, bytes);
+  } else {
+    throw new StudioSessionApiError(400, 'Completed job output must be a local public URL or http(s) URL before sequence materialization');
+  }
+
+  return {
+    outputVideoUrl,
+    materialization: {
+      copied: true,
+      outputVideoUrl,
+      sourceOutputVideoUrl: input.sourceUrl,
+      sourceJobId: input.jobId,
+      copiedAt: new Date().toISOString(),
+    },
+  };
+}
+
 export async function pickManualFrameForVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
   const timeSeconds = asOptionalNonNegativeNumber(input.timeSeconds, 'timeSeconds');
   if (timeSeconds === undefined) {
@@ -1364,6 +1424,7 @@ function segmentStatusFromJob(jobStatus: string) {
 export async function syncVideoSequenceSegmentStatus(sequenceId: string, segmentId: string) {
   const segment = await prisma.videoSequenceSegment.findFirst({
     where: { id: segmentId, sequenceId },
+    include: { sequence: { select: { workspaceId: true } } },
   });
   if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
   if (!segment.generationJobId) throw new StudioSessionApiError(400, 'Segment has no generation job to sync');
@@ -1377,7 +1438,17 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
   const error = nextStatus === 'failed'
     ? (job.error || (typeof options.error === 'string' ? options.error : null) || 'Job failed')
     : null;
-  const outputVideoUrl = nextStatus === 'completed' ? job.resultUrl || segment.outputVideoUrl : segment.outputVideoUrl;
+  const sourceOutputVideoUrl = nextStatus === 'completed' ? job.resultUrl || segment.outputVideoUrl : segment.outputVideoUrl;
+  const materializedOutput = nextStatus === 'completed' && sourceOutputVideoUrl
+    ? await materializeVideoSequenceSegmentOutput({
+      workspaceId: segment.sequence.workspaceId,
+      sequenceId,
+      segmentId,
+      sourceUrl: sourceOutputVideoUrl,
+      jobId: job.id,
+    })
+    : null;
+  const outputVideoUrl = materializedOutput?.outputVideoUrl || sourceOutputVideoUrl;
 
   const updated = await prisma.videoSequenceSegment.update({
     where: { id: segmentId },
@@ -1390,9 +1461,26 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
         jobStatus: job.status,
         runpodJobId: job.runpodJobId || options.runpodJobId || null,
         endpointId: job.endpointId || options.endpointId || null,
-        resultUrl: job.resultUrl || null,
+        resultUrl: outputVideoUrl || null,
+        sourceResultUrl: job.resultUrl || null,
         thumbnailUrl: job.thumbnailUrl || null,
         executionMs: job.executionMs || null,
+        jobMetadata: {
+          id: job.id,
+          status: job.status,
+          type: job.type,
+          modelId: job.modelId || null,
+          prompt: job.prompt || null,
+          options,
+          runpodJobId: job.runpodJobId || options.runpodJobId || null,
+          endpointId: job.endpointId || options.endpointId || null,
+          resultUrl: job.resultUrl || null,
+          thumbnailUrl: job.thumbnailUrl || null,
+          executionMs: job.executionMs || null,
+          createdAt: job.createdAt instanceof Date ? job.createdAt.toISOString() : job.createdAt || null,
+          completedAt: job.completedAt instanceof Date ? job.completedAt.toISOString() : job.completedAt || null,
+        },
+        outputMaterialization: materializedOutput?.materialization || null,
         syncedAt: new Date().toISOString(),
       }),
     },

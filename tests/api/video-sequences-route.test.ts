@@ -928,7 +928,14 @@ describe('video sequence APIs', () => {
   });
 
   it('syncs a completed generation job back onto the segment without submitting a new job', async () => {
-    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+    const sourceVideoPath = path.join(process.cwd(), 'public', 'generations', 'video.mp4');
+    fs.mkdirSync(path.dirname(sourceVideoPath), { recursive: true });
+    fs.writeFileSync(sourceVideoPath, 'sequence job output');
+    createdFiles.add(sourceVideoPath);
+
+    let copiedOutputVideoUrl = '/generations/video.mp4';
+    mockPrisma.videoSequenceSegment.findFirst
+      .mockResolvedValueOnce({
       id: 'seg-1',
       sequenceId: 'seq-1',
       status: 'queued',
@@ -938,11 +945,27 @@ describe('video sequence APIs', () => {
       loraConfigJson: '{}',
       generationOptionsJson: '{}',
       templateSnapshotJson: null,
-    });
+      sequence: { workspaceId: 'ws-1' },
+    })
+      .mockImplementation(async () => ({
+        id: 'seg-1',
+        sequenceId: 'seq-1',
+        status: 'completed',
+        generationJobId: 'job-1',
+        outputVideoUrl: copiedOutputVideoUrl,
+        generationSnapshotJson: '{"jobId":"job-1"}',
+        loraConfigJson: '{}',
+        generationOptionsJson: '{}',
+        templateSnapshotJson: null,
+        lastFrameUrl: null,
+        sequence: { workspaceId: 'ws-1' },
+      }));
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'job-1',
       status: 'completed',
       type: 'video',
+      modelId: 'wan22',
+      prompt: 'segment prompt',
       runpodJobId: 'rp-1',
       endpointId: 'wan22',
       resultUrl: '/generations/video.mp4',
@@ -952,11 +975,12 @@ describe('video sequence APIs', () => {
       error: null,
     });
     mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      ...(data.outputVideoUrl ? { outputVideoUrl: (copiedOutputVideoUrl = data.outputVideoUrl) } : {}),
       id: 'seg-1',
       sequenceId: 'seq-1',
       orderIndex: 0,
       title: 'Segment 1',
-      status: data.status,
+      status: data.status || 'completed',
       sourceMode: 'initial',
       sourceImageUrl: '/generations/source.png',
       sourceFrozen: false,
@@ -972,7 +996,7 @@ describe('video sequence APIs', () => {
       randomizeSeed: true,
       durationSeconds: 6,
       generationJobId: 'job-1',
-      outputVideoUrl: data.outputVideoUrl,
+      outputVideoUrl: data.outputVideoUrl || copiedOutputVideoUrl,
       firstFrameUrl: '/generations/first.jpg',
       lastFrameUrl: '/generations/last.jpg',
       templateId: null,
@@ -989,7 +1013,25 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(200);
     expect(json.segment).toMatchObject({
       status: 'completed',
-      outputVideoUrl: '/generations/video.mp4',
+      outputVideoUrl: expect.stringMatching(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/output\/job-job-1-/),
+    });
+    const copiedPath = path.join(process.cwd(), 'public', json.segment.outputVideoUrl.replace(/^\/+/, ''));
+    createdFiles.add(copiedPath);
+    expect(fs.existsSync(copiedPath)).toBe(true);
+    const snapshot = JSON.parse(mockPrisma.videoSequenceSegment.update.mock.calls[0][0].data.generationSnapshotJson);
+    expect(snapshot).toMatchObject({
+      resultUrl: json.segment.outputVideoUrl,
+      sourceResultUrl: '/generations/video.mp4',
+      jobMetadata: {
+        id: 'job-1',
+        prompt: 'segment prompt',
+        options: { runpodJobId: 'rp-1' },
+      },
+      outputMaterialization: {
+        copied: true,
+        sourceOutputVideoUrl: '/generations/video.mp4',
+        sourceJobId: 'job-1',
+      },
     });
     expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
   });
