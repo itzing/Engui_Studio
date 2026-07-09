@@ -28,6 +28,9 @@ const { mockPrisma } = vi.hoisted(() => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    galleryAsset: {
+      findFirst: vi.fn(),
+    },
     job: {
       findUnique: vi.fn(),
     },
@@ -64,6 +67,7 @@ import { POST as generateFromSegment } from '@/app/api/video-sequences/[id]/gene
 import { POST as renderSequence } from '@/app/api/video-sequences/[id]/render/route';
 import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
 import { PATCH as updateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/route';
+import { POST as applyGalleryAsset } from '@/app/api/video-sequences/[id]/segments/[segmentId]/gallery-asset/route';
 import { POST as insertFromTemplate } from '@/app/api/video-sequences/[id]/segments/from-template/route';
 import { POST as saveSegmentTemplate } from '@/app/api/video-sequences/[id]/segments/[segmentId]/save-template/route';
 import { POST as extractSegmentFrames } from '@/app/api/video-sequences/[id]/segments/[segmentId]/extract-frames/route';
@@ -193,6 +197,225 @@ describe('video sequence APIs', () => {
       sourceMode: 'initial',
       loraConfig: {},
       generationOptions: {},
+    });
+  });
+
+  it('applies a Gallery image as the selected segment source frame', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'draft',
+      sourceMode: 'initial',
+      sourceImageUrl: null,
+      sourceImageAssetId: null,
+      sourceJobId: null,
+      sourceSegmentId: null,
+      sourceFrameRole: 'last',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: null,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      error: null,
+      sequence: { workspaceId: 'ws-1' },
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue({
+      id: 'asset-image-1',
+      type: 'image',
+      originalUrl: '/generations/gallery/ws-1/image.png',
+      previewUrl: '/generations/gallery/ws-1/image.webp',
+      thumbnailUrl: '/generations/gallery/ws-1/thumb.webp',
+      sourceJobId: 'job-image-1',
+    });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'draft',
+      sourceFrameRole: 'last',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: null,
+      outputVideoUrl: null,
+      firstFrameUrl: null,
+      lastFrameUrl: null,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      error: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+      ...data,
+    }));
+
+    const response = await applyGalleryAsset(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/gallery-asset', {
+      assetId: 'asset-image-1',
+      mode: 'initial_image',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.galleryAsset.findFirst).toHaveBeenCalledWith({
+      where: { id: 'asset-image-1', workspaceId: 'ws-1', trashed: false },
+      select: expect.any(Object),
+    });
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith({
+      where: { id: 'seg-1' },
+      data: expect.objectContaining({
+        sourceMode: 'gallery_asset',
+        sourceImageAssetId: 'asset-image-1',
+        sourceImageUrl: '/generations/gallery/ws-1/image.png',
+        sourceJobId: 'job-image-1',
+      }),
+    });
+    expect(json.segment).toMatchObject({
+      sourceImageAssetId: 'asset-image-1',
+      sourceImageUrl: '/generations/gallery/ws-1/image.png',
+    });
+  });
+
+  it('applies a Gallery video as the first completed segment output', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'completed',
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/old-source.png',
+      sourceImageAssetId: null,
+      sourceJobId: null,
+      sourceSegmentId: null,
+      sourceFrameRole: 'last',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: 'job-old',
+      outputVideoUrl: '/generations/old-video.mp4',
+      firstFrameUrl: '/generations/old-first.jpg',
+      lastFrameUrl: '/generations/old-last.jpg',
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: null,
+      error: null,
+      sequence: { workspaceId: 'ws-1' },
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue({
+      id: 'asset-video-1',
+      type: 'video',
+      originalUrl: '/generations/gallery/ws-1/video.mp4',
+      previewUrl: '/generations/gallery/ws-1/video.mp4',
+      thumbnailUrl: '/generations/gallery/ws-1/video-thumb.jpg',
+      sourceJobId: 'job-video-1',
+    });
+    mockPrisma.videoSequenceSegment.findMany.mockResolvedValueOnce([
+      {
+        id: 'seg-2',
+        status: 'completed',
+        sourceMode: 'previous_last_frame',
+        sourceFrozen: false,
+        outputVideoUrl: '/generations/seg-2.mp4',
+        firstFrameUrl: null,
+        lastFrameUrl: '/generations/seg-2-last.jpg',
+        generationJobId: 'job-2',
+      },
+    ]);
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      sourceFrameRole: 'last',
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      templateId: null,
+      templateSnapshotJson: null,
+      error: null,
+      createdAt: new Date('2026-07-08T22:00:00Z'),
+      updatedAt: new Date('2026-07-08T22:00:00Z'),
+      ...data,
+    }));
+
+    const response = await applyGalleryAsset(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/gallery-asset', {
+      assetId: 'asset-video-1',
+      mode: 'completed_video',
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith({
+      where: { id: 'seg-1' },
+      data: expect.objectContaining({
+        status: 'completed',
+        sourceMode: 'gallery_asset',
+        sourceImageAssetId: 'asset-video-1',
+        sourceImageUrl: '/generations/gallery/ws-1/video-thumb.jpg',
+        sourceFrozen: true,
+        outputVideoUrl: '/generations/gallery/ws-1/video.mp4',
+        firstFrameUrl: null,
+        lastFrameUrl: null,
+        generationJobId: null,
+      }),
+    });
+    expect(mockPrisma.videoSequenceSegment.updateMany).toHaveBeenCalled();
+    expect(json.segment).toMatchObject({
+      status: 'completed',
+      outputVideoUrl: '/generations/gallery/ws-1/video.mp4',
+      firstFrameUrl: null,
+      lastFrameUrl: null,
     });
   });
 

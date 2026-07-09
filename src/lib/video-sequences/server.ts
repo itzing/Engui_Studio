@@ -361,6 +361,76 @@ export async function updateVideoSequenceSegment(sequenceId: string, segmentId: 
   return serializeVideoSegment(segment);
 }
 
+export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
+  const assetId = asTrimmedString(input.assetId);
+  const mode = enumValue(input.mode, ['initial_image', 'completed_video'] as const, 'mode');
+  if (!assetId) throw new StudioSessionApiError(400, 'assetId is required');
+  if (!mode) throw new StudioSessionApiError(400, 'mode is required');
+
+  const existing = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+    include: { sequence: { select: { workspaceId: true } } },
+  });
+  if (!existing) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  const asset = await prisma.galleryAsset.findFirst({
+    where: {
+      id: assetId,
+      workspaceId: existing.sequence.workspaceId,
+      trashed: false,
+    },
+    select: {
+      id: true,
+      type: true,
+      originalUrl: true,
+      previewUrl: true,
+      thumbnailUrl: true,
+      sourceJobId: true,
+    },
+  });
+  if (!asset) throw new StudioSessionApiError(404, 'Gallery asset not found');
+
+  const data: Record<string, unknown> = {
+    sourceMode: 'gallery_asset',
+    sourceImageAssetId: asset.id,
+    sourceJobId: asset.sourceJobId || null,
+    sourceSegmentId: null,
+    error: null,
+  };
+
+  if (mode === 'initial_image') {
+    if (asset.type !== 'image') throw new StudioSessionApiError(400, 'Gallery image asset is required');
+    data.sourceImageUrl = asset.originalUrl;
+    data.sourceFrozen = false;
+    if (hasGeneratedSegmentOutput(existing)) data.status = 'stale';
+  } else {
+    if (asset.type !== 'video') throw new StudioSessionApiError(400, 'Gallery video asset is required');
+    if (existing.orderIndex !== 0) throw new StudioSessionApiError(400, 'Gallery video can only seed the first segment');
+    data.status = 'completed';
+    data.sourceImageUrl = asset.thumbnailUrl || asset.previewUrl || null;
+    data.sourceFrozen = true;
+    data.outputVideoUrl = asset.originalUrl;
+    data.firstFrameUrl = null;
+    data.lastFrameUrl = null;
+    data.generationJobId = null;
+    data.generationSnapshotJson = toJsonString({
+      source: 'gallery_asset',
+      assetId: asset.id,
+      originalUrl: asset.originalUrl,
+    }, {});
+  }
+
+  const lastFrameChanged = Object.prototype.hasOwnProperty.call(data, 'lastFrameUrl') && data.lastFrameUrl !== existing.lastFrameUrl;
+  const segment = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data,
+  });
+  if (lastFrameChanged) {
+    await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, existing.orderIndex);
+  }
+  return serializeVideoSegment(segment);
+}
+
 export async function deleteVideoSequenceSegment(sequenceId: string, segmentId: string) {
   const existing = await prisma.videoSequenceSegment.findFirst({ where: { id: segmentId, sequenceId }, select: { id: true } });
   if (!existing) throw new StudioSessionApiError(404, 'Video sequence segment not found');

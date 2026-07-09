@@ -8,6 +8,7 @@ import {
   CopyPlus,
   Film,
   FastForward,
+  ImageIcon,
   ImagePlus,
   Images,
   Layers3,
@@ -34,6 +35,7 @@ type VideoSequenceSegment = {
   status: string;
   sourceMode: string;
   sourceImageUrl: string | null;
+  sourceImageAssetId?: string | null;
   sourceFrozen: boolean;
   prompt: string;
   negativePrompt: string;
@@ -80,6 +82,17 @@ type VideoSegmentTemplate = {
   motionTemplate: string;
   defaultDurationSeconds: number;
   thumbnailUrl: string | null;
+};
+
+type GalleryAsset = {
+  id: string;
+  type: 'image' | 'video' | string;
+  originalUrl: string;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+  prompt?: string | null;
+  modelId?: string | null;
+  addedToGalleryAt: string;
 };
 
 type SegmentDraft = {
@@ -215,6 +228,10 @@ export default function VideoSequenceBuilder() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [galleryPickerType, setGalleryPickerType] = useState<'image' | 'video' | null>(null);
+  const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryQuery, setGalleryQuery] = useState('');
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
@@ -233,6 +250,16 @@ export default function VideoSequenceBuilder() {
   const timelineStatus = activeSequence?.finalVideoUrl
     ? 'Final rendered'
     : renderBlocker ?? `00:00 - 00:${String(totalDuration).padStart(2, '0')}`;
+  const filteredGalleryAssets = useMemo(() => {
+    const query = galleryQuery.trim().toLowerCase();
+    if (!query) return galleryAssets;
+    return galleryAssets.filter((asset) => [
+      asset.id,
+      asset.prompt ?? '',
+      asset.modelId ?? '',
+      asset.originalUrl,
+    ].join(' ').toLowerCase().includes(query));
+  }, [galleryAssets, galleryQuery]);
 
   const loadSequence = useCallback(async (sequenceId: string, preferredSegmentId?: string | null) => {
     const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${sequenceId}`);
@@ -324,6 +351,47 @@ export default function VideoSequenceBuilder() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function openGalleryPicker(type: 'image' | 'video') {
+    if (!workspaceId || !selectedSegment) return;
+    setGalleryPickerType(type);
+    setGalleryQuery('');
+    setGalleryLoading(true);
+    setError(null);
+    try {
+      const search = new URLSearchParams({
+        workspaceId,
+        type,
+        bucket: 'all',
+        limit: '48',
+      });
+      const data = await fetchJson<{ success: true; assets: GalleryAsset[] }>(`/api/gallery/assets?${search.toString()}`);
+      setGalleryAssets(data.assets);
+    } catch (nextError) {
+      setGalleryPickerType(null);
+      setError(nextError instanceof Error ? nextError.message : 'Failed to load gallery assets');
+    } finally {
+      setGalleryLoading(false);
+    }
+  }
+
+  async function applyGalleryAsset(asset: GalleryAsset) {
+    if (!activeSequence || !selectedSegment || !galleryPickerType) return;
+    const mode = galleryPickerType === 'video' ? 'completed_video' : 'initial_image';
+    await runAction('gallery', async () => {
+      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/gallery-asset`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ assetId: asset.id, mode }),
+        },
+      );
+      setGalleryPickerType(null);
+      setGalleryAssets([]);
+      await loadSequence(activeSequence.id, selectedSegment.id);
+      setNotice(galleryPickerType === 'video' ? 'Gallery video applied as first segment' : 'Gallery image applied as source');
+    });
   }
 
   async function createSequence() {
@@ -820,6 +888,29 @@ export default function VideoSequenceBuilder() {
                       className="h-9 border-white/10 bg-zinc-900 text-sm"
                       placeholder="Source image URL"
                     />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                        onClick={() => openGalleryPicker('image')}
+                        disabled={!workspaceId || !!busy}
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        Image
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                        onClick={() => openGalleryPicker('video')}
+                        disabled={!workspaceId || selectedSegment.orderIndex !== 0 || !!busy}
+                        title={selectedSegment.orderIndex === 0 ? 'Use a Gallery video as the first completed segment' : 'Gallery video can only seed segment 1'}
+                      >
+                        <Film className="h-4 w-4" />
+                        Video
+                      </Button>
+                    </div>
                     <label className="flex items-center gap-2 text-xs text-zinc-400">
                       <input
                         type="checkbox"
@@ -927,6 +1018,82 @@ export default function VideoSequenceBuilder() {
           )}
         </div>
       </aside>
+      {galleryPickerType ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="flex max-h-[82vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+              <div>
+                <div className="text-sm font-semibold">
+                  {galleryPickerType === 'video' ? 'Pick first segment video' : 'Pick initial image'}
+                </div>
+                <div className="text-xs text-zinc-500">
+                  {galleryPickerType === 'video' ? 'Video becomes completed segment 1' : 'Image becomes the selected segment source'}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={galleryQuery}
+                  onChange={(event) => setGalleryQuery(event.target.value)}
+                  className="h-9 w-64 border-white/10 bg-zinc-900 text-sm"
+                  placeholder="Filter loaded assets"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                  onClick={() => setGalleryPickerType(null)}
+                  disabled={busy === 'gallery'}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {galleryLoading ? (
+                <div className="flex h-56 items-center justify-center text-zinc-500">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading Gallery
+                </div>
+              ) : filteredGalleryAssets.length ? (
+                <div className="grid grid-cols-6 gap-3">
+                  {filteredGalleryAssets.map((asset) => {
+                    const previewUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
+                    return (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => applyGalleryAsset(asset)}
+                        disabled={busy === 'gallery'}
+                        className="group overflow-hidden rounded-md border border-white/10 bg-white/[0.03] text-left transition-colors hover:border-cyan-500/45 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <div className="aspect-video bg-zinc-900">
+                          {asset.type === 'video' ? (
+                            <video src={asset.previewUrl || asset.originalUrl} poster={asset.thumbnailUrl || undefined} className="h-full w-full object-cover" muted playsInline />
+                          ) : (
+                            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+                          )}
+                        </div>
+                        <div className="space-y-1 px-2 py-2">
+                          <div className="truncate text-xs text-zinc-300">{asset.prompt || asset.originalUrl.split('/').pop() || asset.id}</div>
+                          <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+                            <span>{asset.type}</span>
+                            <span>{asset.modelId || 'Gallery'}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-white/15 text-zinc-500">
+                  {galleryPickerType === 'video' ? <Film className="h-7 w-7" /> : <ImageIcon className="h-7 w-7" />}
+                  <div className="text-sm">No matching Gallery {galleryPickerType}s</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
