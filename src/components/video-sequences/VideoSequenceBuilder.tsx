@@ -12,6 +12,7 @@ import {
   Loader2,
   Play,
   Plus,
+  RefreshCw,
   Save,
   Scissors,
   Sparkles,
@@ -43,10 +44,12 @@ type VideoSequenceSegment = {
   seed: number | null;
   randomizeSeed: boolean;
   durationSeconds: number;
+  generationJobId: string | null;
   outputVideoUrl: string | null;
   firstFrameUrl: string | null;
   lastFrameUrl: string | null;
   templateId: string | null;
+  error: string | null;
 };
 
 type VideoSequence = {
@@ -398,6 +401,31 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function generateSelectedSegment() {
+    if (!activeSequence || !selectedSegment) return;
+    await runAction('generate', async () => {
+      await fetchJson<{ success: boolean; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/generate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ userId }),
+        },
+      );
+      await loadSequence(activeSequence.id, selectedSegment.id);
+    });
+  }
+
+  async function refreshSelectedStatus() {
+    if (!activeSequence || !selectedSegment) return;
+    await runAction('status', async () => {
+      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/sync-status`,
+        { method: 'POST' },
+      );
+      await loadSequence(activeSequence.id, selectedSegment.id);
+    });
+  }
+
   return (
     <main className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-100">
       <aside className="flex w-[320px] shrink-0 flex-col border-r border-white/10 bg-zinc-950">
@@ -513,9 +541,23 @@ export default function VideoSequenceBuilder() {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" disabled>
-              <Play className="h-4 w-4" />
-              Generate from here
+            <Button
+              variant="outline"
+              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+              onClick={generateSelectedSegment}
+              disabled={!selectedSegment || !!busy}
+            >
+              {busy === 'generate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Generate selected
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+              onClick={refreshSelectedStatus}
+              disabled={!selectedSegment?.generationJobId || !!busy}
+            >
+              {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Refresh status
             </Button>
             <Button variant="outline" className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" disabled>
               <Scissors className="h-4 w-4" />
@@ -687,6 +729,20 @@ export default function VideoSequenceBuilder() {
               </InspectorSection>
 
               <InspectorSection icon={<Layers3 className="h-4 w-4" />} title="Generation">
+                <div className="rounded-md border border-white/10 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Status</span>
+                    <span className={cn('rounded border px-2 py-0.5 text-[10px]', statusStyles[selectedSegment.status] ?? statusStyles.draft)}>
+                      {selectedSegment.status}
+                    </span>
+                  </div>
+                  {selectedSegment.generationJobId ? (
+                    <div className="mt-2 truncate font-mono text-[11px] text-zinc-500">Job {selectedSegment.generationJobId}</div>
+                  ) : null}
+                  {selectedSegment.error ? (
+                    <div className="mt-2 text-rose-300">{selectedSegment.error}</div>
+                  ) : null}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Model">
                     <Input value={segmentDraft.modelId} onChange={(event) => setSegmentDraft((draft) => ({ ...draft, modelId: event.target.value }))} className="h-9 border-white/10 bg-zinc-900 text-sm" />
@@ -712,6 +768,16 @@ export default function VideoSequenceBuilder() {
                 <TextArea label="LoRA JSON" value={segmentDraft.loraConfigJson} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, loraConfigJson: value }))} rows={4} mono />
                 <TextArea label="Options JSON" value={segmentDraft.generationOptionsJson} onChange={(value) => setSegmentDraft((draft) => ({ ...draft, generationOptionsJson: value }))} rows={4} mono />
               </InspectorSection>
+
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="outline" className="h-9 flex-1 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={generateSelectedSegment} disabled={!!busy}>
+                  {busy === 'generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                  Generate
+                </Button>
+                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
+                  {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+              </div>
 
               <div className="flex items-center justify-between gap-2">
                 <Button variant="outline" className="h-9 flex-1 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={saveSelectedAsTemplate} disabled={!!busy}>

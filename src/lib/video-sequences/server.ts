@@ -1,6 +1,9 @@
 import type { Prisma } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
 import { prisma } from '@/lib/prisma';
+import { submitGenerationFormData } from '@/lib/generation/submitFormData';
 import { StudioSessionApiError } from '@/lib/studio-sessions/api';
 
 const sequenceStatuses = ['draft', 'ready', 'rendering', 'rendered', 'failed'] as const;
@@ -74,6 +77,55 @@ function parseJsonField(value: string | null | undefined, fallback: JsonFallback
   } catch {
     return fallback;
   }
+}
+
+function inferMimeFromPath(value: string) {
+  const ext = path.extname(value.split('?')[0]).toLowerCase();
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  return 'image/png';
+}
+
+function resolveLocalPublicPath(url: string) {
+  if (!url.startsWith('/')) return null;
+  const normalized = url.split('?')[0].split('#')[0];
+  if (!normalized.startsWith('/generations/') && !normalized.startsWith('/results/')) return null;
+  const resolved = path.resolve(process.cwd(), 'public', normalized.replace(/^\/+/, ''));
+  const publicRoot = path.resolve(process.cwd(), 'public');
+  if (!resolved.startsWith(publicRoot)) return null;
+  return resolved;
+}
+
+async function loadSourceImageBlob(sourceImageUrl: string) {
+  const localPath = resolveLocalPublicPath(sourceImageUrl);
+  if (localPath) {
+    if (!fs.existsSync(localPath)) throw new StudioSessionApiError(400, `Source image does not exist: ${sourceImageUrl}`);
+    const bytes = fs.readFileSync(localPath);
+    return { blob: new Blob([bytes], { type: inferMimeFromPath(sourceImageUrl) }), filename: path.basename(localPath) || 'source.png' };
+  }
+
+  if (!/^https?:\/\//i.test(sourceImageUrl)) {
+    throw new StudioSessionApiError(400, 'sourceImageUrl must be a local public /generations or /results URL, or an http(s) URL');
+  }
+
+  const response = await fetch(sourceImageUrl);
+  if (!response.ok) throw new StudioSessionApiError(400, `Failed to fetch source image: ${response.status}`);
+  const contentType = response.headers.get('content-type') || inferMimeFromPath(sourceImageUrl);
+  const blob = await response.blob();
+  return { blob: new Blob([await blob.arrayBuffer()], { type: contentType }), filename: path.basename(new URL(sourceImageUrl).pathname) || 'source.png' };
+}
+
+function appendScalarFormValue(formData: FormData, key: string, value: unknown) {
+  if (value === undefined || value === null || value === '') return;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    formData.append(key, String(value));
+  }
+}
+
+function parseJsonObjectField(value: string | null | undefined): Record<string, unknown> {
+  const parsed = parseJsonField(value, {});
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
 }
 
 function segmentCreateDefaults(orderIndex: number) {
@@ -390,4 +442,207 @@ export async function saveSegmentAsTemplate(sequenceId: string, segmentId: strin
     },
   });
   return serializeVideoSegmentTemplate(template);
+}
+
+export async function resolveVideoSegmentSourceFrame(sequenceId: string, segmentId: string) {
+  const segment = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+    include: {
+      sequence: true,
+    },
+  });
+  if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  if (segment.sourceMode === 'previous_last_frame') {
+    const previous = await prisma.videoSequenceSegment.findFirst({
+      where: {
+        sequenceId,
+        orderIndex: segment.orderIndex - 1,
+      },
+      select: {
+        id: true,
+        lastFrameUrl: true,
+        outputVideoUrl: true,
+      },
+    });
+    if (!previous?.lastFrameUrl) {
+      throw new StudioSessionApiError(400, 'Previous segment last frame is required before generating this segment');
+    }
+    return { segment, sequence: segment.sequence, sourceFrameUrl: previous.lastFrameUrl, sourceSegmentId: previous.id };
+  }
+
+  if (segment.sourceSegmentId) {
+    const sourceSegment = await prisma.videoSequenceSegment.findFirst({
+      where: { id: segment.sourceSegmentId },
+      select: { id: true, lastFrameUrl: true, firstFrameUrl: true, sourceImageUrl: true },
+    });
+    const sourceFrameUrl = sourceSegment?.lastFrameUrl || sourceSegment?.firstFrameUrl || sourceSegment?.sourceImageUrl;
+    if (sourceFrameUrl) return { segment, sequence: segment.sequence, sourceFrameUrl, sourceSegmentId: sourceSegment?.id ?? null };
+  }
+
+  if (segment.sourceJobId) {
+    const sourceJob = await prisma.job.findUnique({
+      where: { id: segment.sourceJobId },
+      select: { id: true, resultUrl: true, thumbnailUrl: true, imageInputPath: true },
+    });
+    const sourceFrameUrl = sourceJob?.resultUrl || sourceJob?.thumbnailUrl || sourceJob?.imageInputPath;
+    if (sourceFrameUrl) return { segment, sequence: segment.sequence, sourceFrameUrl, sourceJobId: sourceJob?.id ?? null };
+  }
+
+  if (segment.sourceImageUrl) {
+    return { segment, sequence: segment.sequence, sourceFrameUrl: segment.sourceImageUrl, sourceSegmentId: null };
+  }
+
+  throw new StudioSessionApiError(400, 'Source frame is required before generating this segment');
+}
+
+export function buildVideoSegmentGenerationFormData(input: {
+  sequence: any;
+  segment: any;
+  sourceFrameUrl: string;
+  sourceImage: { blob: Blob; filename: string };
+  userId?: string;
+}) {
+  const { sequence, segment, sourceFrameUrl, sourceImage, userId = 'user-with-settings' } = input;
+  const formData = new FormData();
+  const generationOptions = {
+    ...parseJsonObjectField(sequence.defaultGenerationOptionsJson),
+    ...parseJsonObjectField(segment.generationOptionsJson),
+  };
+  const loraConfig = parseJsonObjectField(segment.loraConfigJson);
+  const prompt = [segment.prompt, segment.motionPrompt, segment.continuityPrompt]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+    .join('\n\n');
+
+  formData.append('userId', userId);
+  formData.append('workspaceId', sequence.workspaceId);
+  formData.append('language', 'en');
+  formData.append('modelId', segment.modelId || sequence.defaultModelId || 'wan22');
+  formData.append('prompt', prompt);
+  formData.append('negativePrompt', segment.negativePrompt || '');
+  formData.append('randomizeSeed', String(segment.randomizeSeed));
+  formData.append('image', sourceImage.blob, sourceImage.filename);
+
+  if (segment.seed !== null && segment.seed !== undefined && !segment.randomizeSeed) {
+    formData.append('seed', String(segment.seed));
+  }
+
+  if (generationOptions.length === undefined && sequence.targetFps && segment.durationSeconds) {
+    formData.append('length', String(Math.max(81, Math.min(161, Math.round(sequence.targetFps * segment.durationSeconds)))));
+  }
+
+  for (const [key, value] of Object.entries(generationOptions)) {
+    appendScalarFormValue(formData, key, value);
+  }
+  for (const [key, value] of Object.entries(loraConfig)) {
+    appendScalarFormValue(formData, key, value);
+  }
+
+  return {
+    formData,
+    snapshot: {
+      modelId: segment.modelId || sequence.defaultModelId || 'wan22',
+      prompt,
+      negativePrompt: segment.negativePrompt || '',
+      sourceFrameUrl,
+      generationOptions,
+      loraConfig,
+      seed: segment.seed,
+      randomizeSeed: segment.randomizeSeed,
+      durationSeconds: segment.durationSeconds,
+    },
+  };
+}
+
+export async function generateVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown> = {}) {
+  const { segment, sequence, sourceFrameUrl } = await resolveVideoSegmentSourceFrame(sequenceId, segmentId);
+  const sourceImage = await loadSourceImageBlob(sourceFrameUrl);
+  const { formData, snapshot } = buildVideoSegmentGenerationFormData({
+    sequence,
+    segment,
+    sourceFrameUrl,
+    sourceImage,
+    userId: asTrimmedString(input.userId) ?? 'user-with-settings',
+  });
+
+  const response = await submitGenerationFormData(formData);
+  const payload = await response.json().catch(() => ({}));
+  const jobId = typeof payload?.jobId === 'string' ? payload.jobId : null;
+  if (!response.ok || !payload?.success || !jobId) {
+    const error = typeof payload?.error === 'string' ? payload.error : 'Failed to queue segment generation';
+    const failed = await prisma.videoSequenceSegment.update({
+      where: { id: segmentId },
+      data: {
+        status: 'failed',
+        error,
+        generationSnapshotJson: JSON.stringify({ ...snapshot, error }),
+      },
+    });
+    return { segment: serializeVideoSegment(failed), jobId: null, status: 'FAILED', error };
+  }
+
+  const updated = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data: {
+      status: 'queued',
+      generationJobId: jobId,
+      error: null,
+      generationSnapshotJson: JSON.stringify({
+        ...snapshot,
+        jobId,
+        runpodJobId: typeof payload.runpodJobId === 'string' ? payload.runpodJobId : null,
+        queuedAt: new Date().toISOString(),
+      }),
+    },
+  });
+
+  return { segment: serializeVideoSegment(updated), jobId, status: payload.status || 'IN_QUEUE' };
+}
+
+function segmentStatusFromJob(jobStatus: string) {
+  if (jobStatus === 'completed') return 'completed';
+  if (jobStatus === 'failed') return 'failed';
+  if (jobStatus === 'processing' || jobStatus === 'finalizing') return 'processing';
+  if (jobStatus === 'queued' || jobStatus === 'queueing_up') return 'queued';
+  return 'queued';
+}
+
+export async function syncVideoSequenceSegmentStatus(sequenceId: string, segmentId: string) {
+  const segment = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+  });
+  if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+  if (!segment.generationJobId) throw new StudioSessionApiError(400, 'Segment has no generation job to sync');
+
+  const job = await prisma.job.findUnique({ where: { id: segment.generationJobId } });
+  if (!job) throw new StudioSessionApiError(404, 'Generation job not found');
+
+  const existingSnapshot = parseJsonObjectField(segment.generationSnapshotJson);
+  const options = parseJsonObjectField(job.options);
+  const nextStatus = segmentStatusFromJob(job.status);
+  const error = nextStatus === 'failed'
+    ? (job.error || (typeof options.error === 'string' ? options.error : null) || 'Job failed')
+    : null;
+
+  const updated = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data: {
+      status: nextStatus,
+      error,
+      outputVideoUrl: nextStatus === 'completed' ? job.resultUrl || segment.outputVideoUrl : segment.outputVideoUrl,
+      generationSnapshotJson: JSON.stringify({
+        ...existingSnapshot,
+        jobStatus: job.status,
+        runpodJobId: job.runpodJobId || options.runpodJobId || null,
+        endpointId: job.endpointId || options.endpointId || null,
+        resultUrl: job.resultUrl || null,
+        thumbnailUrl: job.thumbnailUrl || null,
+        executionMs: job.executionMs || null,
+        syncedAt: new Date().toISOString(),
+      }),
+    },
+  });
+
+  return { segment: serializeVideoSegment(updated), job };
 }
