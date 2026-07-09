@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getHeaderActionTooltip,
   getRenderBlocker,
   getSegmentSourcePreviewUrl,
 } from '@/components/video-sequences/VideoSequenceBuilder';
@@ -83,5 +84,12 @@ describe('VideoSequenceBuilder polish helpers', () => {
         segment({ orderIndex: 1, outputVideoUrl: '/generations/seg-2.mp4' }),
       ],
     }))).toBeNull();
+  });
+
+  it('keeps compact header actions discoverable with detailed tooltips', () => {
+    expect(getHeaderActionTooltip('save')).toContain('Save sequence title');
+    expect(getHeaderActionTooltip('generateFrom')).toContain('selected segment forward');
+    expect(getHeaderActionTooltip('render', 'Segment 2 is stale')).toContain('Segment 2 is stale');
+    expect(getHeaderActionTooltip('final')).toContain('new tab');
   });
 });

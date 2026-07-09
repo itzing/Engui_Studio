@@ -215,6 +215,23 @@ export function getRenderBlocker(sequence: VideoSequence | null) {
   return null;
 }
 
+export function getHeaderActionTooltip(action: 'save' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
+  switch (action) {
+    case 'save':
+      return 'Save sequence title, description, and selected segment changes';
+    case 'generate':
+      return 'Generate only the selected segment';
+    case 'generateFrom':
+      return 'Generate from the selected segment forward until the chain blocks or finishes';
+    case 'status':
+      return 'Refresh the selected segment job status and pull completed output metadata';
+    case 'render':
+      return renderBlocker ? `Render final is blocked: ${renderBlocker}` : 'Render one final video from all completed segment outputs';
+    case 'final':
+      return 'Open the rendered final video in a new tab';
+  }
+}
+
 export default function VideoSequenceBuilder() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sequences, setSequences] = useState<VideoSequence[]>([]);
@@ -670,12 +687,12 @@ export default function VideoSequenceBuilder() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-zinc-950 px-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-zinc-950 px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
               <Waypoints className="h-4 w-4" />
             </div>
-            <div className="grid min-w-0 grid-cols-[minmax(180px,320px)_minmax(160px,360px)] gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(160px,320px)_minmax(140px,1fr)] gap-2">
               <Input
                 value={sequenceTitle}
                 onChange={(event) => setSequenceTitle(event.target.value)}
@@ -691,56 +708,57 @@ export default function VideoSequenceBuilder() {
                 disabled={!activeSequence}
               />
             </div>
-            <Button variant="outline" size="sm" className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10" onClick={saveSequence} disabled={!activeSequence || !!busy}>
-              <Save className="mr-2 h-4 w-4" />
-              Save
-            </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+          <div className="flex shrink-0 items-center gap-1.5">
+            <ToolbarIconButton
+              label="Save sequence"
+              tooltip={getHeaderActionTooltip('save')}
+              onClick={saveSequence}
+              disabled={!activeSequence || !!busy}
+            >
+              <Save className="h-4 w-4" />
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Generate selected segment"
+              tooltip={getHeaderActionTooltip('generate')}
               onClick={generateSelectedSegment}
               disabled={!selectedSegment || !!busy}
             >
               {busy === 'generate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Generate selected
-            </Button>
-            <Button
-              variant="outline"
-              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Generate from selected segment"
+              tooltip={getHeaderActionTooltip('generateFrom')}
               onClick={generateFromSelectedSegment}
               disabled={!selectedSegment || !!busy}
             >
               {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
-              Generate from here
-            </Button>
-            <Button
-              variant="outline"
-              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Refresh selected segment status"
+              tooltip={getHeaderActionTooltip('status')}
               onClick={refreshSelectedStatus}
               disabled={!selectedSegment?.generationJobId || !!busy}
             >
               {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh status
-            </Button>
-            <Button
-              variant="outline"
-              className="h-9 gap-2 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Render final video"
+              tooltip={getHeaderActionTooltip('render', renderBlocker)}
               onClick={renderFinalVideo}
               disabled={!!renderBlocker || !!busy}
-              title={renderBlocker ?? 'Render final video'}
             >
               {busy === 'render' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
-              Render final
-            </Button>
+            </ToolbarIconButton>
             {activeSequence?.finalVideoUrl ? (
-              <Button asChild variant="outline" className="h-9 gap-2 border-emerald-500/30 bg-transparent text-emerald-200 hover:bg-emerald-500/10">
-                <a href={activeSequence.finalVideoUrl} target="_blank" rel="noreferrer">
-                  <Film className="h-4 w-4" />
-                  Final
-                </a>
-              </Button>
+              <ToolbarIconLink
+                href={activeSequence.finalVideoUrl}
+                label="Open final video"
+                tooltip={getHeaderActionTooltip('final')}
+                accent="emerald"
+              >
+                <Film className="h-4 w-4" />
+              </ToolbarIconLink>
             ) : null}
           </div>
         </header>
@@ -1121,6 +1139,78 @@ function InspectorSection({ icon, title, children }: { icon: ReactNode; title: s
       </div>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+function ToolbarIconButton({
+  label,
+  tooltip,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  tooltip: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="group relative flex" title={tooltip}>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-9 w-9 shrink-0 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 disabled:opacity-40"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+      >
+        {children}
+      </Button>
+      <ToolbarTooltip>{tooltip}</ToolbarTooltip>
+    </div>
+  );
+}
+
+function ToolbarIconLink({
+  href,
+  label,
+  tooltip,
+  accent,
+  children,
+}: {
+  href: string;
+  label: string;
+  tooltip: string;
+  accent?: 'emerald';
+  children: ReactNode;
+}) {
+  return (
+    <div className="group relative flex" title={tooltip}>
+      <Button
+        asChild
+        variant="outline"
+        size="icon"
+        className={cn(
+          'h-9 w-9 shrink-0 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10',
+          accent === 'emerald' ? 'border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10' : null,
+        )}
+      >
+        <a href={href} target="_blank" rel="noreferrer" aria-label={label}>
+          {children}
+        </a>
+      </Button>
+      <ToolbarTooltip>{tooltip}</ToolbarTooltip>
+    </div>
+  );
+}
+
+function ToolbarTooltip({ children }: { children: ReactNode }) {
+  return (
+    <div className="pointer-events-none absolute right-0 top-full z-30 mt-2 w-64 rounded-md border border-white/10 bg-zinc-900 px-3 py-2 text-xs leading-5 text-zinc-200 opacity-0 shadow-xl shadow-black/40 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      {children}
+    </div>
   );
 }
 
