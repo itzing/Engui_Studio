@@ -12,6 +12,11 @@ export interface ThumbnailOptions {
   format?: 'jpg' | 'png' | 'webp';
 }
 
+export interface FrameExtractionOptions extends ThumbnailOptions {
+  position?: 'first' | 'last';
+  time?: string;
+}
+
 export class FFmpegService {
   private ffmpegPath: string;
 
@@ -102,6 +107,67 @@ export class FFmpegService {
     } catch (error) {
       console.error(`[FFmpeg] Error extracting thumbnail:`, error);
       throw new Error(`Failed to extract thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Extract a specific video frame without forcing a resize unless dimensions are provided.
+   */
+  async extractVideoFrame(
+    inputPath: string,
+    outputPath: string,
+    options: FrameExtractionOptions = {}
+  ): Promise<string> {
+    const {
+      width,
+      height,
+      quality = 4,
+      format = 'jpg',
+      position = 'first',
+      time,
+    } = options;
+
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    let ffmpegCommand = this.ffmpegPath;
+    const localPath = path.join(process.cwd(), 'ffmpeg', 'ffmpeg.exe');
+    if (fs.existsSync(localPath)) {
+      ffmpegCommand = localPath;
+    }
+
+    const seekArgs = time
+      ? `-ss ${time}`
+      : position === 'last'
+        ? '-sseof -0.1'
+        : '-ss 00:00:00';
+    const filterArgs = width && height
+      ? ` -vf "scale=${width}:${height}:force_original_aspect_ratio=decrease"`
+      : '';
+    const qualityArgs = format === 'jpg' ? ` -q:v ${quality}` : '';
+    const command = `"${ffmpegCommand}" -y ${seekArgs} -i "${inputPath}" -frames:v 1${filterArgs}${qualityArgs} "${outputPath}"`;
+
+    try {
+      console.log(`[FFmpeg] Extracting ${position} frame: ${inputPath} -> ${outputPath}`);
+      const { stderr } = await execAsync(command, {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024 * 10,
+      });
+
+      if (stderr && !stderr.includes('frame=')) {
+        console.warn(`[FFmpeg] Warning: ${stderr}`);
+      }
+
+      if (fs.existsSync(outputPath)) {
+        return outputPath;
+      }
+
+      throw new Error('Frame file was not created');
+    } catch (error) {
+      console.error(`[FFmpeg] Error extracting ${position} frame:`, error);
+      throw new Error(`Failed to extract ${position} frame: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

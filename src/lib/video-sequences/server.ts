@@ -1,8 +1,10 @@
 import type { Prisma } from '@prisma/client';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
 import { prisma } from '@/lib/prisma';
+import { ffmpegService } from '@/lib/ffmpegService';
 import { submitGenerationFormData } from '@/lib/generation/submitFormData';
 import { StudioSessionApiError } from '@/lib/studio-sessions/api';
 
@@ -10,6 +12,7 @@ const sequenceStatuses = ['draft', 'ready', 'rendering', 'rendered', 'failed'] a
 const segmentStatuses = ['draft', 'queued', 'processing', 'completed', 'failed', 'stale'] as const;
 const sourceModes = ['initial', 'previous_last_frame', 'gallery_asset', 'job_output', 'upload', 'manual_frame'] as const;
 const sourceFrameRoles = ['first', 'last', 'custom'] as const;
+const sequenceFrameRoot = path.join(process.cwd(), 'public', 'generations', 'video-sequences');
 
 type JsonFallback = Record<string, unknown> | unknown[];
 
@@ -126,6 +129,18 @@ function appendScalarFormValue(formData: FormData, key: string, value: unknown) 
 function parseJsonObjectField(value: string | null | undefined): Record<string, unknown> {
   const parsed = parseJsonField(value, {});
   return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+}
+
+function safePathSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9-_]/g, '_');
+}
+
+function sequenceFramePublicUrl(workspaceId: string, sequenceId: string, segmentId: string, fileName: string) {
+  return `/generations/video-sequences/${safePathSegment(workspaceId)}/${safePathSegment(sequenceId)}/${safePathSegment(segmentId)}/frames/${fileName}`;
+}
+
+function sequenceFrameOutputPath(workspaceId: string, sequenceId: string, segmentId: string, fileName: string) {
+  return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), safePathSegment(segmentId), 'frames', fileName);
 }
 
 function segmentCreateDefaults(orderIndex: number) {
@@ -600,6 +615,66 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
   return { segment: serializeVideoSegment(updated), jobId, status: payload.status || 'IN_QUEUE' };
 }
 
+export async function extractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string) {
+  const segment = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+    include: { sequence: { select: { workspaceId: true } } },
+  });
+  if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  const outputVideoUrl = segment.outputVideoUrl;
+  if (!outputVideoUrl) {
+    throw new StudioSessionApiError(400, 'Segment output video is required before extracting frames');
+  }
+
+  const inputPath = resolveLocalPublicPath(outputVideoUrl);
+  if (!inputPath || !fs.existsSync(inputPath)) {
+    throw new StudioSessionApiError(400, 'Segment output video must be a local /generations or /results file before extracting frames');
+  }
+
+  const ffmpegAvailable = await ffmpegService.isFFmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new StudioSessionApiError(500, 'FFmpeg is not available for segment frame extraction');
+  }
+
+  const hash = crypto.createHash('md5').update(outputVideoUrl).digest('hex').slice(0, 8);
+  const firstFileName = `first-${hash}.jpg`;
+  const lastFileName = `last-${hash}.jpg`;
+  const firstFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName);
+  const lastFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName);
+
+  await ffmpegService.extractVideoFrame(
+    inputPath,
+    sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName),
+    { position: 'first', format: 'jpg', quality: 3 },
+  );
+  await ffmpegService.extractVideoFrame(
+    inputPath,
+    sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName),
+    { position: 'last', format: 'jpg', quality: 3 },
+  );
+
+  const existingSnapshot = parseJsonObjectField(segment.generationSnapshotJson);
+  const updated = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data: {
+      firstFrameUrl,
+      lastFrameUrl,
+      error: null,
+      generationSnapshotJson: JSON.stringify({
+        ...existingSnapshot,
+        frameExtraction: {
+          firstFrameUrl,
+          lastFrameUrl,
+          extractedAt: new Date().toISOString(),
+        },
+      }),
+    },
+  });
+
+  return serializeVideoSegment(updated);
+}
+
 function segmentStatusFromJob(jobStatus: string) {
   if (jobStatus === 'completed') return 'completed';
   if (jobStatus === 'failed') return 'failed';
@@ -624,13 +699,14 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
   const error = nextStatus === 'failed'
     ? (job.error || (typeof options.error === 'string' ? options.error : null) || 'Job failed')
     : null;
+  const outputVideoUrl = nextStatus === 'completed' ? job.resultUrl || segment.outputVideoUrl : segment.outputVideoUrl;
 
   const updated = await prisma.videoSequenceSegment.update({
     where: { id: segmentId },
     data: {
       status: nextStatus,
       error,
-      outputVideoUrl: nextStatus === 'completed' ? job.resultUrl || segment.outputVideoUrl : segment.outputVideoUrl,
+      outputVideoUrl,
       generationSnapshotJson: JSON.stringify({
         ...existingSnapshot,
         jobStatus: job.status,
@@ -643,6 +719,20 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
       }),
     },
   });
+
+  if (nextStatus === 'completed' && outputVideoUrl && (!updated.firstFrameUrl || !updated.lastFrameUrl)) {
+    try {
+      const frameSegment = await extractVideoSequenceSegmentFrames(sequenceId, segmentId);
+      return { segment: frameSegment, job };
+    } catch (error) {
+      console.warn('Failed to extract video sequence segment frames during status sync', {
+        sequenceId,
+        segmentId,
+        outputVideoUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   return { segment: serializeVideoSegment(updated), job };
 }

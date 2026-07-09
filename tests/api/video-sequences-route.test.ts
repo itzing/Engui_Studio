@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
@@ -44,14 +46,28 @@ vi.mock('@/lib/generation/submitFormData', () => ({
   submitGenerationFormData: mockSubmitGenerationFormData,
 }));
 
+const { mockFfmpegService } = vi.hoisted(() => ({
+  mockFfmpegService: {
+    isFFmpegAvailable: vi.fn(),
+    extractVideoFrame: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/ffmpegService', () => ({
+  ffmpegService: mockFfmpegService,
+}));
+
 import { POST as createSequence } from '@/app/api/video-sequences/route';
 import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
 import { PATCH as updateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/route';
 import { POST as insertFromTemplate } from '@/app/api/video-sequences/[id]/segments/from-template/route';
 import { POST as saveSegmentTemplate } from '@/app/api/video-sequences/[id]/segments/[segmentId]/save-template/route';
+import { POST as extractSegmentFrames } from '@/app/api/video-sequences/[id]/segments/[segmentId]/extract-frames/route';
 import { POST as generateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/generate/route';
 import { POST as syncSegmentStatus } from '@/app/api/video-sequences/[id]/segments/[segmentId]/sync-status/route';
 import { buildVideoSegmentGenerationFormData } from '@/lib/video-sequences/server';
+
+const createdFiles = new Set<string>();
 
 function request(url: string, body: Record<string, unknown>) {
   return new NextRequest(url, {
@@ -73,6 +89,20 @@ describe('video sequence APIs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+    mockFfmpegService.isFFmpegAvailable.mockResolvedValue(true);
+    mockFfmpegService.extractVideoFrame.mockResolvedValue('/tmp/frame.jpg');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const filePath of createdFiles) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    createdFiles.clear();
   });
 
   it('creates a persisted video sequence with generation defaults', async () => {
@@ -185,8 +215,8 @@ describe('video sequence APIs', () => {
       id: 'seg-2',
       ...data,
       outputVideoUrl: null,
-      firstFrameUrl: null,
-      lastFrameUrl: null,
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
       generationSnapshotJson: null,
       createdAt: new Date('2026-07-08T22:00:00Z'),
       updatedAt: new Date('2026-07-08T22:00:00Z'),
@@ -473,8 +503,8 @@ describe('video sequence APIs', () => {
       durationSeconds: 6,
       generationJobId: 'job-1',
       outputVideoUrl: data.outputVideoUrl,
-      firstFrameUrl: null,
-      lastFrameUrl: null,
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
       templateId: null,
       templateSnapshotJson: null,
       generationSnapshotJson: data.generationSnapshotJson,
@@ -492,5 +522,84 @@ describe('video sequence APIs', () => {
       outputVideoUrl: '/generations/video.mp4',
     });
     expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
+  });
+
+  it('extracts first and last frames for a completed local segment video', async () => {
+    const videoPath = path.join(process.cwd(), 'public', 'generations', 'video-sequence-test.mp4');
+    fs.mkdirSync(path.dirname(videoPath), { recursive: true });
+    fs.writeFileSync(videoPath, 'not a real mp4, ffmpeg is mocked');
+    createdFiles.add(videoPath);
+
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      status: 'completed',
+      outputVideoUrl: '/generations/video-sequence-test.mp4',
+      generationSnapshotJson: '{"jobId":"job-1"}',
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      templateSnapshotJson: null,
+      sequence: { workspaceId: 'ws-1' },
+    });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'completed',
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: null,
+      randomizeSeed: true,
+      durationSeconds: 6,
+      generationJobId: 'job-1',
+      outputVideoUrl: '/generations/video-sequence-test.mp4',
+      firstFrameUrl: data.firstFrameUrl,
+      lastFrameUrl: data.lastFrameUrl,
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error,
+    }));
+
+    const response = await extractSegmentFrames(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/extract-frames', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(1, videoPath, expect.stringContaining('/first-'), expect.objectContaining({ position: 'first' }));
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), expect.objectContaining({ position: 'last' }));
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
+  });
+
+  it('rejects frame extraction before the segment has an output video', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      outputVideoUrl: null,
+      generationSnapshotJson: null,
+      sequence: { workspaceId: 'ws-1' },
+    });
+
+    const response = await extractSegmentFrames(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/extract-frames', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toBe('Segment output video is required before extracting frames');
+    expect(mockFfmpegService.extractVideoFrame).not.toHaveBeenCalled();
   });
 });

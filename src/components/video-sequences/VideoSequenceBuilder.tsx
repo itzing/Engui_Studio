@@ -7,6 +7,7 @@ import {
   Clapperboard,
   CopyPlus,
   Film,
+  ImagePlus,
   Images,
   Layers3,
   Loader2,
@@ -426,6 +427,17 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function extractSelectedFrames() {
+    if (!activeSequence || !selectedSegment) return;
+    await runAction('frames', async () => {
+      await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/extract-frames`,
+        { method: 'POST' },
+      );
+      await loadSequence(activeSequence.id, selectedSegment.id);
+    });
+  }
+
   return (
     <main className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-100">
       <aside className="flex w-[320px] shrink-0 flex-col border-r border-white/10 bg-zinc-950">
@@ -739,6 +751,12 @@ export default function VideoSequenceBuilder() {
                   {selectedSegment.generationJobId ? (
                     <div className="mt-2 truncate font-mono text-[11px] text-zinc-500">Job {selectedSegment.generationJobId}</div>
                   ) : null}
+                  {selectedSegment.firstFrameUrl || selectedSegment.lastFrameUrl ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <MiniFrame label="First" url={selectedSegment.firstFrameUrl} />
+                      <MiniFrame label="Last" url={selectedSegment.lastFrameUrl} />
+                    </div>
+                  ) : null}
                   {selectedSegment.error ? (
                     <div className="mt-2 text-rose-300">{selectedSegment.error}</div>
                   ) : null}
@@ -776,6 +794,9 @@ export default function VideoSequenceBuilder() {
                 </Button>
                 <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
                   {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+                <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={extractSelectedFrames} disabled={!selectedSegment.outputVideoUrl || !!busy} aria-label="Extract segment frames">
+                  {busy === 'frames' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 </Button>
               </div>
 
@@ -837,6 +858,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-xs text-zinc-500">{label}</span>
       {children}
     </label>
+  );
+}
+
+function MiniFrame({ label, url }: { label: string; url: string | null }) {
+  return (
+    <div className="overflow-hidden rounded border border-white/10 bg-black/20">
+      <div className="aspect-video bg-zinc-950">
+        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : null}
+      </div>
+      <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+    </div>
   );
 }
 
