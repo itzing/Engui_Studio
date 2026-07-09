@@ -109,7 +109,7 @@ type GalleryAsset = {
   addedToGalleryAt: string;
 };
 
-type SegmentDraft = {
+export type SegmentDraft = {
   title: string;
   sourceMode: string;
   sourceImageUrl: string;
@@ -190,6 +190,7 @@ const maxWanLoraFiles = maxWanLoraPairs * 2;
 const defaultWanLoraWeight = 0.8;
 const defaultWanSteps = 4;
 const defaultSegmentDurationSeconds = 5;
+const videoSequenceSelectionStoragePrefix = 'engui:video-sequences:selected';
 
 type WanLoraSlot = {
   index: number;
@@ -366,6 +367,40 @@ function makeSegmentDraft(segment: VideoSequenceSegment): SegmentDraft {
   };
 }
 
+export function buildSegmentDraftPatchPayload(segmentDraft: SegmentDraft) {
+  return {
+    title: segmentDraft.title,
+    sourceMode: segmentDraft.sourceMode,
+    sourceImageUrl: segmentDraft.sourceImageUrl || null,
+    sourceFrozen: segmentDraft.sourceFrozen,
+    prompt: segmentDraft.prompt,
+    negativePrompt: segmentDraft.negativePrompt,
+    motionPrompt: segmentDraft.motionPrompt,
+    continuityPrompt: segmentDraft.continuityPrompt,
+    modelId: segmentDraft.modelId || 'wan22',
+    endpointId: segmentDraft.endpointId || null,
+    durationSeconds: Number(segmentDraft.durationSeconds || defaultSegmentDurationSeconds),
+    seed: segmentDraft.seed ? Number(segmentDraft.seed) : null,
+    randomizeSeed: segmentDraft.randomizeSeed,
+    loraConfigJson: segmentDraft.loraConfigJson,
+    generationOptionsJson: buildSegmentGenerationOptionsJson(segmentDraft.generationOptionsJson, segmentDraft.generationSteps),
+  };
+}
+
+export function getSegmentDraftPersistenceKey(segmentDraft: SegmentDraft) {
+  try {
+    return JSON.stringify(buildSegmentDraftPatchPayload(segmentDraft));
+  } catch {
+    return null;
+  }
+}
+
+export function hasSegmentDraftChanged(segment: VideoSequenceSegment, segmentDraft: SegmentDraft) {
+  const currentKey = getSegmentDraftPersistenceKey(segmentDraft);
+  const persistedKey = getSegmentDraftPersistenceKey(makeSegmentDraft(segment));
+  return Boolean(currentKey && persistedKey && currentKey !== persistedKey);
+}
+
 function emptySegmentDraft(): SegmentDraft {
   return {
     title: '',
@@ -441,6 +476,34 @@ export function findSequencePreviewTimelineItem(timeline: SequencePreviewTimelin
 
 export function shouldRestartSequencePreview(previewHasEnded: boolean, previewTime: number, previewTotalDuration: number) {
   return previewHasEnded || (previewTotalDuration > 0 && previewTime >= previewTotalDuration);
+}
+
+export function getSequencePreviewRestartTime(timeline: SequencePreviewTimelineItem[]) {
+  return timeline[0]?.start ?? 0;
+}
+
+function getVideoSequenceSelectionStorageKey(workspaceId: string) {
+  return `${videoSequenceSelectionStoragePrefix}:${workspaceId}`;
+}
+
+function readStoredVideoSequenceSelection(workspaceId: string) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(getVideoSequenceSelectionStorageKey(workspaceId));
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      sequenceId: typeof parsed.sequenceId === 'string' ? parsed.sequenceId : null,
+      segmentId: typeof parsed.segmentId === 'string' ? parsed.segmentId : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredVideoSequenceSelection(workspaceId: string, sequenceId: string, segmentId: string | null) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(getVideoSequenceSelectionStorageKey(workspaceId), JSON.stringify({ sequenceId, segmentId }));
 }
 
 export function getRenderBlocker(sequence: VideoSequence | null) {
@@ -540,6 +603,11 @@ export default function VideoSequenceBuilder() {
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
   const autoStatusSyncInFlightRef = useRef(false);
+  const segmentAutosaveTimerRef = useRef<number | null>(null);
+  const segmentAutosaveInFlightRef = useRef(false);
+  const segmentAutosavePromiseRef = useRef<Promise<VideoSequenceSegment | null> | null>(null);
+  const lastPersistedSegmentDraftKeyRef = useRef<string | null>(null);
+  const segmentDraftRef = useRef(segmentDraft);
 
   const selectedSegment = useMemo(() => (
     activeSequence?.segments.find((segment) => segment.id === selectedSegmentId) ?? activeSequence?.segments[0] ?? null
@@ -615,6 +683,15 @@ export default function VideoSequenceBuilder() {
     });
   }, [loraPairs, loraSearchQuery, selectedLoraPathSet]);
 
+  useEffect(() => {
+    segmentDraftRef.current = segmentDraft;
+  }, [segmentDraft]);
+
+  useEffect(() => {
+    if (!workspaceId || !activeSequence) return;
+    writeStoredVideoSequenceSelection(workspaceId, activeSequence.id, selectedSegmentId);
+  }, [activeSequence?.id, selectedSegmentId, workspaceId]);
+
   const loadSequence = useCallback(async (sequenceId: string, preferredSegmentId?: string | null) => {
     const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${sequenceId}`);
     setActiveSequence(data.sequence);
@@ -641,16 +718,21 @@ export default function VideoSequenceBuilder() {
     )));
   }, []);
 
-  const loadWorkspaceData = useCallback(async (nextWorkspaceId: string, preferredSequenceId?: string | null) => {
+  const loadWorkspaceData = useCallback(async (nextWorkspaceId: string, preferredSequenceId?: string | null, preferredSegmentId?: string | null) => {
     const [sequenceData, templateData] = await Promise.all([
       fetchJson<{ success: true; sequences: VideoSequence[] }>(`/api/video-sequences?workspaceId=${encodeURIComponent(nextWorkspaceId)}`),
       fetchJson<{ success: true; templates: VideoSegmentTemplate[] }>(`/api/video-segment-templates?workspaceId=${encodeURIComponent(nextWorkspaceId)}`),
     ]);
     setSequences(sequenceData.sequences);
     setTemplates(templateData.templates);
-    const nextSequenceId = preferredSequenceId ?? sequenceData.sequences[0]?.id ?? null;
+    const storedSelection = preferredSequenceId ? null : readStoredVideoSequenceSelection(nextWorkspaceId);
+    const candidateSequenceId = preferredSequenceId ?? storedSelection?.sequenceId ?? sequenceData.sequences[0]?.id ?? null;
+    const nextSequenceId = sequenceData.sequences.some((sequence) => sequence.id === candidateSequenceId)
+      ? candidateSequenceId
+      : sequenceData.sequences[0]?.id ?? null;
+    const nextSegmentId = preferredSegmentId ?? storedSelection?.segmentId ?? null;
     if (nextSequenceId) {
-      await loadSequence(nextSequenceId);
+      await loadSequence(nextSequenceId, nextSegmentId);
     } else {
       setActiveSequence(null);
       setSelectedSegmentId(null);
@@ -728,9 +810,17 @@ export default function VideoSequenceBuilder() {
 
   useEffect(() => {
     if (selectedSegment) {
-      setSegmentDraft(makeSegmentDraft(selectedSegment));
+      const nextDraft = makeSegmentDraft(selectedSegment);
+      setSegmentDraft(nextDraft);
+      lastPersistedSegmentDraftKeyRef.current = getSegmentDraftPersistenceKey(nextDraft);
     } else {
-      setSegmentDraft(emptySegmentDraft());
+      const nextDraft = emptySegmentDraft();
+      setSegmentDraft(nextDraft);
+      lastPersistedSegmentDraftKeyRef.current = getSegmentDraftPersistenceKey(nextDraft);
+    }
+    if (segmentAutosaveTimerRef.current !== null) {
+      window.clearTimeout(segmentAutosaveTimerRef.current);
+      segmentAutosaveTimerRef.current = null;
     }
     setFramePickerOpen(false);
     setFramePickerTime(0);
@@ -738,6 +828,35 @@ export default function VideoSequenceBuilder() {
     setLoraPickerOpen(false);
     setLoraSearchQuery('');
   }, [selectedSegment]);
+
+  useEffect(() => {
+    return () => {
+      if (segmentAutosaveTimerRef.current !== null) {
+        window.clearTimeout(segmentAutosaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeSequence || !selectedSegment) return;
+    const draftKey = getSegmentDraftPersistenceKey(segmentDraft);
+    if (!draftKey || draftKey === lastPersistedSegmentDraftKeyRef.current) return;
+
+    if (segmentAutosaveTimerRef.current !== null) {
+      window.clearTimeout(segmentAutosaveTimerRef.current);
+    }
+
+    segmentAutosaveTimerRef.current = window.setTimeout(() => {
+      void saveSelectedSegmentDraftIfChanged({ silent: true });
+    }, 650);
+
+    return () => {
+      if (segmentAutosaveTimerRef.current !== null) {
+        window.clearTimeout(segmentAutosaveTimerRef.current);
+        segmentAutosaveTimerRef.current = null;
+      }
+    };
+  }, [activeSequence?.id, selectedSegment?.id, segmentDraft]);
 
   useEffect(() => {
     setPreviewPlaying(false);
@@ -842,16 +961,44 @@ export default function VideoSequenceBuilder() {
     }
   }
 
-  function selectSegment(segmentId: string) {
+  async function switchSequence(sequenceId: string) {
+    if (sequenceId === activeSequence?.id) return;
+    try {
+      await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
+      await loadSequence(sequenceId);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to switch sequence');
+    }
+  }
+
+  async function selectSegment(segmentId: string) {
+    if (segmentId === selectedSegmentId) {
+      const previewItem = previewTimeline.find((item) => item.segment.id === segmentId);
+      if (previewItem) seekPreview(previewItem.start);
+      return;
+    }
+
+    try {
+      await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to save segment before switching');
+      return;
+    }
+
     setSelectedSegmentId(segmentId);
     const previewItem = previewTimeline.find((item) => item.segment.id === segmentId);
     if (previewItem) seekPreview(previewItem.start);
   }
 
   function togglePreviewPlayback() {
-    if (!activePreviewSegment) return;
+    if (!activePreviewSegment && previewTimeline.length === 0) return;
     if (shouldRestartSequencePreview(previewHasEnded, previewTime, previewTotalDuration)) {
-      seekPreview(0);
+      const restartTime = getSequencePreviewRestartTime(previewTimeline);
+      setPreviewHasEnded(false);
+      setPreviewTime(restartTime);
+      if (previewVideoRef.current) {
+        previewVideoRef.current.currentTime = 0;
+      }
       setPreviewPlaying(true);
       return;
     }
@@ -993,36 +1140,65 @@ export default function VideoSequenceBuilder() {
     }));
   }
 
-  function buildSegmentDraftPayload() {
-    return {
-      title: segmentDraft.title,
-      sourceMode: segmentDraft.sourceMode,
-      sourceImageUrl: segmentDraft.sourceImageUrl || null,
-      sourceFrozen: segmentDraft.sourceFrozen,
-      prompt: segmentDraft.prompt,
-      negativePrompt: segmentDraft.negativePrompt,
-      motionPrompt: segmentDraft.motionPrompt,
-      continuityPrompt: segmentDraft.continuityPrompt,
-      modelId: segmentDraft.modelId || 'wan22',
-      endpointId: segmentDraft.endpointId || null,
-      durationSeconds: Number(segmentDraft.durationSeconds || defaultSegmentDurationSeconds),
-      seed: segmentDraft.seed ? Number(segmentDraft.seed) : null,
-      randomizeSeed: segmentDraft.randomizeSeed,
-      loraConfigJson: segmentDraft.loraConfigJson,
-      generationOptionsJson: buildSegmentGenerationOptionsJson(segmentDraft.generationOptionsJson, segmentDraft.generationSteps),
-    };
-  }
-
-  async function persistSelectedSegmentDraft() {
+  async function persistSelectedSegmentDraft(draftSnapshot = segmentDraft) {
     if (!activeSequence || !selectedSegment) return null;
+    const draftKey = getSegmentDraftPersistenceKey(draftSnapshot);
+    if (!draftKey) {
+      buildSegmentDraftPatchPayload(draftSnapshot);
+      return null;
+    }
     const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
       `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}`,
       {
         method: 'PATCH',
-        body: JSON.stringify(buildSegmentDraftPayload()),
+        body: JSON.stringify(buildSegmentDraftPatchPayload(draftSnapshot)),
       },
     );
+    lastPersistedSegmentDraftKeyRef.current = draftKey;
+    if (getSegmentDraftPersistenceKey(segmentDraftRef.current) === draftKey) {
+      setActiveSequence((current) => {
+        if (!current || current.id !== activeSequence.id) return current;
+        return {
+          ...current,
+          segments: current.segments.map((segment) => (
+            segment.id === data.segment.id ? data.segment : segment
+          )),
+        };
+      });
+    }
     return data.segment;
+  }
+
+  async function saveSelectedSegmentDraftIfChanged(options: { silent?: boolean; propagateError?: boolean } = {}) {
+    if (!activeSequence || !selectedSegment) return null;
+    if (segmentAutosaveInFlightRef.current && segmentAutosavePromiseRef.current) {
+      await segmentAutosavePromiseRef.current;
+    }
+
+    const draftSnapshot = segmentDraftRef.current;
+    const draftKey = getSegmentDraftPersistenceKey(draftSnapshot);
+    if (!draftKey || draftKey === lastPersistedSegmentDraftKeyRef.current) return null;
+
+    if (segmentAutosaveTimerRef.current !== null) {
+      window.clearTimeout(segmentAutosaveTimerRef.current);
+      segmentAutosaveTimerRef.current = null;
+    }
+
+    segmentAutosaveInFlightRef.current = true;
+    const autosavePromise = persistSelectedSegmentDraft(draftSnapshot);
+    segmentAutosavePromiseRef.current = autosavePromise;
+    try {
+      const segment = await autosavePromise;
+      if (!options.silent && segment) setNotice('Segment saved');
+      return segment;
+    } catch (nextError) {
+      if (!options.silent || options.propagateError) throw nextError;
+      setError(nextError instanceof Error ? nextError.message : 'Failed to autosave segment');
+      return null;
+    } finally {
+      segmentAutosaveInFlightRef.current = false;
+      segmentAutosavePromiseRef.current = null;
+    }
   }
 
   async function createSequence() {
@@ -1039,6 +1215,7 @@ export default function VideoSequenceBuilder() {
   async function saveSequence() {
     if (!activeSequence) return;
     await runAction('sequence', async () => {
+      await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
       const width = parseSequenceDimension(sequenceWidth, activeSequence.width || 1280);
       const height = parseSequenceDimension(sequenceHeight, activeSequence.height || 720);
       const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${activeSequence.id}`, {
@@ -1088,6 +1265,7 @@ export default function VideoSequenceBuilder() {
   async function addSegment() {
     if (!activeSequence) return;
     await runAction('segment', async () => {
+      await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
       const orderIndex = activeSequence.segments.length;
       const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(`/api/video-sequences/${activeSequence.id}/segments`, {
         method: 'POST',
@@ -1105,7 +1283,7 @@ export default function VideoSequenceBuilder() {
   async function saveSegment() {
     if (!activeSequence || !selectedSegment) return;
     await runAction('segment', async () => {
-      await persistSelectedSegmentDraft();
+      await persistSelectedSegmentDraft(segmentDraftRef.current);
       await loadSequence(activeSequence.id, selectedSegment.id);
       setNotice('Segment saved');
     });
@@ -1144,6 +1322,7 @@ export default function VideoSequenceBuilder() {
   async function insertTemplate(templateId: string) {
     if (!activeSequence) return;
     await runAction('template', async () => {
+      await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
       const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(`/api/video-sequences/${activeSequence.id}/segments/from-template`, {
         method: 'POST',
         body: JSON.stringify({ templateId }),
@@ -1247,7 +1426,7 @@ export default function VideoSequenceBuilder() {
               <button
                 key={sequence.id}
                 type="button"
-                onClick={() => loadSequence(sequence.id)}
+                onClick={() => void switchSequence(sequence.id)}
                 className={cn(
                   'flex w-full items-center justify-between rounded-md border px-3 py-2 text-left transition-colors',
                   activeSequence?.id === sequence.id
@@ -1486,7 +1665,7 @@ export default function VideoSequenceBuilder() {
                       <div key={segment.id} className="flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => selectSegment(segment.id)}
+                          onClick={() => void selectSegment(segment.id)}
                           className={cn(
                             'w-[292px] overflow-hidden rounded-md border bg-zinc-900 text-left transition-colors',
                             selectedSegment?.id === segment.id ? 'border-cyan-500/50' : 'border-white/10 hover:border-white/20',
@@ -1553,7 +1732,7 @@ export default function VideoSequenceBuilder() {
                 <button
                   key={segment.id}
                   type="button"
-                  onClick={() => selectSegment(segment.id)}
+                  onClick={() => void selectSegment(segment.id)}
                   className={cn(
                     'flex min-w-24 flex-1 items-center border-r border-white/10 px-3 last:border-r-0',
                     selectedSegment?.id === segment.id ? 'bg-cyan-500/10' : '',

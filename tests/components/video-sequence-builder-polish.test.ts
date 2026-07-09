@@ -16,6 +16,9 @@ import {
   findSequencePreviewTimelineItem,
   formatSegmentOutputMetrics,
   shouldRestartSequencePreview,
+  getSequencePreviewRestartTime,
+  buildSegmentDraftPatchPayload,
+  hasSegmentDraftChanged,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -156,9 +159,50 @@ describe('VideoSequenceBuilder polish helpers', () => {
   });
 
   it('restarts stitched preview after it reaches the end', () => {
-    expect(shouldRestartSequencePreview(true, 9.06, 9.06)).toBe(true);
-    expect(shouldRestartSequencePreview(false, 9.06, 9.06)).toBe(true);
+    const timeline = buildSequencePreviewTimeline([
+      segment({ id: 'seg-1', orderIndex: 0, durationSeconds: 5 }),
+      segment({ id: 'seg-2', orderIndex: 1, durationSeconds: 4 }),
+    ]);
+
+    expect(shouldRestartSequencePreview(true, 9, 9)).toBe(true);
+    expect(shouldRestartSequencePreview(false, 9, 9)).toBe(true);
     expect(shouldRestartSequencePreview(false, 3, 9.06)).toBe(false);
+    expect(getSequencePreviewRestartTime(timeline)).toBe(0);
+  });
+
+  it('detects changed segment drafts for autosave payloads', () => {
+    const savedSegment = segment({
+      title: 'Opening',
+      durationSeconds: 5,
+      outputVideoUrl: null,
+    });
+    const matchingDraft = {
+      title: 'Opening',
+      sourceMode: 'initial',
+      sourceImageUrl: '',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: '',
+      durationSeconds: '5',
+      seed: '',
+      randomizeSeed: true,
+      generationSteps: '4',
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+    };
+    const changedDraft = { ...matchingDraft, prompt: 'camera pushes forward' };
+
+    expect(hasSegmentDraftChanged(savedSegment, matchingDraft)).toBe(false);
+    expect(hasSegmentDraftChanged(savedSegment, changedDraft)).toBe(true);
+    expect(buildSegmentDraftPatchPayload(changedDraft)).toMatchObject({
+      prompt: 'camera pushes forward',
+      durationSeconds: 5,
+      generationOptionsJson: '{\n  "steps": 4\n}',
+    });
   });
 
   it('builds editable WAN LoRA slots while preserving generation config keys', () => {
