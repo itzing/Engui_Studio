@@ -46,7 +46,10 @@ const mockModel = {
   type: 'image',
   inputs: ['text'],
   optionalInputs: [],
-  parameters: [],
+  parameters: [
+    { name: 'width', label: 'Width', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic' },
+    { name: 'height', label: 'Height', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic' },
+  ],
   capabilities: {},
   api: { type: 'runpod', endpoint: 'endpoint-1' },
 };
@@ -217,6 +220,30 @@ describe('ImageGenerationForm prompt draft selector', () => {
       expect(screen.queryByTestId('image-create-prompt-editor-textarea')).toBeNull();
     });
     expect(promptTextarea.value).toBe('expanded prompt');
+  });
+
+  it('does not apply browser step or range validation to Create Image dimensions', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    const { container } = render(React.createElement(ImageGenerationForm));
+
+    await screen.findByTestId('image-create-prompt-textarea');
+
+    const widthInput = container.querySelector('input[name="width"]') as HTMLInputElement | null;
+    const heightInput = container.querySelector('input[name="height"]') as HTMLInputElement | null;
+
+    expect(widthInput?.getAttribute('step')).toBe('any');
+    expect(widthInput?.getAttribute('min')).toBeNull();
+    expect(widthInput?.getAttribute('max')).toBeNull();
+    expect(heightInput?.getAttribute('step')).toBe('any');
+    expect(heightInput?.getAttribute('min')).toBeNull();
+    expect(heightInput?.getAttribute('max')).toBeNull();
   });
 
   it('locks prompt editing for a selected draft and re-renders latest draft prompt on generate', async () => {

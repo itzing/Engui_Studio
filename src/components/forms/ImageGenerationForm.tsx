@@ -792,15 +792,10 @@ export default function ImageGenerationForm() {
             nextWidth = Math.round((baseEdge * ratioWidth) / ratioHeight);
         }
 
-        const clampToStep = (value: number, step?: number) => {
-            const safeStep = Number(step || 64);
-            return Math.max(safeStep, Math.round(value / safeStep) * safeStep);
-        };
-
         setParameterValues(prev => ({
             ...prev,
-            [widthParam.name]: clampToStep(nextWidth, widthParam.step),
-            [heightParam.name]: clampToStep(nextHeight, heightParam.step),
+            [widthParam.name]: Math.max(1, Math.round(nextWidth)),
+            [heightParam.name]: Math.max(1, Math.round(nextHeight)),
         }));
     };
 
@@ -856,9 +851,7 @@ export default function ImageGenerationForm() {
                             name={widthParam.name}
                             value={parameterValues[widthParam.name] ?? widthParam.default}
                             onChange={(e) => handleParameterChange(widthParam.name, parseFloat(e.target.value))}
-                            min={widthParam.min}
-                            max={widthParam.max}
-                            step={widthParam.step}
+                            step="any"
                             className={`h-8 text-sm transition-all duration-500 ${isDimensionSwapHighlightActive ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : ''}`}
                         />
                     </div>
@@ -870,9 +863,7 @@ export default function ImageGenerationForm() {
                             name={heightParam.name}
                             value={parameterValues[heightParam.name] ?? heightParam.default}
                             onChange={(e) => handleParameterChange(heightParam.name, parseFloat(e.target.value))}
-                            min={heightParam.min}
-                            max={heightParam.max}
-                            step={heightParam.step}
+                            step="any"
                             className={`h-8 text-sm transition-all duration-500 ${isDimensionSwapHighlightActive ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : ''}`}
                         />
                     </div>

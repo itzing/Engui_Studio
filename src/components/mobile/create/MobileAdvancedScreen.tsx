@@ -319,9 +319,7 @@ export default function MobileAdvancedScreen() {
                     <Input
                       type="number"
                       value={parameterValues[widthParam.name] ?? widthParam.default ?? ''}
-                      min={widthParam.min}
-                      max={widthParam.max}
-                      step={widthParam.step}
+                      step="any"
                       className="text-base sm:text-sm"
                       onChange={(event) => handleNumericParameterInput(widthParam.name, event.target.value)}
                     />
@@ -331,9 +329,7 @@ export default function MobileAdvancedScreen() {
                     <Input
                       type="number"
                       value={parameterValues[heightParam.name] ?? heightParam.default ?? ''}
-                      min={heightParam.min}
-                      max={heightParam.max}
-                      step={heightParam.step}
+                      step="any"
                       className="text-base sm:text-sm"
                       onChange={(event) => handleNumericParameterInput(heightParam.name, event.target.value)}
                     />

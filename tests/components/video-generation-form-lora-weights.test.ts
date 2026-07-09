@@ -134,4 +134,20 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(model?.parameters.find((param) => param.name === 'length')?.default).toBe(80);
     expect(model?.parameters.find((param) => param.name === 'length')?.min).toBeLessThanOrEqual(80);
   });
+
+  it('does not apply browser step or range validation to Create Video dimensions', async () => {
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    await screen.findByRole('button', { name: 'generationForm.advancedSettings' });
+
+    const widthInput = container.querySelector('input[name="width"]') as HTMLInputElement | null;
+    const heightInput = container.querySelector('input[name="height"]') as HTMLInputElement | null;
+
+    expect(widthInput?.getAttribute('step')).toBe('any');
+    expect(widthInput?.getAttribute('min')).toBeNull();
+    expect(widthInput?.getAttribute('max')).toBeNull();
+    expect(heightInput?.getAttribute('step')).toBe('any');
+    expect(heightInput?.getAttribute('min')).toBeNull();
+    expect(heightInput?.getAttribute('max')).toBeNull();
+  });
 });

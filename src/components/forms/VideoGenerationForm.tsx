@@ -528,9 +528,7 @@ export default function VideoGenerationForm() {
                             type="number"
                             name={widthParam.name}
                             value={parameterValues[widthParam.name] ?? widthParam.default}
-                            min={widthParam.min}
-                            max={widthParam.max}
-                            step={widthParam.step}
+                            step="any"
                             className="h-8 text-sm"
                             onChange={(e) => handleParameterChange(widthParam.name, parseFloat(e.target.value))}
                         />
@@ -542,9 +540,7 @@ export default function VideoGenerationForm() {
                             type="number"
                             name={heightParam.name}
                             value={parameterValues[heightParam.name] ?? heightParam.default}
-                            min={heightParam.min}
-                            max={heightParam.max}
-                            step={heightParam.step}
+                            step="any"
                             className="h-8 text-sm"
                             onChange={(e) => handleParameterChange(heightParam.name, parseFloat(e.target.value))}
                         />
