@@ -522,8 +522,8 @@ describe('video sequence APIs', () => {
       status: 'completed',
       outputVideoUrl: '/generations/gallery/ws-1/video.mp4',
     });
-    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
-    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.png$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.png$/);
   });
 
   it('inserts a draft segment from a saved template', async () => {
@@ -1167,10 +1167,10 @@ describe('video sequence APIs', () => {
 
     expect(response.status).toBe(200);
     expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
-    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(1, videoPath, expect.stringContaining('/first-'), expect.objectContaining({ position: 'first' }));
-    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), expect.objectContaining({ position: 'last' }));
-    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
-    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(1, videoPath, expect.stringContaining('/first-'), expect.objectContaining({ position: 'first', format: 'png' }));
+    expect(mockFfmpegService.extractVideoFrame).toHaveBeenNthCalledWith(2, videoPath, expect.stringContaining('/last-'), expect.objectContaining({ position: 'first', time: '1.000', format: 'png' }));
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.png$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.png$/);
   });
 
   it('rejects frame extraction before the segment has an output video', async () => {
@@ -1799,8 +1799,8 @@ describe('video sequence APIs', () => {
       }),
     });
     expect(mockFfmpegService.extractVideoFrame).toHaveBeenCalledTimes(2);
-    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.jpg$/);
-    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.jpg$/);
+    expect(json.segment.firstFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/first-[a-f0-9]{8}\.png$/);
+    expect(json.segment.lastFrameUrl).toMatch(/^\/generations\/video-sequences\/ws-1\/seq-1\/seg-1\/frames\/last-[a-f0-9]{8}\.png$/);
   });
 
   it('marks downstream previous-last-frame outputs stale when extracted last frame changes', async () => {

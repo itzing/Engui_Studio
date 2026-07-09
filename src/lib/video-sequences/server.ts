@@ -158,6 +158,12 @@ function outputMetadataFromVideoInfo(outputVideoUrl: string, info: Awaited<Retur
   };
 }
 
+function continuationFrameTimeFromMetadata(metadata: { durationSeconds?: number | null }) {
+  const durationSeconds = Number(metadata.durationSeconds);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 3) return null;
+  return Math.max(0, durationSeconds - 3).toFixed(3);
+}
+
 function outputMetadataFromSnapshot(snapshot: Record<string, unknown>, outputVideoUrl: string | null | undefined) {
   const candidates = [
     snapshot.outputVideoMetadata,
@@ -1281,22 +1287,25 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   }
 
   const hash = crypto.createHash('md5').update(outputVideoUrl).digest('hex').slice(0, 8);
-  const firstFileName = `first-${hash}.jpg`;
-  const lastFileName = `last-${hash}.jpg`;
+  const firstFileName = `first-${hash}.png`;
+  const lastFileName = `last-${hash}.png`;
   const firstFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName);
   const lastFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName);
   const previousLastFrameUrl = segment.lastFrameUrl;
   const outputVideoMetadata = outputMetadataFromVideoInfo(outputVideoUrl, await ffmpegService.getVideoInfo(inputPath));
+  const continuationFrameTime = continuationFrameTimeFromMetadata(outputVideoMetadata);
 
   await ffmpegService.extractVideoFrame(
     inputPath,
     sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName),
-    { position: 'first', format: 'jpg', quality: 3 },
+    { position: 'first', format: 'png' },
   );
   await ffmpegService.extractVideoFrame(
     inputPath,
     sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, lastFileName),
-    { position: 'last', format: 'jpg', quality: 3 },
+    continuationFrameTime
+      ? { position: 'first', time: continuationFrameTime, format: 'png' }
+      : { position: 'last', format: 'png' },
   );
 
   const existingSnapshot = parseJsonObjectField(segment.generationSnapshotJson);
@@ -1312,6 +1321,7 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
         frameExtraction: {
           firstFrameUrl,
           lastFrameUrl,
+          continuationFrameTime,
           outputVideoMetadata,
           extractedAt: new Date().toISOString(),
         },
