@@ -21,6 +21,67 @@ function ffmpegConcatListPath(value: string) {
   return value.replace(/'/g, "'\\''");
 }
 
+function parseFraction(value: unknown, fallback: number) {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  const [numeratorText, denominatorText] = value.split('/');
+  const numerator = Number(numeratorText);
+  const denominator = denominatorText === undefined ? 1 : Number(denominatorText);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return fallback;
+  return numerator / denominator;
+}
+
+function normalizedRotation(stream: any) {
+  const raw = stream?.tags?.rotate ?? stream?.side_data_list?.find((item: any) => item?.rotation !== undefined)?.rotation;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 0;
+  return ((parsed % 360) + 360) % 360;
+}
+
+export function videoInfoFromFfprobeJson(value: string, inputPath: string) {
+  const parsed = JSON.parse(value);
+  const stream = Array.isArray(parsed?.streams) ? parsed.streams[0] : null;
+  const width = Number(stream?.width);
+  const height = Number(stream?.height);
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+    throw new Error('Could not parse video stream dimensions');
+  }
+
+  const rotation = normalizedRotation(stream);
+  const shouldSwapDimensions = rotation === 90 || rotation === 270;
+  const duration = Number(parsed?.format?.duration);
+  const fps = parseFraction(stream?.avg_frame_rate, parseFraction(stream?.r_frame_rate, 30));
+
+  return {
+    duration: Number.isFinite(duration) && duration >= 0 ? duration : 0,
+    width: shouldSwapDimensions ? height : width,
+    height: shouldSwapDimensions ? width : height,
+    fps: Number.isFinite(fps) && fps > 0 ? fps : 30,
+    format: path.extname(inputPath).toLowerCase(),
+  };
+}
+
+export function videoInfoFromFfmpegStderr(value: string, inputPath: string) {
+  const durationMatch = value.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+  const streamMatch = value.match(/Stream #\S+.*?Video:.*?\s([1-9]\d*)x([1-9]\d*)(?:[,\s]|$)/);
+  const fpsMatch = value.match(/(\d+(?:\.\d+)?) fps/);
+
+  if (!durationMatch || !streamMatch) {
+    throw new Error('Could not parse video information');
+  }
+
+  const [, hours, minutes, seconds] = durationMatch;
+  const [, width, height] = streamMatch;
+  const duration = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
+
+  return {
+    duration,
+    width: parseInt(width),
+    height: parseInt(height),
+    fps: fpsMatch ? parseFloat(fpsMatch[1]) : 30,
+    format: path.extname(inputPath).toLowerCase(),
+  };
+}
+
 export class FFmpegService {
   private ffmpegPath: string;
 
@@ -54,6 +115,12 @@ export class FFmpegService {
     // 시스템 PATH에서 찾기
     console.log('[FFmpeg] FFmpeg not found in local paths, trying system PATH');
     return 'ffmpeg';
+  }
+
+  private getFFprobePath(): string {
+    if (this.ffmpegPath.endsWith('ffmpeg.exe')) return this.ffmpegPath.replace(/ffmpeg\.exe$/i, 'ffprobe.exe');
+    if (this.ffmpegPath.endsWith('ffmpeg')) return this.ffmpegPath.replace(/ffmpeg$/i, 'ffprobe');
+    return 'ffprobe';
   }
 
   /**
@@ -255,39 +322,27 @@ export class FFmpegService {
     fps: number;
     format: string;
   }> {
-    const command = `"${this.ffmpegPath}" -i "${inputPath}" -f null -`;
+    const ffprobeCommand = `"${this.getFFprobePath()}" -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,r_frame_rate:stream_tags=rotate:stream_side_data=rotation:format=duration -of json "${inputPath}"`;
 
     try {
-      const { stderr } = await execAsync(command, {
+      const { stdout } = await execAsync(ffprobeCommand, {
         timeout: 10000,
         maxBuffer: 1024 * 1024 * 5
       });
 
-      // FFmpeg 출력에서 정보 파싱
-      const durationMatch = stderr.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-      const resolutionMatch = stderr.match(/(\d+)x(\d+)/);
-      const fpsMatch = stderr.match(/(\d+(?:\.\d+)?) fps/);
-
-      if (!durationMatch || !resolutionMatch) {
-        throw new Error('Could not parse video information');
-      }
-
-      const [, hours, minutes, seconds] = durationMatch;
-      const [, width, height] = resolutionMatch;
-      const fps = fpsMatch ? parseFloat(fpsMatch[1]) : 30;
-
-      const duration = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
-
-      return {
-        duration,
-        width: parseInt(width),
-        height: parseInt(height),
-        fps,
-        format: path.extname(inputPath).toLowerCase()
-      };
+      return videoInfoFromFfprobeJson(stdout, inputPath);
     } catch (error) {
-      console.error(`[FFmpeg] Error getting video info:`, error);
-      throw new Error(`Failed to get video info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const command = `"${this.ffmpegPath}" -i "${inputPath}" -f null -`;
+      try {
+        const { stderr } = await execAsync(command, {
+          timeout: 10000,
+          maxBuffer: 1024 * 1024 * 5
+        });
+        return videoInfoFromFfmpegStderr(stderr, inputPath);
+      } catch (fallbackError) {
+        console.error(`[FFmpeg] Error getting video info:`, fallbackError);
+        throw new Error(`Failed to get video info: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+      }
     }
   }
 
