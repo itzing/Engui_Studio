@@ -18,6 +18,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Scissors,
   Search,
@@ -540,7 +541,7 @@ export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'gene
 }
 
 export function getSegmentInspectorActionTooltip(
-  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
+  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'clearStale' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
   context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean; hasPreviousOutput?: boolean },
 ) {
   switch (action) {
@@ -554,6 +555,9 @@ export function getSegmentInspectorActionTooltip(
       return context?.hasJob
         ? 'Refresh this segment job status and import completed output, first frame, and last frame metadata'
         : 'Refresh status becomes available after this segment has a generation job';
+    case 'clearStale':
+      if (!context?.hasOutput) return 'Mark completed becomes available for stale segments that still have an output video';
+      return 'Keep the existing output video and mark this stale segment completed again';
     case 'saveTemplate':
       return 'Save this segment prompt, model, and generation settings as a reusable segment template';
     case 'delete':
@@ -1378,6 +1382,26 @@ export default function VideoSequenceBuilder() {
     });
   }
 
+  async function clearSelectedStaleStatus() {
+    if (!activeSequence || !selectedSegment || selectedSegment.status !== 'stale' || !selectedSegment.outputVideoUrl) return;
+    await runAction('clear-stale', async () => {
+      const data = await fetchJson<{ success: true; segment: VideoSequenceSegment }>(
+        `/api/video-sequences/${activeSequence.id}/segments/${selectedSegment.id}/clear-stale`,
+        { method: 'POST' },
+      );
+      setActiveSequence((current) => {
+        if (!current || current.id !== activeSequence.id) return current;
+        return {
+          ...current,
+          segments: current.segments.map((segment) => (
+            segment.id === data.segment.id ? data.segment : segment
+          )),
+        };
+      });
+      setNotice(`Marked ${selectedSegment.title} completed`);
+    });
+  }
+
   async function renderFinalVideo() {
     if (!activeSequence || renderBlocker) return;
     await runAction('render', async () => {
@@ -2028,6 +2052,11 @@ export default function VideoSequenceBuilder() {
                 <ActionTooltip tooltip={getSegmentInspectorActionTooltip('status', { hasJob: !!selectedSegment.generationJobId })}>
                   <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={refreshSelectedStatus} disabled={!selectedSegment.generationJobId || !!busy} aria-label="Refresh segment status">
                     {busy === 'status' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </ActionTooltip>
+                <ActionTooltip tooltip={getSegmentInspectorActionTooltip('clearStale', { hasOutput: selectedSegment.status === 'stale' && !!selectedSegment.outputVideoUrl })}>
+                  <Button variant="outline" size="icon" className="h-9 w-9 border-amber-500/30 bg-transparent text-amber-200 hover:bg-amber-500/10" onClick={clearSelectedStaleStatus} disabled={selectedSegment.status !== 'stale' || !selectedSegment.outputVideoUrl || !!busy} aria-label="Mark stale segment completed">
+                    {busy === 'clear-stale' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   </Button>
                 </ActionTooltip>
               </div>

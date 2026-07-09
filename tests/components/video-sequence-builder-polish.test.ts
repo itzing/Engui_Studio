@@ -113,6 +113,7 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getSegmentInspectorActionTooltip('saveSegment')).toContain('source, prompt, model');
     expect(getSegmentInspectorActionTooltip('generate')).toContain('source frame');
     expect(getSegmentInspectorActionTooltip('status', { hasJob: false })).toContain('available after');
+    expect(getSegmentInspectorActionTooltip('clearStale', { hasOutput: true })).toContain('mark this stale segment completed');
     expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
     expect(getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: true })).toContain('pick a custom source frame');
   });

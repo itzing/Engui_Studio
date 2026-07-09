@@ -526,6 +526,22 @@ export async function updateVideoSequenceSegment(sequenceId: string, segmentId: 
   return serializeVideoSegmentWithOutputMetadata(segment);
 }
 
+export async function clearVideoSequenceSegmentStaleStatus(sequenceId: string, segmentId: string) {
+  const existing = await prisma.videoSequenceSegment.findFirst({ where: { id: segmentId, sequenceId } });
+  if (!existing) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+  if (existing.status !== 'stale') throw new StudioSessionApiError(400, 'Only stale segments can be marked completed');
+  if (!existing.outputVideoUrl) throw new StudioSessionApiError(400, 'Stale segment needs an output video before it can be marked completed');
+
+  const segment = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data: {
+      status: 'completed',
+      error: null,
+    },
+  });
+  return serializeVideoSegmentWithOutputMetadata(segment);
+}
+
 export async function applyGalleryAssetToVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown>) {
   const assetId = asTrimmedString(input.assetId);
   const mode = enumValue(input.mode, ['initial_image', 'completed_video'] as const, 'mode');

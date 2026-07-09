@@ -76,6 +76,7 @@ import { POST as extractSegmentFrames } from '@/app/api/video-sequences/[id]/seg
 import { POST as pickManualFrame } from '@/app/api/video-sequences/[id]/segments/[segmentId]/pick-frame/route';
 import { POST as generateSegment } from '@/app/api/video-sequences/[id]/segments/[segmentId]/generate/route';
 import { POST as syncSegmentStatus } from '@/app/api/video-sequences/[id]/segments/[segmentId]/sync-status/route';
+import { POST as clearSegmentStale } from '@/app/api/video-sequences/[id]/segments/[segmentId]/clear-stale/route';
 import { buildVideoSegmentGenerationFormData } from '@/lib/video-sequences/server';
 
 const createdFiles = new Set<string>();
@@ -1558,6 +1559,106 @@ describe('video sequence APIs', () => {
       outputVideoUrl: '/generations/seg-1.mp4',
       lastFrameUrl: '/generations/last.jpg',
     });
+  });
+
+  it('marks a stale segment completed while preserving existing output metadata', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'stale',
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: 40,
+      randomizeSeed: false,
+      durationSeconds: 5,
+      generationJobId: 'job-1',
+      outputVideoUrl: '/generations/seg-1.mp4',
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: '{"jobId":"job-1"}',
+      error: 'stale',
+    });
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ data }: any) => ({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: data.status,
+      sourceMode: 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: '',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: '{}',
+      seed: 40,
+      randomizeSeed: false,
+      durationSeconds: 5,
+      generationJobId: 'job-1',
+      outputVideoUrl: '/generations/seg-1.mp4',
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: '{"jobId":"job-1"}',
+      error: data.error,
+    }));
+
+    const response = await clearSegmentStale(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/clear-stale', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith({
+      where: { id: 'seg-1' },
+      data: {
+        status: 'completed',
+        error: null,
+      },
+    });
+    expect(json.segment).toMatchObject({
+      status: 'completed',
+      outputVideoUrl: '/generations/seg-1.mp4',
+      firstFrameUrl: '/generations/first.jpg',
+      lastFrameUrl: '/generations/last.jpg',
+      generationSnapshot: { jobId: 'job-1' },
+    });
+  });
+
+  it('rejects clearing stale status when the segment has no output', async () => {
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      status: 'stale',
+      outputVideoUrl: null,
+    });
+
+    const response = await clearSegmentStale(request('http://localhost/api/video-sequences/seq-1/segments/seg-1/clear-stale', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1', segmentId: 'seg-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toBe('Stale segment needs an output video before it can be marked completed');
+    expect(mockPrisma.videoSequenceSegment.update).not.toHaveBeenCalled();
   });
 
   it('auto-extracts first and last frames when segment output changes', async () => {
