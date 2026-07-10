@@ -148,6 +148,7 @@ describe('video sequence APIs', () => {
         title: 'Long take',
         width: 832,
         height: 1216,
+        targetFps: 16,
         defaultModelId: 'wan22',
         defaultGenerationOptionsJson: JSON.stringify({ steps: 8, cfg: 1.5 }),
       }),
@@ -158,6 +159,30 @@ describe('video sequence APIs', () => {
       defaultGenerationOptions: { steps: 8, cfg: 1.5 },
       segments: [],
     });
+  });
+
+  it('uses 16fps as the default target FPS for new video sequences', async () => {
+    mockPrisma.videoSequence.create.mockImplementation(async ({ data, include }: any) => ({
+      id: 'seq-1',
+      ...data,
+      finalVideoUrl: null,
+      finalRenderJobId: null,
+      createdAt: new Date('2026-07-10T17:00:00Z'),
+      updatedAt: new Date('2026-07-10T17:00:00Z'),
+      segments: include.segments ? [] : undefined,
+    }));
+
+    const response = await createSequence(request('http://localhost/api/video-sequences', {
+      workspaceId: 'ws-1',
+      title: 'WAN chain',
+    }) as any);
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.videoSequence.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        targetFps: 16,
+      }),
+    }));
   });
 
   it('deletes a video sequence', async () => {
@@ -725,6 +750,37 @@ describe('video sequence APIs', () => {
     expect(formData.get('height')).toBe('1216');
     expect(formData.get('steps')).toBe('4');
     expect(snapshot.generationOptions).toMatchObject({ width: 832, height: 1216, steps: 4 });
+  });
+
+  it('derives WAN22 sequence segment length from a 16fps sequence target', () => {
+    const { formData } = buildVideoSegmentGenerationFormData({
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 1280,
+        height: 720,
+        targetFps: 16,
+        defaultGenerationOptionsJson: '{}',
+      },
+      segment: {
+        id: 'seg-1',
+        modelId: 'wan22',
+        prompt: 'slow push in',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        generationOptionsJson: '{}',
+        loraConfigJson: '{}',
+        seed: 40,
+        randomizeSeed: false,
+        durationSeconds: 5,
+      },
+      sourceFrameUrl: '/generations/source.png',
+      sourceImage: { blob: new Blob(['image'], { type: 'image/png' }), filename: 'source.png' },
+    });
+
+    expect(formData.get('length')).toBe('80');
   });
 
   it('ignores source frame dimensions and keeps the sequence resolution', () => {

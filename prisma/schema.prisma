@@ -201,7 +201,7 @@ model VideoSequence {
   aspectRatio                  String   @default("16:9")
   width                        Int      @default(1280)
   height                       Int      @default(720)
-  targetFps                    Int      @default(24)
+  targetFps                    Int      @default(16)
   defaultModelId               String   @default("wan22")
   defaultGenerationOptionsJson String   @default("{}")
   finalVideoUrl                String?

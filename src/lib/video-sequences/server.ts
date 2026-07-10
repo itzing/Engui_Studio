@@ -483,7 +483,7 @@ export async function createVideoSequence(workspaceId: string, input: Record<str
       aspectRatio: asOptionalString(input.aspectRatio) ?? '16:9',
       width: asOptionalPositiveInt(input.width, 'width') ?? 1280,
       height: asOptionalPositiveInt(input.height, 'height') ?? 720,
-      targetFps: asOptionalPositiveInt(input.targetFps, 'targetFps') ?? 24,
+      targetFps: asOptionalPositiveInt(input.targetFps, 'targetFps') ?? 16,
       defaultModelId: asOptionalString(input.defaultModelId) ?? 'wan22',
       defaultGenerationOptionsJson: toJsonString(input.defaultGenerationOptions ?? input.defaultGenerationOptionsJson, { steps: 4 }),
     },
@@ -978,7 +978,7 @@ export function buildVideoSegmentGenerationFormData(input: {
   }
 
   if (generationOptions.length === undefined && sequence.targetFps && segment.durationSeconds) {
-    formData.append('length', String(Math.max(81, Math.min(161, Math.round(sequence.targetFps * segment.durationSeconds)))));
+    formData.append('length', String(Math.max(1, Math.min(161, Math.round(sequence.targetFps * segment.durationSeconds)))));
   }
 
   for (const [key, value] of Object.entries(generationOptions)) {

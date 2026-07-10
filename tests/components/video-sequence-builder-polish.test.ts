@@ -64,7 +64,7 @@ function sequence(overrides: Record<string, any> = {}) {
     aspectRatio: '16:9',
     width: 1280,
     height: 720,
-    targetFps: 24,
+    targetFps: 16,
     defaultModelId: 'wan22',
     defaultGenerationOptions: {},
     finalVideoUrl: null,
