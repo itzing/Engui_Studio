@@ -1059,7 +1059,7 @@ describe('video sequence APIs', () => {
       title: 'Segment 1',
       status: data.status || 'completed',
       sourceMode: 'initial',
-      sourceImageUrl: '/generations/source.png',
+      sourceImageUrl: 'https://example.com/source.png',
       sourceFrozen: false,
       prompt: '',
       negativePrompt: '',
@@ -1137,7 +1137,7 @@ describe('video sequence APIs', () => {
       title: 'Segment 1',
       status: 'completed',
       sourceMode: 'initial',
-      sourceImageUrl: '/generations/source.png',
+      sourceImageUrl: 'https://example.com/source.png',
       sourceFrozen: false,
       prompt: '',
       negativePrompt: '',
@@ -1198,7 +1198,7 @@ describe('video sequence APIs', () => {
       title: 'Segment 1',
       status: 'completed',
       sourceMode: 'initial',
-      sourceImageUrl: '/generations/source.png',
+      sourceImageUrl: 'https://example.com/source.png',
       sourceFrozen: false,
       prompt: '',
       negativePrompt: '',
@@ -1492,6 +1492,141 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(400);
     expect(json.error).toContain('stepsOverride must be a positive integer');
     expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
+  });
+
+  it('generate-from can mark completed segments stale and regenerate from the selected segment', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      workspaceId: 'ws-1',
+      defaultModelId: 'wan22',
+      targetFps: 24,
+      defaultGenerationOptionsJson: '{}',
+      segments: [
+        {
+          id: 'seg-1',
+          sequenceId: 'seq-1',
+          orderIndex: 0,
+          title: 'Segment 1',
+          status: 'completed',
+          sourceMode: 'initial',
+          generationJobId: 'job-1',
+          outputVideoUrl: '/generations/seg-1.mp4',
+          firstFrameUrl: '/generations/first-1.png',
+          lastFrameUrl: '/generations/last-1.png',
+          loraConfigJson: '{}',
+          generationOptionsJson: '{"steps":4}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: null,
+        },
+        {
+          id: 'seg-2',
+          sequenceId: 'seq-1',
+          orderIndex: 1,
+          title: 'Segment 2',
+          status: 'completed',
+          sourceMode: 'previous_last_frame',
+          generationJobId: 'job-2',
+          outputVideoUrl: '/generations/seg-2.mp4',
+          firstFrameUrl: '/generations/first-2.png',
+          lastFrameUrl: '/generations/last-2.png',
+          loraConfigJson: '{}',
+          generationOptionsJson: '{"steps":4}',
+          templateSnapshotJson: null,
+          generationSnapshotJson: null,
+        },
+      ],
+    });
+    mockPrisma.videoSequenceSegment.findFirst.mockResolvedValue({
+      id: 'seg-1',
+      sequenceId: 'seq-1',
+      orderIndex: 0,
+      title: 'Segment 1',
+      status: 'completed',
+      sourceMode: 'initial',
+      sourceImageUrl: 'https://example.com/source.png',
+      sourceSegmentId: null,
+      sourceJobId: null,
+      prompt: 'restart sequence',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      loraConfigJson: '{}',
+      generationOptionsJson: '{"steps":12}',
+      seed: 40,
+      randomizeSeed: false,
+      durationSeconds: 5,
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        targetFps: 24,
+        defaultGenerationOptionsJson: '{}',
+        width: 1280,
+        height: 720,
+      },
+    });
+    (globalThis.fetch as any).mockResolvedValue(new Response(new Blob(['image'], { type: 'image/png' }), {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }));
+    mockSubmitGenerationFormData.mockResolvedValue(Response.json({
+      success: true,
+      jobId: 'job-new-1',
+      runpodJobId: 'rp-new-1',
+      status: 'IN_QUEUE',
+    }));
+    mockPrisma.videoSequenceSegment.findMany.mockResolvedValue([]);
+    mockPrisma.videoSequenceSegment.update.mockImplementation(async ({ where, data }: any) => ({
+      id: where.id,
+      sequenceId: 'seq-1',
+      orderIndex: where.id === 'seg-2' ? 1 : 0,
+      title: where.id === 'seg-2' ? 'Segment 2' : 'Segment 1',
+      status: data.status ?? 'stale',
+      sourceMode: where.id === 'seg-2' ? 'previous_last_frame' : 'initial',
+      sourceImageUrl: '/generations/source.png',
+      sourceFrozen: false,
+      prompt: 'restart sequence',
+      negativePrompt: '',
+      motionPrompt: '',
+      continuityPrompt: '',
+      modelId: 'wan22',
+      endpointId: null,
+      loraConfigJson: '{}',
+      generationOptionsJson: data.generationOptionsJson ?? '{"steps":12}',
+      seed: 40,
+      randomizeSeed: false,
+      durationSeconds: 5,
+      generationJobId: data.generationJobId ?? null,
+      outputVideoUrl: '/generations/seg.mp4',
+      firstFrameUrl: '/generations/first.png',
+      lastFrameUrl: '/generations/last.png',
+      templateId: null,
+      templateSnapshotJson: null,
+      generationSnapshotJson: data.generationSnapshotJson,
+      error: data.error ?? null,
+    }));
+
+    const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
+      segmentId: 'seg-1',
+      stepsOverride: 12,
+      regenerateAllSegments: true,
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(json).toMatchObject({ success: true, action: 'queued', jobId: 'job-new-1' });
+    expect(mockSubmitGenerationFormData.mock.calls[0][0].get('steps')).toBe('12');
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'seg-1' },
+      data: { generationOptionsJson: '{"steps":12}', status: 'stale' },
+    }));
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'seg-2' },
+      data: { generationOptionsJson: '{"steps":12}', status: 'stale' },
+    }));
   });
 
   it('generate-from syncs an in-flight selected segment instead of submitting a duplicate job', async () => {

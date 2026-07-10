@@ -1065,6 +1065,7 @@ type GenerateFromResult = {
 };
 
 const generatableSegmentStatuses = new Set(['draft', 'failed', 'stale']);
+const activeSegmentStatuses = new Set(['queued', 'processing']);
 
 function generateFromResult(input: GenerateFromResult) {
   return input;
@@ -1074,6 +1075,12 @@ function withStepsOverride(generationOptionsJson: string | null | undefined, ste
   const generationOptions = stripResolutionOptions(parseJsonObjectField(generationOptionsJson));
   generationOptions.steps = stepsOverride;
   return JSON.stringify(generationOptions);
+}
+
+function shouldPrepareSegmentForGenerateFrom(segment: any, regenerateAllSegments: boolean) {
+  if (activeSegmentStatuses.has(segment.status)) return false;
+  if (regenerateAllSegments) return true;
+  return generatableSegmentStatuses.has(segment.status);
 }
 
 async function ensurePreviousLastFrame(sequenceId: string, segment: any) {
@@ -1118,6 +1125,7 @@ export async function generateVideoSequenceFrom(sequenceId: string, input: Recor
   const startSegmentId = asTrimmedString(input.segmentId);
   if (!startSegmentId) throw new StudioSessionApiError(400, 'segmentId is required');
   const stepsOverride = asOptionalPositiveInt(input.stepsOverride, 'stepsOverride');
+  const regenerateAllSegments = asOptionalBoolean(input.regenerateAllSegments) ?? false;
 
   const sequence = await prisma.videoSequence.findUnique({
     where: { id: sequenceId },
@@ -1127,16 +1135,25 @@ export async function generateVideoSequenceFrom(sequenceId: string, input: Recor
 
   const startIndex = sequence.segments.findIndex((segment) => segment.id === startSegmentId);
   if (startIndex === -1) throw new StudioSessionApiError(404, 'Video sequence segment not found');
-  if (stepsOverride) {
+  if (stepsOverride || regenerateAllSegments) {
     const eligibleSegments = sequence.segments
       .slice(startIndex)
-      .filter((segment) => generatableSegmentStatuses.has(segment.status));
+      .filter((segment) => shouldPrepareSegmentForGenerateFrom(segment, regenerateAllSegments));
     await Promise.all(eligibleSegments.map((segment) => {
-      const generationOptionsJson = withStepsOverride(segment.generationOptionsJson, stepsOverride);
-      segment.generationOptionsJson = generationOptionsJson;
+      const data: Record<string, unknown> = {};
+      if (stepsOverride) {
+        const generationOptionsJson = withStepsOverride(segment.generationOptionsJson, stepsOverride);
+        segment.generationOptionsJson = generationOptionsJson;
+        data.generationOptionsJson = generationOptionsJson;
+      }
+      if (regenerateAllSegments && segment.status === 'completed') {
+        segment.status = 'stale';
+        data.status = 'stale';
+      }
+      if (!Object.keys(data).length) return Promise.resolve(segment);
       return prisma.videoSequenceSegment.update({
         where: { id: segment.id },
-        data: { generationOptionsJson },
+        data,
       });
     }));
   }

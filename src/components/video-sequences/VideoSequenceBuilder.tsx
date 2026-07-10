@@ -522,16 +522,21 @@ export function getRenderBlocker(sequence: VideoSequence | null) {
 }
 
 const generateFromEligibleStatuses = new Set(['draft', 'failed', 'stale']);
+const generateFromActiveStatuses = new Set(['queued', 'processing']);
 
-export function getGenerateFromPlan(sequence: VideoSequence | null, selectedSegmentId: string | null) {
-  if (!sequence || !selectedSegmentId) return { segments: [] as VideoSequenceSegment[], startIndex: -1 };
+export function getGenerateFromPlan(sequence: VideoSequence | null, selectedSegmentId: string | null, regenerateAllSegments = false) {
+  if (!sequence || !selectedSegmentId) return { segments: [] as VideoSequenceSegment[], activeSegments: [] as VideoSequenceSegment[], startIndex: -1 };
   const startIndex = sequence.segments.findIndex((segment) => segment.id === selectedSegmentId);
-  if (startIndex === -1) return { segments: [] as VideoSequenceSegment[], startIndex: -1 };
+  if (startIndex === -1) return { segments: [] as VideoSequenceSegment[], activeSegments: [] as VideoSequenceSegment[], startIndex: -1 };
+  const range = sequence.segments.slice(startIndex);
   return {
     startIndex,
-    segments: sequence.segments
-      .slice(startIndex)
-      .filter((segment) => generateFromEligibleStatuses.has(segment.status)),
+    segments: range.filter((segment) => (
+      regenerateAllSegments
+        ? !generateFromActiveStatuses.has(segment.status)
+        : generateFromEligibleStatuses.has(segment.status)
+    )),
+    activeSegments: range.filter((segment) => generateFromActiveStatuses.has(segment.status)),
   };
 }
 
@@ -618,6 +623,7 @@ export default function VideoSequenceBuilder() {
   const [framePickerDuration, setFramePickerDuration] = useState(0);
   const [generateFromModalOpen, setGenerateFromModalOpen] = useState(false);
   const [generateFromStepsOverride, setGenerateFromStepsOverride] = useState(String(defaultWanSteps));
+  const [generateFromRegenerateAll, setGenerateFromRegenerateAll] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [loraLoading, setLoraLoading] = useState(false);
   const [loraPickerOpen, setLoraPickerOpen] = useState(false);
@@ -659,7 +665,10 @@ export default function VideoSequenceBuilder() {
   const previewTimeline = useMemo(() => (
     activeSequence ? buildSequencePreviewTimeline(activeSequence.segments) : []
   ), [activeSequence]);
-  const generateFromPlan = useMemo(() => getGenerateFromPlan(activeSequence, selectedSegment?.id ?? null), [activeSequence, selectedSegment]);
+  const generateFromPlan = useMemo(
+    () => getGenerateFromPlan(activeSequence, selectedSegment?.id ?? null, generateFromRegenerateAll),
+    [activeSequence, selectedSegment, generateFromRegenerateAll],
+  );
   const previewTotalDuration = previewTimeline.length ? previewTimeline[previewTimeline.length - 1].end : 0;
   const activePreviewTimelineItem = useMemo(() => (
     findSequencePreviewTimelineItem(previewTimeline, previewTime)
@@ -1380,6 +1389,7 @@ export default function VideoSequenceBuilder() {
     if (!activeSequence || !selectedSegment) return;
     const currentSteps = Number(selectedSegment.generationOptions?.steps);
     setGenerateFromStepsOverride(String(Number.isFinite(currentSteps) && currentSteps > 0 ? currentSteps : defaultWanSteps));
+    setGenerateFromRegenerateAll(false);
     setGenerateFromModalOpen(true);
   }
 
@@ -1396,7 +1406,7 @@ export default function VideoSequenceBuilder() {
         `/api/video-sequences/${activeSequence.id}/generate-from`,
         {
           method: 'POST',
-          body: JSON.stringify({ segmentId: selectedSegment.id, userId, stepsOverride }),
+          body: JSON.stringify({ segmentId: selectedSegment.id, userId, stepsOverride, regenerateAllSegments: generateFromRegenerateAll }),
         },
       );
       setGenerateFromModalOpen(false);
@@ -2219,7 +2229,7 @@ export default function VideoSequenceBuilder() {
                 <div>
                   <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Steps override</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    Applied to draft, failed, and stale segments from {selectedSegment.title} forward.
+                    Applied to {generateFromRegenerateAll ? 'all non-active segments' : 'draft, failed, and stale segments'} from {selectedSegment.title} forward.
                   </div>
                 </div>
                 <Input
@@ -2233,6 +2243,22 @@ export default function VideoSequenceBuilder() {
                   disabled={busy === 'generate-from'}
                 />
               </div>
+              <label className="flex items-start gap-3 rounded-md border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-200">
+                <input
+                  type="checkbox"
+                  checked={generateFromRegenerateAll}
+                  onChange={(event) => setGenerateFromRegenerateAll(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-cyan-400"
+                  disabled={busy === 'generate-from'}
+                  aria-label="Regenerate completed segments too"
+                />
+                <span>
+                  <span className="block font-medium">Regenerate all segments from selected</span>
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Includes completed segments; queued and processing jobs are skipped to avoid duplicate submits.
+                  </span>
+                </span>
+              </label>
               <div className="rounded-md border border-white/10 bg-white/[0.03]">
                 <div className="border-b border-white/10 px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Segments to regenerate
@@ -2252,10 +2278,15 @@ export default function VideoSequenceBuilder() {
                   </div>
                 ) : (
                   <div className="px-3 py-6 text-sm text-zinc-500">
-                    No draft, failed, or stale segments from the selected segment forward. The action can still sync or report waiting state.
+                    No matching segments from the selected segment forward. Toggle regenerate all to include completed segments.
                   </div>
                 )}
               </div>
+              {generateFromRegenerateAll && generateFromPlan.activeSegments.length ? (
+                <div className="text-xs text-zinc-500">
+                  Skipping {generateFromPlan.activeSegments.length} active segment{generateFromPlan.activeSegments.length === 1 ? '' : 's'} already queued or processing.
+                </div>
+              ) : null}
               <div className="flex items-center justify-end gap-2">
                 <Button
                   type="button"

@@ -125,6 +125,21 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(plan.segments.map((item) => item.id)).toEqual(['seg-2', 'seg-4', 'seg-5']);
   });
 
+  it('plans generate-from regeneration for completed segments when all mode is enabled', () => {
+    const plan = getGenerateFromPlan(sequence({
+      segments: [
+        segment({ id: 'seg-1', orderIndex: 0, status: 'completed' }),
+        segment({ id: 'seg-2', orderIndex: 1, status: 'queued' }),
+        segment({ id: 'seg-3', orderIndex: 2, status: 'processing' }),
+        segment({ id: 'seg-4', orderIndex: 3, status: 'completed' }),
+        segment({ id: 'seg-5', orderIndex: 4, status: 'draft' }),
+      ],
+    }), 'seg-1', true);
+
+    expect(plan.segments.map((item) => item.id)).toEqual(['seg-1', 'seg-4', 'seg-5']);
+    expect(plan.activeSegments.map((item) => item.id)).toEqual(['seg-2', 'seg-3']);
+  });
+
   it('keeps segment inspector actions discoverable with detailed tooltips', () => {
     expect(getSegmentInspectorActionTooltip('saveSegment')).toContain('source, prompt, model');
     expect(getSegmentInspectorActionTooltip('generate')).toContain('source frame');
