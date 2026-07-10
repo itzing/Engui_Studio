@@ -521,6 +521,25 @@ export function getRenderBlocker(sequence: VideoSequence | null) {
   return null;
 }
 
+const generateFromEligibleStatuses = new Set(['draft', 'failed', 'stale']);
+
+export function getGenerateFromPlan(sequence: VideoSequence | null, selectedSegmentId: string | null) {
+  if (!sequence || !selectedSegmentId) return { segments: [] as VideoSequenceSegment[], startIndex: -1 };
+  const startIndex = sequence.segments.findIndex((segment) => segment.id === selectedSegmentId);
+  if (startIndex === -1) return { segments: [] as VideoSequenceSegment[], startIndex: -1 };
+  return {
+    startIndex,
+    segments: sequence.segments
+      .slice(startIndex)
+      .filter((segment) => generateFromEligibleStatuses.has(segment.status)),
+  };
+}
+
+function readGenerationStepsOverride(value: string) {
+  const steps = Number(value);
+  return Number.isInteger(steps) && steps > 0 ? steps : null;
+}
+
 export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
   switch (action) {
     case 'save':
@@ -597,6 +616,8 @@ export default function VideoSequenceBuilder() {
   const [framePickerOpen, setFramePickerOpen] = useState(false);
   const [framePickerTime, setFramePickerTime] = useState(0);
   const [framePickerDuration, setFramePickerDuration] = useState(0);
+  const [generateFromModalOpen, setGenerateFromModalOpen] = useState(false);
+  const [generateFromStepsOverride, setGenerateFromStepsOverride] = useState(String(defaultWanSteps));
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [loraLoading, setLoraLoading] = useState(false);
   const [loraPickerOpen, setLoraPickerOpen] = useState(false);
@@ -638,6 +659,7 @@ export default function VideoSequenceBuilder() {
   const previewTimeline = useMemo(() => (
     activeSequence ? buildSequencePreviewTimeline(activeSequence.segments) : []
   ), [activeSequence]);
+  const generateFromPlan = useMemo(() => getGenerateFromPlan(activeSequence, selectedSegment?.id ?? null), [activeSequence, selectedSegment]);
   const previewTotalDuration = previewTimeline.length ? previewTimeline[previewTimeline.length - 1].end : 0;
   const activePreviewTimelineItem = useMemo(() => (
     findSequencePreviewTimelineItem(previewTimeline, previewTime)
@@ -1354,17 +1376,30 @@ export default function VideoSequenceBuilder() {
     });
   }
 
-  async function generateFromSelectedSegment() {
+  function openGenerateFromModal() {
     if (!activeSequence || !selectedSegment) return;
+    const currentSteps = Number(selectedSegment.generationOptions?.steps);
+    setGenerateFromStepsOverride(String(Number.isFinite(currentSteps) && currentSteps > 0 ? currentSteps : defaultWanSteps));
+    setGenerateFromModalOpen(true);
+  }
+
+  async function confirmGenerateFromSelectedSegment() {
+    if (!activeSequence || !selectedSegment) return;
+    const stepsOverride = readGenerationStepsOverride(generateFromStepsOverride);
+    if (!stepsOverride) {
+      setError('Steps override must be a positive whole number');
+      return;
+    }
     await runAction('generate-from', async () => {
       await persistSelectedSegmentDraft();
       const data = await fetchJson<{ success: boolean; action?: string; message?: string; segment?: VideoSequenceSegment | null }>(
         `/api/video-sequences/${activeSequence.id}/generate-from`,
         {
           method: 'POST',
-          body: JSON.stringify({ segmentId: selectedSegment.id, userId }),
+          body: JSON.stringify({ segmentId: selectedSegment.id, userId, stepsOverride }),
         },
       );
+      setGenerateFromModalOpen(false);
       await loadSequence(activeSequence.id, selectedSegment.id);
       setNotice(data.message ?? (data.action ? `Generate from here: ${data.action}` : 'Generate from here updated'));
     });
@@ -1579,7 +1614,7 @@ export default function VideoSequenceBuilder() {
             <ToolbarIconButton
               label="Generate from selected segment"
               tooltip={getHeaderActionTooltip('generateFrom')}
-              onClick={generateFromSelectedSegment}
+              onClick={openGenerateFromModal}
               disabled={!selectedSegment || !!busy}
             >
               {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
@@ -2045,7 +2080,7 @@ export default function VideoSequenceBuilder() {
                   </Button>
                 </ActionTooltip>
                 <ActionTooltip tooltip={getSegmentInspectorActionTooltip('generateFrom')}>
-                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={generateFromSelectedSegment} disabled={!!busy} aria-label="Generate from selected segment">
+                  <Button variant="outline" size="icon" className="h-9 w-9 border-white/10 bg-transparent text-zinc-300 hover:bg-white/10" onClick={openGenerateFromModal} disabled={!!busy} aria-label="Generate from selected segment">
                     {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
                   </Button>
                 </ActionTooltip>
@@ -2153,6 +2188,92 @@ export default function VideoSequenceBuilder() {
                 >
                   {busy === 'pick-frame' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                   Pick frame
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {generateFromModalOpen && selectedSegment ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="flex max-h-[82vh] w-full max-w-lg flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+              <div>
+                <div className="text-sm font-semibold">Generate from selected</div>
+                <div className="text-xs text-zinc-500">
+                  {generateFromPlan.segments.length} segment{generateFromPlan.segments.length === 1 ? '' : 's'} will use the steps override
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                onClick={() => setGenerateFromModalOpen(false)}
+                disabled={busy === 'generate-from'}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="space-y-4 p-4">
+              <div className="grid grid-cols-[1fr_120px] items-end gap-3">
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Steps override</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    Applied to draft, failed, and stale segments from {selectedSegment.title} forward.
+                  </div>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={generateFromStepsOverride}
+                  onChange={(event) => setGenerateFromStepsOverride(event.target.value)}
+                  className="h-9 border-white/10 bg-zinc-900 text-sm"
+                  aria-label="Generate from steps override"
+                  disabled={busy === 'generate-from'}
+                />
+              </div>
+              <div className="rounded-md border border-white/10 bg-white/[0.03]">
+                <div className="border-b border-white/10 px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Segments to regenerate
+                </div>
+                {generateFromPlan.segments.length ? (
+                  <div className="max-h-56 overflow-y-auto divide-y divide-white/10">
+                    {generateFromPlan.segments.map((segment) => (
+                      <div key={segment.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate text-zinc-200">
+                          {segment.orderIndex + 1}. {segment.title}
+                        </span>
+                        <span className="shrink-0 rounded border border-white/10 px-2 py-0.5 text-xs text-zinc-500">
+                          {segment.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-3 py-6 text-sm text-zinc-500">
+                    No draft, failed, or stale segments from the selected segment forward. The action can still sync or report waiting state.
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10"
+                  onClick={() => setGenerateFromModalOpen(false)}
+                  disabled={busy === 'generate-from'}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="h-9 min-w-36 gap-2"
+                  onClick={confirmGenerateFromSelectedSegment}
+                  disabled={busy === 'generate-from'}
+                >
+                  {busy === 'generate-from' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
+                  Generate
                 </Button>
               </div>
             </div>

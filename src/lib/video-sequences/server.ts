@@ -943,15 +943,18 @@ export function buildVideoSegmentGenerationFormData(input: {
   segment: any;
   sourceFrameUrl: string;
   sourceImage: { blob: Blob; filename: string; width?: number; height?: number };
+  generationOptionsOverride?: Record<string, unknown>;
   userId?: string;
 }) {
-  const { sequence, segment, sourceFrameUrl, sourceImage, userId = 'user-with-settings' } = input;
+  const { sequence, segment, sourceFrameUrl, sourceImage, generationOptionsOverride = {}, userId = 'user-with-settings' } = input;
   const formData = new FormData();
   const sequenceGenerationOptions = stripResolutionOptions(parseJsonObjectField(sequence.defaultGenerationOptionsJson));
   const segmentGenerationOptions = stripResolutionOptions(parseJsonObjectField(segment.generationOptionsJson));
+  const requestGenerationOptions = stripResolutionOptions(generationOptionsOverride);
   const generationOptions = {
     ...sequenceGenerationOptions,
     ...segmentGenerationOptions,
+    ...requestGenerationOptions,
   };
   generationOptions.width = positiveInteger(sequence.width) ?? 1280;
   generationOptions.height = positiveInteger(sequence.height) ?? 720;
@@ -1004,11 +1007,13 @@ export function buildVideoSegmentGenerationFormData(input: {
 export async function generateVideoSequenceSegment(sequenceId: string, segmentId: string, input: Record<string, unknown> = {}) {
   const { segment, sequence, sourceFrameUrl } = await resolveVideoSegmentSourceFrame(sequenceId, segmentId);
   const sourceImage = await loadSourceImageBlob(sourceFrameUrl);
+  const stepsOverride = asOptionalPositiveInt(input.stepsOverride, 'stepsOverride');
   const { formData, snapshot } = buildVideoSegmentGenerationFormData({
     sequence,
     segment,
     sourceFrameUrl,
     sourceImage,
+    generationOptionsOverride: stepsOverride ? { steps: stepsOverride } : undefined,
     userId: asTrimmedString(input.userId) ?? 'user-with-settings',
   });
 
@@ -1065,6 +1070,12 @@ function generateFromResult(input: GenerateFromResult) {
   return input;
 }
 
+function withStepsOverride(generationOptionsJson: string | null | undefined, stepsOverride: number) {
+  const generationOptions = stripResolutionOptions(parseJsonObjectField(generationOptionsJson));
+  generationOptions.steps = stepsOverride;
+  return JSON.stringify(generationOptions);
+}
+
 async function ensurePreviousLastFrame(sequenceId: string, segment: any) {
   if (segment.sourceMode !== 'previous_last_frame') return null;
 
@@ -1106,6 +1117,7 @@ async function ensurePreviousLastFrame(sequenceId: string, segment: any) {
 export async function generateVideoSequenceFrom(sequenceId: string, input: Record<string, unknown> = {}): Promise<GenerateFromResult> {
   const startSegmentId = asTrimmedString(input.segmentId);
   if (!startSegmentId) throw new StudioSessionApiError(400, 'segmentId is required');
+  const stepsOverride = asOptionalPositiveInt(input.stepsOverride, 'stepsOverride');
 
   const sequence = await prisma.videoSequence.findUnique({
     where: { id: sequenceId },
@@ -1115,6 +1127,19 @@ export async function generateVideoSequenceFrom(sequenceId: string, input: Recor
 
   const startIndex = sequence.segments.findIndex((segment) => segment.id === startSegmentId);
   if (startIndex === -1) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+  if (stepsOverride) {
+    const eligibleSegments = sequence.segments
+      .slice(startIndex)
+      .filter((segment) => generatableSegmentStatuses.has(segment.status));
+    await Promise.all(eligibleSegments.map((segment) => {
+      const generationOptionsJson = withStepsOverride(segment.generationOptionsJson, stepsOverride);
+      segment.generationOptionsJson = generationOptionsJson;
+      return prisma.videoSequenceSegment.update({
+        where: { id: segment.id },
+        data: { generationOptionsJson },
+      });
+    }));
+  }
 
   const processedSegmentIds: string[] = [];
   for (const segment of sequence.segments.slice(startIndex)) {

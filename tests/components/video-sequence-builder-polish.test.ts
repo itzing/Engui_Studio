@@ -19,6 +19,7 @@ import {
   getSequencePreviewRestartTime,
   buildSegmentDraftPatchPayload,
   hasSegmentDraftChanged,
+  getGenerateFromPlan,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -107,6 +108,21 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getHeaderActionTooltip('generateFrom')).toContain('selected segment forward');
     expect(getHeaderActionTooltip('render', 'Segment 2 is stale')).toContain('Segment 2 is stale');
     expect(getHeaderActionTooltip('final')).toContain('new tab');
+  });
+
+  it('plans generate-from regeneration across draft failed and stale segments', () => {
+    const plan = getGenerateFromPlan(sequence({
+      segments: [
+        segment({ id: 'seg-1', orderIndex: 0, status: 'completed' }),
+        segment({ id: 'seg-2', orderIndex: 1, status: 'draft' }),
+        segment({ id: 'seg-3', orderIndex: 2, status: 'queued' }),
+        segment({ id: 'seg-4', orderIndex: 3, status: 'stale' }),
+        segment({ id: 'seg-5', orderIndex: 4, status: 'failed' }),
+      ],
+    }), 'seg-2');
+
+    expect(plan.startIndex).toBe(1);
+    expect(plan.segments.map((item) => item.id)).toEqual(['seg-2', 'seg-4', 'seg-5']);
   });
 
   it('keeps segment inspector actions discoverable with detailed tooltips', () => {

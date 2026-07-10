@@ -1460,6 +1460,7 @@ describe('video sequence APIs', () => {
 
     const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
       segmentId: 'seg-2',
+      stepsOverride: 12,
     }) as any, {
       params: Promise.resolve({ id: 'seq-1' }),
     });
@@ -1468,10 +1469,29 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(202);
     expect(json).toMatchObject({ success: true, action: 'queued', jobId: 'job-2' });
     expect(mockSubmitGenerationFormData).toHaveBeenCalledTimes(1);
+    expect(mockSubmitGenerationFormData.mock.calls[0][0].get('steps')).toBe('12');
+    expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'seg-2' },
+      data: { generationOptionsJson: '{"steps":12}' },
+    }));
     expect(mockPrisma.videoSequenceSegment.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'seg-2' },
       data: expect.objectContaining({ status: 'queued', generationJobId: 'job-2' }),
     }));
+  });
+
+  it('generate-from rejects an invalid steps override', async () => {
+    const response = await generateFromSegment(request('http://localhost/api/video-sequences/seq-1/generate-from', {
+      segmentId: 'seg-2',
+      stepsOverride: 0,
+    }) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toContain('stepsOverride must be a positive integer');
+    expect(mockSubmitGenerationFormData).not.toHaveBeenCalled();
   });
 
   it('generate-from syncs an in-flight selected segment instead of submitting a duplicate job', async () => {
