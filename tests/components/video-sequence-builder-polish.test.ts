@@ -20,6 +20,7 @@ import {
   buildSegmentDraftPatchPayload,
   hasSegmentDraftChanged,
   getGenerateFromPlan,
+  getGenerateFromContinuationSummary,
 } from '@/components/video-sequences/VideoSequenceBuilder';
 
 function segment(overrides: Record<string, any> = {}) {
@@ -138,6 +139,49 @@ describe('VideoSequenceBuilder polish helpers', () => {
 
     expect(plan.segments.map((item) => item.id)).toEqual(['seg-1', 'seg-4', 'seg-5']);
     expect(plan.activeSegments.map((item) => item.id)).toEqual(['seg-2', 'seg-3']);
+  });
+
+  it('continues generate-from only after active jobs finish and leaves completed segments alone', () => {
+    expect(getGenerateFromContinuationSummary(sequence({
+      segments: [
+        segment({ id: 'seg-1', orderIndex: 0, status: 'completed', outputVideoUrl: '/generations/seg-1.mp4', lastFrameUrl: '/generations/last-1.png' }),
+        segment({ id: 'seg-2', orderIndex: 1, status: 'queued', generationJobId: 'job-2', outputVideoUrl: null }),
+        segment({ id: 'seg-3', orderIndex: 2, status: 'stale' }),
+      ],
+    }), 'seg-1')).toMatchObject({
+      activeCount: 1,
+      remainingCount: 1,
+      shouldContinue: false,
+      isComplete: false,
+    });
+
+    expect(getGenerateFromContinuationSummary(sequence({
+      segments: [
+        segment({ id: 'seg-1', orderIndex: 0, status: 'completed', outputVideoUrl: '/generations/seg-1.mp4', lastFrameUrl: '/generations/last-1.png' }),
+        segment({ id: 'seg-2', orderIndex: 1, status: 'completed', outputVideoUrl: '/generations/seg-2.mp4', lastFrameUrl: '/generations/last-2.png' }),
+        segment({ id: 'seg-3', orderIndex: 2, status: 'stale', sourceMode: 'previous_last_frame' }),
+      ],
+    }), 'seg-1')).toMatchObject({
+      activeCount: 0,
+      remainingCount: 1,
+      shouldContinue: true,
+      isComplete: false,
+    });
+  });
+
+  it('blocks generate-from continuation until the previous continuation frame exists', () => {
+    expect(getGenerateFromContinuationSummary(sequence({
+      segments: [
+        segment({ id: 'seg-1', orderIndex: 0, status: 'completed', outputVideoUrl: '/generations/seg-1.mp4', lastFrameUrl: null }),
+        segment({ id: 'seg-2', orderIndex: 1, status: 'stale', sourceMode: 'previous_last_frame' }),
+      ],
+    }), 'seg-1')).toMatchObject({
+      activeCount: 0,
+      remainingCount: 1,
+      shouldContinue: false,
+      isComplete: false,
+      blocker: 'Waiting for the previous segment output and continuation frame',
+    });
   });
 
   it('keeps segment inspector actions discoverable with detailed tooltips', () => {

@@ -110,6 +110,13 @@ type GalleryAsset = {
   addedToGalleryAt: string;
 };
 
+type GenerateFromAutoRun = {
+  sequenceId: string;
+  startSegmentId: string;
+  stepsOverride: number;
+  active: boolean;
+};
+
 export type SegmentDraft = {
   title: string;
   sourceMode: string;
@@ -545,6 +552,38 @@ function readGenerationStepsOverride(value: string) {
   return Number.isInteger(steps) && steps > 0 ? steps : null;
 }
 
+export function getGenerateFromContinuationSummary(sequence: VideoSequence | null, startSegmentId: string | null) {
+  if (!sequence || !startSegmentId) {
+    return { activeCount: 0, remainingCount: 0, shouldContinue: false, isComplete: false, blocker: null as string | null };
+  }
+
+  const startIndex = sequence.segments.findIndex((segment) => segment.id === startSegmentId);
+  if (startIndex === -1) {
+    return { activeCount: 0, remainingCount: 0, shouldContinue: false, isComplete: false, blocker: 'Selected segment is no longer available' };
+  }
+
+  const range = sequence.segments.slice(startIndex);
+  const activeSegments = range.filter((segment) => generateFromActiveStatuses.has(segment.status));
+  const remainingSegments = range.filter((segment) => generateFromEligibleStatuses.has(segment.status));
+  const nextSegment = remainingSegments[0] ?? null;
+  let blocker: string | null = null;
+
+  if (!activeSegments.length && nextSegment?.sourceMode === 'previous_last_frame') {
+    const previous = sequence.segments.find((segment) => segment.orderIndex === nextSegment.orderIndex - 1) ?? null;
+    if (!previous || previous.status !== 'completed' || !previous.outputVideoUrl || !previous.lastFrameUrl) {
+      blocker = 'Waiting for the previous segment output and continuation frame';
+    }
+  }
+
+  return {
+    activeCount: activeSegments.length,
+    remainingCount: remainingSegments.length,
+    shouldContinue: activeSegments.length === 0 && remainingSegments.length > 0 && !blocker,
+    isComplete: activeSegments.length === 0 && remainingSegments.length === 0,
+    blocker,
+  };
+}
+
 export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
   switch (action) {
     case 'save':
@@ -624,6 +663,7 @@ export default function VideoSequenceBuilder() {
   const [generateFromModalOpen, setGenerateFromModalOpen] = useState(false);
   const [generateFromStepsOverride, setGenerateFromStepsOverride] = useState(String(defaultWanSteps));
   const [generateFromRegenerateAll, setGenerateFromRegenerateAll] = useState(false);
+  const [generateFromAutoRun, setGenerateFromAutoRun] = useState<GenerateFromAutoRun | null>(null);
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [loraLoading, setLoraLoading] = useState(false);
   const [loraPickerOpen, setLoraPickerOpen] = useState(false);
@@ -635,6 +675,7 @@ export default function VideoSequenceBuilder() {
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const loraSearchInputRef = useRef<HTMLInputElement | null>(null);
   const autoStatusSyncInFlightRef = useRef(false);
+  const generateFromAutoContinueInFlightRef = useRef(false);
   const segmentAutosaveTimerRef = useRef<number | null>(null);
   const segmentAutosaveInFlightRef = useRef(false);
   const segmentAutosavePromiseRef = useRef<Promise<VideoSequenceSegment | null> | null>(null);
@@ -669,6 +710,12 @@ export default function VideoSequenceBuilder() {
     () => getGenerateFromPlan(activeSequence, selectedSegment?.id ?? null, generateFromRegenerateAll),
     [activeSequence, selectedSegment, generateFromRegenerateAll],
   );
+  const generateFromContinuationSummary = useMemo(() => (
+    getGenerateFromContinuationSummary(
+      activeSequence,
+      generateFromAutoRun && generateFromAutoRun.sequenceId === activeSequence?.id ? generateFromAutoRun.startSegmentId : null,
+    )
+  ), [activeSequence, generateFromAutoRun]);
   const previewTotalDuration = previewTimeline.length ? previewTimeline[previewTimeline.length - 1].end : 0;
   const activePreviewTimelineItem = useMemo(() => (
     findSequencePreviewTimelineItem(previewTimeline, previewTime)
@@ -986,6 +1033,26 @@ export default function VideoSequenceBuilder() {
       window.clearInterval(intervalId);
     };
   }, [activeSequence]);
+
+  useEffect(() => {
+    if (!generateFromAutoRun?.active || !activeSequence || generateFromAutoRun.sequenceId !== activeSequence.id) return;
+    if (generateFromContinuationSummary.activeCount > 0 || generateFromAutoContinueInFlightRef.current) return;
+
+    if (generateFromContinuationSummary.shouldContinue) {
+      void continueGenerateFromChain();
+      return;
+    }
+
+    if (generateFromContinuationSummary.isComplete) {
+      setGenerateFromAutoRun(null);
+      setNotice('Generate from selected completed');
+      return;
+    }
+
+    if (generateFromContinuationSummary.blocker) {
+      setNotice(generateFromContinuationSummary.blocker);
+    }
+  }, [activeSequence, generateFromAutoRun, generateFromContinuationSummary]);
 
   function seekPreview(timeSeconds: number) {
     const nextTime = Math.max(0, Math.min(timeSeconds, previewTotalDuration));
@@ -1371,6 +1438,7 @@ export default function VideoSequenceBuilder() {
 
   async function generateSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
+    setGenerateFromAutoRun(null);
     await runAction('generate', async () => {
       await persistSelectedSegmentDraft();
       const data = await fetchJson<{ success: boolean; segment: VideoSequenceSegment; jobId?: string | null }>(
@@ -1393,6 +1461,50 @@ export default function VideoSequenceBuilder() {
     setGenerateFromModalOpen(true);
   }
 
+  async function submitGenerateFromRequest(input: {
+    sequenceId: string;
+    startSegmentId: string;
+    stepsOverride: number;
+    regenerateAllSegments: boolean;
+  }) {
+    return fetchJson<{ success: boolean; action?: string; message?: string; segment?: VideoSequenceSegment | null }>(
+      `/api/video-sequences/${input.sequenceId}/generate-from`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          segmentId: input.startSegmentId,
+          userId,
+          stepsOverride: input.stepsOverride,
+          regenerateAllSegments: input.regenerateAllSegments,
+        }),
+      },
+    );
+  }
+
+  async function continueGenerateFromChain() {
+    if (!generateFromAutoRun || generateFromAutoContinueInFlightRef.current) return;
+    generateFromAutoContinueInFlightRef.current = true;
+    setBusy('generate-from');
+    setError(null);
+
+    try {
+      const data = await submitGenerateFromRequest({
+        sequenceId: generateFromAutoRun.sequenceId,
+        startSegmentId: generateFromAutoRun.startSegmentId,
+        stepsOverride: generateFromAutoRun.stepsOverride,
+        regenerateAllSegments: false,
+      });
+      await loadSequence(generateFromAutoRun.sequenceId, selectedSegmentId ?? generateFromAutoRun.startSegmentId);
+      setNotice(data.message ?? (data.action ? `Generate from here: ${data.action}` : 'Generate from here updated'));
+    } catch (nextError) {
+      setGenerateFromAutoRun(null);
+      setError(nextError instanceof Error ? nextError.message : 'Generate from selected failed');
+    } finally {
+      generateFromAutoContinueInFlightRef.current = false;
+      setBusy(null);
+    }
+  }
+
   async function confirmGenerateFromSelectedSegment() {
     if (!activeSequence || !selectedSegment) return;
     const stepsOverride = readGenerationStepsOverride(generateFromStepsOverride);
@@ -1402,15 +1514,17 @@ export default function VideoSequenceBuilder() {
     }
     await runAction('generate-from', async () => {
       await persistSelectedSegmentDraft();
-      const data = await fetchJson<{ success: boolean; action?: string; message?: string; segment?: VideoSequenceSegment | null }>(
-        `/api/video-sequences/${activeSequence.id}/generate-from`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ segmentId: selectedSegment.id, userId, stepsOverride, regenerateAllSegments: generateFromRegenerateAll }),
-        },
-      );
+      const startSegmentId = selectedSegment.id;
+      const sequenceId = activeSequence.id;
+      const data = await submitGenerateFromRequest({
+        sequenceId,
+        startSegmentId,
+        stepsOverride,
+        regenerateAllSegments: generateFromRegenerateAll,
+      });
       setGenerateFromModalOpen(false);
-      await loadSequence(activeSequence.id, selectedSegment.id);
+      await loadSequence(sequenceId, startSegmentId);
+      setGenerateFromAutoRun({ sequenceId, startSegmentId, stepsOverride, active: true });
       setNotice(data.message ?? (data.action ? `Generate from here: ${data.action}` : 'Generate from here updated'));
     });
   }
