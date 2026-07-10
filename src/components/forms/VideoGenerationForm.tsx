@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeftRight, Loader2, Sparkles, WandSparkles } from 'lucide-react';
+import { ArrowLeftRight, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
@@ -32,6 +32,7 @@ export default function VideoGenerationForm() {
     const [audioFile2, setAudioFile2] = useState<File | null>(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>('');
+    const [fullscreenReferenceUrl, setFullscreenReferenceUrl] = useState<string | null>(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isDragOverImage, setIsDragOverImage] = useState(false);
     const [isDragOverVideo, setIsDragOverVideo] = useState(false);
@@ -452,6 +453,7 @@ export default function VideoGenerationForm() {
     const handleRemoveImage = () => {
         setImageFile(null);
         setImagePreviewUrl('');
+        setFullscreenReferenceUrl(null);
     };
 
     const handleRemoveVideo = () => {
@@ -909,7 +911,14 @@ export default function VideoGenerationForm() {
                             </div>
                         ) : (imageFile && imagePreviewUrl) ? (
                             <div className="relative group rounded-lg overflow-hidden border border-border">
-                                <img src={imagePreviewUrl} alt="Reference" className="w-full h-40 object-cover" />
+                                <button
+                                    type="button"
+                                    className="block w-full focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    onClick={() => setFullscreenReferenceUrl(imagePreviewUrl)}
+                                    aria-label="Open video reference image fullscreen"
+                                >
+                                    <img src={imagePreviewUrl} alt="Reference" className="w-full h-40 object-cover" />
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleRemoveImage}
@@ -1475,6 +1484,33 @@ export default function VideoGenerationForm() {
                 onLoRAUploaded={fetchAvailableLoras}
                 workspaceId={activeWorkspaceId || undefined}
             />
+            {fullscreenReferenceUrl ? (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Video reference image fullscreen"
+                    onClick={() => setFullscreenReferenceUrl(null)}
+                    data-testid="video-create-reference-fullscreen"
+                >
+                    <button
+                        type="button"
+                        className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/70"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setFullscreenReferenceUrl(null);
+                        }}
+                        aria-label="Close video reference image fullscreen"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                    <img
+                        src={fullscreenReferenceUrl}
+                        alt="Video reference fullscreen"
+                        className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }

@@ -150,4 +150,31 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(heightInput?.getAttribute('min')).toBeNull();
     expect(heightInput?.getAttribute('max')).toBeNull();
   });
+
+  it('opens and closes the image reference preview fullscreen', async () => {
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:video-reference-preview'),
+    });
+
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    const fileInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(['image'], 'reference.png', { type: 'image/png' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open video reference image fullscreen' }));
+
+    const fullscreen = screen.getByTestId('video-create-reference-fullscreen');
+    expect(fullscreen).toBeTruthy();
+    expect((screen.getByAltText('Video reference fullscreen') as HTMLImageElement).getAttribute('src')).toBe('blob:video-reference-preview');
+
+    fireEvent.click(fullscreen);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('video-create-reference-fullscreen')).toBeNull();
+    });
+  });
 });
