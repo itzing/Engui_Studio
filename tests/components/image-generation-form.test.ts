@@ -57,7 +57,7 @@ const mockModel = {
 vi.mock('@/lib/models/modelConfig', () => ({
   getModelsByType: () => [mockModel],
   getModelById: (id: string) => (id === 'mock-image' ? mockModel : null),
-  isInputVisible: () => false,
+  isInputVisible: (model: typeof mockModel, input: string) => model.inputs.includes(input),
 }));
 
 vi.mock('@/lib/create/submitImageGeneration', () => ({
@@ -184,6 +184,8 @@ function buildSceneDocument(appearance: string) {
 describe('ImageGenerationForm prompt draft selector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockModel.inputs = ['text'];
+    mockModel.optionalInputs = [];
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation(() => ({
@@ -191,6 +193,44 @@ describe('ImageGenerationForm prompt draft selector', () => {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       })),
+    });
+  });
+
+  it('opens and closes the reference preview fullscreen', async () => {
+    mockModel.inputs = ['text', 'image'];
+    mockModel.optionalInputs = ['image'];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:reference-preview'),
+    });
+
+    const { container } = render(React.createElement(ImageGenerationForm));
+
+    await screen.findByTestId('image-create-prompt-textarea');
+
+    const fileInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(['image'], 'reference.png', { type: 'image/png' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open reference image fullscreen' }));
+
+    const fullscreen = screen.getByTestId('image-create-reference-fullscreen');
+    expect(fullscreen).toBeTruthy();
+    expect((screen.getByAltText('Reference fullscreen') as HTMLImageElement).getAttribute('src')).toBe('blob:reference-preview');
+
+    fireEvent.click(fullscreen);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('image-create-reference-fullscreen')).toBeNull();
     });
   });
 

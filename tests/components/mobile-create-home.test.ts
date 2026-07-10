@@ -123,4 +123,27 @@ describe('MobileCreateHome prompt draft tile', () => {
     expect(screen.queryByText(/Prompt:/i)).toBeNull();
     expect(screen.queryByRole('link', { name: /open prompt editor/i })).toBeNull();
   });
+
+  it('opens and closes the primary reference preview fullscreen', () => {
+    mobileCreateState.current = buildState({
+      previewUrl: '/reference.png',
+      primaryImageVisible: true,
+      primaryImageRequired: false,
+    });
+
+    render(React.createElement(MobileCreateHome, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open primary input preview fullscreen' }));
+
+    const fullscreen = screen.getByTestId('mobile-create-reference-fullscreen');
+    expect(fullscreen).toBeTruthy();
+    expect((screen.getByAltText('Reference fullscreen') as HTMLImageElement).getAttribute('src')).toBe('/reference.png');
+
+    fireEvent.click(fullscreen);
+
+    expect(screen.queryByTestId('mobile-create-reference-fullscreen')).toBeNull();
+  });
 });

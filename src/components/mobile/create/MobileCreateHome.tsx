@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ImagePlus, Loader2, Sparkles, WandSparkles } from 'lucide-react';
+import { ImagePlus, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
 import type { CreateMode } from '@/lib/createDrafts';
@@ -29,6 +29,7 @@ export default function MobileCreateHome({
 }) {
   const { showToast } = useToast();
   const [showPromptDraftSelector, setShowPromptDraftSelector] = useState(false);
+  const [fullscreenReferenceUrl, setFullscreenReferenceUrl] = useState<string | null>(null);
   const {
     currentModel,
     prompt,
@@ -182,7 +183,14 @@ export default function MobileCreateHome({
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
                     {previewUrl ? (
-                      <img src={previewUrl} alt="Primary input preview" className="h-40 w-full rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        className="block w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        onClick={() => setFullscreenReferenceUrl(previewUrl)}
+                        aria-label="Open primary input preview fullscreen"
+                      >
+                        <img src={previewUrl} alt="Primary input preview" className="h-40 w-full rounded-lg object-cover" />
+                      </button>
                     ) : (
                       <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
                         No image selected yet
@@ -223,7 +231,14 @@ export default function MobileCreateHome({
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
                     {previewUrl2 ? (
-                      <img src={previewUrl2} alt="Secondary input preview" className="h-40 w-full rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        className="block w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        onClick={() => setFullscreenReferenceUrl(previewUrl2)}
+                        aria-label="Open secondary input preview fullscreen"
+                      >
+                        <img src={previewUrl2} alt="Secondary input preview" className="h-40 w-full rounded-lg object-cover" />
+                      </button>
                     ) : (
                       <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
                         No second image selected yet
@@ -319,6 +334,33 @@ export default function MobileCreateHome({
           </div>
         </DialogContent>
       </Dialog>
+      {fullscreenReferenceUrl ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reference image fullscreen"
+          onClick={() => setFullscreenReferenceUrl(null)}
+          data-testid="mobile-create-reference-fullscreen"
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] rounded-full bg-black/50 p-2 text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/70"
+            onClick={(event) => {
+              event.stopPropagation();
+              setFullscreenReferenceUrl(null);
+            }}
+            aria-label="Close reference image fullscreen"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={fullscreenReferenceUrl}
+            alt="Reference fullscreen"
+            className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+          />
+        </div>
+      ) : null}
 
       <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="space-y-3">

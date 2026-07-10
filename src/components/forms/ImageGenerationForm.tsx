@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Plus, Sparkles, Upload, WandSparkles } from 'lucide-react';
+import { ArrowLeftRight, Check, Copy, ImagePlus, Loader2, Plus, Sparkles, Upload, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
@@ -90,6 +90,7 @@ export default function ImageGenerationForm() {
     const [imagePromptElapsedMs, setImagePromptElapsedMs] = useState(0);
     const [imagePromptStartedAt, setImagePromptStartedAt] = useState<number | null>(null);
     const [isDimensionSwapHighlightActive, setIsDimensionSwapHighlightActive] = useState(false);
+    const [fullscreenReferenceUrl, setFullscreenReferenceUrl] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // LoRA state
@@ -1237,11 +1238,21 @@ export default function ImageGenerationForm() {
                                 </div>
                             ) : previewUrl ? (
                                 <div className="space-y-2">
-                                    <img
-                                        src={previewUrl}
-                                        alt="Preview"
-                                        className="max-w-full max-h-48 mx-auto rounded-lg"
-                                    />
+                                    <button
+                                        type="button"
+                                        className="mx-auto block max-w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setFullscreenReferenceUrl(previewUrl);
+                                        }}
+                                        aria-label="Open reference image fullscreen"
+                                    >
+                                        <img
+                                            src={previewUrl}
+                                            alt="Preview"
+                                            className="max-w-full max-h-48 rounded-lg"
+                                        />
+                                    </button>
                                     <div className="flex flex-wrap items-center justify-center gap-3">
                                         {isZImageModel && zImageMode === 'i2i' && imagePromptFile ? (
                                             <button
@@ -1308,11 +1319,21 @@ export default function ImageGenerationForm() {
                                 </div>
                             ) : previewUrl2 ? (
                                 <div className="space-y-2">
-                                    <img
-                                        src={previewUrl2}
-                                        alt="Preview 2"
-                                        className="max-w-full max-h-48 mx-auto rounded-lg"
-                                    />
+                                    <button
+                                        type="button"
+                                        className="mx-auto block max-w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setFullscreenReferenceUrl(previewUrl2);
+                                        }}
+                                        aria-label="Open second reference image fullscreen"
+                                    >
+                                        <img
+                                            src={previewUrl2}
+                                            alt="Preview 2"
+                                            className="max-w-full max-h-48 rounded-lg"
+                                        />
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={(e) => {
@@ -2005,6 +2026,33 @@ export default function ImageGenerationForm() {
                     onLoRAUploaded={fetchAvailableLoras}
                 />
             )}
+            {fullscreenReferenceUrl ? (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Reference image fullscreen"
+                    onClick={() => setFullscreenReferenceUrl(null)}
+                    data-testid="image-create-reference-fullscreen"
+                >
+                    <button
+                        type="button"
+                        className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/70"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setFullscreenReferenceUrl(null);
+                        }}
+                        aria-label="Close reference image fullscreen"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                    <img
+                        src={fullscreenReferenceUrl}
+                        alt="Reference fullscreen"
+                        className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+                    />
+                </div>
+            ) : null}
         </div >
     );
 }
