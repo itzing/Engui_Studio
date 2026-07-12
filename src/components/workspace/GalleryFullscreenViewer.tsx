@@ -619,7 +619,7 @@ export function GalleryFullscreenViewer({
               const isActiveVideo = customSlide.id === currentItem?.id;
               return (
                 <div
-                  className={`flex h-full w-full items-center justify-center ${isDesktop ? 'p-0' : 'px-0 py-16'}`}
+                  className="flex h-full w-full items-center justify-center p-0"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <video
@@ -639,9 +639,7 @@ export function GalleryFullscreenViewer({
                     }}
                     src={customSlide.src}
                     poster={customSlide.poster}
-                    className={isDesktop
-                      ? 'block h-full w-full object-contain'
-                      : 'block max-h-[calc(100dvh-8rem)] max-w-full object-contain'}
+                    className="block h-full w-full object-contain"
                     controls
                     autoPlay={isActiveVideo}
                     loop
