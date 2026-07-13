@@ -17,6 +17,9 @@ export const requestImagePromptImprovement = async (payload: {
   helperProfile?: 'wan22-video' | 'default';
   width?: number;
   height?: number;
+  frameCount?: number;
+  durationSeconds?: number;
+  fps?: number;
 }): Promise<ImagePromptHelperResult> => {
   const response = await fetch('/api/prompt-helper/improve', {
     method: 'POST',

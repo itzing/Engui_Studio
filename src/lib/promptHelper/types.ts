@@ -18,6 +18,9 @@ export interface PromptHelperRequest {
   helperProfile?: PromptHelperProfile;
   width?: number;
   height?: number;
+  frameCount?: number;
+  durationSeconds?: number;
+  fps?: number;
 }
 
 export interface PromptHelperDebugInfo {

@@ -82,12 +82,25 @@ function buildFramingHint(width: number | null, height: number | null): string |
   return 'Use composition cues that fit a moderately rectangular frame, balancing subject emphasis with enough surrounding context.';
 }
 
+function readPositiveRoundedNumber(value: unknown): number | null {
+  const numberValue = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : null;
+  return numberValue && numberValue > 0 ? numberValue : null;
+}
+
+function readPositiveFixedNumber(value: unknown, decimals = 2): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return Number(value.toFixed(decimals));
+}
+
 function buildDefaultUserMessage(request: PromptHelperRequest): string {
   const instruction = sanitizePromptHelperText(request.instruction.trim());
   const currentPrompt = sanitizePromptHelperText(request.prompt.trim());
   const currentNegativePrompt = sanitizePromptHelperText(request.negativePrompt?.trim() || '');
-  const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
-  const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
+  const width = readPositiveRoundedNumber(request.width);
+  const height = readPositiveRoundedNumber(request.height);
   const aspectRatio = width && height ? `${width}:${height}` : null;
   const framingHint = buildFramingHint(width, height);
 
@@ -125,8 +138,11 @@ function buildWan22UserMessage(request: PromptHelperRequest): string {
   const instruction = sanitizePromptHelperText(request.instruction.trim());
   const currentPrompt = sanitizePromptHelperText(request.prompt.trim());
   const currentNegativePrompt = sanitizePromptHelperText(request.negativePrompt?.trim() || '');
-  const width = typeof request.width === 'number' && Number.isFinite(request.width) ? Math.round(request.width) : null;
-  const height = typeof request.height === 'number' && Number.isFinite(request.height) ? Math.round(request.height) : null;
+  const width = readPositiveRoundedNumber(request.width);
+  const height = readPositiveRoundedNumber(request.height);
+  const frameCount = readPositiveRoundedNumber(request.frameCount);
+  const durationSeconds = readPositiveFixedNumber(request.durationSeconds, 1);
+  const fps = readPositiveFixedNumber(request.fps, 2);
   const aspectRatio = width && height ? `${width}:${height}` : null;
   const framingHint = buildFramingHint(width, height);
 
@@ -137,6 +153,9 @@ function buildWan22UserMessage(request: PromptHelperRequest): string {
     request.modelId ? `Target model: ${request.modelId}` : 'Target model: wan22',
     width && height ? `Target dimensions: ${width}x${height}` : null,
     aspectRatio ? `Target aspect ratio: ${aspectRatio}` : null,
+    frameCount ? `Target frame count: ${frameCount}` : null,
+    durationSeconds ? `Approximate video duration: ${durationSeconds}s` : null,
+    fps ? `Target FPS: ${fps}` : null,
     '',
     'Current positive prompt:',
     currentPrompt || '(empty)',
@@ -157,6 +176,7 @@ function buildWan22UserMessage(request: PromptHelperRequest): string {
     'For vague animation requests such as animate, make alive, cinematic, or add motion, choose believable micro-motion as the main beat.',
     'Use zero or one simple camera move only, such as slow push-in, gentle pan, slight dolly in, subtle handheld, or subtle orbit.',
     'Keep the clip focused on one action beat, one optional camera move, and one coherent scene.',
+    'Use frame count and approximate duration as hidden pacing context: short clips should have one clean readable motion beat, while longer clips may include a simple start, middle, and finish.',
     'Keep the positive prompt concise, usually 1 to 2 short sentences.',
     'Bias empty-prompt generation toward a balanced, believable result.',
     'If the instruction is a narrow edit, preserve all existing useful prompt content and change only what the instruction requires.',

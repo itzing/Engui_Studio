@@ -208,6 +208,11 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
           instruction: 'make it cinematic',
           modelId: 'wan22',
           helperProfile: 'wan22-video',
+          width: 768,
+          height: 512,
+          frameCount: 80,
+          durationSeconds: 5,
+          fps: 16,
         });
         return textResponse('expanded video prompt');
       }
@@ -255,6 +260,11 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
           instruction: 'make it cinematic',
           modelId: 'wan22',
           helperProfile: 'wan22-video',
+          width: 768,
+          height: 512,
+          frameCount: 80,
+          durationSeconds: 5,
+          fps: 16,
         });
         return textResponse('generated from empty prompt');
       }
@@ -276,6 +286,27 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
     await waitFor(() => {
       expect(promptTextarea.value).toBe('generated from empty prompt');
+    });
+  });
+
+  it('persists the WAN22 Prompt Helper empty-prompt option across remounts', async () => {
+    const firstRender = render(React.createElement(VideoGenerationForm));
+
+    const emptyPromptCheckbox = await screen.findByLabelText('Empty prompt') as HTMLInputElement;
+    expect(emptyPromptCheckbox.checked).toBe(false);
+
+    fireEvent.click(emptyPromptCheckbox);
+    expect(emptyPromptCheckbox.checked).toBe(true);
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('engui:video-prompt-helper:empty-prompt')).toBe('true');
+    });
+
+    firstRender.unmount();
+    render(React.createElement(VideoGenerationForm));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Empty prompt') as HTMLInputElement).checked).toBe(true);
     });
   });
 

@@ -33,6 +33,11 @@ describe('LocalPromptHelperProvider', () => {
       instruction: 'improve this for i2v',
       modelId: 'wan22',
       helperProfile: 'wan22-video',
+      width: 768,
+      height: 512,
+      frameCount: 80,
+      durationSeconds: 5,
+      fps: 16,
     });
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || '{}'));
@@ -57,6 +62,11 @@ describe('LocalPromptHelperProvider', () => {
     expect(systemPrompt).toContain('Return the final edited positive prompt text only');
     expect(systemPrompt).not.toMatch(/\bAvoid\b|\bDo not\b/);
     expect(userMessage).toContain('Make the user requested action, pose change, gesture, expression change, or camera change the main motion beat');
+    expect(userMessage).toContain('Target dimensions: 768x512');
+    expect(userMessage).toContain('Target frame count: 80');
+    expect(userMessage).toContain('Approximate video duration: 5s');
+    expect(userMessage).toContain('Target FPS: 16');
+    expect(userMessage).toContain('Use frame count and approximate duration as hidden pacing context');
     expect(userMessage).toContain('Transform short abstract action phrases into concrete observable choreography');
     expect(userMessage).toContain('For dance prompts, describe hips, torso, shoulders, arms or hands');
     expect(userMessage).toContain('Use micro-motion as supporting detail for explicit actions');

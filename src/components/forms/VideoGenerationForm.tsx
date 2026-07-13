@@ -123,6 +123,8 @@ export default function VideoGenerationForm() {
     const videoModels = getModelsByType('video');
     const DEFAULT_VIDEO_MODEL = videoModels[0]?.id || 'wan22';
     const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:video-prompt-helper:instruction';
+    const PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY = 'engui:video-prompt-helper:empty-prompt';
+    const WAN22_DEFAULT_FPS = 16;
 
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
@@ -253,8 +255,12 @@ export default function VideoGenerationForm() {
             if (storedInstruction !== null) {
                 setPromptHelperInstruction(storedInstruction);
             }
+            const storedEmptyPrompt = localStorage.getItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY);
+            if (storedEmptyPrompt !== null) {
+                setPromptHelperEmptyPrompt(storedEmptyPrompt === 'true');
+            }
         } catch (error) {
-            console.warn('Failed to restore video prompt helper instruction', error);
+            console.warn('Failed to restore video prompt helper preferences', error);
         }
     }, []);
 
@@ -269,6 +275,14 @@ export default function VideoGenerationForm() {
             console.warn('Failed to persist video prompt helper instruction', error);
         }
     }, [promptHelperInstruction]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY, promptHelperEmptyPrompt ? 'true' : 'false');
+        } catch (error) {
+            console.warn('Failed to persist video prompt helper Empty prompt preference', error);
+        }
+    }, [promptHelperEmptyPrompt]);
 
     // Initialize selected model if not set
     useEffect(() => {
@@ -300,8 +314,15 @@ export default function VideoGenerationForm() {
         : '';
     const widthParameter = currentModel?.parameters.find((param) => param.name === 'width');
     const heightParameter = currentModel?.parameters.find((param) => param.name === 'height');
+    const frameCountParameter = currentModel?.parameters.find((param) => param.name === 'length' || param.name === 'frameCount' || param.name === 'frames');
+    const fpsParameter = currentModel?.parameters.find((param) => param.name === 'fps' || param.name === 'frame_rate' || param.name === 'targetFps');
     const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
     const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
+    const currentFrameCount = frameCountParameter ? Number(parameterValues[frameCountParameter.name] ?? frameCountParameter.default) : undefined;
+    const currentFps = fpsParameter ? Number(parameterValues[fpsParameter.name] ?? fpsParameter.default) : ['wan22', 'wan22-t2v'].includes(currentModel?.id || '') ? WAN22_DEFAULT_FPS : undefined;
+    const currentDurationSeconds = Number.isFinite(currentFrameCount) && Number.isFinite(currentFps) && Number(currentFps) > 0
+        ? Number((Number(currentFrameCount) / Number(currentFps)).toFixed(2))
+        : undefined;
     const isMobileCreateRoute = pathname?.startsWith('/m/');
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
 
@@ -374,6 +395,9 @@ export default function VideoGenerationForm() {
                 helperProfile: 'wan22-video',
                 width: Number.isFinite(currentWidth) ? currentWidth : undefined,
                 height: Number.isFinite(currentHeight) ? currentHeight : undefined,
+                frameCount: Number.isFinite(currentFrameCount) ? currentFrameCount : undefined,
+                durationSeconds: Number.isFinite(currentDurationSeconds) ? currentDurationSeconds : undefined,
+                fps: Number.isFinite(currentFps) ? currentFps : undefined,
             });
 
             setPrompt(data.improvedPrompt);

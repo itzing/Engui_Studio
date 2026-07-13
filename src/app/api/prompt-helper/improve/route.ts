@@ -7,6 +7,11 @@ import { ensureHelperMode } from '@/lib/helperMode';
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
 
+function readPositiveNumber(value: unknown): number | undefined {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -15,6 +20,11 @@ export async function POST(request: NextRequest) {
     const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
     const modelId = typeof body?.modelId === 'string' ? body.modelId : undefined;
     const helperProfile: PromptHelperProfile = body?.helperProfile === 'wan22-video' ? 'wan22-video' : 'default';
+    const width = readPositiveNumber(body?.width);
+    const height = readPositiveNumber(body?.height);
+    const frameCount = readPositiveNumber(body?.frameCount);
+    const durationSeconds = readPositiveNumber(body?.durationSeconds);
+    const fps = readPositiveNumber(body?.fps);
 
     if (!instruction) {
       return NextResponse.json({ success: false, error: 'Instruction is required' }, { status: 400 });
@@ -23,7 +33,7 @@ export async function POST(request: NextRequest) {
     const settingsResult = await settingsService.getSettings(userId);
     await ensureHelperMode('text');
     const provider = getPromptHelperProvider(settingsResult.settings.promptHelper || { provider: 'disabled' });
-    const result = await provider.improve({ prompt, negativePrompt, instruction, modelId, helperProfile });
+    const result = await provider.improve({ prompt, negativePrompt, instruction, modelId, helperProfile, width, height, frameCount, durationSeconds, fps });
 
     return new NextResponse(result.improvedPrompt, {
       status: 200,
