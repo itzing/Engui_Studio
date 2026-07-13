@@ -149,7 +149,7 @@ export default function VideoGenerationForm() {
         'Source image context for WAN2.2 image-to-video prompting:',
         sourceImagePrompt,
         '',
-        'Use the source image context as the visual starting point and identity reference. Keep the subject, identity cues, outfit, overall framing, lighting, background, and camera angle continuous by default. Treat explicit user requests for action, pose, body movement, expression, or camera change as intentional direction. Make that requested movement the primary motion beat, with the source pose as the opening position and natural body movement, gesture, expression, and secondary motion carrying the clip forward. Return only the final video prompt.',
+        'Use the source image context as the visual starting point and identity reference. Keep the subject, identity cues, outfit, overall framing, lighting, background, and camera angle continuous by default. Treat explicit user requests for action, pose, body movement, expression, or camera change as intentional direction. Make that requested movement the primary motion beat, with the source pose as the opening position and natural body movement, gesture, expression, and secondary motion carrying the clip forward. Transform short abstract action phrases into concrete observable choreography: describe body parts, movement direction, weight transfer, rhythm, hands or arms, head direction, expression, and how the motion starts and finishes. For dance prompts, spell out hips, torso, shoulders, hands, step rhythm, and confident camera-facing expression with tasteful physical specificity. Return only the final video prompt.',
     ].join('\n');
 
     useEffect(() => {

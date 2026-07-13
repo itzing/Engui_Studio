@@ -250,6 +250,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         expect(body.instruction).toContain('A woman in a red dress stands by a window.');
         expect(body.instruction).toContain('Treat explicit user requests for action, pose, body movement, expression, or camera change as intentional direction');
         expect(body.instruction).toContain('Make that requested movement the primary motion beat');
+        expect(body.instruction).toContain('Transform short abstract action phrases into concrete observable choreography');
+        expect(body.instruction).toContain('For dance prompts, spell out hips, torso, shoulders, hands');
         expect(body.instruction).not.toContain('outfit, pose, framing');
         return textResponse(promptRequestCount === 1
           ? 'A woman in a red dress walks forward from the window, natural motion, steady camera.'

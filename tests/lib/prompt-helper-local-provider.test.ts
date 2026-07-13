@@ -44,6 +44,11 @@ describe('LocalPromptHelperProvider', () => {
     expect(systemPrompt).toContain('Treat explicit action, pose-change, gesture, expression, or camera-change requests as intentional direction');
     expect(systemPrompt).toContain('Make the user requested action the primary motion beat');
     expect(systemPrompt).toContain('For commands such as dance, walk, run, sit, kneel, turn around, raise an arm, look back, lean forward, smile, or change pose');
+    expect(systemPrompt).toContain('Transform short abstract action phrases into concrete observable choreography');
+    expect(systemPrompt).toContain('prominent seductive dance movements');
+    expect(systemPrompt).toContain('hip and torso motion, shoulder rhythm, arm and hand paths');
+    expect(systemPrompt).toContain('hips swaying or tracing a figure-eight');
+    expect(systemPrompt).toContain('[specific body choreography]');
     expect(systemPrompt).toContain('Use the source pose as the opening position');
     expect(systemPrompt).toContain('Layer micro-motion around explicit actions as support');
     expect(systemPrompt).toContain('For vague animation requests such as animate, make alive, add motion, cinematic, or more natural');
@@ -51,6 +56,8 @@ describe('LocalPromptHelperProvider', () => {
     expect(systemPrompt).toContain('Return the final edited positive prompt text only');
     expect(systemPrompt).not.toMatch(/\bAvoid\b|\bDo not\b/);
     expect(userMessage).toContain('Make the user requested action, pose change, gesture, expression change, or camera change the main motion beat');
+    expect(userMessage).toContain('Transform short abstract action phrases into concrete observable choreography');
+    expect(userMessage).toContain('For dance prompts, describe hips, torso, shoulders, arms or hands');
     expect(userMessage).toContain('Use micro-motion as supporting detail for explicit actions');
     expect(userMessage).not.toMatch(/\bAvoid\b|\bDo not\b/);
   });
