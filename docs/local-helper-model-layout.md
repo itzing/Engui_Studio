@@ -31,7 +31,14 @@ Current text helper service references the local text helper shell entrypoint:
 
 That script currently launches:
 
-- model: `/home/engui/models/prompt-helper/gemma-4-E2B-it-uncensored-Q4_K_M.gguf`
+- model: `/home/engui/models/prompt-helper/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf`
+- companion split file: `/home/engui/models/prompt-helper/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf`
+
+The Engui settings API currently still points to:
+
+- model: `gemma-4-E2B-it-uncensored-Q4_K_M.gguf`
+
+That Gemma file exists locally, but it is not the active text helper runtime until `/home/engui/prompt-helper-llama.sh` is changed to launch it.
 
 ### Vision helper
 
@@ -58,6 +65,20 @@ Current stable launch settings for GTX 1060 6GB:
 - `no-warmup`
 - `no-webui`
 - `n-gpu-layers 18`
+
+## Active production text service settings
+
+Current stable launch settings for GTX 1060 6GB:
+
+- `ctx-size 4096`
+- `threads 6`
+- `parallel 1`
+- `batch-size 128`
+- `ubatch-size 128`
+- `reasoning off`
+- `reasoning-format none`
+- `no-webui`
+- `n-gpu-layers 28`
 
 ## Runtime switching contract
 
