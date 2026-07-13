@@ -82,6 +82,15 @@ function textResponse(body: string, ok = true, status = 200) {
   } as Response);
 }
 
+function blobResponse(body: Blob, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    statusText: ok ? 'OK' : 'Error',
+    blob: async () => body,
+  } as Response);
+}
+
 describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -230,6 +239,9 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     let promptRequestCount = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.startsWith('data:image/png')) {
+        return blobResponse(new Blob(['image'], { type: 'image/png' }));
+      }
       if (url.includes('/api/lora?workspaceId=ws-1')) {
         return jsonResponse({ success: true, loras: [] });
       }
@@ -253,17 +265,21 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         expect(body.instruction).toContain('Transform short abstract action phrases into concrete observable choreography');
         expect(body.instruction).toContain('For dance prompts, spell out hips, torso, shoulders, hands');
         expect(body.instruction).not.toContain('outfit, pose, framing');
-        return textResponse(promptRequestCount === 1
-          ? 'A woman in a red dress walks forward from the window, natural motion, steady camera.'
-          : 'A woman in a red dress turns beside the window, natural motion, steady camera.');
+        if (promptRequestCount === 1) {
+          return textResponse('A woman in a red dress walks forward from the window, natural motion, steady camera.');
+        }
+        if (promptRequestCount === 2) {
+          return textResponse('A woman in a red dress turns beside the window, natural motion, steady camera.');
+        }
+        return textResponse('A woman in a red dress dances beside the window, natural motion, steady camera.');
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { container } = render(React.createElement(VideoGenerationForm));
+    const firstRender = render(React.createElement(VideoGenerationForm));
 
-    const fileInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null;
+    const fileInput = firstRender.container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null;
     expect(fileInput).toBeTruthy();
 
     const file = new File(['image'], 'reference.png', { type: 'image/png' });
@@ -290,5 +306,32 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
     expect(visionRequestCount).toBe(1);
     expect(promptRequestCount).toBe(2);
+
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      expect(stored.workflows.video.drafts.wan22.draft.imagePreviewUrl).toBeTruthy();
+    });
+
+    const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+    stored.workflows.video.drafts.wan22.draft.imagePreviewUrl = 'data:image/png;base64,aW1hZ2U=';
+    window.localStorage.setItem(CREATE_DRAFT_STATE_STORAGE_KEY, JSON.stringify(stored));
+
+    firstRender.unmount();
+    render(React.createElement(VideoGenerationForm));
+
+    const restoredPromptTextarea = await screen.findByPlaceholderText('generationForm.describeYourVideo') as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png/));
+    });
+
+    fireEvent.change(restoredPromptTextarea, { target: { value: 'make her dance' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Prompt Helper' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(restoredPromptTextarea.value).toBe('A woman in a red dress dances beside the window, natural motion, steady camera.');
+    });
+    expect(visionRequestCount).toBe(1);
+    expect(promptRequestCount).toBe(3);
   });
 });

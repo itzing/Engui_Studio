@@ -19,6 +19,7 @@ import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanit
 import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { extractImagePromptFromDataUrl, requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
+import { buildVideoSourcePromptCacheKey, readVideoSourcePromptCache, writeVideoSourcePromptCache } from '@/lib/create/videoSourcePromptCache';
 
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -51,7 +52,7 @@ export default function VideoGenerationForm() {
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
-    const sourceImagePromptCacheRef = useRef<{ file: File; prompt: string } | null>(null);
+    const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -332,9 +333,10 @@ export default function VideoGenerationForm() {
             let promptHelperInstruction = instruction;
 
             if (currentModel.id === 'wan22' && imageFile) {
-                let sourceImagePrompt = sourceImagePromptCacheRef.current?.file === imageFile
+                const cacheKey = await buildVideoSourcePromptCacheKey(imageFile, currentModel.id);
+                let sourceImagePrompt = sourceImagePromptCacheRef.current?.key === cacheKey.key
                     ? sourceImagePromptCacheRef.current.prompt
-                    : '';
+                    : readVideoSourcePromptCache(cacheKey.key) || '';
 
                 if (!sourceImagePrompt) {
                     const imageDataUrl = await readFileAsDataUrl(imageFile);
@@ -345,8 +347,15 @@ export default function VideoGenerationForm() {
                     }).catch((error) => {
                         throw new Error(`Could not analyze source image: ${error instanceof Error ? error.message : 'Vision Prompt Helper request failed'}`);
                     });
-                    sourceImagePromptCacheRef.current = { file: imageFile, prompt: sourceImagePrompt };
+                    writeVideoSourcePromptCache({
+                        ...cacheKey,
+                        prompt: sourceImagePrompt,
+                        fileName: imageFile.name,
+                        fileSize: imageFile.size,
+                        fileType: imageFile.type,
+                    });
                 }
+                sourceImagePromptCacheRef.current = { key: cacheKey.key, prompt: sourceImagePrompt };
 
                 promptHelperInstruction = buildImageAwareVideoInstruction(instruction, sourceImagePrompt);
             }
