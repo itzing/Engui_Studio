@@ -149,7 +149,7 @@ export default function VideoGenerationForm() {
         'Source image context for WAN2.2 image-to-video prompting:',
         sourceImagePrompt,
         '',
-        'Use the source image context as visual ground truth. Preserve the subject, identity cues, outfit, pose, framing, lighting, background, and camera angle unless the user explicitly asks to change them. Return only the final video prompt.',
+        'Use the source image context as the visual starting point and identity reference. Preserve the subject, identity cues, outfit, overall framing, lighting, background, and camera angle unless the user explicitly asks to change them. Treat the source pose as the initial pose only; adapt body position, gestures, expression, and secondary motion as needed to create a natural WAN2.2 video prompt. Return only the final video prompt.',
     ].join('\n');
 
     useEffect(() => {
