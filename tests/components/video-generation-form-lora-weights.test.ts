@@ -220,18 +220,21 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
-  it('adds source image context before applying WAN22 Prompt Helper', async () => {
+  it('caches source image context before applying WAN22 Prompt Helper again', async () => {
     vi.stubGlobal('URL', {
       ...URL,
       createObjectURL: vi.fn(() => 'blob:video-reference-preview'),
     });
 
+    let visionRequestCount = 0;
+    let promptRequestCount = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/api/lora?workspaceId=ws-1')) {
         return jsonResponse({ success: true, loras: [] });
       }
       if (url.includes('/api/vision-prompt-helper/extract')) {
+        visionRequestCount += 1;
         const body = JSON.parse(String(init?.body || '{}'));
         expect(body.modelId).toBe('wan22');
         expect(body.imageDataUrl).toContain('data:image/png;base64');
@@ -239,15 +242,15 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         return jsonResponse({ success: true, prompt: 'A woman in a red dress stands by a window.' });
       }
       if (url.includes('/api/prompt-helper/improve')) {
+        promptRequestCount += 1;
         const body = JSON.parse(String(init?.body || '{}'));
-        expect(body).toMatchObject({
-          prompt: 'make her walk forward',
-          modelId: 'wan22',
-          helperProfile: 'wan22-video',
-        });
+        expect(body.modelId).toBe('wan22');
+        expect(body.helperProfile).toBe('wan22-video');
         expect(body.instruction).toContain('Source image context for WAN2.2 image-to-video prompting');
         expect(body.instruction).toContain('A woman in a red dress stands by a window.');
-        return textResponse('A woman in a red dress walks forward from the window, natural motion, steady camera.');
+        return textResponse(promptRequestCount === 1
+          ? 'A woman in a red dress walks forward from the window, natural motion, steady camera.'
+          : 'A woman in a red dress turns beside the window, natural motion, steady camera.');
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -271,6 +274,16 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     await waitFor(() => {
       expect(promptTextarea.value).toBe('A woman in a red dress walks forward from the window, natural motion, steady camera.');
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/vision-prompt-helper/extract', expect.anything());
+    expect(visionRequestCount).toBe(1);
+
+    fireEvent.change(promptTextarea, { target: { value: 'make her turn' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Prompt Helper' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(promptTextarea.value).toBe('A woman in a red dress turns beside the window, natural motion, steady camera.');
+    });
+    expect(visionRequestCount).toBe(1);
+    expect(promptRequestCount).toBe(2);
   });
 });

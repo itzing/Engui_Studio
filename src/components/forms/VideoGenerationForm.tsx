@@ -51,6 +51,7 @@ export default function VideoGenerationForm() {
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
+    const sourceImagePromptCacheRef = useRef<{ file: File; prompt: string } | null>(null);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -150,6 +151,10 @@ export default function VideoGenerationForm() {
         '',
         'Use the source image context as visual ground truth. Preserve the subject, identity cues, outfit, pose, framing, lighting, background, and camera angle unless the user explicitly asks to change them. Return only the final video prompt.',
     ].join('\n');
+
+    useEffect(() => {
+        sourceImagePromptCacheRef.current = null;
+    }, [imageFile]);
 
     useEffect(() => {
         const modelId = getWorkflowActiveModel('video') || DEFAULT_VIDEO_MODEL;
@@ -327,14 +332,21 @@ export default function VideoGenerationForm() {
             let promptHelperInstruction = instruction;
 
             if (currentModel.id === 'wan22' && imageFile) {
-                const imageDataUrl = await readFileAsDataUrl(imageFile);
-                const sourceImagePrompt = await extractImagePromptFromDataUrl({
-                    imageDataUrl,
-                    modelId: currentModel.id,
-                    instruction: 'Describe the source image for WAN2.2 image-to-video prompting. Focus on subject, identity cues, outfit, pose, framing, lighting, background, and camera angle. Keep it factual and concise.',
-                }).catch((error) => {
-                    throw new Error(`Could not analyze source image: ${error instanceof Error ? error.message : 'Vision Prompt Helper request failed'}`);
-                });
+                let sourceImagePrompt = sourceImagePromptCacheRef.current?.file === imageFile
+                    ? sourceImagePromptCacheRef.current.prompt
+                    : '';
+
+                if (!sourceImagePrompt) {
+                    const imageDataUrl = await readFileAsDataUrl(imageFile);
+                    sourceImagePrompt = await extractImagePromptFromDataUrl({
+                        imageDataUrl,
+                        modelId: currentModel.id,
+                        instruction: 'Describe the source image for WAN2.2 image-to-video prompting. Focus on subject, identity cues, outfit, pose, framing, lighting, background, and camera angle. Keep it factual and concise.',
+                    }).catch((error) => {
+                        throw new Error(`Could not analyze source image: ${error instanceof Error ? error.message : 'Vision Prompt Helper request failed'}`);
+                    });
+                    sourceImagePromptCacheRef.current = { file: imageFile, prompt: sourceImagePrompt };
+                }
 
                 promptHelperInstruction = buildImageAwareVideoInstruction(instruction, sourceImagePrompt);
             }
