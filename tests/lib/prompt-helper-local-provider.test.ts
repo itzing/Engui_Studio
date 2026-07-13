@@ -40,6 +40,7 @@ describe('LocalPromptHelperProvider', () => {
 
     const userMessage = body.messages?.[1]?.content || '';
 
+    expect(body.temperature).toBe(0.4);
     expect(systemPrompt).toContain('turn the user\'s rough intent into one polished WAN 2.2 I2V positive prompt');
     expect(systemPrompt).toContain('Treat explicit action, pose-change, gesture, expression, or camera-change requests as intentional direction');
     expect(systemPrompt).toContain('Make the user requested action the primary motion beat');
@@ -60,5 +61,38 @@ describe('LocalPromptHelperProvider', () => {
     expect(userMessage).toContain('For dance prompts, describe hips, torso, shoulders, arms or hands');
     expect(userMessage).toContain('Use micro-motion as supporting detail for explicit actions');
     expect(userMessage).not.toMatch(/\bAvoid\b|\bDo not\b/);
+  });
+
+  it('keeps the default image Prompt Helper temperature low', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: {
+            content: 'A cinematic portrait in soft window light.',
+          },
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LocalPromptHelperProvider({
+      baseUrl: 'http://prompt-helper.local',
+      model: 'helper-model',
+    });
+
+    await provider.improve({
+      prompt: 'portrait',
+      negativePrompt: '',
+      instruction: 'make it cinematic',
+      modelId: 'z-image',
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || '{}'));
+
+    expect(body.temperature).toBe(0.1);
   });
 });

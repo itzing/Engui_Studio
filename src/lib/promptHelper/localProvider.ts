@@ -173,6 +173,15 @@ function resolveHelperProfile(request: PromptHelperRequest): PromptHelperProfile
   return request.helperProfile === 'wan22-video' ? 'wan22-video' : 'default';
 }
 
+const DEFAULT_PROMPT_HELPER_TEMPERATURE = 0.1;
+const WAN22_VIDEO_PROMPT_HELPER_TEMPERATURE = 0.4;
+
+function resolvePromptHelperTemperature(request: PromptHelperRequest): number {
+  return resolveHelperProfile(request) === 'wan22-video'
+    ? WAN22_VIDEO_PROMPT_HELPER_TEMPERATURE
+    : DEFAULT_PROMPT_HELPER_TEMPERATURE;
+}
+
 const WAN22_VIDEO_SYSTEM_PROMPT = [
   'You are an expert instruction-following prompt editor for WAN 2.2 image-to-video prompting.',
   '',
@@ -260,6 +269,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
 
   private async callModel(request: PromptHelperRequest): Promise<PromptHelperResult> {
     const { systemPrompt, userMessage } = buildPromptHelperMessages(request);
+    const temperature = resolvePromptHelperTemperature(request);
 
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
@@ -269,7 +279,7 @@ export class LocalPromptHelperProvider implements PromptHelperProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        temperature: 0.1,
+        temperature,
         max_tokens: 8000,
         stream: false,
         messages: [
