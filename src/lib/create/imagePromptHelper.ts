@@ -14,6 +14,7 @@ export const requestImagePromptImprovement = async (payload: {
   negativePrompt?: string;
   instruction: string;
   modelId: string;
+  helperProfile?: 'wan22-video' | 'default';
   width?: number;
   height?: number;
 }): Promise<ImagePromptHelperResult> => {

@@ -18,6 +18,7 @@ import { useI18n } from '@/lib/i18n/context';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
+import { requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -299,29 +300,15 @@ export default function VideoGenerationForm() {
         setIsPromptHelperLoading(true);
 
         try {
-            const response = await fetch('/api/prompt-helper/improve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt,
-                    negativePrompt: currentNegativePrompt,
-                    instruction,
-                    modelId: currentModel.id,
-                    helperProfile: 'wan22-video',
-                    width: Number.isFinite(currentWidth) ? currentWidth : undefined,
-                    height: Number.isFinite(currentHeight) ? currentHeight : undefined,
-                }),
+            const data = await requestImagePromptImprovement({
+                prompt,
+                negativePrompt: currentNegativePrompt,
+                instruction,
+                modelId: currentModel.id,
+                helperProfile: 'wan22-video',
+                width: Number.isFinite(currentWidth) ? currentWidth : undefined,
+                height: Number.isFinite(currentHeight) ? currentHeight : undefined,
             });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success || !data.improvedPrompt) {
-                const error = new Error(data.error || 'Prompt Helper request failed') as Error & {
-                    debug?: { content?: string; reasoningContent?: string };
-                };
-                error.debug = data.debug;
-                throw error;
-            }
 
             setPrompt(data.improvedPrompt);
 

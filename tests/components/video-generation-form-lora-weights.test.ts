@@ -14,7 +14,7 @@ const { mockAddJob, mockSetSelectedModel } = vi.hoisted(() => ({
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => ({
     settings: {
-      promptHelper: { provider: 'disabled', local: {} },
+      promptHelper: { provider: 'local', local: { baseUrl: 'http://prompt-helper.local', model: 'helper-model' } },
       apiKeys: {},
       runpod: { endpoints: {} },
     },
@@ -71,6 +71,14 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
     ok,
     status,
     json: async () => body,
+  } as Response);
+}
+
+function textResponse(body: string, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    text: async () => body,
   } as Response);
 }
 
@@ -175,6 +183,40 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('video-create-reference-fullscreen')).toBeNull();
+    });
+  });
+
+  it('applies WAN22 Prompt Helper plain text responses', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-helper/improve')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body).toMatchObject({
+          prompt: 'small prompt',
+          instruction: 'make it cinematic',
+          modelId: 'wan22',
+          helperProfile: 'wan22-video',
+        });
+        return textResponse('expanded video prompt');
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByPlaceholderText('generationForm.describeYourVideo') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'small prompt' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prompt Helper' }));
+    fireEvent.change(screen.getByLabelText('Instruction'), { target: { value: 'make it cinematic' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(promptTextarea.value).toBe('expanded video prompt');
     });
   });
 });
