@@ -47,6 +47,7 @@ export default function VideoGenerationForm() {
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
     const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
+    const [promptHelperEmptyPrompt, setPromptHelperEmptyPrompt] = useState(false);
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
@@ -330,6 +331,11 @@ export default function VideoGenerationForm() {
         setIsPromptHelperLoading(true);
 
         try {
+            const promptForHelper = promptHelperEmptyPrompt ? '' : prompt;
+            if (promptHelperEmptyPrompt && prompt) {
+                setPrompt('');
+            }
+
             let promptHelperInstruction = instruction;
 
             if (currentModel.id === 'wan22' && imageFile) {
@@ -361,7 +367,7 @@ export default function VideoGenerationForm() {
             }
 
             const data = await requestImagePromptImprovement({
-                prompt,
+                prompt: promptForHelper,
                 negativePrompt: currentNegativePrompt,
                 instruction: promptHelperInstruction,
                 modelId: currentModel.id,
@@ -1141,6 +1147,23 @@ export default function VideoGenerationForm() {
                 {/* Prompt */}
                 {currentModel.inputs.includes('text') && (
                     <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</Label>
+                            {prompt.trim() ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+                                    onClick={() => setPrompt('')}
+                                    disabled={isPromptHelperLoading}
+                                    aria-label="Clear prompt"
+                                    title="Clear prompt"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            ) : null}
+                        </div>
                         <div className="relative">
                             <textarea
                                 className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
@@ -1148,10 +1171,11 @@ export default function VideoGenerationForm() {
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 disabled={isPromptHelperLoading}
+                                data-testid="video-create-prompt-textarea"
                             />
                         </div>
                         {isWanPromptHelperVisible && (
-                            <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
+                            <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_auto]'}`}>
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -1175,6 +1199,21 @@ export default function VideoGenerationForm() {
                                         </>
                                     )}
                                 </Button>
+                                <label
+                                    htmlFor="video-prompt-helper-empty-prompt"
+                                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground ${isPromptHelperLoading || isGenerating || isLoadingMedia ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
+                                    title="Clear the current prompt before applying Prompt Helper"
+                                >
+                                    <input
+                                        id="video-prompt-helper-empty-prompt"
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-border"
+                                        checked={promptHelperEmptyPrompt}
+                                        onChange={(event) => setPromptHelperEmptyPrompt(event.target.checked)}
+                                        disabled={isPromptHelperLoading || isGenerating || isLoadingMedia}
+                                    />
+                                    <span className="whitespace-nowrap">Empty prompt</span>
+                                </label>
                                 <Button
                                     type="button"
                                     variant="outline"

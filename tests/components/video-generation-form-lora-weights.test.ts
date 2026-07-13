@@ -229,6 +229,56 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
+  it('clears the WAN22 video prompt from the form control', async () => {
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'prompt to clear' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear prompt' }));
+
+    expect(promptTextarea.value).toBe('');
+  });
+
+  it('sends an empty prompt when the WAN22 Prompt Helper empty-prompt option is enabled', async () => {
+    window.localStorage.setItem('engui:video-prompt-helper:instruction', 'make it cinematic');
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-helper/improve')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body).toMatchObject({
+          prompt: '',
+          instruction: 'make it cinematic',
+          modelId: 'wan22',
+          helperProfile: 'wan22-video',
+        });
+        return textResponse('generated from empty prompt');
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'existing prompt should be cleared first' } });
+    fireEvent.click(screen.getByLabelText('Empty prompt'));
+
+    await waitFor(() => {
+      expect((screen.getByTitle('Apply saved WAN 2.2 Prompt Helper instruction') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByTitle('Apply saved WAN 2.2 Prompt Helper instruction'));
+
+    await waitFor(() => {
+      expect(promptTextarea.value).toBe('generated from empty prompt');
+    });
+  });
+
   it('caches source image context before applying WAN22 Prompt Helper again', async () => {
     vi.stubGlobal('URL', {
       ...URL,
