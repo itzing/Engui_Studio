@@ -219,4 +219,58 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       expect(promptTextarea.value).toBe('expanded video prompt');
     });
   });
+
+  it('adds source image context before applying WAN22 Prompt Helper', async () => {
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:video-reference-preview'),
+    });
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/vision-prompt-helper/extract')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body.modelId).toBe('wan22');
+        expect(body.imageDataUrl).toContain('data:image/png;base64');
+        expect(body.instruction).toContain('WAN2.2 image-to-video');
+        return jsonResponse({ success: true, prompt: 'A woman in a red dress stands by a window.' });
+      }
+      if (url.includes('/api/prompt-helper/improve')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body).toMatchObject({
+          prompt: 'make her walk forward',
+          modelId: 'wan22',
+          helperProfile: 'wan22-video',
+        });
+        expect(body.instruction).toContain('Source image context for WAN2.2 image-to-video prompting');
+        expect(body.instruction).toContain('A woman in a red dress stands by a window.');
+        return textResponse('A woman in a red dress walks forward from the window, natural motion, steady camera.');
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    const fileInput = container.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(['image'], 'reference.png', { type: 'image/png' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    const promptTextarea = await screen.findByPlaceholderText('generationForm.describeYourVideo') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'make her walk forward' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prompt Helper' }));
+    fireEvent.change(screen.getByLabelText('Instruction'), { target: { value: 'make it cinematic' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(promptTextarea.value).toBe('A woman in a red dress walks forward from the window, natural motion, steady camera.');
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/vision-prompt-helper/extract', expect.anything());
+  });
 });
