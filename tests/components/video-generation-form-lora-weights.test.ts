@@ -248,7 +248,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         expect(body.helperProfile).toBe('wan22-video');
         expect(body.instruction).toContain('Source image context for WAN2.2 image-to-video prompting');
         expect(body.instruction).toContain('A woman in a red dress stands by a window.');
-        expect(body.instruction).toContain('Treat the source pose as the initial pose only');
+        expect(body.instruction).toContain('Treat explicit user requests for action, pose, body movement, expression, or camera change as intentional direction');
+        expect(body.instruction).toContain('Make that requested movement the primary motion beat');
         expect(body.instruction).not.toContain('outfit, pose, framing');
         return textResponse(promptRequestCount === 1
           ? 'A woman in a red dress walks forward from the window, natural motion, steady camera.'

@@ -38,13 +38,20 @@ describe('LocalPromptHelperProvider', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || '{}'));
     const systemPrompt = body.messages?.[0]?.content || '';
 
+    const userMessage = body.messages?.[1]?.content || '';
+
     expect(systemPrompt).toContain('turn the user\'s rough intent into one polished WAN 2.2 I2V positive prompt');
-    expect(systemPrompt).toContain('The source image already carries identity, outfit, visible subject appearance, framing, background, and much of the scene');
-    expect(systemPrompt).toContain('One short clip should have one clear action beat');
-    expect(systemPrompt).toContain('Prefer believable micro-motion for photo animation');
-    expect(systemPrompt).toContain('Use at most one simple camera move');
-    expect(systemPrompt).toContain('Treat any source pose as the initial pose only');
+    expect(systemPrompt).toContain('Treat explicit action, pose-change, gesture, expression, or camera-change requests as intentional direction');
+    expect(systemPrompt).toContain('Make the user requested action the primary motion beat');
+    expect(systemPrompt).toContain('For commands such as dance, walk, run, sit, kneel, turn around, raise an arm, look back, lean forward, smile, or change pose');
+    expect(systemPrompt).toContain('Use the source pose as the opening position');
+    expect(systemPrompt).toContain('Layer micro-motion around explicit actions as support');
+    expect(systemPrompt).toContain('For vague animation requests such as animate, make alive, add motion, cinematic, or more natural');
     expect(systemPrompt).toContain('When source image context is provided, use it as visual ground truth and identity reference');
-    expect(systemPrompt).toContain('Return only the final edited positive prompt text');
+    expect(systemPrompt).toContain('Return the final edited positive prompt text only');
+    expect(systemPrompt).not.toMatch(/\bAvoid\b|\bDo not\b/);
+    expect(userMessage).toContain('Make the user requested action, pose change, gesture, expression change, or camera change the main motion beat');
+    expect(userMessage).toContain('Use micro-motion as supporting detail for explicit actions');
+    expect(userMessage).not.toMatch(/\bAvoid\b|\bDo not\b/);
   });
 });
