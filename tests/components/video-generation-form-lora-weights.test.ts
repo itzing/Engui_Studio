@@ -150,6 +150,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(model?.parameters.find((param) => param.name === 'steps')?.default).toBe(4);
     expect(model?.parameters.find((param) => param.name === 'length')?.default).toBe(80);
     expect(model?.parameters.find((param) => param.name === 'length')?.min).toBeLessThanOrEqual(80);
+    expect(model?.parameters.find((param) => param.name === 'length')?.max).toBe(512);
   });
 
   it('does not apply browser step or range validation to Create Video dimensions', async () => {
