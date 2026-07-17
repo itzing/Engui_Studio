@@ -172,7 +172,8 @@ export const submitImageGeneration = async ({
     }
 
     const nextSeed = typeof data.seed === 'number' && Number.isFinite(data.seed) ? data.seed : fallbackNextSeed;
-    const resolvedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
+    const storedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
+    const resolvedPrompt = typeof data.resolvedPrompt === 'string' ? data.resolvedPrompt : storedPrompt;
 
     return {
       success: true,
@@ -181,13 +182,13 @@ export const submitImageGeneration = async ({
         modelId: currentModel.id,
         type: 'image',
         status: 'queued',
-        prompt: resolvedPrompt,
+        prompt: storedPrompt,
         createdAt: Date.now(),
         endpointId: headers['X-RunPod-Endpoint-Id'],
         options: {
           ...parameterValues,
           randomizeSeed,
-          ...(resolvedPrompt !== prompt ? { promptTemplate: prompt, resolvedPrompt } : {}),
+          ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
         },
       },
       nextSeed,

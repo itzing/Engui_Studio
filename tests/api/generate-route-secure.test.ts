@@ -352,7 +352,8 @@ describe('POST /api/generate secure RunPod flow', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.prompt).toBe(expectedPrompt);
+    expect(json.prompt).toBe(template);
+    expect(json.resolvedPrompt).toBe(expectedPrompt);
     expect(json.seed).toBe(123);
     expect(mockCreateStructuredEnvelope).toHaveBeenCalledWith(
       expect.any(Buffer),
@@ -363,11 +364,12 @@ describe('POST /api/generate secure RunPod flow', () => {
     );
     expect(mockPrisma.job.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        prompt: expectedPrompt,
+        prompt: template,
       }),
     }));
     const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
     expect(updateOptions).toMatchObject({
+      prompt: template,
       promptTemplate: template,
       resolvedPrompt: expectedPrompt,
       resolvedPromptSeed: 123,

@@ -340,10 +340,11 @@ export async function submitGenerationFormData(formData: FormData) {
             parameters.seed = generateRandomSeed();
         }
 
-        const prompt = resolvePromptVariants(rawPrompt || '', parameters.seed);
-        const promptVariantMetadata = hasResolvedPromptVariants(rawPrompt || '', prompt)
+        const promptTemplate = rawPrompt || '';
+        const prompt = resolvePromptVariants(promptTemplate, parameters.seed);
+        const promptVariantMetadata = hasResolvedPromptVariants(promptTemplate, prompt)
             ? {
-                promptTemplate: rawPrompt || '',
+                promptTemplate,
                 resolvedPrompt: prompt,
                 resolvedPromptSeed: parameters.seed,
             }
@@ -484,6 +485,7 @@ export async function submitGenerationFormData(formData: FormData) {
         // Create job in database with media input paths
         const jobId = (formData.get('jobId') as string) || uuidv4();
         const persistedOptions = JSON.stringify(buildPersistedOptions(parameters, inputData, {
+            prompt: promptTemplate,
             randomizeSeed,
             studioSessionContext,
             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
@@ -497,7 +499,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 status: model.api.type === 'runpod' ? 'queueing_up' : 'processing',
                 type: model.type,
                 modelId: model.id,
-                prompt: prompt || null,
+                prompt: promptTemplate || null,
                 sceneSnapshotJson: sceneSnapshot ? JSON.stringify(sceneSnapshot) : null,
                 sourcePromptDocumentId: sourcePromptDocumentId || sceneSnapshot?.sourceDocumentId || null,
                 sourcePromptDocumentTitle: sourcePromptDocumentTitle || sceneSnapshot?.sourceDocumentTitle || null,
@@ -725,6 +727,7 @@ export async function submitGenerationFormData(formData: FormData) {
                         runpodJobId,
                         endpointId,
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            prompt: promptTemplate,
                             randomizeSeed,
                             runpodJobId,
                             endpointId,
@@ -752,7 +755,8 @@ export async function submitGenerationFormData(formData: FormData) {
                     jobId: job.id,
                     runpodJobId: runpodJobId,
                     status: 'IN_QUEUE',
-                    prompt,
+                    prompt: promptTemplate,
+                    resolvedPrompt: prompt,
                     seed: parameters.seed,
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
                 });
@@ -764,6 +768,7 @@ export async function submitGenerationFormData(formData: FormData) {
                     data: {
                         status: 'failed',
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
+                            prompt: promptTemplate,
                             randomizeSeed,
                             error: error.message,
                             secureMode: requiresSecureKey || undefined,

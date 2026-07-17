@@ -66,8 +66,42 @@ describe('POST /api/gallery/assets/from-job-output', () => {
     expect(mockPrisma.galleryAsset.create).toHaveBeenCalledTimes(1);
     const generationSnapshot = JSON.parse(mockPrisma.galleryAsset.create.mock.calls[0][0].data.generationSnapshot);
     expect(generationSnapshot.stylePreset).toBe('studio');
+    expect(generationSnapshot.prompt).toBe('portrait client-a');
     expect(queueGalleryDerivativesMock).toHaveBeenCalledWith('asset-new');
     expect(queueGalleryEnrichmentMock).toHaveBeenCalledWith('asset-new');
+  });
+
+  it('preserves brace prompt templates in gallery snapshots', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-template-1',
+      workspaceId: 'ws-1',
+      type: 'image',
+      resultUrl: '/generations/template.png',
+      options: JSON.stringify({
+        prompt: 'resolved cinematic pov',
+        promptTemplate: '{cinematic|vintage} {pov|side shot}',
+        resolvedPrompt: 'cinematic pov',
+        resolvedPromptSeed: 123,
+      }),
+      thumbnailUrl: null,
+      prompt: '{cinematic|vintage} {pov|side shot}',
+      modelId: 'z-image',
+      endpointId: 'z-image',
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
+    mockPrisma.galleryAsset.create.mockResolvedValue({ id: 'asset-template', enrichmentStatus: 'pending' });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
+      method: 'POST',
+      body: JSON.stringify({ jobId: 'job-template-1', outputId: 'output-1' }),
+      headers: { 'Content-Type': 'application/json' },
+    }) as any);
+
+    expect(response.status).toBe(200);
+    const generationSnapshot = JSON.parse(mockPrisma.galleryAsset.create.mock.calls[0][0].data.generationSnapshot);
+    expect(generationSnapshot.prompt).toBe('{cinematic|vintage} {pov|side shot}');
+    expect(generationSnapshot.promptTemplate).toBe('{cinematic|vintage} {pov|side shot}');
+    expect(generationSnapshot.resolvedPrompt).toBe('cinematic pov');
   });
 
   it('carries WAN22 source image metadata into gallery video snapshots', async () => {
