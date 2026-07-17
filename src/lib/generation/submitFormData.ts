@@ -16,6 +16,7 @@ import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 import { v4 as uuidv4 } from 'uuid';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
+import { hasResolvedPromptVariants, resolvePromptVariants } from '@/lib/generation/promptVariants';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -111,7 +112,7 @@ export async function submitGenerationFormData(formData: FormData) {
         console.log(`🎬 Processing ${model.name} generation request...`);
 
         // Extract prompt
-        const prompt = formData.get('prompt') as string;
+        const rawPrompt = formData.get('prompt') as string;
         const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
         const sourceImageGenerationSnapshot = parseSourceImageGenerationSnapshot(formData.get('sourceImageGenerationSnapshot'));
         const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
@@ -339,6 +340,15 @@ export async function submitGenerationFormData(formData: FormData) {
             parameters.seed = generateRandomSeed();
         }
 
+        const prompt = resolvePromptVariants(rawPrompt || '', parameters.seed);
+        const promptVariantMetadata = hasResolvedPromptVariants(rawPrompt || '', prompt)
+            ? {
+                promptTemplate: rawPrompt || '',
+                resolvedPrompt: prompt,
+                resolvedPromptSeed: parameters.seed,
+            }
+            : {};
+
         // Collect LoRA weights for WAN 2.2 (4 pairs = 8 weights)
         if (modelId === 'wan22') {
             for (let i = 1; i <= 4; i++) {
@@ -477,6 +487,7 @@ export async function submitGenerationFormData(formData: FormData) {
             randomizeSeed,
             studioSessionContext,
             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+            ...promptVariantMetadata,
         }));
         const job = await prisma.job.create({
             data: {
@@ -721,6 +732,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
                             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+                            ...promptVariantMetadata,
                         })),
                         secureState: secureState ? JSON.stringify({
                             ...secureState,
@@ -740,6 +752,8 @@ export async function submitGenerationFormData(formData: FormData) {
                     jobId: job.id,
                     runpodJobId: runpodJobId,
                     status: 'IN_QUEUE',
+                    prompt,
+                    seed: parameters.seed,
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
                 });
             } catch (error: any) {
@@ -755,6 +769,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
                             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+                            ...promptVariantMetadata,
                         }))
                     },
                 });

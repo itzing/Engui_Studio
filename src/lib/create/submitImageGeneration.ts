@@ -86,7 +86,7 @@ export const submitImageGeneration = async ({
   }
 
   const shouldRandomizeSeed = randomizeSeed && currentModel.parameters.some(param => param.name === 'seed');
-  const nextSeed = shouldRandomizeSeed ? generateRandomSeed() : null;
+  const fallbackNextSeed = shouldRandomizeSeed ? generateRandomSeed() : null;
 
   try {
     const formData = new FormData();
@@ -167,9 +167,12 @@ export const submitImageGeneration = async ({
       return {
         success: false,
         error: data.error || 'Generation failed',
-        nextSeed,
+        nextSeed: fallbackNextSeed,
       };
     }
+
+    const nextSeed = typeof data.seed === 'number' && Number.isFinite(data.seed) ? data.seed : fallbackNextSeed;
+    const resolvedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
 
     return {
       success: true,
@@ -178,12 +181,13 @@ export const submitImageGeneration = async ({
         modelId: currentModel.id,
         type: 'image',
         status: 'queued',
-        prompt,
+        prompt: resolvedPrompt,
         createdAt: Date.now(),
         endpointId: headers['X-RunPod-Endpoint-Id'],
         options: {
           ...parameterValues,
           randomizeSeed,
+          ...(resolvedPrompt !== prompt ? { promptTemplate: prompt, resolvedPrompt } : {}),
         },
       },
       nextSeed,
@@ -192,7 +196,7 @@ export const submitImageGeneration = async ({
     return {
       success: false,
       error: 'An unexpected error occurred',
-      nextSeed,
+      nextSeed: fallbackNextSeed,
     };
   }
 };

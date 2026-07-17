@@ -889,7 +889,7 @@ export default function VideoGenerationForm() {
                     modelId: currentModel.id,
                     type: 'video',
                     status: 'queued',
-                    prompt: prompt,
+                    prompt: typeof data.prompt === 'string' ? data.prompt : prompt,
                     createdAt: Date.now(),
                     endpointId: headers['X-RunPod-Endpoint-Id']
                 });

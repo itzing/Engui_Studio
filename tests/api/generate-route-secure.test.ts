@@ -104,6 +104,7 @@ vi.mock('uuid', () => ({
 }));
 
 import { POST } from '@/app/api/generate/route';
+import { resolvePromptVariants } from '@/lib/generation/promptVariants';
 
 function buildRequest(formData: FormData) {
   return new Request('http://localhost/api/generate', {
@@ -303,6 +304,74 @@ describe('POST /api/generate secure RunPod flow', () => {
       kind: 'image',
     }));
     expect(mockStartRunPodSupervisor).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves brace prompt variants by seed before creating the secure payload', async () => {
+    mockGetModelById.mockReturnValue({
+      id: 'wan22',
+      name: 'WAN 2.2',
+      type: 'video',
+      api: {
+        type: 'runpod',
+        endpoint: 'wan22',
+      },
+      inputs: ['text', 'image'],
+      imageInputKey: 'image_path',
+      parameters: [
+        { name: 'seed', type: 'number', default: 123 },
+        { name: 'negative_prompt', type: 'string' },
+      ],
+    });
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { wan22: 'endpoint-1' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+
+    const template = '{4k UHD footage|iphone video from 2000s|vintage 1970s|futuristic 8k} {pov|side-shot|top-down pov|4k video}';
+    const expectedPrompt = resolvePromptVariants(template, 123);
+    const formData = new FormData();
+    formData.set('modelId', 'wan22');
+    formData.set('prompt', template);
+    formData.set('seed', '123');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.prompt).toBe(expectedPrompt);
+    expect(json.seed).toBe(123);
+    expect(mockCreateStructuredEnvelope).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.any(Object),
+      expect.objectContaining({
+        prompt: expectedPrompt,
+      }),
+    );
+    expect(mockPrisma.job.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        prompt: expectedPrompt,
+      }),
+    }));
+    const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
+    expect(updateOptions).toMatchObject({
+      promptTemplate: template,
+      resolvedPrompt: expectedPrompt,
+      resolvedPromptSeed: 123,
+    });
   });
 
   it('persists source image generation metadata on WAN22 jobs', async () => {
