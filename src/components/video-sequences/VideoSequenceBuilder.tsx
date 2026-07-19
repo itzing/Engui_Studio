@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link';
 import {
   ArrowLeft,
+  Check,
   Clapperboard,
   CopyPlus,
   Film,
   FastForward,
+  FolderPlus,
   ImageIcon,
   ImagePlus,
   Images,
@@ -101,7 +103,9 @@ type VideoSegmentTemplate = {
 
 type GalleryAsset = {
   id: string;
+  workspaceId?: string;
   type: 'image' | 'video' | string;
+  bucket?: string;
   originalUrl: string;
   previewUrl: string | null;
   thumbnailUrl: string | null;
@@ -584,7 +588,7 @@ export function getGenerateFromContinuationSummary(sequence: VideoSequence | nul
   };
 }
 
-export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final', renderBlocker?: string | null) {
+export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'generate' | 'generateFrom' | 'status' | 'render' | 'final' | 'galleryFinal', context?: string | null) {
   switch (action) {
     case 'save':
       return 'Save sequence title, description, and selected segment changes';
@@ -597,9 +601,13 @@ export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'gene
     case 'status':
       return 'Refresh the selected segment job status and pull completed output metadata';
     case 'render':
-      return renderBlocker ? `Render final is blocked: ${renderBlocker}` : 'Render one final video from all completed segment outputs';
+      return context ? `Render final is blocked: ${context}` : 'Render one final video from all completed segment outputs';
     case 'final':
       return 'Open the rendered final video in a new tab';
+    case 'galleryFinal':
+      if (context === 'saved') return 'Final video is already saved in Gallery';
+      if (context === 'missing') return 'Render a final video before adding it to Gallery';
+      return 'Copy the rendered final video into Gallery for desktop and mobile viewing';
   }
 }
 
@@ -657,6 +665,7 @@ export default function VideoSequenceBuilder() {
   const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState('');
+  const [finalGalleryAssetIdsBySequenceId, setFinalGalleryAssetIdsBySequenceId] = useState<Record<string, string>>({});
   const [framePickerOpen, setFramePickerOpen] = useState(false);
   const [framePickerTime, setFramePickerTime] = useState(0);
   const [framePickerDuration, setFramePickerDuration] = useState(0);
@@ -727,6 +736,7 @@ export default function VideoSequenceBuilder() {
   const timelineStatus = activeSequence?.finalVideoUrl
     ? 'Final rendered'
     : renderBlocker ?? `${formatPreviewTime(0)} - ${formatPreviewTime(totalDuration)}`;
+  const finalGalleryAssetId = activeSequence ? finalGalleryAssetIdsBySequenceId[activeSequence.id] ?? null : null;
   const filteredGalleryAssets = useMemo(() => {
     const query = galleryQuery.trim().toLowerCase();
     if (!query) return galleryAssets;
@@ -1574,7 +1584,40 @@ export default function VideoSequenceBuilder() {
           ? { ...sequence, status: data.sequence.status, title: data.sequence.title, segmentCount: data.sequence.segments.length }
           : sequence
       )));
+      setFinalGalleryAssetIdsBySequenceId((current) => {
+        if (!current[data.sequence.id]) return current;
+        const next = { ...current };
+        delete next[data.sequence.id];
+        return next;
+      });
       setNotice('Final video rendered');
+    });
+  }
+
+  function dispatchGalleryAssetChanged(asset: GalleryAsset, reason: 'created' | 'existing') {
+    if (typeof window === 'undefined' || !activeSequence) return;
+    window.dispatchEvent(new CustomEvent('galleryAssetChanged', {
+      detail: {
+        workspaceId: asset.workspaceId || activeSequence.workspaceId,
+        assetId: asset.id,
+        reason,
+      },
+    }));
+  }
+
+  async function addFinalVideoToGallery() {
+    if (!activeSequence?.finalVideoUrl || finalGalleryAssetId) return;
+    await runAction('gallery-final', async () => {
+      const data = await fetchJson<{ success: true; alreadyInGallery: boolean; asset: GalleryAsset; bucket: 'common' }>(
+        `/api/video-sequences/${activeSequence.id}/add-to-gallery`,
+        { method: 'POST' },
+      );
+      setFinalGalleryAssetIdsBySequenceId((current) => ({
+        ...current,
+        [activeSequence.id]: data.asset.id,
+      }));
+      dispatchGalleryAssetChanged(data.asset, data.alreadyInGallery ? 'existing' : 'created');
+      setNotice(data.alreadyInGallery ? 'Final video is already in Gallery' : 'Final video added to Gallery');
     });
   }
 
@@ -1759,6 +1802,22 @@ export default function VideoSequenceBuilder() {
             >
               {busy === 'render' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
             </ToolbarIconButton>
+            {activeSequence?.finalVideoUrl ? (
+              <ToolbarIconButton
+                label={finalGalleryAssetId ? 'Final video is in Gallery' : 'Add final video to Gallery'}
+                tooltip={getHeaderActionTooltip(
+                  'galleryFinal',
+                  finalGalleryAssetId ? 'saved' : activeSequence.finalVideoUrl ? null : 'missing',
+                )}
+                onClick={addFinalVideoToGallery}
+                disabled={!!busy || !!finalGalleryAssetId}
+                accent={finalGalleryAssetId ? 'emerald' : undefined}
+              >
+                {busy === 'gallery-final'
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : finalGalleryAssetId ? <Check className="h-4 w-4" /> : <FolderPlus className="h-4 w-4" />}
+              </ToolbarIconButton>
+            ) : null}
             {activeSequence?.finalVideoUrl ? (
               <ToolbarIconLink
                 href={activeSequence.finalVideoUrl}
@@ -2626,12 +2685,14 @@ function ToolbarIconButton({
   tooltip,
   disabled,
   onClick,
+  accent,
   children,
 }: {
   label: string;
   tooltip: string;
   disabled?: boolean;
   onClick: () => void;
+  accent?: 'emerald';
   children: ReactNode;
 }) {
   return (
@@ -2640,7 +2701,10 @@ function ToolbarIconButton({
         type="button"
         variant="outline"
         size="icon"
-        className="h-9 w-9 shrink-0 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 disabled:opacity-40"
+        className={cn(
+          'h-9 w-9 shrink-0 border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 disabled:opacity-40',
+          accent === 'emerald' ? 'border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10' : null,
+        )}
         onClick={onClick}
         disabled={disabled}
         aria-label={label}

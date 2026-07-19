@@ -109,6 +109,8 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getHeaderActionTooltip('generateFrom')).toContain('selected segment forward');
     expect(getHeaderActionTooltip('render', 'Segment 2 is stale')).toContain('Segment 2 is stale');
     expect(getHeaderActionTooltip('final')).toContain('new tab');
+    expect(getHeaderActionTooltip('galleryFinal')).toContain('Gallery');
+    expect(getHeaderActionTooltip('galleryFinal', 'saved')).toContain('already saved');
   });
 
   it('plans generate-from regeneration across draft failed and stale segments', () => {

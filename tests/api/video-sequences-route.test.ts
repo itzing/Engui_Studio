@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPrisma } = vi.hoisted(() => ({
+const { mockPrisma, queueGalleryDerivativesMock, queueGalleryEnrichmentMock } = vi.hoisted(() => ({
   mockPrisma: {
     videoSequence: {
       findMany: vi.fn(),
@@ -30,17 +31,23 @@ const { mockPrisma } = vi.hoisted(() => ({
     },
     galleryAsset: {
       findFirst: vi.fn(),
+      create: vi.fn(),
     },
     job: {
       findUnique: vi.fn(),
     },
     $transaction: vi.fn(),
   },
+  queueGalleryDerivativesMock: vi.fn(),
+  queueGalleryEnrichmentMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   prisma: mockPrisma,
 }));
+
+vi.mock('@/lib/galleryDerivatives', () => ({ queueGalleryDerivatives: queueGalleryDerivativesMock }));
+vi.mock('@/lib/galleryEnrichment', () => ({ queueGalleryEnrichment: queueGalleryEnrichmentMock }));
 
 const { mockSubmitGenerationFormData } = vi.hoisted(() => ({
   mockSubmitGenerationFormData: vi.fn(),
@@ -65,6 +72,7 @@ vi.mock('@/lib/ffmpegService', () => ({
 
 import { POST as createSequence } from '@/app/api/video-sequences/route';
 import { DELETE as deleteSequence } from '@/app/api/video-sequences/[id]/route';
+import { POST as addSequenceFinalToGallery } from '@/app/api/video-sequences/[id]/add-to-gallery/route';
 import { POST as generateFromSegment } from '@/app/api/video-sequences/[id]/generate-from/route';
 import { POST as renderSequence } from '@/app/api/video-sequences/[id]/render/route';
 import { POST as createSegment } from '@/app/api/video-sequences/[id]/segments/route';
@@ -2376,5 +2384,154 @@ describe('video sequence APIs', () => {
     expect(response.status).toBe(400);
     expect(json.error).toBe('Segment 2 is stale; render requires every segment to be completed');
     expect(mockFfmpegService.concatenateVideos).not.toHaveBeenCalled();
+  });
+
+  it('adds a rendered final sequence video to Gallery storage', async () => {
+    const finalVideoPath = path.join(process.cwd(), 'public', 'generations', 'video-sequences', 'ws-1', 'seq-1', 'final', 'final-test.mp4');
+    const finalVideoBytes = Buffer.from('final video bytes');
+    fs.mkdirSync(path.dirname(finalVideoPath), { recursive: true });
+    fs.writeFileSync(finalVideoPath, finalVideoBytes);
+    createdFiles.add(finalVideoPath);
+
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      workspaceId: 'ws-1',
+      title: 'Gallery sequence',
+      description: 'Sequence description',
+      status: 'rendered',
+      aspectRatio: '16:9',
+      width: 1280,
+      height: 720,
+      targetFps: 16,
+      defaultModelId: 'wan22',
+      defaultGenerationOptionsJson: JSON.stringify({ steps: 4 }),
+      finalVideoUrl: '/generations/video-sequences/ws-1/seq-1/final/final-test.mp4',
+      finalRenderJobId: null,
+      segments: [
+        {
+          id: 'seg-1',
+          sequenceId: 'seq-1',
+          orderIndex: 0,
+          title: 'Segment 1',
+          status: 'completed',
+          sourceMode: 'initial',
+          sourceImageUrl: '/generations/source.png',
+          sourceImageAssetId: 'asset-source',
+          sourceJobId: null,
+          sourceSegmentId: null,
+          sourceFrameRole: 'first',
+          prompt: 'segment prompt',
+          negativePrompt: '',
+          motionPrompt: 'slow turn',
+          continuityPrompt: '',
+          modelId: 'wan22',
+          endpointId: 'wan-endpoint',
+          loraConfigJson: '{}',
+          generationOptionsJson: JSON.stringify({ length: 80 }),
+          seed: 42,
+          randomizeSeed: false,
+          durationSeconds: 5,
+          generationJobId: 'job-1',
+          outputVideoUrl: '/generations/segment.mp4',
+          firstFrameUrl: '/generations/first.png',
+          lastFrameUrl: '/generations/last.png',
+          templateId: null,
+          templateSnapshotJson: null,
+          generationSnapshotJson: JSON.stringify({ resultUrl: '/generations/segment.mp4' }),
+        },
+      ],
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
+    mockPrisma.galleryAsset.create.mockImplementation(async ({ data }: any) => ({
+      id: 'asset-sequence-final',
+      ...data,
+      addedToGalleryAt: new Date('2026-07-19T21:45:00Z'),
+      updatedAt: new Date('2026-07-19T21:45:00Z'),
+    }));
+
+    const response = await addSequenceFinalToGallery(request('http://localhost/api/video-sequences/seq-1/add-to-gallery', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ success: true, alreadyInGallery: false, bucket: 'common' });
+    const contentHash = crypto.createHash('sha256').update(finalVideoBytes).digest('hex');
+    expect(mockPrisma.galleryAsset.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        workspaceId: 'ws-1',
+        type: 'video',
+        bucket: 'common',
+        originKind: 'video_sequence_final',
+        sourceOutputId: 'video-sequence-final:seq-1:/generations/video-sequences/ws-1/seq-1/final/final-test.mp4',
+        contentHash,
+        originalUrl: `/generations/gallery/ws-1/${contentHash}.mp4`,
+      }),
+    }));
+    const snapshot = JSON.parse(mockPrisma.galleryAsset.create.mock.calls[0][0].data.generationSnapshot);
+    expect(snapshot).toMatchObject({
+      originKind: 'video_sequence_final',
+      prompt: 'Gallery sequence',
+      sequenceId: 'seq-1',
+      width: 1280,
+      height: 720,
+      targetFps: 16,
+      segments: [
+        expect.objectContaining({
+          id: 'seg-1',
+          prompt: 'segment prompt',
+          generationJobId: 'job-1',
+          generationOptions: { length: 80 },
+        }),
+      ],
+    });
+    expect(queueGalleryDerivativesMock).toHaveBeenCalledWith('asset-sequence-final');
+    expect(queueGalleryEnrichmentMock).toHaveBeenCalledWith('asset-sequence-final');
+    const copiedPath = path.join(process.cwd(), 'public', json.asset.originalUrl.replace(/^\/+/, ''));
+    createdFiles.add(copiedPath);
+    expect(fs.existsSync(copiedPath)).toBe(true);
+  });
+
+  it('returns the existing Gallery asset when the same final sequence video was already saved', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      workspaceId: 'ws-1',
+      finalVideoUrl: '/generations/video-sequences/ws-1/seq-1/final/final-test.mp4',
+      segments: [],
+    });
+    mockPrisma.galleryAsset.findFirst.mockResolvedValueOnce({
+      id: 'asset-existing',
+      workspaceId: 'ws-1',
+      originKind: 'video_sequence_final',
+    });
+
+    const response = await addSequenceFinalToGallery(request('http://localhost/api/video-sequences/seq-1/add-to-gallery', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ success: true, alreadyInGallery: true, asset: { id: 'asset-existing' } });
+    expect(mockPrisma.galleryAsset.create).not.toHaveBeenCalled();
+    expect(queueGalleryDerivativesMock).not.toHaveBeenCalled();
+    expect(queueGalleryEnrichmentMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects adding a sequence to Gallery before final render exists', async () => {
+    mockPrisma.videoSequence.findUnique.mockResolvedValue({
+      id: 'seq-1',
+      workspaceId: 'ws-1',
+      finalVideoUrl: null,
+      segments: [],
+    });
+
+    const response = await addSequenceFinalToGallery(request('http://localhost/api/video-sequences/seq-1/add-to-gallery', {}) as any, {
+      params: Promise.resolve({ id: 'seq-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toBe('Final video must be rendered before it can be added to Gallery');
+    expect(mockPrisma.galleryAsset.create).not.toHaveBeenCalled();
   });
 });

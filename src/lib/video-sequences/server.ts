@@ -5,6 +5,8 @@ import path from 'path';
 
 import { prisma } from '@/lib/prisma';
 import { ffmpegService } from '@/lib/ffmpegService';
+import { queueGalleryDerivatives } from '@/lib/galleryDerivatives';
+import { queueGalleryEnrichment } from '@/lib/galleryEnrichment';
 import { submitGenerationFormData } from '@/lib/generation/submitFormData';
 import { StudioSessionApiError } from '@/lib/studio-sessions/api';
 
@@ -300,6 +302,73 @@ function sequenceRenderPublicUrl(workspaceId: string, sequenceId: string, fileNa
 
 function sequenceRenderOutputPath(workspaceId: string, sequenceId: string, fileName: string) {
   return path.join(sequenceFrameRoot, safePathSegment(workspaceId), safePathSegment(sequenceId), 'final', fileName);
+}
+
+function galleryPublicUrl(workspaceId: string, fileName: string) {
+  return `/generations/gallery/${safePathSegment(workspaceId)}/${fileName}`;
+}
+
+function galleryOutputPath(workspaceId: string, fileName: string) {
+  return path.join(process.cwd(), 'public', 'generations', 'gallery', safePathSegment(workspaceId), fileName);
+}
+
+function getMediaExtensionFromUrl(url: string, fallback: string) {
+  const ext = path.extname(url.split('?')[0].split('#')[0]).toLowerCase();
+  return ext || fallback;
+}
+
+function buildVideoSequenceFinalSourceOutputId(sequenceId: string, finalVideoUrl: string) {
+  return `video-sequence-final:${sequenceId}:${finalVideoUrl}`;
+}
+
+function buildVideoSequenceFinalGallerySnapshot(sequence: any) {
+  const segments = Array.isArray(sequence.segments) ? sequence.segments : [];
+  return {
+    originKind: 'video_sequence_final',
+    prompt: sequence.title || 'Video sequence final',
+    modelId: sequence.defaultModelId || null,
+    sequenceId: sequence.id,
+    sequenceTitle: sequence.title,
+    sequenceDescription: sequence.description || '',
+    status: sequence.status,
+    aspectRatio: sequence.aspectRatio,
+    width: sequence.width,
+    height: sequence.height,
+    targetFps: sequence.targetFps,
+    defaultModelId: sequence.defaultModelId,
+    defaultGenerationOptions: parseJsonField(sequence.defaultGenerationOptionsJson, {}),
+    finalVideoUrl: sequence.finalVideoUrl,
+    segments: segments.map((segment: any) => ({
+      id: segment.id,
+      orderIndex: segment.orderIndex,
+      title: segment.title,
+      status: segment.status,
+      sourceMode: segment.sourceMode,
+      sourceImageUrl: segment.sourceImageUrl,
+      sourceImageAssetId: segment.sourceImageAssetId,
+      sourceJobId: segment.sourceJobId,
+      sourceSegmentId: segment.sourceSegmentId,
+      sourceFrameRole: segment.sourceFrameRole,
+      prompt: segment.prompt,
+      negativePrompt: segment.negativePrompt,
+      motionPrompt: segment.motionPrompt,
+      continuityPrompt: segment.continuityPrompt,
+      modelId: segment.modelId,
+      endpointId: segment.endpointId,
+      loraConfig: parseJsonField(segment.loraConfigJson, {}),
+      generationOptions: parseJsonField(segment.generationOptionsJson, {}),
+      seed: segment.seed,
+      randomizeSeed: segment.randomizeSeed,
+      durationSeconds: segment.durationSeconds,
+      generationJobId: segment.generationJobId,
+      outputVideoUrl: segment.outputVideoUrl,
+      firstFrameUrl: segment.firstFrameUrl,
+      lastFrameUrl: segment.lastFrameUrl,
+      templateId: segment.templateId,
+      templateSnapshot: parseJsonField(segment.templateSnapshotJson, {}),
+      generationSnapshot: parseJsonField(segment.generationSnapshotJson, {}),
+    })),
+  };
 }
 
 function segmentCreateDefaults(orderIndex: number) {
@@ -1315,6 +1384,94 @@ export async function renderVideoSequenceFinal(sequenceId: string) {
   });
 
   return serializeVideoSequence(updated);
+}
+
+export async function addVideoSequenceFinalToGallery(sequenceId: string) {
+  const sequence = await prisma.videoSequence.findUnique({
+    where: { id: sequenceId },
+    include: { segments: { orderBy: { orderIndex: 'asc' } } },
+  });
+  if (!sequence) throw new StudioSessionApiError(404, 'Video sequence not found');
+  if (!sequence.finalVideoUrl) throw new StudioSessionApiError(400, 'Final video must be rendered before it can be added to Gallery');
+
+  const sourceOutputId = buildVideoSequenceFinalSourceOutputId(sequence.id, sequence.finalVideoUrl);
+  const existingBySource = await prisma.galleryAsset.findFirst({
+    where: {
+      workspaceId: sequence.workspaceId,
+      originKind: 'video_sequence_final',
+      sourceOutputId,
+      bucket: 'common',
+      trashed: false,
+    },
+    orderBy: { addedToGalleryAt: 'desc' },
+  });
+
+  if (existingBySource) {
+    return {
+      alreadyInGallery: true,
+      asset: existingBySource,
+      bucket: 'common',
+    };
+  }
+
+  const inputPath = resolveLocalPublicPath(sequence.finalVideoUrl);
+  if (!inputPath || !fs.existsSync(inputPath)) {
+    throw new StudioSessionApiError(400, 'Final video must be a local /generations or /results file before it can be added to Gallery');
+  }
+
+  const fileBytes = fs.readFileSync(inputPath);
+  const contentHash = crypto.createHash('sha256').update(fileBytes).digest('hex');
+  const existingByHash = await prisma.galleryAsset.findFirst({
+    where: {
+      workspaceId: sequence.workspaceId,
+      contentHash,
+      bucket: 'common',
+      trashed: false,
+    },
+    orderBy: { addedToGalleryAt: 'desc' },
+  });
+
+  if (existingByHash) {
+    return {
+      alreadyInGallery: true,
+      asset: existingByHash,
+      bucket: 'common',
+    };
+  }
+
+  const ext = getMediaExtensionFromUrl(sequence.finalVideoUrl, '.mp4');
+  const fileName = `${contentHash}${ext}`;
+  const outputPath = galleryOutputPath(sequence.workspaceId, fileName);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, fileBytes);
+
+  const originalUrl = galleryPublicUrl(sequence.workspaceId, fileName);
+  const asset = await prisma.galleryAsset.create({
+    data: {
+      workspaceId: sequence.workspaceId,
+      type: 'video',
+      bucket: 'common',
+      originKind: 'video_sequence_final',
+      sourceJobId: null,
+      sourceOutputId,
+      contentHash,
+      originalUrl,
+      previewUrl: originalUrl,
+      thumbnailUrl: null,
+      generationSnapshot: JSON.stringify(buildVideoSequenceFinalGallerySnapshot(sequence)),
+      derivativeStatus: 'pending',
+      enrichmentStatus: 'pending',
+    },
+  });
+
+  queueGalleryDerivatives(asset.id);
+  queueGalleryEnrichment(asset.id);
+
+  return {
+    alreadyInGallery: false,
+    asset,
+    bucket: 'common',
+  };
 }
 
 export async function extractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string) {
