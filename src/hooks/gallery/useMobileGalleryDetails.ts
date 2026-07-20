@@ -18,6 +18,8 @@ export type MobileGalleryDetail = {
   derivativeStatus?: string;
   enrichmentStatus?: string;
   prompt?: string | null;
+  promptTemplate?: string | null;
+  resolvedPrompt?: string | null;
   modelId?: string | null;
   addedToGalleryAt: string;
   updatedAt?: string;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
+import { getPromptVersions } from '@/lib/promptVersions';
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   if (!raw) return {};
@@ -13,6 +14,7 @@ function parseGenerationSnapshot(raw: string | null): Record<string, any> {
 }
 
 function toAssetResponse(asset: any, snapshot: Record<string, any>) {
+  const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
   return {
     id: asset.id,
     workspaceId: asset.workspaceId,
@@ -29,7 +31,9 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
     sourceOutputId: asset.sourceOutputId,
     derivativeStatus: asset.derivativeStatus,
     enrichmentStatus: asset.enrichmentStatus,
-    prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : null,
+    prompt: promptVersions.originalPrompt || null,
+    promptTemplate: promptVersions.originalPrompt || null,
+    resolvedPrompt: promptVersions.resolvedPrompt,
     modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
     hasSceneSnapshot: !!(snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' && snapshot.sceneSnapshot.templateId === 'scene_template_v2'),
     addedToGalleryAt: asset.addedToGalleryAt,

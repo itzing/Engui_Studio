@@ -12,18 +12,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useMobileGalleryDetails } from '@/hooks/gallery/useMobileGalleryDetails';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
+import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
+  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
+    setPromptMode('original');
   }, [asset?.id, asset?.userTags]);
 
   const mediaUrl = useMemo(() => asset?.previewUrl || asset?.originalUrl || '', [asset]);
+  const promptVersions = useMemo(() => getPromptVersions({
+    prompt: asset?.prompt,
+    promptTemplate: asset?.promptTemplate,
+    resolvedPrompt: asset?.resolvedPrompt,
+  }), [asset]);
+  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
 
   const downloadAsset = async () => {
     if (!asset) return;
@@ -114,7 +123,10 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({
+        action,
+        ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+      }),
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
@@ -176,8 +188,24 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                     <div><div className="text-muted-foreground">Source job</div><div>{asset.sourceJobId || '—'}</div></div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Prompt</div>
-                    <div className="whitespace-pre-wrap">{asset.prompt || 'No prompt saved.'}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-muted-foreground">Prompt</div>
+                      {promptVersions.hasResolvedPrompt ? (
+                        <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                          {(['original', 'resolved'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setPromptMode(mode)}
+                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                              {mode === 'original' ? 'Original' : 'Resolved'}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="whitespace-pre-wrap">{selectedPrompt || 'No prompt saved.'}</div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-muted-foreground">Tags</div>

@@ -75,6 +75,7 @@ function buildReusePayload(
   asset: GalleryReuseAsset,
   snapshot: Record<string, any>,
   sourceJobImageInputPath?: string | null,
+  promptOverride?: string | null,
 ) {
   const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
@@ -90,7 +91,7 @@ function buildReusePayload(
     if (!sourceSnapshot) {
       return null;
     }
-    const sourcePrompt = typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
+    const sourcePrompt = typeof promptOverride === 'string' ? promptOverride : typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
     const sourceModelId = typeof sourceSnapshot.modelId === 'string' ? sourceSnapshot.modelId : undefined;
     const sourceOptions = { ...sourceSnapshot };
     delete sourceOptions.prompt;
@@ -188,6 +189,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const action = body.action as ReuseAction;
+    const promptOverride = action === 'txt2img' && typeof body.promptOverride === 'string' ? body.promptOverride : null;
 
     if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
@@ -246,7 +248,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       sourceJobImageInputPath = sourceJob?.imageInputPath || null;
     }
 
-    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot, sourceJobImageInputPath);
+    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot, sourceJobImageInputPath, promptOverride);
     if (!payload) {
       return NextResponse.json({ success: false, error: 'Source image metadata is not available for this video' }, { status: 400 });
     }

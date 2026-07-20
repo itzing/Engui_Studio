@@ -96,8 +96,8 @@ function buildSourceImageSnapshot(snapshot: Record<string, any>) {
   };
 }
 
-function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, any>) {
-  const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
+function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, any>, promptOverride?: string | null) {
+  const prompt = typeof promptOverride === 'string' ? promptOverride : typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
   const baseOptions = { ...snapshot };
   delete baseOptions.prompt;
@@ -123,7 +123,7 @@ function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, an
   };
 }
 
-function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, snapshot: Record<string, any>) {
+function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, snapshot: Record<string, any>, promptOverride?: string | null) {
   const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
   const baseOptions = { ...snapshot };
@@ -138,7 +138,7 @@ function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, sna
     if (!sourceSnapshot) {
       return null;
     }
-    return buildImageTxt2ImgPayload(action, sourceSnapshot);
+    return buildImageTxt2ImgPayload(action, sourceSnapshot, promptOverride);
   }
 
   if (action === 'img2img') {
@@ -177,6 +177,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json().catch(() => ({}));
     const action = body.action as ReuseAction;
     const outputId = typeof body.outputId === 'string' ? body.outputId : 'output-1';
+    const promptOverride = action === 'txt2img' && typeof body.promptOverride === 'string' ? body.promptOverride : null;
 
     if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
@@ -221,7 +222,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       prompt: job.prompt || snapshot.prompt || '',
       modelId: (job as any).modelId || snapshot.modelId,
       endpointId: (job as any).endpointId || snapshot.endpointId,
-    });
+    }, promptOverride);
     if (!payload) {
       return NextResponse.json({ success: false, error: 'Source image metadata is not available for this video' }, { status: 400 });
     }

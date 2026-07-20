@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getPromptVersions } from '@/lib/promptVersions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -50,33 +51,33 @@ export async function GET(request: NextRequest) {
         : { addedToGalleryAt: 'desc' },
     });
 
-    let normalizedAssets = assets.map(asset => ({
-      id: asset.id,
-      workspaceId: asset.workspaceId,
-      type: asset.type,
-      originalUrl: asset.originalUrl,
-      previewUrl: asset.previewUrl,
-      thumbnailUrl: asset.thumbnailUrl,
-      favorited: asset.favorited,
-      trashed: asset.trashed,
-      userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
-      autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
-      sourceJobId: asset.sourceJobId,
-      sourceOutputId: asset.sourceOutputId,
-      bucket: asset.bucket,
-      derivativeStatus: asset.derivativeStatus,
-      enrichmentStatus: asset.enrichmentStatus,
-      prompt: (() => {
-        const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
-        return typeof snapshot.prompt === 'string' && snapshot.prompt.trim().length > 0 ? snapshot.prompt : null;
-      })(),
-      modelId: (() => {
-        const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
-        return typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null;
-      })(),
-      addedToGalleryAt: asset.addedToGalleryAt,
-      updatedAt: asset.updatedAt,
-    }));
+    let normalizedAssets = assets.map(asset => {
+      const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+      const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
+      return {
+        id: asset.id,
+        workspaceId: asset.workspaceId,
+        type: asset.type,
+        originalUrl: asset.originalUrl,
+        previewUrl: asset.previewUrl,
+        thumbnailUrl: asset.thumbnailUrl,
+        favorited: asset.favorited,
+        trashed: asset.trashed,
+        userTags: asset.userTags ? JSON.parse(asset.userTags) : [],
+        autoTags: asset.autoTags ? JSON.parse(asset.autoTags) : [],
+        sourceJobId: asset.sourceJobId,
+        sourceOutputId: asset.sourceOutputId,
+        bucket: asset.bucket,
+        derivativeStatus: asset.derivativeStatus,
+        enrichmentStatus: asset.enrichmentStatus,
+        prompt: promptVersions.originalPrompt || null,
+        promptTemplate: promptVersions.originalPrompt || null,
+        resolvedPrompt: promptVersions.resolvedPrompt,
+        modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
+        addedToGalleryAt: asset.addedToGalleryAt,
+        updatedAt: asset.updatedAt,
+      };
+    });
 
     if (tokens.length > 0) {
       normalizedAssets = normalizedAssets.filter(asset => {

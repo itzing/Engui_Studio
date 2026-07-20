@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { ChevronLeft, ChevronRight, Download, Trash2, Copy, Sparkles, Type, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
+import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 interface JobDetailsDialogProps {
     job: Job | null;
@@ -148,6 +149,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
     const [isUpscaling, setIsUpscaling] = useState(false);
     const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
+    const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -213,6 +215,11 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
     const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
     const loraUsageSummary = useMemo(() => getLoraUsageSummary(job), [job]);
+    const promptVersions = useMemo(() => getPromptVersions({
+        prompt: job?.prompt,
+        options: (job as any)?.options,
+    }), [job]);
+    const selectedPrompt = getPromptForMode(promptVersions, promptMode);
     const sourceImagePath = typeof (job as any)?.imageInputPath === 'string' && (job as any).imageInputPath.trim()
         ? (job as any).imageInputPath.trim()
         : '';
@@ -223,6 +230,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
     const canNavigateLeft = Boolean(onNavigate && totalCount > 1 && currentIndex > 1);
     const canNavigateRight = Boolean(onNavigate && totalCount > 1 && currentIndex > 0 && currentIndex < totalCount);
+
+    useEffect(() => {
+        setPromptMode('original');
+    }, [job?.id]);
 
     const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
         if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -326,7 +337,11 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
             const response = await fetch(`/api/jobs/${job.id}/reuse`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, outputId: selectedOutput.outputId }),
+                body: JSON.stringify({
+                    action,
+                    outputId: selectedOutput.outputId,
+                    ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+                }),
             });
             const data = await response.json();
 
@@ -414,8 +429,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     };
 
     const handleCopyPrompt = () => {
-        if (job?.prompt) {
-            navigator.clipboard.writeText(job.prompt);
+        if (selectedPrompt) {
+            navigator.clipboard.writeText(selectedPrompt);
         }
     };
 
@@ -544,12 +559,28 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-medium text-foreground">{t('jobDetails.prompt')}</h3>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyPrompt}>
-                                        <Copy className="w-3 h-3" />
-                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                        {promptVersions.hasResolvedPrompt ? (
+                                            <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                                                {(['original', 'resolved'] as const).map((mode) => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setPromptMode(mode)}
+                                                        className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    >
+                                                        {mode === 'original' ? 'Original' : 'Resolved'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyPrompt}>
+                                            <Copy className="w-3 h-3" />
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="bg-muted/30 p-3 rounded-lg border border-border text-sm text-muted-foreground leading-relaxed max-h-[150px] overflow-y-auto">
-                                    {job.prompt || 'No prompt provided'}
+                                    {selectedPrompt || 'No prompt provided'}
                                 </div>
                             </div>
 

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 import { useToast } from '@/components/ui/toast';
@@ -23,6 +24,8 @@ export type GalleryAssetDialogAsset = {
   sourceOutputId?: string | null;
   enrichmentStatus?: string;
   prompt?: string | null;
+  promptTemplate?: string | null;
+  resolvedPrompt?: string | null;
   modelId?: string | null;
   addedToGalleryAt: string;
 };
@@ -45,10 +48,18 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [isEnriching, setIsEnriching] = useState(false);
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
+  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
   const { showToast } = useToast();
+  const promptVersions = getPromptVersions({
+    prompt: asset?.prompt,
+    promptTemplate: asset?.promptTemplate,
+    resolvedPrompt: asset?.resolvedPrompt,
+  });
+  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
 
   useEffect(() => {
     setTagsInput((asset?.userTags || []).join(', '));
+    setPromptMode('original');
   }, [asset?.id, asset?.userTags]);
 
   const handleDownload = async () => {
@@ -125,7 +136,10 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({
+          action,
+          ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+        }),
       });
       const data = await response.json();
       if (!response.ok || !data.success || !data.payload) {
@@ -187,8 +201,24 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
             <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 overscroll-contain">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Prompt</span>
-                  <div className="text-sm whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/20 px-3 py-2 max-h-40 overflow-y-auto">{asset.prompt || '—'}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">Prompt</span>
+                    {promptVersions.hasResolvedPrompt ? (
+                      <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                        {(['original', 'resolved'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setPromptMode(mode)}
+                            className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                          >
+                            {mode === 'original' ? 'Original' : 'Resolved'}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/20 px-3 py-2 max-h-40 overflow-y-auto">{selectedPrompt || '—'}</div>
                 </div>
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground">Source Job</span>

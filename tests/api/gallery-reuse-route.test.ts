@@ -226,4 +226,41 @@ describe('gallery reuse route', () => {
     });
     expect(json.payload.options.image_path).toBeUndefined();
   });
+
+  it('uses selected prompt override for gallery txt2img payloads', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      type: 'image',
+      originKind: 'job_output',
+      originalUrl: '/generations/gallery/ws-1/file.png',
+      generationSnapshot: JSON.stringify({
+        prompt: 'portrait, {hairColor}',
+        resolvedPrompt: 'portrait, blonde hair',
+        modelId: 'z-image',
+        width: 1024,
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img', promptOverride: 'portrait, blonde hair' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'portrait, blonde hair',
+      options: {
+        width: 1024,
+        use_controlnet: false,
+        task_type: '',
+      },
+    });
+  });
 });

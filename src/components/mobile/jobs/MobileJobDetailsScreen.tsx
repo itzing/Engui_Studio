@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
 
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
+import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type MediaResolution = { width: number; height: number };
 
@@ -64,12 +65,18 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
+  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
   const selectedOutput = job?.outputs?.[0] || null;
   const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
   const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
   const hasSceneSnapshot = !!(job as any)?.sceneSnapshotJson;
+  const promptVersions = useMemo(() => getPromptVersions({
+    prompt: job?.prompt,
+    options: (job as any)?.options,
+  }), [job]);
+  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
   const loraSummary = useMemo(() => {
     if (!job) return '';
     const options = parseJobOptions((job as any).options);
@@ -121,6 +128,10 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
 
     return arraySlots.join(' • ');
   }, [job]);
+
+  useEffect(() => {
+    setPromptMode('original');
+  }, [job?.id]);
 
   const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
     if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -181,7 +192,11 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     const response = await fetch(`/api/jobs/${job.id}/reuse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, outputId: selectedOutput.outputId }),
+      body: JSON.stringify({
+        action,
+        outputId: selectedOutput.outputId,
+        ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+      }),
     });
     const data = await response.json();
     if (response.ok && data.success && data.payload) {
@@ -322,8 +337,24 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div><div className="text-muted-foreground">Result resolution</div><div>{formatResolution(selectedActualResolution || requestedResolution)}</div></div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Prompt</div>
-                    <div className="whitespace-pre-wrap">{job.prompt || 'No prompt saved.'}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-muted-foreground">Prompt</div>
+                      {promptVersions.hasResolvedPrompt ? (
+                        <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                          {(['original', 'resolved'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setPromptMode(mode)}
+                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                              {mode === 'original' ? 'Original' : 'Resolved'}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="whitespace-pre-wrap">{selectedPrompt || 'No prompt saved.'}</div>
                   </div>
                   {selectedOutput ? (
                     <div>

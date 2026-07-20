@@ -117,4 +117,44 @@ describe('job reuse route', () => {
     });
     expect(json.payload.options.image_path).toBeUndefined();
   });
+
+  it('uses selected prompt override for job txt2img payloads', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-1',
+      type: 'image',
+      prompt: 'portrait, {hairColor}',
+      resultUrl: '/generations/job-output.png',
+      modelId: 'z-image',
+      endpointId: 'z-image',
+      options: JSON.stringify({
+        prompt: 'portrait, {hairColor}',
+        promptTemplate: 'portrait, {hairColor}',
+        resolvedPrompt: 'portrait, blonde hair',
+        modelId: 'z-image',
+        width: 1024,
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/jobs/job-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img', outputId: 'output-1', promptOverride: 'portrait, blonde hair' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'job-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'portrait, blonde hair',
+      options: {
+        width: 1024,
+        use_controlnet: false,
+        task_type: '',
+      },
+    });
+  });
 });

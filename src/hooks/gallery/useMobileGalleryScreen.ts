@@ -20,6 +20,8 @@ export type MobileGalleryAsset = {
   sourceOutputId?: string | null;
   bucket?: 'common' | 'draft' | 'upscale';
   prompt?: string | null;
+  promptTemplate?: string | null;
+  resolvedPrompt?: string | null;
   addedToGalleryAt: string;
 };
 
