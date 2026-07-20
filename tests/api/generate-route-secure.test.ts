@@ -24,6 +24,9 @@ const {
     workspace: {
       findFirst: vi.fn(),
     },
+    promptWildcard: {
+      findMany: vi.fn(),
+    },
   },
   mockSubmitJob: vi.fn(),
   mockGetSettings: vi.fn(),
@@ -133,6 +136,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     });
 
     mockPrisma.workspace.findFirst.mockResolvedValue({ id: 'workspace-default' });
+    mockPrisma.promptWildcard.findMany.mockResolvedValue([]);
 
     mockEnsureStudioSessionMaterializationTaskForJob.mockResolvedValue(null);
 
@@ -373,6 +377,80 @@ describe('POST /api/generate secure RunPod flow', () => {
       promptTemplate: template,
       resolvedPrompt: expectedPrompt,
       resolvedPromptSeed: 123,
+    });
+  });
+
+  it('expands workspace prompt wildcards before resolving brace variants', async () => {
+    mockGetModelById.mockReturnValue({
+      id: 'wan22',
+      name: 'WAN 2.2',
+      type: 'video',
+      api: {
+        type: 'runpod',
+        endpoint: 'wan22',
+      },
+      inputs: ['text', 'image'],
+      imageInputKey: 'image_path',
+      parameters: [
+        { name: 'seed', type: 'number', default: 42 },
+      ],
+    });
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { wan22: 'endpoint-1' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+    mockPrisma.promptWildcard.findMany.mockResolvedValue([
+      { key: 'hairColor', name: 'Hair color', value: '{black hair|blonde hair}' },
+      { key: 'eyeColor', name: 'Eye color', value: '{blue eyes|green eyes}' },
+    ]);
+
+    const template = 'portrait, {hairColor}, {eyeColor}';
+    const expandedTemplate = 'portrait, {black hair|blonde hair}, {blue eyes|green eyes}';
+    const expectedPrompt = resolvePromptVariants(expandedTemplate, 42);
+    const formData = new FormData();
+    formData.set('modelId', 'wan22');
+    formData.set('workspaceId', 'workspace-default');
+    formData.set('prompt', template);
+    formData.set('seed', '42');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.prompt).toBe(template);
+    expect(json.resolvedPrompt).toBe(expectedPrompt);
+    expect(mockCreateStructuredEnvelope).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.any(Object),
+      expect.objectContaining({
+        prompt: expectedPrompt,
+      }),
+    );
+    const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
+    expect(updateOptions).toMatchObject({
+      prompt: template,
+      promptTemplate: template,
+      expandedPromptTemplate: expandedTemplate,
+      resolvedPrompt: expectedPrompt,
+      resolvedPromptSeed: 42,
+      promptWildcardReplacements: [
+        { key: 'hairColor', name: 'Hair color', placeholder: '{hairColor}' },
+        { key: 'eyeColor', name: 'Eye color', placeholder: '{eyeColor}' },
+      ],
     });
   });
 

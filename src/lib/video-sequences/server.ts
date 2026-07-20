@@ -1112,6 +1112,7 @@ export async function generateVideoSequenceSegment(sequenceId: string, segmentId
         ...snapshot,
         jobId,
         runpodJobId: typeof payload.runpodJobId === 'string' ? payload.runpodJobId : null,
+        resolvedPrompt: typeof payload.resolvedPrompt === 'string' ? payload.resolvedPrompt : snapshot.prompt,
         queuedAt: new Date().toISOString(),
       }),
     },

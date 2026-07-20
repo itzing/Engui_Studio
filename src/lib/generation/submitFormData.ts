@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
 import { hasResolvedPromptVariants, resolvePromptVariants } from '@/lib/generation/promptVariants';
+import { expandPromptWildcards } from '@/lib/prompt-wildcards/server';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -341,12 +342,17 @@ export async function submitGenerationFormData(formData: FormData) {
         }
 
         const promptTemplate = rawPrompt || '';
-        const prompt = resolvePromptVariants(promptTemplate, parameters.seed);
-        const promptVariantMetadata = hasResolvedPromptVariants(promptTemplate, prompt)
+        const wildcardExpansion = await expandPromptWildcards(promptTemplate, resolvedWorkspaceId);
+        const expandedPromptTemplate = wildcardExpansion.prompt;
+        const prompt = resolvePromptVariants(expandedPromptTemplate, parameters.seed);
+        const hasWildcardExpansion = expandedPromptTemplate !== promptTemplate;
+        const promptVariantMetadata = hasResolvedPromptVariants(expandedPromptTemplate, prompt) || hasWildcardExpansion
             ? {
                 promptTemplate,
+                expandedPromptTemplate,
                 resolvedPrompt: prompt,
                 resolvedPromptSeed: parameters.seed,
+                promptWildcardReplacements: wildcardExpansion.replacements,
             }
             : {};
 

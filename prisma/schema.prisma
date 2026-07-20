@@ -153,10 +153,28 @@ model Workspace {
   studioFramingPresets       StudioFramingPreset[]
   videoSequences             VideoSequence[]
   videoSegmentTemplates      VideoSegmentTemplate[]
+  promptWildcards            PromptWildcard[]
 
   @@unique([userId, name]) // 사용자별 워크스페이스 이름은 고유해야 함
   @@index([userId])
   @@map("workspaces")
+}
+
+model PromptWildcard {
+  id          String   @id @default(uuid())
+  workspaceId String
+  key         String
+  name        String
+  value       String   @default("")
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, status, updatedAt(sort: Desc)])
+  @@map("prompt_wildcards")
 }
 
 model GalleryAsset {

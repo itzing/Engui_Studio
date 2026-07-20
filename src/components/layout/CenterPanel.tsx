@@ -6,8 +6,10 @@ import { useStudio, Job } from '@/lib/context/StudioContext';
 import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ArrowUpCircle, FolderPlus, Images, Info, Waypoints } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ArrowUpCircle, Braces, FolderPlus, Images, Info, Waypoints, Wrench } from 'lucide-react';
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
+import PromptWildcardsDialog from '@/components/prompt-wildcards/PromptWildcardsDialog';
 
 type CenterMode = 'image' | 'video';
 type ImageViewMode = 'native' | 'fit';
@@ -55,6 +57,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
   const [desktopGalleryOpen, setDesktopGalleryOpen] = useState(false);
+  const [promptWildcardsOpen, setPromptWildcardsOpen] = useState(false);
 
   useEffect(() => {
     if (activeTool === 'speech-sequencer') {
@@ -508,6 +511,20 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         <div className={`flex items-center gap-2 ${mobile ? 'justify-between' : ''}`}>
           {!mobile && (
             <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="h-9 px-4 text-sm font-medium">
+                    <Wrench className="w-4 h-4 mr-2" />
+                    Tools
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onSelect={() => setPromptWildcardsOpen(true)}>
+                    <Braces className="h-4 w-4" />
+                    Wildcards
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button asChild variant="outline" className="h-9 px-5 text-sm font-medium">
                 <Link href="/video-sequences">
                   <Waypoints className="w-4 h-4 mr-2" />
@@ -631,6 +648,13 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       </div>
       {!mobile && (
         <DesktopGalleryOverlay open={desktopGalleryOpen} onClose={() => setDesktopGalleryOpen(false)} />
+      )}
+      {!mobile && (
+        <PromptWildcardsDialog
+          open={promptWildcardsOpen}
+          workspaceId={activeWorkspaceId}
+          onOpenChange={setPromptWildcardsOpen}
+        />
       )}
     </div>
   );
