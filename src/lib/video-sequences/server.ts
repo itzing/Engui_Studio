@@ -1349,13 +1349,27 @@ export async function renderVideoSequenceFinal(sequenceId: string) {
   }
 
   const inputPaths: string[] = [];
-  for (const segment of sequence.segments) {
+  const trimEndSecondsByInputPath: Record<string, number> = {};
+  const trimPlan: Array<{ segmentId: string; outputVideoUrl: string; trimEndSeconds: string | null }> = [];
+  for (const [index, segment] of sequence.segments.entries()) {
     const outputVideoUrl = segment.outputVideoUrl as string;
     const inputPath = resolveLocalPublicPath(outputVideoUrl);
     if (!inputPath || !fs.existsSync(inputPath)) {
       throw new StudioSessionApiError(400, `Segment ${segment.orderIndex + 1} output video must be a local /generations or /results file`);
     }
     inputPaths.push(inputPath);
+
+    const isFinalSegment = index === sequence.segments.length - 1;
+    const metadata = isFinalSegment ? null : await readOutputVideoMetadata(segment);
+    const continuationFrameTime = metadata ? continuationFrameTimeFromMetadata(metadata) : null;
+    if (!isFinalSegment && continuationFrameTime) {
+      trimEndSecondsByInputPath[inputPath] = Number(continuationFrameTime);
+    }
+    trimPlan.push({
+      segmentId: segment.id,
+      outputVideoUrl,
+      trimEndSeconds: isFinalSegment ? null : continuationFrameTime,
+    });
   }
 
   const ffmpegAvailable = await ffmpegService.isFFmpegAvailable();
@@ -1364,14 +1378,14 @@ export async function renderVideoSequenceFinal(sequenceId: string) {
   }
 
   const renderHash = crypto.createHash('md5')
-    .update(sequence.segments.map((segment) => `${segment.id}:${segment.outputVideoUrl}`).join('|'))
+    .update(JSON.stringify(trimPlan))
     .digest('hex')
     .slice(0, 10);
   const fileName = `final-${renderHash}.mp4`;
   const finalVideoUrl = sequenceRenderPublicUrl(sequence.workspaceId, sequenceId, fileName);
   const outputPath = sequenceRenderOutputPath(sequence.workspaceId, sequenceId, fileName);
 
-  await ffmpegService.concatenateVideos(inputPaths, outputPath);
+  await ffmpegService.concatenateVideos(inputPaths, outputPath, { trimEndSecondsByInputPath });
 
   const updated = await prisma.videoSequence.update({
     where: { id: sequenceId },

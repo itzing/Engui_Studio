@@ -2258,7 +2258,7 @@ describe('video sequence APIs', () => {
     });
   });
 
-  it('renders a completed sequence into one final local video', async () => {
+  it('renders a completed sequence into one final local video and trims non-final continuation tails', async () => {
     const firstVideoPath = path.join(process.cwd(), 'public', 'generations', 'sequence-render-seg-1.mp4');
     const secondVideoPath = path.join(process.cwd(), 'public', 'results', 'sequence-render-seg-2.mp4');
     fs.mkdirSync(path.dirname(firstVideoPath), { recursive: true });
@@ -2337,6 +2337,11 @@ describe('video sequence APIs', () => {
     expect(mockFfmpegService.concatenateVideos).toHaveBeenCalledWith(
       [firstVideoPath, secondVideoPath],
       expect.stringMatching(/\/public\/generations\/video-sequences\/ws-1\/seq-1\/final\/final-[a-f0-9]{10}\.mp4$/),
+      {
+        trimEndSecondsByInputPath: {
+          [firstVideoPath]: 3.875,
+        },
+      },
     );
     expect(mockPrisma.videoSequence.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'seq-1' },

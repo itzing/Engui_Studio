@@ -17,6 +17,10 @@ export interface FrameExtractionOptions extends ThumbnailOptions {
   time?: string;
 }
 
+export interface VideoConcatOptions {
+  trimEndSecondsByInputPath?: Record<string, number>;
+}
+
 function ffmpegConcatListPath(value: string) {
   return value.replace(/'/g, "'\\''");
 }
@@ -264,7 +268,8 @@ export class FFmpegService {
    */
   async concatenateVideos(
     inputPaths: string[],
-    outputPath: string
+    outputPath: string,
+    options: VideoConcatOptions = {},
   ): Promise<string> {
     if (!inputPaths.length) {
       throw new Error('At least one input video is required');
@@ -281,33 +286,72 @@ export class FFmpegService {
       ffmpegCommand = localPath;
     }
 
-    const listPath = path.join(outputDir, `concat-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
-    fs.writeFileSync(listPath, inputPaths.map((inputPath) => `file '${ffmpegConcatListPath(inputPath)}'`).join('\n'));
-
-    const command = `"${ffmpegCommand}" -y -f concat -safe 0 -i "${listPath}" -c copy -movflags +faststart "${outputPath}"`;
+    const tempPaths: string[] = [];
+    const concatInputPaths: string[] = [];
+    const trimEndSecondsByInputPath = options.trimEndSecondsByInputPath ?? {};
+    const shouldNormalizeInputs = Object.values(trimEndSecondsByInputPath).some((seconds) => Number.isFinite(seconds) && seconds > 0);
 
     try {
+      for (const [index, inputPath] of inputPaths.entries()) {
+        const trimEndSeconds = trimEndSecondsByInputPath[inputPath];
+        const shouldTrim = Number.isFinite(trimEndSeconds) && trimEndSeconds > 0;
+        if (!shouldNormalizeInputs) {
+          concatInputPaths.push(inputPath);
+          continue;
+        }
+
+        const tempPath = path.join(outputDir, `concat-input-${index}-${Date.now()}-${Math.random().toString(16).slice(2)}.mp4`);
+        const durationArgs = shouldTrim ? `-t ${trimEndSeconds.toFixed(3)} ` : '';
+        const normalizeCommand = `"${ffmpegCommand}" -y -i "${inputPath}" ${durationArgs}-an -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p -movflags +faststart "${tempPath}"`;
+        console.log(`[FFmpeg] Preparing concat input ${index + 1}: ${inputPath} -> ${tempPath}${shouldTrim ? ` (${trimEndSeconds.toFixed(3)}s)` : ''}`);
+        await execAsync(normalizeCommand, {
+          timeout: 300000,
+          maxBuffer: 1024 * 1024 * 20,
+        });
+
+        if (!fs.existsSync(tempPath)) {
+          throw new Error(`Prepared concat input ${index + 1} was not created`);
+        }
+
+        tempPaths.push(tempPath);
+        concatInputPaths.push(tempPath);
+      }
+
+      const listPath = path.join(outputDir, `concat-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+      fs.writeFileSync(listPath, concatInputPaths.map((inputPath) => `file '${ffmpegConcatListPath(inputPath)}'`).join('\n'));
+
+      const command = `"${ffmpegCommand}" -y -f concat -safe 0 -i "${listPath}" -c copy -movflags +faststart "${outputPath}"`;
       console.log(`[FFmpeg] Concatenating ${inputPaths.length} videos -> ${outputPath}`);
-      const { stderr } = await execAsync(command, {
-        timeout: 300000,
-        maxBuffer: 1024 * 1024 * 20,
-      });
+      try {
+        const { stderr } = await execAsync(command, {
+          timeout: 300000,
+          maxBuffer: 1024 * 1024 * 20,
+        });
 
-      if (stderr && !stderr.includes('frame=') && !stderr.includes('video:')) {
-        console.warn(`[FFmpeg] Concat warning: ${stderr}`);
+        if (stderr && !stderr.includes('frame=') && !stderr.includes('video:')) {
+          console.warn(`[FFmpeg] Concat warning: ${stderr}`);
+        }
+
+        if (!fs.existsSync(outputPath)) {
+          throw new Error('Concatenated video file was not created');
+        }
+
+        const stats = fs.statSync(outputPath);
+        if (stats.size === 0) {
+          fs.unlinkSync(outputPath);
+          throw new Error('Concatenated video file is empty');
+        }
+
+        return outputPath;
+      } finally {
+        try {
+          fs.unlinkSync(listPath);
+        } catch (cleanupError: any) {
+          if (cleanupError?.code !== 'ENOENT') {
+            console.warn(`[FFmpeg] Failed to remove concat list: ${cleanupError}`);
+          }
+        }
       }
-
-      if (!fs.existsSync(outputPath)) {
-        throw new Error('Concatenated video file was not created');
-      }
-
-      const stats = fs.statSync(outputPath);
-      if (stats.size === 0) {
-        fs.unlinkSync(outputPath);
-        throw new Error('Concatenated video file is empty');
-      }
-
-      return outputPath;
     } catch (error) {
       if (fs.existsSync(outputPath)) {
         try {
@@ -319,11 +363,13 @@ export class FFmpegService {
       console.error(`[FFmpeg] Error concatenating videos:`, error);
       throw new Error(`Failed to concatenate videos: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      try {
-        fs.unlinkSync(listPath);
-      } catch (cleanupError: any) {
-        if (cleanupError?.code !== 'ENOENT') {
-          console.warn(`[FFmpeg] Failed to remove concat list: ${cleanupError}`);
+      for (const tempPath of tempPaths) {
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (cleanupError: any) {
+          if (cleanupError?.code !== 'ENOENT') {
+            console.warn(`[FFmpeg] Failed to remove trimmed concat input: ${cleanupError}`);
+          }
         }
       }
     }
