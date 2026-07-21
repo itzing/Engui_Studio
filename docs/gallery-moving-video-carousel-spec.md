@@ -17,7 +17,7 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 - Drag pause behavior: once the pointer movement crosses the drag threshold, carousel movement is paused and remains paused after release.
 - Bidirectional tape behavior: manual scrubbing restores adjacent feed slots on both sides, including previously played clips, so scrubbing backward does not expose black empty space where clips already left during normal playback.
 - Video end behavior: if a video ends before its card leaves the scene, restart it and keep playing until the card exits.
-- Controls: user can regulate card movement speed, scrub the tape by holding physical ArrowLeft/ArrowRight keyboard keys, and toggle movement pause with Space.
+- Controls: user can regulate card movement speed, regulate held keyboard scrub speed, scrub the tape by holding physical ArrowLeft/ArrowRight keyboard keys, and toggle movement pause with Space.
 - Images: an `Images` checkbox is available in the carousel header, off by default.
 - Image insertion: when Images is enabled, the carousel inserts one image slot after every two video slots.
 - Image slot content: each image slot preselects five gallery images when enough images are available.
@@ -57,7 +57,7 @@ The carousel has one pause state:
 
 Clicking the scene toggles this state. Movement resumes from the same card positions; visible videos and images continue their own playback/cycling while the tape is frozen.
 
-Dragging the scene manually moves the current tape slots left/right. A normal click without drag still toggles pause. Starting a real drag pauses movement and leaves movement paused after pointer release. Holding physical ArrowLeft/ArrowRight keyboard keys scrubs the tape backward/forward at double the current playback speed; releasing the key stops keyboard scrubbing. Previously played slots are restored on the right side when scrubbing backward, and upcoming slots are restored on the left side when scrubbing forward, keeping the tape continuous in both directions. Space toggles pause/resume unless focus is inside a form control, slider, button, or editable element.
+Dragging the scene manually moves the current tape slots left/right. A normal click without drag still toggles pause. Starting a real drag pauses movement and leaves movement paused after pointer release. Holding physical ArrowLeft/ArrowRight keyboard keys scrubs the tape backward/forward at the selected `Scrub` multiplier, defaulting to 4x and adjustable from 2x to 10x; releasing the key stops keyboard scrubbing. Previously played slots are restored on the right side when scrubbing backward, and upcoming slots are restored on the left side when scrubbing forward, keeping the tape continuous in both directions. Space toggles pause/resume unless focus is inside a form control, slider, button, or editable element.
 
 ### Controls Visibility
 
@@ -120,6 +120,7 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - render controls as a hideable overlay with `Hide UI` and `H`
    - keep visible videos muted and looping
    - expose speed control
+   - expose held keyboard scrub speed control, default 4x with a 2x-10x range
    - expose Images checkbox, default off
    - insert image slots after every two videos when enabled
    - cycle each image slot every second, even while card movement is paused

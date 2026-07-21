@@ -64,7 +64,9 @@ const DEFAULT_VIDEO_RATIO = 9 / 16;
 const DEFAULT_IMAGE_RATIO = 1;
 const BASE_SPEED_PX_PER_SECOND = 90;
 const DRAG_START_THRESHOLD_PX = 4;
-const KEYBOARD_SCRUB_SPEED_MULTIPLIER = 2;
+const DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 4;
+const MIN_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 2;
+const MAX_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 10;
 const EDGE_OVERLAP_PX = 2;
 const SLOT_TRIM_BUFFER_STAGE_RATIO = 1.5;
 
@@ -135,6 +137,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const slotCounterRef = useRef(0);
   const pausedRef = useRef(false);
   const speedRef = useRef(1);
+  const scrubSpeedMultiplierRef = useRef(DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER);
   const imagesEnabledRef = useRef(false);
   const measuredRatiosRef = useRef<Record<string, number>>({});
   const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
@@ -145,6 +148,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const [activeSlots, setActiveSlots] = useState<CarouselSlot[]>([]);
   const [nextIndex, setNextIndex] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER);
   const [paused, setPaused] = useState(false);
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -226,6 +230,10 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   useEffect(() => {
     speedRef.current = speed;
   }, [speed]);
+
+  useEffect(() => {
+    scrubSpeedMultiplierRef.current = scrubSpeedMultiplier;
+  }, [scrubSpeedMultiplier]);
 
   useEffect(() => {
     imagesEnabledRef.current = imagesEnabled;
@@ -473,7 +481,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
           fillAdjacentSlots(keyboardScrubDirection < 0 ? -1 : 1);
         }
         const distance = isKeyboardScrubbing
-          ? keyboardScrubDirection * deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current * KEYBOARD_SCRUB_SPEED_MULTIPLIER
+          ? keyboardScrubDirection * deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current * scrubSpeedMultiplierRef.current
           : pausedRef.current ? 0 : deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
         let didCycleImages = false;
         activeSlotsRef.current = activeSlotsRef.current
@@ -659,6 +667,18 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
               onClick={(event) => event.stopPropagation()}
             />
             <span className="w-8 text-right text-xs tabular-nums text-white/55">{speed.toFixed(1)}x</span>
+          </div>
+          <div className="flex w-[190px] items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+            <span className="text-xs text-white/55">Scrub</span>
+            <Slider
+              min={MIN_KEYBOARD_SCRUB_SPEED_MULTIPLIER}
+              max={MAX_KEYBOARD_SCRUB_SPEED_MULTIPLIER}
+              step={1}
+              value={[scrubSpeedMultiplier]}
+              onValueChange={(value) => setScrubSpeedMultiplier(value[0] || DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER)}
+              onClick={(event) => event.stopPropagation()}
+            />
+            <span className="w-9 text-right text-xs tabular-nums text-white/55">{scrubSpeedMultiplier.toFixed(0)}x</span>
           </div>
           <Button
             variant="ghost"

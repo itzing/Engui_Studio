@@ -140,6 +140,8 @@ describe('GalleryVideoCarousel', () => {
 
     expect(screen.queryByRole('button', { name: 'Move carousel tape right' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Move carousel tape left' })).toBeNull();
+    expect(screen.getByText('Scrub')).toBeTruthy();
+    expect(screen.getByText('4x')).toBeTruthy();
 
     const stage = screen.getByTestId('gallery-video-carousel');
     await waitFor(() => expect(stage.querySelector('video')?.parentElement?.style.transform).toContain('translate3d'));
