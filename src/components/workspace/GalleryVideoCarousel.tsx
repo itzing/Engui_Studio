@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
   getAdjacentGalleryCarouselSlotX,
+  getFullHeightGalleryCarouselSlotSize,
   shouldSpawnAdjacentGalleryCarouselSlot,
   shuffleGalleryVideoFeed,
 } from '@/lib/galleryVideoCarousel';
@@ -47,9 +48,7 @@ type CarouselSlot = {
 
 const PAGE_LIMIT = 100;
 const DEFAULT_VIDEO_RATIO = 9 / 16;
-const CARD_HEIGHT_RATIO = 0.82;
 const BASE_SPEED_PX_PER_SECOND = 90;
-const MIN_CARD_HEIGHT = 160;
 
 function readAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -62,14 +61,7 @@ function readAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<stri
 
 function buildSlotSize(asset: GalleryCarouselAsset, stage: { width: number; height: number }, measuredRatios: Record<string, number>) {
   const ratio = readAssetRatio(asset, measuredRatios);
-  const availableHeight = Math.max(120, stage.height - 32);
-  const height = Math.min(availableHeight, Math.max(MIN_CARD_HEIGHT, stage.height * CARD_HEIGHT_RATIO));
-  const width = Math.max(120, height * ratio);
-  return {
-    width,
-    height,
-    y: Math.max(0, (stage.height - height) / 2),
-  };
+  return getFullHeightGalleryCarouselSlotSize(ratio, stage.height);
 }
 
 async function fetchAllGalleryVideos(workspaceId: string) {

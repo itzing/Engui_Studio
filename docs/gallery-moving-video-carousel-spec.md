@@ -28,7 +28,7 @@ The carousel scene is a 16:9 viewport centered in the available Gallery overlay 
 
 ### Cards
 
-Each card contains exactly one muted looping video. The card aspect ratio is derived from Gallery metadata when available:
+Each card contains exactly one muted looping video. Cards fill the full height of the 16:9 scene. Card width is derived from the video's aspect ratio, so short or landscape videos scale up to scene height without distorting their proportions. The card aspect ratio is derived from Gallery metadata when available:
 
 - `outputVideoMetadata.width/height`
 - top-level `width/height`

@@ -73,3 +73,13 @@ export function getAdjacentGalleryCarouselSlotX(trailingSlotX: number | null, ne
   if (trailingSlotX === null || !Number.isFinite(trailingSlotX)) return 0;
   return trailingSlotX - nextWidth + Math.max(0, edgeOverlap);
 }
+
+export function getFullHeightGalleryCarouselSlotSize(ratio: number, stageHeight: number) {
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 9 / 16;
+  const height = Math.max(1, stageHeight);
+  return {
+    width: height * safeRatio,
+    height,
+    y: 0,
+  };
+}

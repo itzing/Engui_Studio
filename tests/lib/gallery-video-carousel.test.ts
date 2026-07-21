@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aspectRatioFromDimensions,
   getAdjacentGalleryCarouselSlotX,
+  getFullHeightGalleryCarouselSlotSize,
   resolveGalleryCarouselDimensions,
   shouldSpawnAdjacentGalleryCarouselSlot,
   shuffleGalleryVideoFeed,
@@ -44,5 +45,23 @@ describe('gallery video carousel helpers', () => {
     expect(shouldSpawnAdjacentGalleryCarouselSlot(-3)).toBe(false);
     expect(shouldSpawnAdjacentGalleryCarouselSlot(-2)).toBe(true);
     expect(shouldSpawnAdjacentGalleryCarouselSlot(0)).toBe(true);
+  });
+
+  it('scales carousel slots to full scene height while preserving aspect ratio', () => {
+    expect(getFullHeightGalleryCarouselSlotSize(16 / 9, 720)).toEqual({
+      width: 1280,
+      height: 720,
+      y: 0,
+    });
+    expect(getFullHeightGalleryCarouselSlotSize(9 / 16, 720)).toEqual({
+      width: 405,
+      height: 720,
+      y: 0,
+    });
+    expect(getFullHeightGalleryCarouselSlotSize(0, 720)).toEqual({
+      width: 405,
+      height: 720,
+      y: 0,
+    });
   });
 });
