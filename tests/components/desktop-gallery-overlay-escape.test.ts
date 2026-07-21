@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 
@@ -54,6 +54,14 @@ vi.mock('@/components/workspace/GalleryAssetDialog', () => ({
   GalleryAssetDialog: () => null,
 }));
 
+vi.mock('@/components/workspace/GalleryVideoCarousel', () => ({
+  GalleryVideoCarousel: ({ onClose }: { onClose?: () => void }) => React.createElement(
+    'div',
+    { 'data-testid': 'mock-gallery-video-carousel' },
+    React.createElement('button', { type: 'button', onClick: onClose }, 'Close carousel'),
+  ),
+}));
+
 describe('DesktopGalleryOverlay Escape handling', () => {
   beforeEach(() => {
     viewerOpen = false;
@@ -86,5 +94,21 @@ describe('DesktopGalleryOverlay Escape handling', () => {
 
     expect(closeViewerMock).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('opens the carousel in a fullscreen modal and closes only the modal on Escape', () => {
+    const onClose = vi.fn();
+
+    render(React.createElement(DesktopGalleryOverlay, { open: true, onClose }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open video carousel' }));
+    expect(screen.getByTestId('gallery-video-carousel-modal')).toBeTruthy();
+    expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.queryByTestId('gallery-video-carousel-modal')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(closeViewerMock).not.toHaveBeenCalled();
   });
 });

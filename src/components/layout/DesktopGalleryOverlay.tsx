@@ -109,7 +109,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   const [gridWidth, setGridWidth] = useState(1200);
   const [detailsAsset, setDetailsAsset] = useState<MobileGalleryAsset | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [galleryViewMode, setGalleryViewMode] = useState<'grid' | 'carousel'>('grid');
+  const [carouselOpen, setCarouselOpen] = useState(false);
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -178,6 +178,13 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         return;
       }
 
+      if (carouselOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setCarouselOpen(false);
+        return;
+      }
+
       if (!detailsOpen) {
         event.preventDefault();
         onClose();
@@ -185,7 +192,11 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [closeViewer, detailsOpen, onClose, open, viewerOpen]);
+  }, [carouselOpen, closeViewer, detailsOpen, onClose, open, viewerOpen]);
+
+  useEffect(() => {
+    if (!open) setCarouselOpen(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -267,28 +278,17 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       </div>
 
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setGalleryViewMode('grid')}
-            className={`inline-flex h-8 items-center justify-center gap-2 rounded border px-2 text-[11px] transition-colors ${galleryViewMode === 'grid' ? 'border-white/20 bg-white/10 text-white' : 'border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}
-          >
-            <ImageIcon className="h-3.5 w-3.5" />
-            Grid
-          </button>
-          <button
-            type="button"
-            onClick={() => setGalleryViewMode('carousel')}
-            className={`inline-flex h-8 items-center justify-center gap-2 rounded border px-2 text-[11px] transition-colors ${galleryViewMode === 'carousel' ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100' : 'border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}
-          >
-            <Clapperboard className="h-3.5 w-3.5" />
-            Carousel
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setCarouselOpen(true)}
+          className="inline-flex h-9 w-full items-center justify-center gap-2 rounded border border-emerald-400/30 bg-emerald-500/10 px-3 text-xs text-emerald-100 transition-colors hover:bg-emerald-500/15 hover:text-white"
+          aria-label="Open video carousel"
+        >
+          <Clapperboard className="h-4 w-4" />
+          Carousel
+        </button>
       </div>
 
-      {galleryViewMode === 'grid' ? (
-        <>
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <div className="flex items-center gap-2 text-xs text-white/70">
           <SlidersHorizontal className="h-4 w-4" />
@@ -374,8 +374,6 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 bg-white/[0.03] border-white/10 text-white placeholder:text-white/35" />
       </div>
-        </>
-      ) : null}
     </aside>
   );
 
@@ -386,9 +384,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       <div className="flex h-full w-full">
         {sidebarSide === 'left' ? sidebar : null}
         <div ref={gridWrapRef} className="min-w-0 flex-1 flex flex-col">
-          {galleryViewMode === 'carousel' ? (
-            <GalleryVideoCarousel workspaceId={workspaceId} />
-          ) : isLoading ? (
+          {isLoading ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-6 text-sm text-white/65">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -474,6 +470,18 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         </div>
         {sidebarSide === 'right' ? sidebar : null}
       </div>
+
+      {carouselOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Gallery video carousel"
+          data-testid="gallery-video-carousel-modal"
+          className="fixed inset-0 z-[70] bg-black text-white"
+        >
+          <GalleryVideoCarousel workspaceId={workspaceId} onClose={() => setCarouselOpen(false)} />
+        </div>
+      ) : null}
 
       <GalleryAssetDialog
         asset={detailsAsset}

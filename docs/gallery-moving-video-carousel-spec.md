@@ -20,7 +20,7 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 
 ### Entry Point
 
-The existing desktop Gallery overlay remains the entry point. A `Carousel` control appears in the overlay sidebar. Switching to carousel mode replaces the grid with the moving video scene while keeping the Gallery overlay shell and close behavior.
+The existing desktop Gallery overlay remains the entry point. A `Carousel` action appears in the overlay sidebar. Activating it opens the moving video scene in a fullscreen modal above the Gallery overlay instead of replacing the Gallery grid content area. Closing the carousel returns the user to the same Gallery overlay state.
 
 ### Scene
 
@@ -45,6 +45,10 @@ The carousel has one pause state:
 - visible `Paused` status indicator
 
 Clicking the scene toggles this state. Playback resumes from the same card positions and video timestamps.
+
+### Close
+
+The fullscreen carousel modal closes through its header close action or the Escape key. Escape closes only the carousel modal when it is open; it should not close the underlying Gallery overlay in the same keypress.
 
 ### Feed End
 

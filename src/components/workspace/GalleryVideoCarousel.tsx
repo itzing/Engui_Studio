@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Pause, Play, RefreshCw, Shuffle } from 'lucide-react';
+import { Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -92,7 +92,7 @@ async function fetchAllGalleryVideos(workspaceId: string) {
   return videos;
 }
 
-export function GalleryVideoCarousel({ workspaceId }: { workspaceId: string | null }) {
+export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: string | null; onClose?: () => void }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
   const stageSizeRef = useRef({ width: 1280, height: 720 });
@@ -350,6 +350,21 @@ export function GalleryVideoCarousel({ workspaceId }: { workspaceId: string | nu
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose();
+              }}
+              aria-label="Close video carousel"
+              title="Close video carousel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
