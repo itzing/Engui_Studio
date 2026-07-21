@@ -109,9 +109,40 @@ function isTransientSecureResultDownloadError(error: any) {
     'nosuchkey',
     'not found',
     '404',
+    '502',
+    'bad gateway',
+    '503',
+    '504',
+    'temporarily',
+    'temporary',
+    'unavailable',
+    'timeout',
+    'timed out',
+    'econnreset',
+    'etimedout',
     'aws cli exited',
     '파일 다운로드에 실패',
+    '일시적으로 불안정',
   ].some(marker => raw.includes(marker));
+}
+
+function isTransientFinalizationError(error: any) {
+  return isTransientSecureResultDownloadError(error);
+}
+
+function getFinalizationRecoveryAttempts(secureState: JsonObject | null) {
+  const attempts = Number(secureState?.finalizationRecovery?.attempts || 0);
+  return Number.isFinite(attempts) ? Math.max(0, attempts) : 0;
+}
+
+function shouldDeferFinalizationRetry(job: any, secureState: JsonObject | null) {
+  if (job.status !== 'finalizing') return false;
+  const nextAttemptAt = secureState?.finalizationRecovery?.nextAttemptAt
+    || secureState?.activeAttempt?.finalization?.nextAttemptAt
+    || null;
+  if (!nextAttemptAt) return false;
+  const timestamp = new Date(nextAttemptAt).getTime();
+  return Number.isFinite(timestamp) && timestamp > Date.now();
 }
 
 function parseSecureState(value: unknown): JsonObject | null {
@@ -970,6 +1001,9 @@ async function finalizeSecureTransportResult(params: {
       'FINALIZATION_FAILED',
       'Secure finalization failed',
     );
+    const recoveryAttempts = getFinalizationRecoveryAttempts(secureState) + 1;
+    const retryable = isTransientFinalizationError(error) && recoveryAttempts <= FAILED_FINALIZATION_RECOVERY_MAX_ATTEMPTS;
+    const nextAttemptAt = retryable ? getNextFailedFinalizationRecoveryAt(recoveryAttempts) : null;
 
     const failedSecureState = {
       ...secureStateWithResponse,
@@ -982,6 +1016,43 @@ async function finalizeSecureTransportResult(params: {
         },
       },
     };
+
+    if (retryable) {
+      const retryRecordedAt = new Date().toISOString();
+      const retrySecureState = {
+        ...secureStateWithResponse,
+        phase: 'finalizing',
+        failure: null,
+        finalizationRecovery: {
+          attempts: recoveryAttempts,
+          lastAttemptAt: retryRecordedAt,
+          nextAttemptAt,
+          lastError: failure.error,
+        },
+        activeAttempt: {
+          ...secureStateWithResponse.activeAttempt,
+          finalization: {
+            status: 'retrying',
+            lastError: failure.error,
+            lastAttemptAt: retryRecordedAt,
+            nextAttemptAt,
+          },
+        },
+      };
+
+      await persistJobUpdate(job.id, {
+        status: 'finalizing',
+        error: null,
+        executionMs: executionMs ?? undefined,
+        options: JSON.stringify({
+          ...options,
+          transportResultStatus: transportResult.status,
+          transientFinalizationError: failure.error.message,
+        }),
+        secureState: JSON.stringify(retrySecureState),
+      });
+      return;
+    }
 
     await markJobFailed({
       job,
@@ -1053,6 +1124,10 @@ export async function processRunPodJob(job: any) {
 
   const options = parseJson(job.options);
   const secureState = parseSecureState(job.secureState);
+  if (shouldDeferFinalizationRetry(job, secureState)) {
+    return;
+  }
+
   const runpodJobId = job.runpodJobId
     || options.runpodJobId
     || secureState?.activeAttempt?.runpodJobId
@@ -1279,6 +1354,7 @@ function shouldRetryFailedSecureFinalization(job: any, secureState: JsonObject |
   const recovery = secureState.finalizationRecovery || {};
   const attempts = Number(recovery.attempts || 0);
   if (attempts >= FAILED_FINALIZATION_RECOVERY_MAX_ATTEMPTS) return false;
+  if (isTransientFinalizationError(secureState.failure?.error)) return true;
 
   const nextAttemptAt = recovery.nextAttemptAt ? new Date(recovery.nextAttemptAt).getTime() : 0;
   return !Number.isFinite(nextAttemptAt) || nextAttemptAt <= Date.now();
@@ -1334,7 +1410,17 @@ async function retryFailedSecureFinalizationsOnce() {
     const secureStateWithRecovery = {
       ...secureState,
       phase: 'finalizing',
+      failure: null,
       finalizationRecovery,
+      activeAttempt: {
+        ...secureState.activeAttempt,
+        finalization: {
+          ...secureState.activeAttempt?.finalization,
+          status: 'retrying',
+          lastAttemptAt: finalizationRecovery.lastAttemptAt,
+          nextAttemptAt: finalizationRecovery.nextAttemptAt,
+        },
+      },
     };
 
     try {

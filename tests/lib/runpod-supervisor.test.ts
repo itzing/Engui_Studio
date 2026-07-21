@@ -273,6 +273,100 @@ describe('runpod supervisor', () => {
     });
   });
 
+  it('keeps completed RunPod jobs finalizing when result download fails with transient 502', async () => {
+    process.env.RUNPOD_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS = '1';
+    const job = {
+      id: 'job-transient-502',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'video',
+      status: 'processing',
+      createdAt: new Date('2026-07-21T20:17:00Z'),
+      runpodJobId: 'rp-transient-502',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'runpod_processing',
+        activeAttempt: {
+          attemptId: 'attempt-transient-502',
+          runpodJobId: 'rp-transient-502',
+          request: { mediaInputs: [] },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockGetJobStatus.mockResolvedValue({
+      status: 'COMPLETED',
+      executionTime: 1000,
+      output: {
+        transport_result: {
+          status: 'completed',
+          result_media: {
+            mime: 'video/mp4',
+            kind: 'video',
+            storage_path: '/runpod-volume/secure-jobs/job-transient-502__attempt-transient-502__output__result.bin',
+            envelope: { v: 1 },
+          },
+        },
+      },
+    });
+    mockDownloadAndDecryptResultMedia.mockRejectedValue(
+      new Error('RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)'),
+    );
+
+    await processRunPodJob(job);
+
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(1);
+    expect(mockSettleJobMaterializationTasks).not.toHaveBeenCalled();
+    const retryUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(retryUpdate.data.status).toBe('finalizing');
+    expect(retryUpdate.data.error).toBeNull();
+
+    const secureState = JSON.parse(retryUpdate.data.secureState);
+    expect(secureState.phase).toBe('finalizing');
+    expect(secureState.failure).toBeNull();
+    expect(secureState.finalizationRecovery.attempts).toBe(1);
+    expect(secureState.finalizationRecovery.lastError.message).toContain('502 Bad Gateway');
+    expect(secureState.activeAttempt.finalization.status).toBe('retrying');
+  });
+
+  it('defers finalizing retry polling until nextAttemptAt', async () => {
+    const job = {
+      id: 'job-deferred-finalization',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'video',
+      status: 'finalizing',
+      createdAt: new Date('2026-07-21T20:17:00Z'),
+      runpodJobId: 'rp-deferred-finalization',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'finalizing',
+        activeAttempt: {
+          attemptId: 'attempt-deferred-finalization',
+          runpodJobId: 'rp-deferred-finalization',
+          finalization: {
+            status: 'retrying',
+            nextAttemptAt: '2099-01-01T00:00:00.000Z',
+          },
+        },
+        finalizationRecovery: {
+          attempts: 1,
+          nextAttemptAt: '2099-01-01T00:00:00.000Z',
+        },
+      }),
+    };
+
+    await processRunPodJob(job);
+
+    expect(mockGetSettings).not.toHaveBeenCalled();
+    expect(mockGetJobStatus).not.toHaveBeenCalled();
+    expect(mockPrisma.job.update).not.toHaveBeenCalled();
+  });
+
   it('deletes every secure media input and encrypted result after completed finalization', async () => {
     const job = {
       id: 'job-clean',
@@ -502,6 +596,87 @@ describe('runpod supervisor', () => {
     expect(recoveryUpdate.where.id).toBe('job-finalization-recovery');
     expect(recoveryUpdate.data.status).toBe('finalizing');
     expect(JSON.parse(recoveryUpdate.data.secureState).finalizationRecovery.attempts).toBe(1);
+
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    expect(finalUpdate.data.error).toBeNull();
+  });
+
+  it('retries already failed transient 502 finalizations without waiting in failed state', async () => {
+    const failedJob = {
+      id: 'job-failed-transient-502',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'video',
+      status: 'failed',
+      createdAt: new Date('2026-07-21T20:17:00Z'),
+      completedAt: new Date('2026-07-21T20:33:00Z'),
+      executionMs: 1000,
+      runpodJobId: 'rp-failed-transient-502',
+      options: JSON.stringify({
+        secureMode: true,
+        transportResultStatus: 'completed',
+        error: 'RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)',
+      }),
+      secureState: JSON.stringify({
+        phase: 'failed',
+        activeAttempt: {
+          attemptId: 'attempt-failed-transient-502',
+          runpodJobId: 'rp-failed-transient-502',
+          request: { mediaInputs: [] },
+          response: {
+            transportResultSecureReceived: true,
+            transportResultStatus: 'completed',
+            resultMediaStoragePath: '/runpod-volume/secure-jobs/job-failed-transient-502__attempt-failed-transient-502__output__result.bin',
+            resultMedia: {
+              mime: 'video/mp4',
+              kind: 'video',
+              storage_path: '/runpod-volume/secure-jobs/job-failed-transient-502__attempt-failed-transient-502__output__result.bin',
+              envelope: { v: 1 },
+            },
+          },
+          finalization: {
+            status: 'failed',
+            failedAt: '2026-07-21T20:33:00.000Z',
+            error: {
+              code: 'Error',
+              message: 'RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)',
+            },
+          },
+        },
+        failure: {
+          source: 'engui.finalization',
+          error: {
+            code: 'Error',
+            message: 'RunPod S3 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. (502 Bad Gateway)',
+          },
+          recordedAt: '2026-07-21T20:33:00.000Z',
+        },
+        finalizationRecovery: {
+          attempts: 4,
+          lastAttemptAt: '2026-07-21T20:37:00.000Z',
+          nextAttemptAt: '2099-01-01T00:00:00.000Z',
+        },
+      }),
+    };
+
+    mockPrisma.job.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([failedJob])
+      .mockResolvedValueOnce([]);
+    mockDownloadAndDecryptResultMedia.mockResolvedValue(Buffer.from('mp4-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJobsOnce();
+
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(1);
+    const requeueUpdate = mockPrisma.job.update.mock.calls[0][0];
+    expect(requeueUpdate.where.id).toBe('job-failed-transient-502');
+    expect(requeueUpdate.data.status).toBe('finalizing');
+    expect(requeueUpdate.data.error).toBeNull();
+    const requeuedSecureState = JSON.parse(requeueUpdate.data.secureState);
+    expect(requeuedSecureState.failure).toBeNull();
+    expect(requeuedSecureState.activeAttempt.finalization.status).toBe('retrying');
 
     const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
     expect(finalUpdate.data.status).toBe('completed');
