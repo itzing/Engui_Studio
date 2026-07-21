@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
@@ -51,7 +51,9 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.click(screen.getByTestId('gallery-video-carousel'));
 
-    expect(screen.getAllByText('Paused').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+    expect(screen.getByText('Movement paused')).toBeTruthy();
+    expect(within(screen.getByTestId('gallery-video-carousel')).queryByText('Paused')).toBeNull();
     expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });

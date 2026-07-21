@@ -352,7 +352,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
     if (error) return 'Unable to load feed';
     if (totalCount === 0) return 'No gallery videos';
     if (feedEnded) return 'End of feed';
-    if (paused) return 'Paused';
+    if (paused) return 'Movement paused';
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
   }, [error, feedEnded, imagesEnabled, isLoading, paused, remainingCount, totalCount, visibleCount, visibleImageSlotCount]);
@@ -367,7 +367,18 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
     <div className="flex min-h-0 flex-1 flex-col bg-black">
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">Video Carousel</div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold text-white">Video Carousel</div>
+            {paused ? (
+              <div
+                className="inline-flex h-6 items-center gap-1.5 rounded-md border border-amber-300/25 bg-amber-400/10 px-2 text-xs font-medium text-amber-100"
+                data-testid="gallery-carousel-pause-indicator"
+              >
+                <Pause className="h-3.5 w-3.5" />
+                Paused
+              </div>
+            ) : null}
+          </div>
           <div className="truncate text-xs text-white/45">{statusLabel}</div>
         </div>
         <div className="flex items-center gap-3">
@@ -533,19 +544,12 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
                 </Button>
               </div>
             </div>
-          ) : paused ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/60 px-4 py-3 text-sm text-white/75">
-                <Pause className="h-4 w-4" />
-                Paused
-              </div>
-            </div>
-          ) : (
+          ) : !paused ? (
             <div className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-2 text-xs text-white/55">
               <Play className="h-3.5 w-3.5" />
               {imagesEnabled ? `${totalCount} videos · ${totalImageCount} images` : `${totalCount} videos`}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

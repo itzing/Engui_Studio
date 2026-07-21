@@ -50,7 +50,7 @@ The carousel has one pause state:
 - paused movement
 - visible video elements keep playing
 - visible image slots keep cycling once per second
-- visible `Paused` status indicator
+- visible `Paused` status indicator in the carousel header/top panel, outside the moving scene
 
 Clicking the scene toggles this state. Movement resumes from the same card positions; visible videos and images continue their own playback/cycling while the tape is frozen.
 
