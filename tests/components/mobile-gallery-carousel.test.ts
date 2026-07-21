@@ -1,0 +1,94 @@
+/**
+ * @vitest-environment jsdom
+ */
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockStudio = vi.hoisted(() => ({
+  current: {
+    activeWorkspaceId: 'ws-1',
+    workspaces: [{ id: 'ws-1' }],
+  },
+}));
+
+const mockCarousel = vi.hoisted(() => ({
+  props: null as Record<string, unknown> | null,
+}));
+
+vi.mock('@/lib/context/StudioContext', () => ({
+  useStudio: () => mockStudio.current,
+}));
+
+vi.mock('@/components/workspace/GalleryVideoCarousel', () => ({
+  GalleryVideoCarousel: (props: Record<string, unknown>) => {
+    mockCarousel.props = props;
+    return React.createElement('div', { 'data-testid': 'mock-gallery-video-carousel' }, 'carousel-player');
+  },
+}));
+
+import MobileGalleryCarouselScreen from '@/components/mobile/gallery/MobileGalleryCarouselScreen';
+import { getMobileTabForPathname, mobileNavItems } from '@/components/mobile/mobileNavigation';
+
+function setViewport(width: number, height: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+  window.dispatchEvent(new Event('resize'));
+}
+
+describe('mobile Gallery carousel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+    mockCarousel.props = null;
+    mockStudio.current = {
+      activeWorkspaceId: 'ws-1',
+      workspaces: [{ id: 'ws-1' }],
+    };
+    setViewport(390, 844);
+  });
+
+  it('adds Carousel between Jobs and Gallery in mobile navigation', () => {
+    expect(mobileNavItems.map((item) => item.id)).toEqual(['create', 'jobs', 'carousel', 'gallery']);
+    expect(getMobileTabForPathname('/m/carousel')).toBe('carousel');
+  });
+
+  it('starts with a portrait rotate-phone gate and closes back to settings', () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    expect(screen.getByText('Carousel')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(screen.getByTestId('mobile-gallery-carousel-overlay')).toBeTruthy();
+    expect(screen.getByText('Поверните телефон')).toBeTruthy();
+    expect(screen.queryByTestId('mock-gallery-video-carousel')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByTestId('mobile-gallery-carousel-overlay')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
+  });
+
+  it('renders the fullscreen player in landscape with selected settings', async () => {
+    setViewport(844, 390);
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('Include image slots'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(screen.queryByText('Поверните телефон')).toBeNull();
+    expect(mockCarousel.props).toMatchObject({
+      workspaceId: 'ws-1',
+      initialImagesEnabled: true,
+      initialSpeed: 1,
+      initialScrubSpeedMultiplier: 4,
+      showControls: false,
+      enableKeyboardControls: false,
+    });
+  });
+});

@@ -7,6 +7,7 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 ## User Requirements
 
 - Surface: desktop only.
+- Mobile surface: mobile gets a dedicated landscape-only player entry in the bottom navigation.
 - Source: all gallery videos in the active workspace.
 - Repeat behavior: prepare the feed up front without duplicates, then play that feed.
 - Motion: video cards move horizontally across a fullscreen viewport-height scene.
@@ -29,6 +30,12 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 ### Entry Point
 
 The existing desktop Gallery overlay remains the entry point. A `Carousel` action appears in the overlay sidebar. Activating it opens the moving video scene in a fullscreen modal above the Gallery overlay instead of replacing the Gallery grid content area. Closing the carousel returns the user to the same Gallery overlay state.
+
+On mobile, a `Carousel` item appears in the bottom navigation between `Jobs` and `Gallery`. It opens a settings screen rather than starting playback immediately. The settings screen has `Images`, movement `Speed`, held-keyboard `Scrub`, and a bottom `Start` action.
+
+### Mobile Landscape Gate
+
+After `Start`, mobile shows a blocking fullscreen layer above the app shell. In portrait orientation, the layer displays `Поверните телефон` and a close button. Closing returns to settings. When the device is landscape, the layer runs the same moving carousel tape fullscreen across the viewport width and height. Tap toggles movement pause/resume. Drag pauses movement and scrubs the tape, while visible videos continue playing and image slots continue cycling when movement is paused.
 
 ### Scene
 

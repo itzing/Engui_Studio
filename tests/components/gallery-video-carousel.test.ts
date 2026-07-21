@@ -216,6 +216,7 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('restores played clips when scrubbing backward after they leave the forward edge', async () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -256,6 +257,7 @@ describe('GalleryVideoCarousel', () => {
 
     await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
     expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy();
+    randomSpy.mockRestore();
   });
 
   it('loads images and rebuilds the feed when Images is toggled', async () => {

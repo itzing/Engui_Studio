@@ -123,7 +123,25 @@ function shouldIgnoreKeyboardShortcutTarget(target: EventTarget | null) {
   return Boolean(target.closest('[role="slider"], [contenteditable="true"]'));
 }
 
-export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: string | null; onClose?: () => void }) {
+type GalleryVideoCarouselProps = {
+  workspaceId: string | null;
+  onClose?: () => void;
+  initialImagesEnabled?: boolean;
+  initialSpeed?: number;
+  initialScrubSpeedMultiplier?: number;
+  showControls?: boolean;
+  enableKeyboardControls?: boolean;
+};
+
+export function GalleryVideoCarousel({
+  workspaceId,
+  onClose,
+  initialImagesEnabled = false,
+  initialSpeed = 1,
+  initialScrubSpeedMultiplier = DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER,
+  showControls = true,
+  enableKeyboardControls = true,
+}: GalleryVideoCarouselProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
   const stageSizeRef = useRef({ width: 1280, height: 720 });
@@ -136,8 +154,8 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const rafRef = useRef<number | null>(null);
   const slotCounterRef = useRef(0);
   const pausedRef = useRef(false);
-  const speedRef = useRef(1);
-  const scrubSpeedMultiplierRef = useRef(DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER);
+  const speedRef = useRef(initialSpeed);
+  const scrubSpeedMultiplierRef = useRef(initialScrubSpeedMultiplier);
   const imagesEnabledRef = useRef(false);
   const measuredRatiosRef = useRef<Record<string, number>>({});
   const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
@@ -147,10 +165,10 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const [sourceImages, setSourceImages] = useState<GalleryCarouselAsset[]>([]);
   const [activeSlots, setActiveSlots] = useState<CarouselSlot[]>([]);
   const [nextIndex, setNextIndex] = useState(0);
-  const [speed, setSpeed] = useState(1);
-  const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER);
+  const [speed, setSpeed] = useState(initialSpeed);
+  const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(initialScrubSpeedMultiplier);
   const [paused, setPaused] = useState(false);
-  const [imagesEnabled, setImagesEnabled] = useState(false);
+  const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedEnded, setFeedEnded] = useState(false);
@@ -218,10 +236,14 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   }, [resetPlayback, workspaceId]);
 
   useEffect(() => {
-    imagesEnabledRef.current = false;
-    setImagesEnabled(false);
-    void loadAssets(false);
-  }, [loadAssets]);
+    imagesEnabledRef.current = initialImagesEnabled;
+    setImagesEnabled(initialImagesEnabled);
+    speedRef.current = initialSpeed;
+    setSpeed(initialSpeed);
+    scrubSpeedMultiplierRef.current = initialScrubSpeedMultiplier;
+    setScrubSpeedMultiplier(initialScrubSpeedMultiplier);
+    void loadAssets(initialImagesEnabled);
+  }, [initialImagesEnabled, initialScrubSpeedMultiplier, initialSpeed, loadAssets]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -399,8 +421,9 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   }, []);
 
   const revealControls = useCallback(() => {
+    if (!showControls) return;
     setIsUiHidden((current) => current ? false : current);
-  }, []);
+  }, [showControls]);
 
   const manualScrubTape = useCallback((deltaX: number) => {
     if (!Number.isFinite(deltaX) || deltaX === 0 || isLoading || totalCount === 0) return;
@@ -525,6 +548,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!enableKeyboardControls) return;
       const isHideControlsShortcut = event.key.toLowerCase() === 'h';
       if (event.code !== 'Space' && event.key !== ' ' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && !isHideControlsShortcut) return;
       if (shouldIgnoreKeyboardShortcutTarget(event.target)) return;
@@ -566,7 +590,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isLoading, totalCount]);
+  }, [enableKeyboardControls, isLoading, totalCount]);
 
   useEffect(() => {
     const videos = Object.values(videoRefs.current);
@@ -621,10 +645,11 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       className="relative h-full min-h-[100dvh] overflow-hidden bg-black"
       onPointerMove={revealControls}
     >
-      <div
-        className={`absolute left-0 right-0 top-0 z-20 flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-opacity duration-150 ${isUiHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
-        data-testid="gallery-carousel-controls"
-      >
+      {showControls ? (
+        <div
+          className={`absolute left-0 right-0 top-0 z-20 flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-opacity duration-150 ${isUiHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+          data-testid="gallery-carousel-controls"
+        >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <div className="text-sm font-semibold text-white">Video Carousel</div>
@@ -737,7 +762,8 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
             </Button>
           ) : null}
         </div>
-      </div>
+        </div>
+      ) : null}
 
       <div
         ref={stageRef}
@@ -840,7 +866,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
                 </Button>
               </div>
             </div>
-          ) : !paused && !isUiHidden ? (
+          ) : showControls && !paused && !isUiHidden ? (
             <div className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-2 text-xs text-white/55">
               <Play className="h-3.5 w-3.5" />
               {imagesEnabled ? `${totalCount} videos · ${totalImageCount} images` : `${totalCount} videos`}
