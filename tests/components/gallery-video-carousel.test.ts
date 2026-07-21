@@ -110,7 +110,7 @@ describe('GalleryVideoCarousel', () => {
     expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
   });
 
-  it('scrubs with header buttons and ignores Space from form controls', async () => {
+  it('scrubs with held physical arrow keys and ignores keyboard shortcuts from form controls', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -138,8 +138,26 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText('1 videos')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move carousel tape right' }));
+    expect(screen.queryByRole('button', { name: 'Move carousel tape right' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move carousel tape left' })).toBeNull();
+
+    const stage = screen.getByTestId('gallery-video-carousel');
+    await waitFor(() => expect(stage.querySelector('video')?.parentElement?.style.transform).toContain('translate3d'));
+    fireEvent.click(stage);
     expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+
+    const slot = stage.querySelector('video')?.parentElement as HTMLElement;
+    const pausedTransform = slot.style.transform;
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    await waitFor(() => expect(slot.style.transform).not.toBe(pausedTransform));
+    const scrubbedTransform = slot.style.transform;
+    fireEvent.keyUp(window, { key: 'ArrowRight' });
+    await new Promise((resolve) => window.setTimeout(resolve, 60));
+    expect(slot.style.transform).toBe(scrubbedTransform);
+
+    fireEvent.keyDown(screen.getByLabelText('Include image slots'), { key: 'ArrowLeft' });
+    await new Promise((resolve) => window.setTimeout(resolve, 60));
+    expect(slot.style.transform).toBe(scrubbedTransform);
 
     fireEvent.keyDown(screen.getByLabelText('Include image slots'), { code: 'Space', key: ' ' });
     expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();

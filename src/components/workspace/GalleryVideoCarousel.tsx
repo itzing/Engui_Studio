@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -63,7 +63,7 @@ const DEFAULT_VIDEO_RATIO = 9 / 16;
 const DEFAULT_IMAGE_RATIO = 1;
 const BASE_SPEED_PX_PER_SECOND = 90;
 const DRAG_START_THRESHOLD_PX = 4;
-const MANUAL_SCRUB_STEP_RATIO = 0.24;
+const KEYBOARD_SCRUB_SPEED_MULTIPLIER = 2;
 
 function readVideoAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -110,7 +110,7 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video
   return assets;
 }
 
-function shouldIgnoreSpaceShortcutTarget(target: EventTarget | null) {
+function shouldIgnoreKeyboardShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tagName = target.tagName.toLowerCase();
@@ -135,6 +135,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const imagesEnabledRef = useRef(false);
   const measuredRatiosRef = useRef<Record<string, number>>({});
   const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
+  const keyboardScrubDirectionRef = useRef<0 | -1 | 1>(0);
   const suppressClickRef = useRef(false);
   const [sourceVideos, setSourceVideos] = useState<GalleryCarouselAsset[]>([]);
   const [sourceImages, setSourceImages] = useState<GalleryCarouselAsset[]>([]);
@@ -365,22 +366,21 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }, []);
 
-  const scrubStep = useCallback((direction: -1 | 1) => {
-    const stageWidth = stageSizeRef.current.width || 1280;
-    pauseAndScrubTape(direction * stageWidth * MANUAL_SCRUB_STEP_RATIO);
-  }, [pauseAndScrubTape]);
-
   useEffect(() => {
     const frame = (timestamp: number) => {
       const lastTimestamp = lastFrameTimestampRef.current ?? timestamp;
       const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - lastTimestamp) / 1000));
       lastFrameTimestampRef.current = timestamp;
+      const keyboardScrubDirection = keyboardScrubDirectionRef.current;
+      const isKeyboardScrubbing = keyboardScrubDirection !== 0;
 
       if (feedRef.current.length > 0) {
-        if (!pausedRef.current) {
+        if (!pausedRef.current || keyboardScrubDirection > 0) {
           maybeSpawnNext();
         }
-        const distance = pausedRef.current ? 0 : deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
+        const distance = isKeyboardScrubbing
+          ? keyboardScrubDirection * deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current * KEYBOARD_SCRUB_SPEED_MULTIPLIER
+          : pausedRef.current ? 0 : deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
         const stage = stageSizeRef.current;
         let didCycleImages = false;
         activeSlotsRef.current = activeSlotsRef.current
@@ -397,13 +397,13 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
               activeImageIndex: Math.floor(imageCycleMs / 1000) % slot.entry.images.length,
             };
           })
-          .filter((slot) => pausedRef.current || slot.x < stage.width + slot.width + 24);
+          .filter((slot) => !(pausedRef.current && !isKeyboardScrubbing) && keyboardScrubDirection >= 0 ? slot.x < stage.width + slot.width + 24 : true);
 
-        if (!pausedRef.current || didCycleImages) {
+        if (!pausedRef.current || isKeyboardScrubbing || didCycleImages) {
           setActiveSlots(activeSlotsRef.current);
         }
 
-        if (!pausedRef.current && nextIndexRef.current >= feedRef.current.length && activeSlotsRef.current.length === 0) {
+        if (!pausedRef.current && !isKeyboardScrubbing && nextIndexRef.current >= feedRef.current.length && activeSlotsRef.current.length === 0) {
           setFeedEnded(true);
         }
       }
@@ -421,9 +421,15 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' && event.key !== ' ') return;
-      if (shouldIgnoreSpaceShortcutTarget(event.target)) return;
+      if (event.code !== 'Space' && event.key !== ' ' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (shouldIgnoreKeyboardShortcutTarget(event.target)) return;
       if (isLoading || totalCount === 0) return;
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        keyboardScrubDirectionRef.current = event.key === 'ArrowRight' ? 1 : -1;
+        return;
+      }
 
       event.preventDefault();
       setPaused((current) => {
@@ -433,8 +439,21 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       });
     };
 
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft' && keyboardScrubDirectionRef.current === -1) {
+        keyboardScrubDirectionRef.current = 0;
+      }
+      if (event.key === 'ArrowRight' && keyboardScrubDirectionRef.current === 1) {
+        keyboardScrubDirectionRef.current = 0;
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [isLoading, totalCount]);
 
   useEffect(() => {
@@ -519,36 +538,6 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
             <ImageIcon className="h-4 w-4" />
             Images
           </label>
-          <div className="flex items-center gap-1" role="group" aria-label="Manual carousel tape controls">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
-              onClick={(event) => {
-                event.stopPropagation();
-                scrubStep(-1);
-              }}
-              disabled={isLoading || totalCount === 0}
-              aria-label="Move carousel tape left"
-              title="Move carousel tape left"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
-              onClick={(event) => {
-                event.stopPropagation();
-                scrubStep(1);
-              }}
-              disabled={isLoading || totalCount === 0}
-              aria-label="Move carousel tape right"
-              title="Move carousel tape right"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
           <div className="flex w-[220px] items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
             <span className="text-xs text-white/55">Speed</span>
             <Slider

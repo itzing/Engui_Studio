@@ -16,7 +16,7 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 - Drag behavior: dragging the carousel scene manually scrubs the tape left or right, including while movement is paused.
 - Drag pause behavior: once the pointer movement crosses the drag threshold, carousel movement is paused and remains paused after release.
 - Video end behavior: if a video ends before its card leaves the scene, restart it and keep playing until the card exits.
-- Controls: user can regulate card movement speed, scrub the tape with left/right header buttons, and toggle movement pause with Space.
+- Controls: user can regulate card movement speed, scrub the tape by holding physical ArrowLeft/ArrowRight keyboard keys, and toggle movement pause with Space.
 - Images: an `Images` checkbox is available in the carousel header, off by default.
 - Image insertion: when Images is enabled, the carousel inserts one image slot after every two video slots.
 - Image slot content: each image slot preselects five gallery images when enough images are available.
@@ -56,7 +56,7 @@ The carousel has one pause state:
 
 Clicking the scene toggles this state. Movement resumes from the same card positions; visible videos and images continue their own playback/cycling while the tape is frozen.
 
-Dragging the scene manually moves the current tape slots left/right. A normal click without drag still toggles pause. Starting a real drag pauses movement and leaves movement paused after pointer release. Header left/right buttons perform fixed-step scrubs and also leave movement paused. Space toggles pause/resume unless focus is inside a form control, slider, button, or editable element.
+Dragging the scene manually moves the current tape slots left/right. A normal click without drag still toggles pause. Starting a real drag pauses movement and leaves movement paused after pointer release. Holding physical ArrowLeft/ArrowRight keyboard keys scrubs the tape backward/forward at double the current playback speed; releasing the key stops keyboard scrubbing. Space toggles pause/resume unless focus is inside a form control, slider, button, or editable element.
 
 ### Close
 
@@ -109,7 +109,7 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - animate cards with `requestAnimationFrame`
    - recycle slots only after cards leave the scene
    - pause/resume card movement on scene click
-   - scrub card positions through scene drag and left/right header controls
+   - scrub card positions through scene drag and held physical ArrowLeft/ArrowRight keyboard keys
    - toggle movement pause with Space while ignoring form controls
    - keep visible videos muted and looping
    - expose speed control
