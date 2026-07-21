@@ -166,6 +166,53 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
+  it('fills the fullscreen viewport and lets users hide and reveal carousel controls', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [
+          {
+            id: 'video-1',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-1.mp4',
+            previewUrl: '/video-1.mp4',
+            thumbnailUrl: '/video-1.png',
+            mediaWidth: 720,
+            mediaHeight: 1280,
+            addedToGalleryAt: '2026-07-21T06:00:00Z',
+          },
+        ],
+        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('1 videos')).toBeTruthy());
+
+    const stage = screen.getByTestId('gallery-video-carousel');
+    const controls = screen.getByTestId('gallery-carousel-controls');
+    expect(stage.className).toContain('h-full');
+    expect(stage.className).toContain('min-h-[100dvh]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide carousel controls' }));
+    expect(controls.className).toContain('opacity-0');
+    expect(screen.queryByText('1 videos')).toBeNull();
+
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 200 });
+    await waitFor(() => expect(controls.className).toContain('opacity-100'));
+
+    fireEvent.keyDown(window, { key: 'h' });
+    expect(controls.className).toContain('opacity-0');
+
+    fireEvent.keyDown(window, { key: 'H' });
+    expect(controls.className).toContain('opacity-100');
+  });
+
   it('restores played clips when scrubbing backward after they leave the forward edge', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

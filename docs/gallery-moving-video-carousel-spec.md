@@ -9,7 +9,7 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 - Surface: desktop only.
 - Source: all gallery videos in the active workspace.
 - Repeat behavior: prepare the feed up front without duplicates, then play that feed.
-- Motion: video cards move horizontally across a 16:9 scene.
+- Motion: video cards move horizontally across a fullscreen viewport-height scene.
 - Mixed orientation: vertical and landscape videos both participate.
 - Playback: all videos are muted by default.
 - Click behavior: clicking the carousel pauses/resumes card movement only; visible videos and image slots keep playing/cycling.
@@ -32,11 +32,11 @@ The existing desktop Gallery overlay remains the entry point. A `Carousel` actio
 
 ### Scene
 
-The carousel scene is a 16:9 viewport centered in the available Gallery overlay content area. Cards enter from the left side, move toward the right side, and are removed after fully leaving the scene. New cards appear behind the previous card as an edge-to-edge chain, with only a tiny overlap to avoid subpixel seams; there should be no intentional black gap between consecutive cards.
+The carousel scene fills the fullscreen modal viewport height instead of staying inside a centered 16:9 box. Cards enter from the left side, move toward the right side, and are removed after fully leaving the scene. New cards appear behind the previous card as an edge-to-edge chain, with only a tiny overlap to avoid subpixel seams; there should be no intentional black gap between consecutive cards.
 
 ### Cards
 
-Video cards contain exactly one muted looping video. Image cards contain one preselected image slot that cycles through up to five images. Cards fill the full height of the 16:9 scene. Card width is derived from the media aspect ratio, so short or landscape media scales up to scene height without distorting its proportions. The card aspect ratio is derived from Gallery metadata when available:
+Video cards contain exactly one muted looping video. Image cards contain one preselected image slot that cycles through up to five images. Cards fill the full height of the fullscreen scene. Card width is derived from the media aspect ratio, so short or landscape media scales up to scene height without distorting its proportions. The card aspect ratio is derived from Gallery metadata when available:
 
 - `outputVideoMetadata.width/height`
 - top-level `width/height`
@@ -58,6 +58,10 @@ The carousel has one pause state:
 Clicking the scene toggles this state. Movement resumes from the same card positions; visible videos and images continue their own playback/cycling while the tape is frozen.
 
 Dragging the scene manually moves the current tape slots left/right. A normal click without drag still toggles pause. Starting a real drag pauses movement and leaves movement paused after pointer release. Holding physical ArrowLeft/ArrowRight keyboard keys scrubs the tape backward/forward at double the current playback speed; releasing the key stops keyboard scrubbing. Previously played slots are restored on the right side when scrubbing backward, and upcoming slots are restored on the left side when scrubbing forward, keeping the tape continuous in both directions. Space toggles pause/resume unless focus is inside a form control, slider, button, or editable element.
+
+### Controls Visibility
+
+Carousel controls render as an overlay above the fullscreen scene rather than as a separate layout row, so they do not reduce the available scene height. The user can hide the overlay through the `Hide UI` control or the `H` keyboard shortcut. Moving the pointer over the carousel reveals the overlay again, and pressing `H` toggles it. Escape still closes the carousel modal.
 
 ### Close
 
@@ -113,6 +117,7 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - scrub card positions through scene drag and held physical ArrowLeft/ArrowRight keyboard keys
    - restore neighboring feed slots on both sides during manual scrubbing
    - toggle movement pause with Space while ignoring form controls
+   - render controls as a hideable overlay with `Hide UI` and `H`
    - keep visible videos muted and looping
    - expose speed control
    - expose Images checkbox, default off
