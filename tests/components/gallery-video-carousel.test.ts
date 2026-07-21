@@ -166,6 +166,49 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
+  it('restores played clips when scrubbing backward after they leave the forward edge', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [1, 2, 3].map((index) => ({
+          id: `video-${index}`,
+          workspaceId: 'ws-1',
+          type: 'video',
+          originalUrl: `/video-${index}.mp4`,
+          previewUrl: `/video-${index}.mp4`,
+          thumbnailUrl: `/video-${index}.png`,
+          mediaWidth: 720,
+          mediaHeight: 1280,
+          addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+        })),
+        pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('3 videos')).toBeTruthy());
+
+    const stage = screen.getByTestId('gallery-video-carousel');
+    await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 0 });
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 5000 });
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', clientX: 5000 });
+
+    await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull());
+
+    fireEvent.pointerDown(stage, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 5000 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: 'mouse', clientX: 1000 });
+    fireEvent.pointerUp(stage, { pointerId: 2, pointerType: 'mouse', clientX: 1000 });
+
+    await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+    expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy();
+  });
+
   it('loads images and rebuilds the feed when Images is toggled', async () => {
     const videoAssets = [
       {
