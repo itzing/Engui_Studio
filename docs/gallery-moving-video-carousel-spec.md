@@ -12,13 +12,13 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 - Motion: video cards move horizontally across a 16:9 scene.
 - Mixed orientation: vertical and landscape videos both participate.
 - Playback: all videos are muted by default.
-- Click behavior: clicking the carousel pauses/resumes all visible playback and the card movement.
+- Click behavior: clicking the carousel pauses/resumes card movement only; visible videos and image slots keep playing/cycling.
 - Video end behavior: if a video ends before its card leaves the scene, restart it and keep playing until the card exits.
 - Controls: user can regulate card movement speed.
 - Images: an `Images` checkbox is available in the carousel header, off by default.
 - Image insertion: when Images is enabled, the carousel inserts one image slot after every two video slots.
 - Image slot content: each image slot preselects five gallery images when enough images are available.
-- Image refresh: image slots switch to the next selected image every second while the carousel is playing.
+- Image refresh: image slots switch to the next selected image every second while the slot is visible, including while card movement is paused.
 - Rebuild behavior: toggling Images on or off rebuilds the carousel feed from scratch.
 
 ## UX Contract
@@ -48,10 +48,11 @@ For image slots, the carousel groups images by similar dimensions/aspect ratios 
 The carousel has one pause state:
 
 - paused movement
-- paused visible video elements
+- visible video elements keep playing
+- visible image slots keep cycling once per second
 - visible `Paused` status indicator
 
-Clicking the scene toggles this state. Playback resumes from the same card positions and video timestamps.
+Clicking the scene toggles this state. Movement resumes from the same card positions; visible videos and images continue their own playback/cycling while the tape is frozen.
 
 ### Close
 
@@ -103,12 +104,12 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - build a shuffled feed
    - animate cards with `requestAnimationFrame`
    - recycle slots only after cards leave the scene
-   - pause/resume on scene click
+   - pause/resume card movement on scene click
    - keep visible videos muted and looping
    - expose speed control
    - expose Images checkbox, default off
    - insert image slots after every two videos when enabled
-   - cycle each image slot every second
+   - cycle each image slot every second, even while card movement is paused
 6. Wire the component into `DesktopGalleryOverlay` as a sidebar-selectable mode.
 7. Add focused tests for helpers, API dimensions, and component pause behavior.
 8. Validate with focused Vitest, targeted lint, `git diff --check`, Prisma validate, production build, service restart, and smoke checks.

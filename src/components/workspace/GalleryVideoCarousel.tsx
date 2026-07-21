@@ -272,16 +272,20 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - lastTimestamp) / 1000));
       lastFrameTimestampRef.current = timestamp;
 
-      if (!pausedRef.current && feedRef.current.length > 0) {
-        maybeSpawnNext();
-        const distance = deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
+      if (feedRef.current.length > 0) {
+        if (!pausedRef.current) {
+          maybeSpawnNext();
+        }
+        const distance = pausedRef.current ? 0 : deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
         const stage = stageSizeRef.current;
+        let didCycleImages = false;
         activeSlotsRef.current = activeSlotsRef.current
           .map((slot) => {
             if (slot.kind !== 'images' || slot.entry.kind !== 'images' || slot.entry.images.length <= 1) {
               return { ...slot, x: slot.x + distance };
             }
             const imageCycleMs = (slot.imageCycleMs || 0) + deltaSeconds * 1000;
+            didCycleImages = true;
             return {
               ...slot,
               x: slot.x + distance,
@@ -289,11 +293,13 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
               activeImageIndex: Math.floor(imageCycleMs / 1000) % slot.entry.images.length,
             };
           })
-          .filter((slot) => slot.x < stage.width + slot.width + 24);
+          .filter((slot) => pausedRef.current || slot.x < stage.width + slot.width + 24);
 
-        setActiveSlots(activeSlotsRef.current);
+        if (!pausedRef.current || didCycleImages) {
+          setActiveSlots(activeSlotsRef.current);
+        }
 
-        if (nextIndexRef.current >= feedRef.current.length && activeSlotsRef.current.length === 0) {
+        if (!pausedRef.current && nextIndexRef.current >= feedRef.current.length && activeSlotsRef.current.length === 0) {
           setFeedEnded(true);
         }
       }
@@ -315,16 +321,12 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
-      if (paused) {
-        video.pause();
-      } else {
-        const result = video.play();
-        if (result && typeof result.catch === 'function') {
-          result.catch(() => {});
-        }
+      const result = video.play();
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
       }
     }
-  }, [activeSlots, paused]);
+  }, [activeSlots]);
 
   useEffect(() => {
     if (activeSlotsRef.current.length === 0) return;

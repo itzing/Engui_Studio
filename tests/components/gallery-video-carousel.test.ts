@@ -21,7 +21,7 @@ describe('GalleryVideoCarousel', () => {
     HTMLMediaElement.prototype.pause = vi.fn();
   });
 
-  it('loads all videos and toggles pause on scene click', async () => {
+  it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -52,7 +52,8 @@ describe('GalleryVideoCarousel', () => {
     fireEvent.click(screen.getByTestId('gallery-video-carousel'));
 
     expect(screen.getAllByText('Paused').length).toBeGreaterThan(0);
-    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
   it('loads images and rebuilds the feed when Images is toggled', async () => {
