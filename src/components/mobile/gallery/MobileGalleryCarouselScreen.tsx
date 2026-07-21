@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -34,6 +34,9 @@ function useLandscapeOrientation(active: boolean) {
   return isLandscape;
 }
 
+const VERTICAL_SWIPE_CLOSE_THRESHOLD_PX = 56;
+const VERTICAL_SWIPE_DOMINANCE = 1.25;
+
 export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
@@ -41,13 +44,47 @@ export default function MobileGalleryCarouselScreen() {
   const [speed, setSpeed] = useState(1);
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(4);
   const [started, setStarted] = useState(false);
+  const swipeCloseRef = useRef<{ pointerId: number | null; startX: number; startY: number }>({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+  });
   const isLandscape = useLandscapeOrientation(started);
 
   const speedLabel = useMemo(() => `${speed.toFixed(1)}x`, [speed]);
   const scrubLabel = useMemo(() => `${scrubSpeedMultiplier.toFixed(0)}x`, [scrubSpeedMultiplier]);
 
   const closePlayer = useCallback(() => {
+    swipeCloseRef.current = { pointerId: null, startX: 0, startY: 0 };
     setStarted(false);
+  }, []);
+
+  const handleLandscapePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') return;
+    swipeCloseRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  }, []);
+
+  const handleLandscapePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const swipe = swipeCloseRef.current;
+    if (swipe.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (absY >= VERTICAL_SWIPE_CLOSE_THRESHOLD_PX && absY > absX * VERTICAL_SWIPE_DOMINANCE) {
+      closePlayer();
+    }
+  }, [closePlayer]);
+
+  const handleLandscapePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (swipeCloseRef.current.pointerId !== event.pointerId) return;
+    swipeCloseRef.current = { pointerId: null, startX: 0, startY: 0 };
   }, []);
 
   return (
@@ -121,7 +158,14 @@ export default function MobileGalleryCarouselScreen() {
           data-testid="mobile-gallery-carousel-overlay"
         >
           {isLandscape ? (
-            <>
+            <div
+              className="h-full min-h-[100dvh] w-full"
+              data-testid="mobile-gallery-carousel-swipe-surface"
+              onPointerDown={handleLandscapePointerDown}
+              onPointerMove={handleLandscapePointerMove}
+              onPointerUp={handleLandscapePointerEnd}
+              onPointerCancel={handleLandscapePointerEnd}
+            >
               <GalleryVideoCarousel
                 workspaceId={workspaceId}
                 initialImagesEnabled={imagesEnabled}
@@ -130,16 +174,7 @@ export default function MobileGalleryCarouselScreen() {
                 showControls={false}
                 enableKeyboardControls={false}
               />
-              <button
-                type="button"
-                onClick={closePlayer}
-                className="absolute right-[max(env(safe-area-inset-right,0px),0.75rem)] top-[max(env(safe-area-inset-top,0px),0.75rem)] z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/60 text-white/85 backdrop-blur"
-                aria-label="Close carousel"
-                title="Close carousel"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </>
+            </div>
           ) : (
             <div className="flex h-full min-h-[100dvh] w-full items-center justify-center p-6">
               <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center">

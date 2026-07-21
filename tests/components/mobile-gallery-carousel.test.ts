@@ -91,4 +91,31 @@ describe('mobile Gallery carousel', () => {
       enableKeyboardControls: false,
     });
   });
+
+  it('closes the landscape player with a vertical swipe instead of a visible close button', async () => {
+    setViewport(844, 390);
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await screen.findByTestId('mobile-gallery-carousel-overlay');
+    const swipeSurface = screen.getByTestId('mobile-gallery-carousel-swipe-surface');
+
+    expect(screen.queryByRole('button', { name: 'Close carousel' })).toBeNull();
+
+    fireEvent.pointerDown(swipeSurface, {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: 400,
+      clientY: 220,
+    });
+    fireEvent.pointerMove(swipeSurface, {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: 402,
+      clientY: 120,
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('mobile-gallery-carousel-overlay')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
+  });
 });
