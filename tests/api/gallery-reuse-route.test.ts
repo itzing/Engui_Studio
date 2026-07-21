@@ -227,6 +227,40 @@ describe('gallery reuse route', () => {
     expect(json.payload.options.image_path).toBeUndefined();
   });
 
+  it('ignores prompt overrides for WAN22 video txt2img payloads', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-video-1',
+      type: 'video',
+      originKind: 'job_output',
+      originalUrl: '/generations/gallery/ws-1/video.mp4',
+      thumbnailUrl: '/generations/gallery/ws-1/derived/video-thumb.jpg',
+      sourceJobId: 'job-1',
+      generationSnapshot: JSON.stringify({
+        prompt: 'video prompt',
+        modelId: 'wan22',
+        sourceImageGenerationSnapshot: {
+          prompt: 'forest temple',
+          modelId: 'z-image',
+          endpointId: 'z-image',
+          width: 1024,
+          height: 1024,
+        },
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img', promptOverride: 'video prompt should not win' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-video-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload.prompt).toBe('forest temple');
+  });
+
   it('uses selected prompt override for gallery txt2img payloads', async () => {
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'asset-1',

@@ -340,7 +340,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                 body: JSON.stringify({
                     action,
                     outputId: selectedOutput.outputId,
-                    ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+                    ...(action === 'txt2img' && selectedOutput.type === 'image' ? { promptOverride: selectedPrompt } : {}),
                 }),
             });
             const data = await response.json();

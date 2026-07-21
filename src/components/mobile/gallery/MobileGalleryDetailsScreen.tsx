@@ -125,7 +125,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action,
-        ...(action === 'txt2img' ? { promptOverride: selectedPrompt } : {}),
+        ...(action === 'txt2img' && asset.type === 'image' ? { promptOverride: selectedPrompt } : {}),
       }),
     });
     const data = await response.json();

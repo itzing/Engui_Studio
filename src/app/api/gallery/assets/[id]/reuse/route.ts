@@ -91,7 +91,9 @@ function buildReusePayload(
     if (!sourceSnapshot) {
       return null;
     }
-    const sourcePrompt = typeof promptOverride === 'string' ? promptOverride : typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
+    const sourcePrompt = asset.type !== 'video' && typeof promptOverride === 'string'
+      ? promptOverride
+      : typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
     const sourceModelId = typeof sourceSnapshot.modelId === 'string' ? sourceSnapshot.modelId : undefined;
     const sourceOptions = { ...sourceSnapshot };
     delete sourceOptions.prompt;

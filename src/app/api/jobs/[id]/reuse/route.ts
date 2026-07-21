@@ -138,7 +138,7 @@ function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, sna
     if (!sourceSnapshot) {
       return null;
     }
-    return buildImageTxt2ImgPayload(action, sourceSnapshot, promptOverride);
+    return buildImageTxt2ImgPayload(action, sourceSnapshot, output.type === 'video' ? null : promptOverride);
   }
 
   if (action === 'img2img') {

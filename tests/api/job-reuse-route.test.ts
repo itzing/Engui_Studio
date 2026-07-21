@@ -118,6 +118,42 @@ describe('job reuse route', () => {
     expect(json.payload.options.image_path).toBeUndefined();
   });
 
+  it('ignores prompt overrides for video job txt2img payloads', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'video-job-1',
+      type: 'video',
+      prompt: 'video prompt',
+      resultUrl: '/generations/video-output.mp4',
+      modelId: 'wan22',
+      endpointId: 'wan22',
+      options: JSON.stringify({
+        sourceImageGenerationSnapshot: {
+          prompt: 'original image prompt',
+          modelId: 'z-image',
+          endpointId: 'z-image',
+          width: 1024,
+          height: 1024,
+        },
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/jobs/video-job-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'txt2img',
+        outputId: 'output-1',
+        promptOverride: 'video prompt should not win',
+      }),
+    }) as any, {
+      params: Promise.resolve({ id: 'video-job-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload.prompt).toBe('original image prompt');
+  });
+
   it('uses selected prompt override for job txt2img payloads', async () => {
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'job-1',
