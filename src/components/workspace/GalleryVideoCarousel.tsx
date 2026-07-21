@@ -4,7 +4,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Pause, Play, RefreshCw, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { shuffleGalleryVideoFeed } from '@/lib/galleryVideoCarousel';
+import {
+  getAdjacentGalleryCarouselSlotX,
+  shouldSpawnAdjacentGalleryCarouselSlot,
+  shuffleGalleryVideoFeed,
+} from '@/lib/galleryVideoCarousel';
 
 type GalleryCarouselAsset = {
   id: string;
@@ -201,11 +205,12 @@ export function GalleryVideoCarousel({ workspaceId }: { workspaceId: string | nu
 
     const asset = feed[nextIndexRef.current];
     const size = buildSlotSize(asset, stage, measuredRatiosRef.current);
+    const trailingSlot = activeSlotsRef.current[activeSlotsRef.current.length - 1] || null;
     nextIndexRef.current += 1;
     const slot: CarouselSlot = {
       instanceId: `${asset.id}-${slotCounterRef.current}-${nextIndexRef.current}`,
       asset,
-      x: -size.width,
+      x: getAdjacentGalleryCarouselSlotX(trailingSlot?.x ?? null, size.width),
       y: size.y,
       width: size.width,
       height: size.height,
@@ -217,7 +222,6 @@ export function GalleryVideoCarousel({ workspaceId }: { workspaceId: string | nu
 
   const maybeSpawnNext = useCallback(() => {
     if (nextIndexRef.current >= feedRef.current.length) return;
-    const stage = stageSizeRef.current;
     const activeSlots = activeSlotsRef.current;
     if (activeSlots.length === 0) {
       spawnNext();
@@ -225,8 +229,7 @@ export function GalleryVideoCarousel({ workspaceId }: { workspaceId: string | nu
     }
 
     const newestSlot = activeSlots[activeSlots.length - 1];
-    const spawnGap = Math.max(120, stage.width * 0.16);
-    if (newestSlot.x >= spawnGap) {
+    if (shouldSpawnAdjacentGalleryCarouselSlot(newestSlot.x)) {
       spawnNext();
     }
   }, [spawnNext]);

@@ -24,7 +24,7 @@ The existing desktop Gallery overlay remains the entry point. A `Carousel` contr
 
 ### Scene
 
-The carousel scene is a 16:9 viewport centered in the available Gallery overlay content area. Cards enter from the left side, move toward the right side, and are removed after fully leaving the scene. New cards appear behind the previous card based on spacing and movement speed.
+The carousel scene is a 16:9 viewport centered in the available Gallery overlay content area. Cards enter from the left side, move toward the right side, and are removed after fully leaving the scene. New cards appear behind the previous card as an edge-to-edge chain, with only a tiny overlap to avoid subpixel seams; there should be no intentional black gap between consecutive cards.
 
 ### Cards
 

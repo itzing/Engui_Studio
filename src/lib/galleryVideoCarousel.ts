@@ -4,6 +4,8 @@ export type GalleryCarouselDimensions = {
   aspectRatio: string | null;
 };
 
+const DEFAULT_EDGE_OVERLAP_PX = 2;
+
 function readPositiveInteger(value: unknown): number | null {
   const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
@@ -60,4 +62,14 @@ export function shuffleGalleryVideoFeed<T extends { id: string }>(assets: T[], r
     [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
   }
   return next;
+}
+
+export function shouldSpawnAdjacentGalleryCarouselSlot(trailingSlotX: number, edgeOverlap = DEFAULT_EDGE_OVERLAP_PX) {
+  return trailingSlotX >= -Math.max(0, edgeOverlap);
+}
+
+export function getAdjacentGalleryCarouselSlotX(trailingSlotX: number | null, nextWidth: number, edgeOverlap = DEFAULT_EDGE_OVERLAP_PX) {
+  if (!Number.isFinite(nextWidth) || nextWidth <= 0) return 0;
+  if (trailingSlotX === null || !Number.isFinite(trailingSlotX)) return 0;
+  return trailingSlotX - nextWidth + Math.max(0, edgeOverlap);
 }

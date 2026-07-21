@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { aspectRatioFromDimensions, resolveGalleryCarouselDimensions, shuffleGalleryVideoFeed } from '@/lib/galleryVideoCarousel';
+import {
+  aspectRatioFromDimensions,
+  getAdjacentGalleryCarouselSlotX,
+  resolveGalleryCarouselDimensions,
+  shouldSpawnAdjacentGalleryCarouselSlot,
+  shuffleGalleryVideoFeed,
+} from '@/lib/galleryVideoCarousel';
 
 describe('gallery video carousel helpers', () => {
   it('reduces media dimensions to a stable aspect ratio label', () => {
@@ -29,5 +35,14 @@ describe('gallery video carousel helpers', () => {
     expect(shuffled).not.toBe(assets);
     expect(new Set(shuffled.map((asset) => asset.id))).toEqual(new Set(['a', 'b', 'c', 'd']));
     expect(shuffled).toHaveLength(assets.length);
+  });
+
+  it('places consecutive carousel slots edge-to-edge without a fixed black gap', () => {
+    expect(getAdjacentGalleryCarouselSlotX(null, 360)).toBe(0);
+    expect(getAdjacentGalleryCarouselSlotX(0, 360)).toBe(-358);
+    expect(getAdjacentGalleryCarouselSlotX(14, 640)).toBe(-624);
+    expect(shouldSpawnAdjacentGalleryCarouselSlot(-3)).toBe(false);
+    expect(shouldSpawnAdjacentGalleryCarouselSlot(-2)).toBe(true);
+    expect(shouldSpawnAdjacentGalleryCarouselSlot(0)).toBe(true);
   });
 });
