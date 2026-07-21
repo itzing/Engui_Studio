@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aspectRatioFromDimensions,
+  buildGalleryCarouselFeed,
+  buildGalleryCarouselImageSlots,
   getAdjacentGalleryCarouselSlotX,
   getFullHeightGalleryCarouselSlotSize,
   resolveGalleryCarouselDimensions,
@@ -36,6 +38,48 @@ describe('gallery video carousel helpers', () => {
     expect(shuffled).not.toBe(assets);
     expect(new Set(shuffled.map((asset) => asset.id))).toEqual(new Set(['a', 'b', 'c', 'd']));
     expect(shuffled).toHaveLength(assets.length);
+  });
+
+  it('builds a mixed feed with one image slot after every two videos', () => {
+    const videos = [{ id: 'v1' }, { id: 'v2' }, { id: 'v3' }, { id: 'v4' }, { id: 'v5' }];
+    const images = Array.from({ length: 10 }, (_, index) => ({
+      id: `image-${index + 1}`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+    }));
+
+    const feed = buildGalleryCarouselFeed(videos, {
+      includeImages: true,
+      images,
+      random: () => 0.99,
+    });
+
+    expect(feed.map((entry) => entry.kind)).toEqual(['video', 'video', 'images', 'video', 'video', 'images', 'video']);
+    expect(feed.filter((entry) => entry.kind === 'images')).toHaveLength(2);
+    expect(feed.filter((entry) => entry.kind === 'images').every((entry) => entry.kind === 'images' && entry.images.length === 5)).toBe(true);
+  });
+
+  it('preselects image slot groups by similar media shape', () => {
+    const images = [
+      { id: 'portrait-1', mediaWidth: 720, mediaHeight: 1280 },
+      { id: 'portrait-2', mediaWidth: 768, mediaHeight: 1344 },
+      { id: 'portrait-3', mediaWidth: 832, mediaHeight: 1216 },
+      { id: 'portrait-4', mediaWidth: 704, mediaHeight: 1280 },
+      { id: 'portrait-5', mediaWidth: 768, mediaHeight: 1280 },
+      { id: 'landscape-1', mediaWidth: 1280, mediaHeight: 720 },
+    ];
+
+    const slots = buildGalleryCarouselImageSlots(images, 1, () => 0.99);
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0].images.map((image) => image.id)).toEqual([
+      'portrait-1',
+      'portrait-4',
+      'portrait-2',
+      'portrait-5',
+      'portrait-3',
+    ]);
+    expect(slots[0].aspectRatio).toBeLessThan(1);
   });
 
   it('places consecutive carousel slots edge-to-edge without a fixed black gap', () => {

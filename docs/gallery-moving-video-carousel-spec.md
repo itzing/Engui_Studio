@@ -15,6 +15,11 @@ Add a desktop-only Gallery viewing mode that turns all gallery videos in the cur
 - Click behavior: clicking the carousel pauses/resumes all visible playback and the card movement.
 - Video end behavior: if a video ends before its card leaves the scene, restart it and keep playing until the card exits.
 - Controls: user can regulate card movement speed.
+- Images: an `Images` checkbox is available in the carousel header, off by default.
+- Image insertion: when Images is enabled, the carousel inserts one image slot after every two video slots.
+- Image slot content: each image slot preselects five gallery images when enough images are available.
+- Image refresh: image slots switch to the next selected image every second while the carousel is playing.
+- Rebuild behavior: toggling Images on or off rebuilds the carousel feed from scratch.
 
 ## UX Contract
 
@@ -28,13 +33,15 @@ The carousel scene is a 16:9 viewport centered in the available Gallery overlay 
 
 ### Cards
 
-Each card contains exactly one muted looping video. Cards fill the full height of the 16:9 scene. Card width is derived from the video's aspect ratio, so short or landscape videos scale up to scene height without distorting their proportions. The card aspect ratio is derived from Gallery metadata when available:
+Video cards contain exactly one muted looping video. Image cards contain one preselected image slot that cycles through up to five images. Cards fill the full height of the 16:9 scene. Card width is derived from the media aspect ratio, so short or landscape media scales up to scene height without distorting its proportions. The card aspect ratio is derived from Gallery metadata when available:
 
 - `outputVideoMetadata.width/height`
 - top-level `width/height`
 - common nested option objects such as `generationOptions`
 
 If metadata is unavailable, the client starts with a vertical fallback ratio and corrects the card once the browser receives video metadata.
+
+For image slots, the carousel groups images by similar dimensions/aspect ratios before playback starts. The slot uses the median aspect ratio of the selected image group so its width remains stable while the displayed image changes once per second.
 
 ### Pause
 
@@ -62,7 +69,13 @@ The carousel loads videos through the existing Gallery assets API:
 GET /api/gallery/assets?workspaceId=<id>&type=video&bucket=all&sort=newest&limit=100&page=<n>
 ```
 
-It keeps fetching pages until `pagination.hasNextPage` is false.
+When Images is enabled, it also loads images through the same API:
+
+```text
+GET /api/gallery/assets?workspaceId=<id>&type=image&bucket=all&sort=newest&limit=100&page=<n>
+```
+
+It keeps fetching pages until `pagination.hasNextPage` is false for each requested media type.
 
 The existing route response is extended with optional media fields:
 
@@ -82,6 +95,8 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - media dimension normalization
    - aspect-ratio label creation
    - no-repeat Fisher-Yates shuffle
+   - mixed video/image feed construction
+   - image-slot grouping by similar dimensions/aspect ratios
 4. Extend Gallery assets list/detail normalization with optional media dimensions.
 5. Add `GalleryVideoCarousel` as a desktop component:
    - fetch all workspace videos up front
@@ -91,6 +106,9 @@ These fields are derived from `generationSnapshot`. No database schema change is
    - pause/resume on scene click
    - keep visible videos muted and looping
    - expose speed control
+   - expose Images checkbox, default off
+   - insert image slots after every two videos when enabled
+   - cycle each image slot every second
 6. Wire the component into `DesktopGalleryOverlay` as a sidebar-selectable mode.
 7. Add focused tests for helpers, API dimensions, and component pause behavior.
 8. Validate with focused Vitest, targeted lint, `git diff --check`, Prisma validate, production build, service restart, and smoke checks.
