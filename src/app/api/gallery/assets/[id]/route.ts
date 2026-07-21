@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
 import { getPromptVersions } from '@/lib/promptVersions';
+import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   if (!raw) return {};
@@ -15,6 +16,7 @@ function parseGenerationSnapshot(raw: string | null): Record<string, any> {
 
 function toAssetResponse(asset: any, snapshot: Record<string, any>) {
   const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
+  const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
   return {
     id: asset.id,
     workspaceId: asset.workspaceId,
@@ -35,6 +37,7 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
     promptTemplate: promptVersions.originalPrompt || null,
     resolvedPrompt: promptVersions.resolvedPrompt,
     modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
+    ...mediaDimensions,
     hasSceneSnapshot: !!(snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' && snapshot.sceneSnapshot.templateId === 'scene_template_v2'),
     addedToGalleryAt: asset.addedToGalleryAt,
     updatedAt: asset.updatedAt,

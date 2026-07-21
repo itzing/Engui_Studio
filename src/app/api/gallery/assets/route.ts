@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPromptVersions } from '@/lib/promptVersions';
+import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
     let normalizedAssets = assets.map(asset => {
       const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
       const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
+      const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
       return {
         id: asset.id,
         workspaceId: asset.workspaceId,
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest) {
         promptTemplate: promptVersions.originalPrompt || null,
         resolvedPrompt: promptVersions.resolvedPrompt,
         modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
+        ...mediaDimensions,
         addedToGalleryAt: asset.addedToGalleryAt,
         updatedAt: asset.updatedAt,
       };

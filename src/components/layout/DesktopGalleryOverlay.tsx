@@ -2,12 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
+import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
+import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 
@@ -108,6 +109,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   const [gridWidth, setGridWidth] = useState(1200);
   const [detailsAsset, setDetailsAsset] = useState<MobileGalleryAsset | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [galleryViewMode, setGalleryViewMode] = useState<'grid' | 'carousel'>('grid');
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -139,6 +141,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
+    workspaceId,
   } = useMobileGalleryScreen('desktop');
 
   useEffect(() => {
@@ -264,6 +267,29 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       </div>
 
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setGalleryViewMode('grid')}
+            className={`inline-flex h-8 items-center justify-center gap-2 rounded border px-2 text-[11px] transition-colors ${galleryViewMode === 'grid' ? 'border-white/20 bg-white/10 text-white' : 'border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Grid
+          </button>
+          <button
+            type="button"
+            onClick={() => setGalleryViewMode('carousel')}
+            className={`inline-flex h-8 items-center justify-center gap-2 rounded border px-2 text-[11px] transition-colors ${galleryViewMode === 'carousel' ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100' : 'border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}
+          >
+            <Clapperboard className="h-3.5 w-3.5" />
+            Carousel
+          </button>
+        </div>
+      </div>
+
+      {galleryViewMode === 'grid' ? (
+        <>
+      <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <div className="flex items-center gap-2 text-xs text-white/70">
           <SlidersHorizontal className="h-4 w-4" />
           Columns: {columns}
@@ -289,7 +315,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                 title={'title' in item ? item.title : item.label}
                 className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active ? ('activeClass' in item ? item.activeClass : 'text-white border-white/20 bg-white/10') : 'text-white/50 border-white/10 bg-transparent hover:text-white hover:bg-white/5'}`}
               >
-                {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                {Icon ? <Icon className="w-3.5 h-3.5" /> : ('label' in item ? item.label : null)}
               </button>
             );
           })}
@@ -310,7 +336,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                 onClick={() => toggleMediaFilter(item.key)}
                 className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 ${active ? ('activeClass' in item ? item.activeClass : 'text-white border-white/20 bg-white/10') : 'text-white/50 border-white/10 bg-transparent hover:text-white hover:bg-white/5'}`}
               >
-                {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                {Icon ? <Icon className="w-3.5 h-3.5" /> : ('label' in item ? item.label : null)}
               </button>
             );
           })}
@@ -348,6 +374,8 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 bg-white/[0.03] border-white/10 text-white placeholder:text-white/35" />
       </div>
+        </>
+      ) : null}
     </aside>
   );
 
@@ -358,7 +386,9 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       <div className="flex h-full w-full">
         {sidebarSide === 'left' ? sidebar : null}
         <div ref={gridWrapRef} className="min-w-0 flex-1 flex flex-col">
-          {isLoading ? (
+          {galleryViewMode === 'carousel' ? (
+            <GalleryVideoCarousel workspaceId={workspaceId} />
+          ) : isLoading ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-6 text-sm text-white/65">
                 <Loader2 className="h-4 w-4 animate-spin" />

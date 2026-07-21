@@ -25,12 +25,14 @@ describe('GET /api/gallery/assets', () => {
         id: 'asset-1', workspaceId: 'ws-1', type: 'image', originalUrl: '/a.png', previewUrl: '/a.png', thumbnailUrl: null,
         favorited: false, trashed: false, userTags: JSON.stringify(['portrait']), autoTags: JSON.stringify(['client-a', 'studio']),
         sourceJobId: 'job-1', sourceOutputId: 'output-1', derivativeStatus: 'pending', enrichmentStatus: 'completed',
+        generationSnapshot: JSON.stringify({ width: 1280, height: 720 }),
         addedToGalleryAt: new Date('2026-04-08T10:00:00Z'), updatedAt: new Date('2026-04-08T10:00:00Z'),
       },
       {
         id: 'asset-2', workspaceId: 'ws-1', type: 'image', originalUrl: '/b.png', previewUrl: '/b.png', thumbnailUrl: null,
         favorited: false, trashed: false, userTags: JSON.stringify(['portrait']), autoTags: JSON.stringify(['nature']),
         sourceJobId: 'job-2', sourceOutputId: 'output-2', derivativeStatus: 'pending', enrichmentStatus: 'completed',
+        generationSnapshot: null,
         addedToGalleryAt: new Date('2026-04-08T09:00:00Z'), updatedAt: new Date('2026-04-08T09:00:00Z'),
       },
     ]);
@@ -44,6 +46,7 @@ describe('GET /api/gallery/assets', () => {
     expect(json.assets).toHaveLength(1);
     expect(json.assets[0].id).toBe('asset-1');
     expect(json.assets[0].autoTags).toContain('client-a');
+    expect(json.assets[0]).toMatchObject({ mediaWidth: 1280, mediaHeight: 720, aspectRatio: '16:9' });
   });
 
   it('returns paginated payload metadata', async () => {
@@ -52,6 +55,7 @@ describe('GET /api/gallery/assets', () => {
         id: `asset-${index + 1}`, workspaceId: 'ws-1', type: 'image', originalUrl: `/${index}.png`, previewUrl: `/${index}.png`, thumbnailUrl: null,
         favorited: false, trashed: false, userTags: JSON.stringify([]), autoTags: JSON.stringify([]),
         sourceJobId: null, sourceOutputId: null, derivativeStatus: 'pending', enrichmentStatus: 'pending',
+        generationSnapshot: null,
         addedToGalleryAt: new Date(`2026-04-08T0${index}:00:00Z`), updatedAt: new Date(`2026-04-08T0${index}:00:00Z`),
       }))
     );
