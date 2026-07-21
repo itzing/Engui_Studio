@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
   buildGalleryCarouselFeed,
+  matchesGalleryCarouselRatioFilter,
   type GalleryCarouselFeedItem,
+  type GalleryCarouselRatioFilter,
   getAdjacentGalleryCarouselSlotX,
   getFullHeightGalleryCarouselSlotSize,
   readGalleryCarouselAssetRatio,
@@ -127,6 +129,8 @@ type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
   initialImagesEnabled?: boolean;
+  initialIncludeLandscape?: boolean;
+  initialIncludePortrait?: boolean;
   initialSpeed?: number;
   initialScrubSpeedMultiplier?: number;
   showControls?: boolean;
@@ -137,6 +141,8 @@ export function GalleryVideoCarousel({
   workspaceId,
   onClose,
   initialImagesEnabled = false,
+  initialIncludeLandscape = true,
+  initialIncludePortrait = true,
   initialSpeed = 1,
   initialScrubSpeedMultiplier = DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER,
   showControls = true,
@@ -157,6 +163,10 @@ export function GalleryVideoCarousel({
   const speedRef = useRef(initialSpeed);
   const scrubSpeedMultiplierRef = useRef(initialScrubSpeedMultiplier);
   const imagesEnabledRef = useRef(false);
+  const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
+    includeLandscape: initialIncludeLandscape,
+    includePortrait: initialIncludePortrait,
+  });
   const measuredRatiosRef = useRef<Record<string, number>>({});
   const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
   const keyboardScrubDirectionRef = useRef<0 | -1 | 1>(0);
@@ -169,6 +179,8 @@ export function GalleryVideoCarousel({
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(initialScrubSpeedMultiplier);
   const [paused, setPaused] = useState(false);
   const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
+  const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
+  const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedEnded, setFeedEnded] = useState(false);
@@ -195,7 +207,7 @@ export function GalleryVideoCarousel({
     setPaused(false);
   }, []);
 
-  const loadAssets = useCallback(async (includeImages: boolean) => {
+  const loadAssets = useCallback(async (includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
@@ -218,11 +230,13 @@ export function GalleryVideoCarousel({
         fetchAllGalleryAssets(workspaceId, 'video'),
         includeImages ? fetchAllGalleryAssets(workspaceId, 'image') : Promise.resolve([]),
       ]);
-      sourceVideosRef.current = videos;
-      sourceImagesRef.current = images;
-      setSourceVideos(videos);
-      setSourceImages(images);
-      resetPlayback(videos, images, includeImages);
+      const filteredVideos = videos.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO));
+      const filteredImages = images.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO));
+      sourceVideosRef.current = filteredVideos;
+      sourceImagesRef.current = filteredImages;
+      setSourceVideos(filteredVideos);
+      setSourceImages(filteredImages);
+      resetPlayback(filteredVideos, filteredImages, includeImages);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load gallery feed');
       sourceVideosRef.current = [];
@@ -236,14 +250,21 @@ export function GalleryVideoCarousel({
   }, [resetPlayback, workspaceId]);
 
   useEffect(() => {
+    const nextRatioFilter = {
+      includeLandscape: initialIncludeLandscape,
+      includePortrait: initialIncludePortrait,
+    };
     imagesEnabledRef.current = initialImagesEnabled;
     setImagesEnabled(initialImagesEnabled);
+    ratioFilterRef.current = nextRatioFilter;
+    setIncludeLandscape(initialIncludeLandscape);
+    setIncludePortrait(initialIncludePortrait);
     speedRef.current = initialSpeed;
     setSpeed(initialSpeed);
     scrubSpeedMultiplierRef.current = initialScrubSpeedMultiplier;
     setScrubSpeedMultiplier(initialScrubSpeedMultiplier);
-    void loadAssets(initialImagesEnabled);
-  }, [initialImagesEnabled, initialScrubSpeedMultiplier, initialSpeed, loadAssets]);
+    void loadAssets(initialImagesEnabled, nextRatioFilter);
+  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, loadAssets]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -637,7 +658,18 @@ export function GalleryVideoCarousel({
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
     setImagesEnabled(nextEnabled);
     imagesEnabledRef.current = nextEnabled;
-    void loadAssets(nextEnabled);
+    void loadAssets(nextEnabled, ratioFilterRef.current);
+  }, [loadAssets]);
+
+  const handleRatioToggle = useCallback((orientation: 'landscape' | 'portrait', nextEnabled: boolean) => {
+    const nextRatioFilter = {
+      ...ratioFilterRef.current,
+      [orientation === 'landscape' ? 'includeLandscape' : 'includePortrait']: nextEnabled,
+    };
+    ratioFilterRef.current = nextRatioFilter;
+    setIncludeLandscape(nextRatioFilter.includeLandscape);
+    setIncludePortrait(nextRatioFilter.includePortrait);
+    void loadAssets(imagesEnabledRef.current, nextRatioFilter);
   }, [loadAssets]);
 
   return (
@@ -665,7 +697,7 @@ export function GalleryVideoCarousel({
           </div>
           <div className="truncate text-xs text-white/45">{statusLabel}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <label
             className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${imagesEnabled ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
             onClick={(event) => event.stopPropagation()}
@@ -680,6 +712,34 @@ export function GalleryVideoCarousel({
             />
             <ImageIcon className="h-4 w-4" />
             Images
+          </label>
+          <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${includeLandscape ? 'border-sky-400/35 bg-sky-500/10 text-sky-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={includeLandscape}
+              disabled={isLoading}
+              onChange={(event) => handleRatioToggle('landscape', event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-sky-400"
+              aria-label="Include landscape assets"
+            />
+            Landscape
+          </label>
+          <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${includePortrait ? 'border-fuchsia-400/35 bg-fuchsia-500/10 text-fuchsia-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={includePortrait}
+              disabled={isLoading}
+              onChange={(event) => handleRatioToggle('portrait', event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-fuchsia-400"
+              aria-label="Include portrait assets"
+            />
+            Portrait
           </label>
           <div className="flex w-[220px] items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
             <span className="text-xs text-white/55">Speed</span>
@@ -738,7 +798,7 @@ export function GalleryVideoCarousel({
             className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              void loadAssets(imagesEnabledRef.current);
+              void loadAssets(imagesEnabledRef.current, ratioFilterRef.current);
             }}
             disabled={isLoading}
             aria-label="Refresh video feed"

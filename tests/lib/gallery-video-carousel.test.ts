@@ -4,8 +4,10 @@ import {
   aspectRatioFromDimensions,
   buildGalleryCarouselFeed,
   buildGalleryCarouselImageSlots,
+  getGalleryCarouselAssetOrientation,
   getAdjacentGalleryCarouselSlotX,
   getFullHeightGalleryCarouselSlotSize,
+  matchesGalleryCarouselRatioFilter,
   resolveGalleryCarouselDimensions,
   shouldSpawnAdjacentGalleryCarouselSlot,
   shuffleGalleryVideoFeed,
@@ -28,6 +30,21 @@ describe('gallery video carousel helpers', () => {
       mediaHeight: 720,
       aspectRatio: '16:9',
     });
+  });
+
+  it('matches assets against landscape and portrait ratio filters', () => {
+    const landscape = { id: 'landscape', mediaWidth: 1280, mediaHeight: 720 };
+    const portrait = { id: 'portrait', mediaWidth: 720, mediaHeight: 1280 };
+    const square = { id: 'square', mediaWidth: 1024, mediaHeight: 1024 };
+
+    expect(getGalleryCarouselAssetOrientation(landscape)).toBe('landscape');
+    expect(getGalleryCarouselAssetOrientation(portrait)).toBe('portrait');
+    expect(getGalleryCarouselAssetOrientation(square)).toBe('landscape');
+    expect(matchesGalleryCarouselRatioFilter(landscape, { includeLandscape: true, includePortrait: false })).toBe(true);
+    expect(matchesGalleryCarouselRatioFilter(portrait, { includeLandscape: true, includePortrait: false })).toBe(false);
+    expect(matchesGalleryCarouselRatioFilter(portrait, { includeLandscape: false, includePortrait: true })).toBe(true);
+    expect(matchesGalleryCarouselRatioFilter(landscape, { includeLandscape: false, includePortrait: true })).toBe(false);
+    expect(matchesGalleryCarouselRatioFilter(landscape, { includeLandscape: false, includePortrait: false })).toBe(false);
   });
 
   it('shuffles without dropping or duplicating assets', () => {

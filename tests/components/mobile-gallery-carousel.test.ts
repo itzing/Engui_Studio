@@ -78,6 +78,9 @@ describe('mobile Gallery carousel', () => {
     render(React.createElement(MobileGalleryCarouselScreen));
 
     fireEvent.click(screen.getByLabelText('Include image slots'));
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText('Include portrait assets'));
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
@@ -85,6 +88,8 @@ describe('mobile Gallery carousel', () => {
     expect(mockCarousel.props).toMatchObject({
       workspaceId: 'ws-1',
       initialImagesEnabled: true,
+      initialIncludeLandscape: true,
+      initialIncludePortrait: false,
       initialSpeed: 1,
       initialScrubSpeedMultiplier: 4,
       showControls: false,

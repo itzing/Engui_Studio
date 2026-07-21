@@ -28,6 +28,11 @@ export type GalleryCarouselFeedItem<TVideo, TImage> =
   | GalleryCarouselVideoFeedItem<TVideo>
   | GalleryCarouselImageFeedItem<TImage>;
 
+export type GalleryCarouselRatioFilter = {
+  includeLandscape: boolean;
+  includePortrait: boolean;
+};
+
 export const GALLERY_CAROUSEL_IMAGES_PER_SLOT = 5;
 export const GALLERY_CAROUSEL_VIDEOS_PER_IMAGE_SLOT = 2;
 
@@ -110,6 +115,21 @@ function readKnownGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike): nu
 export function readGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike, fallbackRatio = 9 / 16) {
   const ratio = readKnownGalleryCarouselAssetRatio(asset);
   return ratio && Number.isFinite(ratio) && ratio > 0 ? ratio : fallbackRatio;
+}
+
+export function getGalleryCarouselAssetOrientation(asset: GalleryCarouselMediaLike, fallbackRatio = 9 / 16): 'landscape' | 'portrait' {
+  return readGalleryCarouselAssetRatio(asset, fallbackRatio) >= 1 ? 'landscape' : 'portrait';
+}
+
+export function matchesGalleryCarouselRatioFilter(
+  asset: GalleryCarouselMediaLike,
+  filter: GalleryCarouselRatioFilter,
+  fallbackRatio = 9 / 16,
+) {
+  if (!filter.includeLandscape && !filter.includePortrait) return false;
+  if (filter.includeLandscape && filter.includePortrait) return true;
+  const orientation = getGalleryCarouselAssetOrientation(asset, fallbackRatio);
+  return orientation === 'landscape' ? filter.includeLandscape : filter.includePortrait;
 }
 
 function readMediaArea(asset: GalleryCarouselMediaLike): number | null {

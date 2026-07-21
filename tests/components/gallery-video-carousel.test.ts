@@ -333,4 +333,91 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
   });
+
+  it('filters carousel videos and images by selected ratio settings', async () => {
+    const videoAssets = [
+      {
+        id: 'video-landscape',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-landscape.mp4',
+        previewUrl: '/video-landscape.mp4',
+        thumbnailUrl: '/video-landscape.png',
+        mediaWidth: 1280,
+        mediaHeight: 720,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+      {
+        id: 'video-portrait',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-portrait.mp4',
+        previewUrl: '/video-portrait.mp4',
+        thumbnailUrl: '/video-portrait.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:01:00Z',
+      },
+    ];
+    const imageAssets = [
+      {
+        id: 'image-landscape',
+        workspaceId: 'ws-1',
+        type: 'image',
+        originalUrl: '/image-landscape.png',
+        previewUrl: '/image-landscape.png',
+        thumbnailUrl: null,
+        prompt: 'Landscape image',
+        mediaWidth: 1280,
+        mediaHeight: 720,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+      {
+        id: 'image-portrait',
+        workspaceId: 'ws-1',
+        type: 'image',
+        originalUrl: '/image-portrait.png',
+        previewUrl: '/image-portrait.png',
+        thumbnailUrl: null,
+        prompt: 'Portrait image',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:01:00Z',
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      const type = search.get('type');
+      const assets = type === 'image' ? imageAssets : videoAssets;
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          assets,
+          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      initialImagesEnabled: true,
+      initialIncludeLandscape: true,
+      initialIncludePortrait: false,
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('1 videos · 1 images')).toBeTruthy());
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
+    await waitFor(() => expect(screen.getByTestId('gallery-video-carousel').querySelector('video[src="/video-landscape.mp4"]')).toBeTruthy());
+    expect(screen.getByTestId('gallery-video-carousel').querySelector('video[src="/video-portrait.mp4"]')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Include landscape assets'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(screen.getByText('No gallery videos in this workspace.')).toBeTruthy());
+  });
 });

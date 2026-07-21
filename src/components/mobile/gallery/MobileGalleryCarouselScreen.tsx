@@ -41,6 +41,8 @@ export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [imagesEnabled, setImagesEnabled] = useState(false);
+  const [includeLandscape, setIncludeLandscape] = useState(true);
+  const [includePortrait, setIncludePortrait] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(4);
   const [started, setStarted] = useState(false);
@@ -110,6 +112,29 @@ export default function MobileGalleryCarouselScreen() {
             />
           </label>
 
+          <div className="grid grid-cols-2 gap-2">
+            <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${includeLandscape ? 'border-sky-500/40 bg-sky-500/10 text-sky-100' : 'border-border bg-background/60 text-foreground'}`}>
+              <span>Landscape</span>
+              <input
+                type="checkbox"
+                checked={includeLandscape}
+                onChange={(event) => setIncludeLandscape(event.currentTarget.checked)}
+                className="h-4 w-4 accent-sky-400"
+                aria-label="Include landscape assets"
+              />
+            </label>
+            <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${includePortrait ? 'border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100' : 'border-border bg-background/60 text-foreground'}`}>
+              <span>Portrait</span>
+              <input
+                type="checkbox"
+                checked={includePortrait}
+                onChange={(event) => setIncludePortrait(event.currentTarget.checked)}
+                className="h-4 w-4 accent-fuchsia-400"
+                aria-label="Include portrait assets"
+              />
+            </label>
+          </div>
+
           <div className="space-y-2 rounded-lg border border-border bg-background/60 p-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Speed</span>
@@ -169,6 +194,8 @@ export default function MobileGalleryCarouselScreen() {
               <GalleryVideoCarousel
                 workspaceId={workspaceId}
                 initialImagesEnabled={imagesEnabled}
+                initialIncludeLandscape={includeLandscape}
+                initialIncludePortrait={includePortrait}
                 initialSpeed={speed}
                 initialScrubSpeedMultiplier={scrubSpeedMultiplier}
                 showControls={false}
