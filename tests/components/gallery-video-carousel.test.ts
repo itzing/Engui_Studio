@@ -56,6 +56,96 @@ describe('GalleryVideoCarousel', () => {
     expect(within(screen.getByTestId('gallery-video-carousel')).queryByText('Paused')).toBeNull();
     expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
+  });
+
+  it('pauses movement and keeps it paused after dragging the tape', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [
+          {
+            id: 'video-1',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-1.mp4',
+            previewUrl: '/video-1.mp4',
+            thumbnailUrl: '/video-1.png',
+            mediaWidth: 720,
+            mediaHeight: 1280,
+            addedToGalleryAt: '2026-07-21T06:00:00Z',
+          },
+          {
+            id: 'video-2',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-2.mp4',
+            previewUrl: '/video-2.mp4',
+            thumbnailUrl: '/video-2.png',
+            mediaWidth: 720,
+            mediaHeight: 1280,
+            addedToGalleryAt: '2026-07-21T06:01:00Z',
+          },
+        ],
+        pagination: { page: 1, limit: 100, totalCount: 2, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
+
+    const stage = screen.getByTestId('gallery-video-carousel');
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 120 });
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 172 });
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', clientX: 172 });
+
+    expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+    expect(screen.getByText('Movement paused')).toBeTruthy();
+    expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+  });
+
+  it('scrubs with header buttons and ignores Space from form controls', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [
+          {
+            id: 'video-1',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-1.mp4',
+            previewUrl: '/video-1.mp4',
+            thumbnailUrl: '/video-1.png',
+            mediaWidth: 720,
+            mediaHeight: 1280,
+            addedToGalleryAt: '2026-07-21T06:00:00Z',
+          },
+        ],
+        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('1 videos')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move carousel tape right' }));
+    expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByLabelText('Include image slots'), { code: 'Space', key: ' ' });
+    expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
   it('loads images and rebuilds the feed when Images is toggled', async () => {

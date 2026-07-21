@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -51,10 +51,19 @@ type CarouselSlot = {
   activeImageIndex?: number;
 };
 
+type DragState = {
+  pointerId: number | null;
+  startX: number;
+  lastX: number;
+  hasDragged: boolean;
+};
+
 const PAGE_LIMIT = 100;
 const DEFAULT_VIDEO_RATIO = 9 / 16;
 const DEFAULT_IMAGE_RATIO = 1;
 const BASE_SPEED_PX_PER_SECOND = 90;
+const DRAG_START_THRESHOLD_PX = 4;
+const MANUAL_SCRUB_STEP_RATIO = 0.24;
 
 function readVideoAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -101,6 +110,14 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video
   return assets;
 }
 
+function shouldIgnoreSpaceShortcutTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tagName = target.tagName.toLowerCase();
+  if (['button', 'input', 'select', 'textarea'].includes(tagName)) return true;
+  return Boolean(target.closest('[role="slider"], [contenteditable="true"]'));
+}
+
 export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: string | null; onClose?: () => void }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
@@ -117,6 +134,8 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const speedRef = useRef(1);
   const imagesEnabledRef = useRef(false);
   const measuredRatiosRef = useRef<Record<string, number>>({});
+  const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
+  const suppressClickRef = useRef(false);
   const [sourceVideos, setSourceVideos] = useState<GalleryCarouselAsset[]>([]);
   const [sourceImages, setSourceImages] = useState<GalleryCarouselAsset[]>([]);
   const [activeSlots, setActiveSlots] = useState<CarouselSlot[]>([]);
@@ -128,6 +147,7 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
   const [error, setError] = useState<string | null>(null);
   const [feedEnded, setFeedEnded] = useState(false);
   const [measuredRatios, setMeasuredRatios] = useState<Record<string, number>>({});
+  const [isDragging, setIsDragging] = useState(false);
 
   const remainingCount = Math.max(0, feedRef.current.length - nextIndex);
   const visibleCount = activeSlots.length;
@@ -266,6 +286,90 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
     }
   }, [spawnNext]);
 
+  const setMovementPaused = useCallback((nextPaused: boolean) => {
+    pausedRef.current = nextPaused;
+    setPaused(nextPaused);
+  }, []);
+
+  const manualScrubTape = useCallback((deltaX: number) => {
+    if (!Number.isFinite(deltaX) || deltaX === 0 || isLoading || totalCount === 0) return;
+    if (activeSlotsRef.current.length === 0) {
+      spawnNext();
+    }
+    if (activeSlotsRef.current.length === 0) return;
+
+    activeSlotsRef.current = activeSlotsRef.current.map((slot) => ({
+      ...slot,
+      x: slot.x + deltaX,
+    }));
+
+    let spawnGuard = 0;
+    while (
+      nextIndexRef.current < feedRef.current.length
+      && activeSlotsRef.current.length > 0
+      && shouldSpawnAdjacentGalleryCarouselSlot(activeSlotsRef.current[activeSlotsRef.current.length - 1].x)
+      && spawnGuard < 12
+    ) {
+      spawnNext();
+      spawnGuard += 1;
+    }
+
+    setFeedEnded(false);
+    setActiveSlots(activeSlotsRef.current);
+  }, [isLoading, spawnNext, totalCount]);
+
+  const pauseAndScrubTape = useCallback((deltaX: number) => {
+    setMovementPaused(true);
+    manualScrubTape(deltaX);
+  }, [manualScrubTape, setMovementPaused]);
+
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (isLoading || totalCount === 0 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      lastX: event.clientX,
+      hasDragged: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, [isLoading, totalCount]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (dragState.pointerId !== event.pointerId) return;
+
+    const totalDelta = event.clientX - dragState.startX;
+    if (!dragState.hasDragged && Math.abs(totalDelta) < DRAG_START_THRESHOLD_PX) return;
+
+    const deltaX = event.clientX - dragState.lastX;
+    dragState.hasDragged = true;
+    dragState.lastX = event.clientX;
+    setIsDragging(true);
+    pauseAndScrubTape(deltaX);
+    event.preventDefault();
+  }, [pauseAndScrubTape]);
+
+  const finishPointerDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (dragState.pointerId !== event.pointerId) return;
+
+    if (dragState.hasDragged) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+
+    dragStateRef.current = { pointerId: null, startX: 0, lastX: 0, hasDragged: false };
+    setIsDragging(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }, []);
+
+  const scrubStep = useCallback((direction: -1 | 1) => {
+    const stageWidth = stageSizeRef.current.width || 1280;
+    pauseAndScrubTape(direction * stageWidth * MANUAL_SCRUB_STEP_RATIO);
+  }, [pauseAndScrubTape]);
+
   useEffect(() => {
     const frame = (timestamp: number) => {
       const lastTimestamp = lastFrameTimestampRef.current ?? timestamp;
@@ -314,6 +418,24 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
       }
     };
   }, [maybeSpawnNext]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' && event.key !== ' ') return;
+      if (shouldIgnoreSpaceShortcutTarget(event.target)) return;
+      if (isLoading || totalCount === 0) return;
+
+      event.preventDefault();
+      setPaused((current) => {
+        const next = !current;
+        pausedRef.current = next;
+        return next;
+      });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLoading, totalCount]);
 
   useEffect(() => {
     const videos = Object.values(videoRefs.current);
@@ -397,6 +519,36 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
             <ImageIcon className="h-4 w-4" />
             Images
           </label>
+          <div className="flex items-center gap-1" role="group" aria-label="Manual carousel tape controls">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
+              onClick={(event) => {
+                event.stopPropagation();
+                scrubStep(-1);
+              }}
+              disabled={isLoading || totalCount === 0}
+              aria-label="Move carousel tape left"
+              title="Move carousel tape left"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
+              onClick={(event) => {
+                event.stopPropagation();
+                scrubStep(1);
+              }}
+              disabled={isLoading || totalCount === 0}
+              aria-label="Move carousel tape right"
+              title="Move carousel tape right"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex w-[220px] items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
             <span className="text-xs text-white/55">Speed</span>
             <Slider
@@ -458,10 +610,22 @@ export function GalleryVideoCarousel({ workspaceId, onClose }: { workspaceId: st
         <div
           ref={stageRef}
           data-testid="gallery-video-carousel"
-          className="relative aspect-video max-h-full w-full overflow-hidden rounded-md border border-white/10 bg-neutral-950 shadow-2xl"
+          className={`relative aspect-video max-h-full w-full touch-none select-none overflow-hidden rounded-md border border-white/10 bg-neutral-950 shadow-2xl ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishPointerDrag}
+          onPointerCancel={finishPointerDrag}
           onClick={() => {
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              return;
+            }
             if (isLoading || totalCount === 0) return;
-            setPaused((value) => !value);
+            setPaused((value) => {
+              const next = !value;
+              pausedRef.current = next;
+              return next;
+            });
           }}
         >
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.6),transparent_12%,transparent_88%,rgba(0,0,0,0.6))]" />
