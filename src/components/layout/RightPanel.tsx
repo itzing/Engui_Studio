@@ -135,8 +135,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [debouncedGallerySearchQuery, setDebouncedGallerySearchQuery] = useState('');
     const [gallerySort, setGallerySort] = useState<'newest' | 'oldest' | 'favorites'>('newest');
     const [galleryPrefsHydrated, setGalleryPrefsHydrated] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [hasNextPage, setHasNextPage] = useState(false);
     const [galleryAnchorPage, setGalleryAnchorPage] = useState(1);
     const [galleryLowestPage, setGalleryLowestPage] = useState(1);
     const [galleryHighestPage, setGalleryHighestPage] = useState(1);
@@ -148,7 +146,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isBackfillingGallery, setIsBackfillingGallery] = useState(false);
     const [isBackfillingDerivatives, setIsBackfillingDerivatives] = useState(false);
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isCancellingAllJobs, setIsCancellingAllJobs] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
     const [galleryScrollerEl, setGalleryScrollerEl] = useState<HTMLElement | null>(null);
@@ -427,23 +424,19 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         return filters.join(',');
     };
 
-    const fetchJobsPage = useCallback(async (page: number, append = false, options?: { silent?: boolean }) => {
+    const fetchJobs = useCallback(async (options?: { silent?: boolean }) => {
         if (!activeWorkspaceId) return;
 
         if (!options?.silent) {
-            if (append) {
-                setIsLoadingMore(true);
-            } else {
-                setIsLoadingJobs(true);
-            }
+            setIsLoadingJobs(true);
         }
 
         try {
             const params = new URLSearchParams({
                 userId: 'user-with-settings',
                 workspaceId: activeWorkspaceId,
-                page: String(page),
-                limit: String(pageSize),
+                page: '1',
+                all: 'true',
             });
 
             const apiType = getApiType(selectedFilters);
@@ -459,21 +452,16 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             }
 
             const nextJobs: Job[] = data.jobs || [];
-            setLoadedJobs(prev => mergeUniqueJobs(append ? [...prev, ...nextJobs] : nextJobs));
-            setCurrentPage(page);
-            setHasNextPage(!!data.pagination?.hasNextPage);
+            setLoadedJobs(nextJobs);
         } catch (error) {
-            console.error('Failed to fetch jobs page:', error);
-            if (!append) {
-                setLoadedJobs([]);
-            }
+            console.error('Failed to fetch jobs:', error);
+            setLoadedJobs([]);
         } finally {
             if (!options?.silent) {
                 setIsLoadingJobs(false);
-                setIsLoadingMore(false);
             }
         }
-    }, [activeWorkspaceId, mergeUniqueJobs, selectedFilters]);
+    }, [activeWorkspaceId, selectedFilters]);
 
     const fetchGalleryAssetsPage = useCallback(async (page: number, options?: { focusAssetId?: string | null }): Promise<GalleryFetchResult | null> => {
         if (!activeWorkspaceId) return null;
@@ -694,8 +682,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             setLoadedJobs([]);
             setGalleryPages({});
             setGallerySelectedAssetId(null);
-            setCurrentPage(1);
-            setHasNextPage(false);
             setGalleryAnchorPage(1);
             setGalleryLowestPage(1);
             setGalleryHighestPage(1);
@@ -709,8 +695,8 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
             mobileViewerPersistenceReadyRef.current = false;
             return;
         }
-        void fetchJobsPage(1, false);
-    }, [activeWorkspaceId, fetchJobsPage, selectedFilters]);
+        void fetchJobs();
+    }, [activeWorkspaceId, fetchJobs, selectedFilters]);
 
     useEffect(() => {
         if (!activeWorkspaceId || typeof window === 'undefined' || !galleryPrefsHydrated) return;
@@ -762,11 +748,11 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (!activeWorkspaceId || panelMode !== 'jobs') return;
 
         const interval = window.setInterval(() => {
-            void fetchJobsPage(1, false, { silent: true });
+            void fetchJobs({ silent: true });
         }, 3000);
 
         return () => window.clearInterval(interval);
-    }, [activeWorkspaceId, panelMode, fetchJobsPage]);
+    }, [activeWorkspaceId, panelMode, fetchJobs]);
 
 
     // Keep right panel live: new jobs should appear immediately, and completed jobs should refresh result URL.
@@ -1967,7 +1953,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                     if (panelMode === 'gallery') {
                                         void fetchGalleryAssets(1);
                                     } else {
-                                        void fetchJobsPage(1, false);
+                                        void fetchJobs();
                                     }
                                 }}
                             >
@@ -2372,19 +2358,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                             </div>
                         );
                     })
-                )}
-
-                {panelMode === 'jobs' && isMounted && hasNextPage && (
-                    <div className="p-3 border-t border-border/60">
-                        <Button
-                            variant="outline"
-                            className="w-full h-8 text-xs"
-                            onClick={() => void fetchJobsPage(currentPage + 1, true)}
-                            disabled={isLoadingMore}
-                        >
-                            {isLoadingMore ? 'Loading...' : 'Load more'}
-                        </Button>
-                    </div>
                 )}
             </div>
 

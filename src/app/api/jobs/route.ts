@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId') || 'user-with-settings';
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const returnAll = searchParams.get('all') === 'true';
     const onlyProcessing = searchParams.get('onlyProcessing') === 'true';
     const workspaceId = searchParams.get('workspaceId');
     const type = (searchParams.get('type') || '').toLowerCase();
@@ -188,10 +189,12 @@ export async function GET(request: NextRequest) {
 
     const totalCount = formattedJobs.length;
     const focusAbsoluteIndex = focusJobId ? formattedJobs.findIndex((job) => job.id === focusJobId) : -1;
-    const resolvedPage = focusAbsoluteIndex >= 0 ? Math.floor(focusAbsoluteIndex / limit) + 1 : page;
+    const resolvedPage = returnAll ? 1 : focusAbsoluteIndex >= 0 ? Math.floor(focusAbsoluteIndex / limit) + 1 : page;
     const resolvedSkip = (resolvedPage - 1) * limit;
-    formattedJobs = formattedJobs.slice(resolvedSkip, resolvedSkip + limit);
-    const hasNextPage = totalCount > resolvedPage * limit;
+    if (!returnAll) {
+      formattedJobs = formattedJobs.slice(resolvedSkip, resolvedSkip + limit);
+    }
+    const hasNextPage = !returnAll && totalCount > resolvedPage * limit;
 
     return NextResponse.json({
       success: true,
@@ -207,9 +210,9 @@ export async function GET(request: NextRequest) {
         page: resolvedPage,
         limit,
         totalCount,
-        totalPages: Math.ceil(totalCount / limit),
+        totalPages: returnAll ? 1 : Math.ceil(totalCount / limit),
         hasNextPage,
-        hasPrevPage: resolvedPage > 1,
+        hasPrevPage: !returnAll && resolvedPage > 1,
       }
     }, {
       headers: {
