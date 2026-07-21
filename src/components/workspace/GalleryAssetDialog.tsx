@@ -40,9 +40,10 @@ interface GalleryAssetDialogProps {
   onSaveTags: (tags: string[]) => Promise<void> | void;
   onRemoveAutoTag: (tag: string) => Promise<void> | void;
   onTagClick: (tag: string) => void;
+  onReuseComplete?: (action: ReuseAction) => void;
 }
 
-export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onRemoveAutoTag, onTagClick }: GalleryAssetDialogProps) {
+export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onRemoveAutoTag, onTagClick, onReuseComplete }: GalleryAssetDialogProps) {
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);
@@ -164,6 +165,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
 
       showToast(`Opened in ${action}`, 'success');
       onOpenChange(false);
+      onReuseComplete?.(action);
     } catch (error) {
       console.error('Failed to reuse gallery asset:', error);
       showToast(error instanceof Error ? error.message : 'Failed to reuse gallery asset', 'error');

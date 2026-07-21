@@ -51,7 +51,12 @@ vi.mock('@/components/workspace/GalleryFullscreenViewer', () => ({
 }));
 
 vi.mock('@/components/workspace/GalleryAssetDialog', () => ({
-  GalleryAssetDialog: () => null,
+  GalleryAssetDialog: ({ onReuseComplete }: { onReuseComplete?: (action: 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2') => void }) => React.createElement(
+    'div',
+    { 'data-testid': 'mock-gallery-asset-dialog' },
+    React.createElement('button', { type: 'button', onClick: () => onReuseComplete?.('img2vid') }, 'Mock img2vid reuse'),
+    React.createElement('button', { type: 'button', onClick: () => onReuseComplete?.('txt2img') }, 'Mock txt2img reuse'),
+  ),
 }));
 
 vi.mock('@/components/workspace/GalleryVideoCarousel', () => ({
@@ -110,5 +115,25 @@ describe('DesktopGalleryOverlay Escape handling', () => {
     expect(screen.queryByTestId('gallery-video-carousel-modal')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     expect(closeViewerMock).not.toHaveBeenCalled();
+  });
+
+  it('closes the desktop gallery after successful img2vid reuse from details', () => {
+    const onClose = vi.fn();
+
+    render(React.createElement(DesktopGalleryOverlay, { open: true, onClose }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock img2vid reuse' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not close the desktop gallery after non-img2vid reuse from details', () => {
+    const onClose = vi.fn();
+
+    render(React.createElement(DesktopGalleryOverlay, { open: true, onClose }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock txt2img reuse' }));
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

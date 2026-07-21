@@ -493,6 +493,11 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         onSaveTags={() => {}}
         onRemoveAutoTag={() => {}}
         onTagClick={(tag) => setQuery(tag)}
+        onReuseComplete={(action) => {
+          if (action === 'img2vid') {
+            onClose();
+          }
+        }}
       />
 
       <GalleryFullscreenViewer
