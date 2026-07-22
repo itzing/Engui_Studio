@@ -24,6 +24,7 @@ import {
     createVideoCreatePreset,
     deleteVideoCreatePreset,
     loadVideoCreatePresets,
+    shouldClearMissingVideoCreatePresetSelection,
     upsertVideoCreatePreset,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
@@ -64,6 +65,8 @@ export default function VideoGenerationForm() {
     const [isPresetSelectorOpen, setIsPresetSelectorOpen] = useState(false);
     const [isPresetNameDialogOpen, setIsPresetNameDialogOpen] = useState(false);
     const [presetNameDraft, setPresetNameDraft] = useState('');
+    const [hasLoadedVideoPresets, setHasLoadedVideoPresets] = useState(false);
+    const [isVideoDraftHydrated, setIsVideoDraftHydrated] = useState(false);
     const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
@@ -176,6 +179,7 @@ export default function VideoGenerationForm() {
     useEffect(() => {
         const modelId = getWorkflowActiveModel('video') || DEFAULT_VIDEO_MODEL;
         isApplyingDraftModelRef.current = true;
+        setIsVideoDraftHydrated(false);
         setVideoSelectedModel(modelId);
         setSelectedModel(modelId);
         hasRestoredDraftRef.current = true;
@@ -185,6 +189,7 @@ export default function VideoGenerationForm() {
         const restoreDraft = async () => {
             if (!hasRestoredDraftRef.current || !videoSelectedModel || hydratedModelRef.current === videoSelectedModel) return;
             hydratedModelRef.current = videoSelectedModel;
+            setIsVideoDraftHydrated(false);
             try {
                 const draft = getWorkflowDraft<{
                     prompt?: string;
@@ -231,13 +236,15 @@ export default function VideoGenerationForm() {
                 }
             } catch (error) {
                 console.warn('Failed to restore video draft', error);
+            } finally {
+                setIsVideoDraftHydrated(true);
             }
         };
         void restoreDraft();
     }, [videoSelectedModel]);
 
     useEffect(() => {
-        if (!hasRestoredDraftRef.current) return;
+        if (!hasRestoredDraftRef.current || !isVideoDraftHydrated) return;
         setWorkflowActiveModel('video', videoSelectedModel || DEFAULT_VIDEO_MODEL);
         saveWorkflowDraft('video', videoSelectedModel || DEFAULT_VIDEO_MODEL, {
             prompt,
@@ -250,6 +257,7 @@ export default function VideoGenerationForm() {
     }, [
         DEFAULT_VIDEO_MODEL,
         imagePreviewUrl,
+        isVideoDraftHydrated,
         loraHigh1Weight,
         loraHigh2Weight,
         loraHigh3Weight,
@@ -283,6 +291,7 @@ export default function VideoGenerationForm() {
 
     useEffect(() => {
         setVideoPresets(loadVideoCreatePresets());
+        setHasLoadedVideoPresets(true);
     }, []);
 
     useEffect(() => {
@@ -350,11 +359,14 @@ export default function VideoGenerationForm() {
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
 
     useEffect(() => {
-        if (!selectedPresetId) return;
-        if (!videoPresets.some((preset) => preset.id === selectedPresetId)) {
+        if (shouldClearMissingVideoCreatePresetSelection({
+            selectedPresetId,
+            presets: videoPresets,
+            presetsHydrated: hasLoadedVideoPresets,
+        })) {
             setSelectedPresetId('');
         }
-    }, [selectedPresetId, videoPresets]);
+    }, [hasLoadedVideoPresets, selectedPresetId, videoPresets]);
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
         return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
@@ -1039,6 +1051,7 @@ export default function VideoGenerationForm() {
                                             key={model.id}
                                             type="button"
                                             onClick={() => {
+                                                setIsVideoDraftHydrated(false);
                                                 setVideoSelectedModel(model.id);
                                                 setIsModelDropdownOpen(false);
                                             }}

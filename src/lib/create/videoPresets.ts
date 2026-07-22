@@ -99,3 +99,12 @@ export function deleteVideoCreatePreset(presetId: string, presets = loadVideoCre
   saveVideoCreatePresets(next);
   return next;
 }
+
+export function shouldClearMissingVideoCreatePresetSelection(input: {
+  selectedPresetId: string;
+  presets: VideoCreatePreset[];
+  presetsHydrated: boolean;
+}): boolean {
+  if (!input.selectedPresetId || !input.presetsHydrated) return false;
+  return !input.presets.some((preset) => preset.id === input.selectedPresetId);
+}

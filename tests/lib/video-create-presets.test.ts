@@ -7,6 +7,7 @@ import {
   deleteVideoCreatePreset,
   loadVideoCreatePresets,
   saveVideoCreatePresets,
+  shouldClearMissingVideoCreatePresetSelection,
   upsertVideoCreatePreset,
   type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
@@ -70,5 +71,25 @@ describe('video create presets', () => {
     deleteVideoCreatePreset('second', loadVideoCreatePresets());
 
     expect(loadVideoCreatePresets().map((preset) => preset.id)).toEqual(['first']);
+  });
+
+  it('does not clear a restored selection before presets hydrate', () => {
+    expect(shouldClearMissingVideoCreatePresetSelection({
+      selectedPresetId: 'saved',
+      presets: [],
+      presetsHydrated: false,
+    })).toBe(false);
+
+    expect(shouldClearMissingVideoCreatePresetSelection({
+      selectedPresetId: 'saved',
+      presets: [makePreset('saved', 100)],
+      presetsHydrated: true,
+    })).toBe(false);
+
+    expect(shouldClearMissingVideoCreatePresetSelection({
+      selectedPresetId: 'missing',
+      presets: [makePreset('saved', 100)],
+      presetsHydrated: true,
+    })).toBe(true);
   });
 });
