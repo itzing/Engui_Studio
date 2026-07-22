@@ -51,6 +51,7 @@ export type ImageCreateDraftV2 = CommonCreateDraftFields & {
 };
 
 export type VideoCreateDraftV2 = CommonCreateDraftFields & {
+  selectedPresetId?: string;
   inputs?: {
     image?: CreateMediaRef | null;
     video?: CreateMediaRef | null;

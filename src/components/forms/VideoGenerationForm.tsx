@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeftRight, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Loader2, Plus, Sparkles, Trash2, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
@@ -20,6 +20,13 @@ import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { extractImagePromptFromDataUrl, requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { buildVideoSourcePromptCacheKey, readVideoSourcePromptCache, writeVideoSourcePromptCache } from '@/lib/create/videoSourcePromptCache';
+import {
+    createVideoCreatePreset,
+    deleteVideoCreatePreset,
+    loadVideoCreatePresets,
+    upsertVideoCreatePreset,
+    type VideoCreatePreset,
+} from '@/lib/create/videoPresets';
 
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -52,6 +59,10 @@ export default function VideoGenerationForm() {
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
+    const [videoPresets, setVideoPresets] = useState<VideoCreatePreset[]>([]);
+    const [selectedPresetId, setSelectedPresetId] = useState('');
+    const [isPresetSelectorOpen, setIsPresetSelectorOpen] = useState(false);
+    const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
 
@@ -179,9 +190,11 @@ export default function VideoGenerationForm() {
                     parameterValues?: Record<string, any>;
                     imagePreviewUrl?: string;
                     videoPreviewUrl?: string;
+                    selectedPresetId?: string;
                 }>('video', videoSelectedModel);
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
+                setSelectedPresetId(typeof draft?.selectedPresetId === 'string' ? draft.selectedPresetId : '');
                 const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
                 setParameterValues(restoredParameterValues);
                 setLoraHigh1Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_1_weight'));
@@ -230,6 +243,7 @@ export default function VideoGenerationForm() {
             parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
             imagePreviewUrl,
             videoPreviewUrl,
+            selectedPresetId,
         });
     }, [
         DEFAULT_VIDEO_MODEL,
@@ -244,6 +258,7 @@ export default function VideoGenerationForm() {
         loraLow4Weight,
         parameterValues,
         prompt,
+        selectedPresetId,
         showAdvanced,
         videoPreviewUrl,
         videoSelectedModel,
@@ -262,6 +277,10 @@ export default function VideoGenerationForm() {
         } catch (error) {
             console.warn('Failed to restore video prompt helper preferences', error);
         }
+    }, []);
+
+    useEffect(() => {
+        setVideoPresets(loadVideoCreatePresets());
     }, []);
 
     useEffect(() => {
@@ -301,6 +320,8 @@ export default function VideoGenerationForm() {
     }, [setSelectedModel, videoSelectedModel]);
 
     const currentModel = getModelById(videoSelectedModel || '') || videoModels[0];
+    const currentModelPresets = videoPresets.filter((preset) => preset.modelId === currentModel?.id);
+    const selectedPreset = currentModelPresets.find((preset) => preset.id === selectedPresetId) || null;
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
     const isPromptHelperConfigured = promptHelperProvider === 'local'
         && !!settings.promptHelper?.local?.baseUrl?.trim()
@@ -325,6 +346,13 @@ export default function VideoGenerationForm() {
         : undefined;
     const isMobileCreateRoute = pathname?.startsWith('/m/');
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
+
+    useEffect(() => {
+        if (!selectedPresetId) return;
+        if (!videoPresets.some((preset) => preset.id === selectedPresetId)) {
+            setSelectedPresetId('');
+        }
+    }, [selectedPresetId, videoPresets]);
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
         return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
@@ -442,6 +470,57 @@ export default function VideoGenerationForm() {
             closeOnSuccess: false,
             animatePromptOnSuccess: true,
         });
+    };
+
+    const saveCurrentPreset = () => {
+        if (!currentModel) return;
+        const preset = createVideoCreatePreset({
+            modelId: currentModel.id,
+            existingPresets: videoPresets,
+            snapshot: {
+                prompt,
+                showAdvanced,
+                parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
+            },
+        });
+        const nextPresets = upsertVideoCreatePreset(preset, videoPresets);
+        setVideoPresets(nextPresets);
+        setSelectedPresetId(preset.id);
+        setConfirmingPresetDeleteId(null);
+    };
+
+    const applyVideoPreset = (preset: VideoCreatePreset) => {
+        setPrompt(preset.prompt || '');
+        setShowAdvanced(preset.showAdvanced === true);
+        const nextParameterValues = preset.parameterValues && typeof preset.parameterValues === 'object'
+            ? { ...preset.parameterValues }
+            : {};
+        setParameterValues(nextParameterValues);
+        setLoraHigh1Weight(getWanLoraWeight(nextParameterValues, 'lora_high_1_weight'));
+        setLoraLow1Weight(getWanLoraWeight(nextParameterValues, 'lora_low_1_weight'));
+        setLoraHigh2Weight(getWanLoraWeight(nextParameterValues, 'lora_high_2_weight'));
+        setLoraLow2Weight(getWanLoraWeight(nextParameterValues, 'lora_low_2_weight'));
+        setLoraHigh3Weight(getWanLoraWeight(nextParameterValues, 'lora_high_3_weight'));
+        setLoraLow3Weight(getWanLoraWeight(nextParameterValues, 'lora_low_3_weight'));
+        setLoraHigh4Weight(getWanLoraWeight(nextParameterValues, 'lora_high_4_weight'));
+        setLoraLow4Weight(getWanLoraWeight(nextParameterValues, 'lora_low_4_weight'));
+        setSelectedPresetId(preset.id);
+        setConfirmingPresetDeleteId(null);
+        setIsPresetSelectorOpen(false);
+    };
+
+    const deletePresetWithInlineConfirm = (presetId: string) => {
+        if (confirmingPresetDeleteId !== presetId) {
+            setConfirmingPresetDeleteId(presetId);
+            return;
+        }
+
+        const nextPresets = deleteVideoCreatePreset(presetId, videoPresets);
+        setVideoPresets(nextPresets);
+        if (selectedPresetId === presetId) {
+            setSelectedPresetId('');
+        }
+        setConfirmingPresetDeleteId(null);
     };
 
     // Check if current model has LoRA parameters
@@ -1199,33 +1278,26 @@ export default function VideoGenerationForm() {
                             />
                         </div>
                         {isWanPromptHelperVisible && (
-                            <div className={`grid grid-cols-1 gap-2 ${isPhoneLayout ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto_auto]'}`}>
+                            <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
+                                    size="icon"
                                     onClick={() => {
                                         setPromptHelperError(null);
                                         setPromptHelperDebug(null);
                                         setIsPromptHelperOpen(true);
                                     }}
                                     disabled={!isPromptHelperConfigured || isPromptHelperLoading || isGenerating || isLoadingMedia}
-                                    className="w-full justify-center gap-2"
+                                    className="h-10 w-10 shrink-0"
+                                    aria-label="Open Prompt Helper"
+                                    title="Open Prompt Helper"
                                 >
-                                    {isPromptHelperLoading ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                            Prompt Helper is working...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="h-4 w-4" />
-                                            Prompt Helper
-                                        </>
-                                    )}
+                                    {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                                 </Button>
                                 <label
                                     htmlFor="video-prompt-helper-empty-prompt"
-                                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground ${isPromptHelperLoading || isGenerating || isLoadingMedia ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
+                                    className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground ${isPromptHelperLoading || isGenerating || isLoadingMedia ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
                                     title="Clear the current prompt before applying Prompt Helper"
                                 >
                                     <input
@@ -1236,7 +1308,7 @@ export default function VideoGenerationForm() {
                                         onChange={(event) => setPromptHelperEmptyPrompt(event.target.checked)}
                                         disabled={isPromptHelperLoading || isGenerating || isLoadingMedia}
                                     />
-                                    <span className="whitespace-nowrap">Empty prompt</span>
+                                    <span className="truncate">Clear</span>
                                 </label>
                                 <Button
                                     type="button"
@@ -1244,13 +1316,54 @@ export default function VideoGenerationForm() {
                                     size="icon"
                                     onClick={() => void runSavedPromptHelperInstruction()}
                                     disabled={!isPromptHelperConfigured || !promptHelperInstruction.trim() || isPromptHelperLoading || isGenerating || isLoadingMedia}
-                                    className={isPhoneLayout ? 'h-11 w-full shrink-0' : 'h-10 w-10 shrink-0'}
+                                    className="h-10 w-10 shrink-0"
+                                    aria-label="Apply saved Prompt Helper instruction"
                                     title={promptHelperInstruction.trim() ? 'Apply saved WAN 2.2 Prompt Helper instruction' : 'Save a WAN 2.2 Prompt Helper instruction first'}
                                 >
                                     {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                                 </Button>
                             </div>
                         )}
+                        {currentModel.id === 'wan22' ? (
+                            <div className="space-y-1.5">
+                                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
+                                <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={saveCurrentPreset}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                        className="h-10 w-10 shrink-0"
+                                        aria-label="Save current img2vid preset"
+                                        title="Save current img2vid preset"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                    <div
+                                        className="flex h-10 min-w-0 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                                        data-testid="video-create-selected-preset"
+                                    >
+                                        <span className="truncate">{selectedPreset?.name || '-'}</span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => {
+                                            setConfirmingPresetDeleteId(null);
+                                            setIsPresetSelectorOpen(true);
+                                        }}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                        className="h-10 w-10 shrink-0"
+                                        aria-label="Select img2vid preset"
+                                        title="Select img2vid preset"
+                                    >
+                                        <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 )}
 
@@ -1506,6 +1619,75 @@ export default function VideoGenerationForm() {
                     </Button>
                 </div>
             </form>
+
+            <Dialog
+                open={isPresetSelectorOpen}
+                onOpenChange={(open) => {
+                    setIsPresetSelectorOpen(open);
+                    if (!open) {
+                        setConfirmingPresetDeleteId(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[80dvh] overflow-hidden p-0 sm:max-w-md">
+                    <DialogHeader className="border-b px-4 py-4">
+                        <DialogTitle>Presets</DialogTitle>
+                    </DialogHeader>
+                    <div className="max-h-[60dvh] overflow-y-auto px-4 py-4">
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                className={`flex h-12 w-full items-center justify-between rounded-md border px-3 text-left ${!selectedPresetId ? 'border-primary/40 bg-primary/5' : 'border-border bg-background hover:bg-accent/40'}`}
+                                onClick={() => {
+                                    setSelectedPresetId('');
+                                    setConfirmingPresetDeleteId(null);
+                                    setIsPresetSelectorOpen(false);
+                                }}
+                            >
+                                <span className="min-w-0 truncate text-sm font-medium">No preset</span>
+                                {!selectedPresetId ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}
+                            </button>
+
+                            {currentModelPresets.length === 0 ? (
+                                <div className="rounded-md border border-dashed border-border px-3 py-6 text-sm text-muted-foreground">
+                                    No presets saved yet.
+                                </div>
+                            ) : (
+                                currentModelPresets.map((preset) => {
+                                    const isSelected = selectedPresetId === preset.id;
+                                    const isConfirmingDelete = confirmingPresetDeleteId === preset.id;
+                                    return (
+                                        <div
+                                            key={preset.id}
+                                            className={`grid grid-cols-[minmax(0,1fr)_2.25rem] items-center gap-2 rounded-md border p-1 ${isSelected ? 'border-primary/40 bg-primary/5' : 'border-border bg-background'}`}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="min-w-0 rounded px-2 py-2 text-left hover:bg-accent/40"
+                                                onClick={() => applyVideoPreset(preset)}
+                                            >
+                                                <div className="truncate text-sm font-medium text-foreground">{preset.name}</div>
+                                                <div className="mt-0.5 truncate text-xs text-muted-foreground">{preset.prompt.trim() || 'Empty prompt'}</div>
+                                            </button>
+                                            <Button
+                                                type="button"
+                                                variant={isConfirmingDelete ? 'default' : 'ghost'}
+                                                size="icon"
+                                                className={`h-9 w-9 ${isConfirmingDelete ? 'bg-red-500 text-white hover:bg-red-400' : 'text-muted-foreground hover:text-red-300'}`}
+                                                onClick={() => deletePresetWithInlineConfirm(preset.id)}
+                                                aria-label={isConfirmingDelete ? `Confirm delete ${preset.name}` : `Delete ${preset.name}`}
+                                                title={isConfirmingDelete ? 'Confirm delete' : 'Delete preset'}
+                                            >
+                                                {isConfirmingDelete ? <Check className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                            </Button>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={isPromptHelperOpen}
