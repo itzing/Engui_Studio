@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Wand2, X, Ban, RotateCcw } from 'lucide-react';
+import { Clapperboard, FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -11,6 +11,8 @@ import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscree
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { useMobileJobsScreen, type MobileJobsScreenItem } from '@/hooks/jobs/useMobileJobsScreen';
 import type { MobileJobDetail } from '@/hooks/jobs/useMobileJobDetails';
+import { useToast } from '@/components/ui/toast';
+import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
 
 function timeAgo(timestamp: number) {
   const diff = Date.now() - timestamp;
@@ -212,6 +214,7 @@ const JobRow = React.memo(function JobRow({
 
 export default function MobileJobsScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
   const {
@@ -241,6 +244,7 @@ export default function MobileJobsScreen() {
 
   const [viewerJobDetailsById, setViewerJobDetailsById] = useState<Record<string, MobileJobDetail>>({});
   const [viewerJobDetailLoadingId, setViewerJobDetailLoadingId] = useState<string | null>(null);
+  const [openingImg2VidJobId, setOpeningImg2VidJobId] = useState<string | null>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: totalCount,
@@ -282,6 +286,21 @@ export default function MobileJobsScreen() {
       return { ...prev, [jobId]: next };
     });
   }, []);
+
+  const openJobInImg2Vid = useCallback(async (item: { id: string; type?: string }) => {
+    if (item.type !== 'image' || openingImg2VidJobId) return;
+    setOpeningImg2VidJobId(item.id);
+    try {
+      await prepareCreateReuseDraft({ kind: 'job', id: item.id }, 'img2vid');
+      closeViewer();
+      router.push('/m/create');
+    } catch (error) {
+      console.error('Failed to reuse mobile fullscreen job image for img2vid:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to open image in img2vid', 'error');
+    } finally {
+      setOpeningImg2VidJobId(null);
+    }
+  }, [closeViewer, openingImg2VidJobId, router, showToast]);
 
   useEffect(() => {
     if (!viewerOpen || !activeViewerItemId) {
@@ -536,6 +555,19 @@ export default function MobileJobsScreen() {
                   title="Mark as Upscale"
                 >
                   <Sparkles className="w-5 h-5" />
+                </Button>
+              ) : null}
+              {item.type === 'image' ? (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                  onClick={() => void openJobInImg2Vid(item)}
+                  disabled={openingImg2VidJobId === item.id}
+                  aria-label="Open image in img2vid"
+                  title="Open in img2vid"
+                >
+                  {openingImg2VidJobId === item.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
                 </Button>
               ) : null}
               {canUpscale ? (

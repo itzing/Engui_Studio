@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
+import { useToast } from '@/components/ui/toast';
+import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
 
 function TileOverlayActions({
   asset,
@@ -101,6 +103,7 @@ function PlaceholderTile() {
 }
 
 export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { showToast } = useToast();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const gridWrapRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
@@ -110,6 +113,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   const [detailsAsset, setDetailsAsset] = useState<MobileGalleryAsset | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [carouselOpen, setCarouselOpen] = useState(false);
+  const [openingImg2VidAssetId, setOpeningImg2VidAssetId] = useState<string | null>(null);
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -143,6 +147,22 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     restoreAbsoluteIndex,
     workspaceId,
   } = useMobileGalleryScreen('desktop');
+
+  const openAssetInImg2Vid = useCallback(async (asset: MobileGalleryAsset) => {
+    if (asset.type !== 'image' || openingImg2VidAssetId) return;
+    setOpeningImg2VidAssetId(asset.id);
+    try {
+      await prepareCreateReuseDraft({ kind: 'gallery-asset', id: asset.id }, 'img2vid');
+      closeViewer();
+      onClose();
+      showToast('Opened in img2vid', 'success');
+    } catch (error) {
+      console.error('Failed to reuse fullscreen gallery image for img2vid:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to open image in img2vid', 'error');
+    } finally {
+      setOpeningImg2VidAssetId(null);
+    }
+  }, [closeViewer, onClose, openingImg2VidAssetId, showToast]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -538,6 +558,17 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                   <PenSquare className="w-5 h-5" />
                 </Button>
               ) : null}
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                onClick={() => void openAssetInImg2Vid(asset)}
+                disabled={openingImg2VidAssetId === asset.id}
+                aria-label="Open image in img2vid"
+                title="Open in img2vid"
+              >
+                {openingImg2VidAssetId === asset.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
+              </Button>
               {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
                 <Button
                   size="icon"

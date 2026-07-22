@@ -8,7 +8,7 @@ import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { JobCardImageThumbnail } from '@/components/layout/JobCardImageThumbnail';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
-import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart, PenSquare, Sparkles } from 'lucide-react';
+import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart, PenSquare, Sparkles, Clapperboard, Loader2 } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PropertiesPanel } from '@/components/video-editor/PropertiesPanel';
 import { VirtuosoGrid, VirtuosoGridHandle } from 'react-virtuoso';
+import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
 
 type GallerySemanticFilter = 'all' | 'common' | 'draft' | 'upscale';
 
@@ -149,6 +150,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
     const [isCancellingAllJobs, setIsCancellingAllJobs] = useState(false);
     const [isLoadingMoreGallery, setIsLoadingMoreGallery] = useState(false);
+    const [openingGalleryImg2VidAssetId, setOpeningGalleryImg2VidAssetId] = useState<string | null>(null);
     const [galleryScrollerEl, setGalleryScrollerEl] = useState<HTMLElement | null>(null);
     const pageSize = 12;
     const galleryScrollContainerRef = useRef<HTMLElement | null>(null);
@@ -1387,6 +1389,24 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         return true;
     }, [applyGalleryBucketLocal]);
 
+    const openGalleryAssetInImg2Vid = useCallback(async (asset: GalleryAsset) => {
+        if (asset.type !== 'image' || openingGalleryImg2VidAssetId) return;
+        setOpeningGalleryImg2VidAssetId(asset.id);
+        try {
+            await prepareCreateReuseDraft({ kind: 'gallery-asset', id: asset.id }, 'img2vid');
+            setGalleryViewerOpen(false);
+            if (mobile && typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('mobileOpenCreateTab'));
+            }
+            showToast('Opened in img2vid', 'success');
+        } catch (error) {
+            console.error('Failed to reuse fullscreen gallery image for img2vid:', error);
+            showToast(error instanceof Error ? error.message : 'Failed to open image in img2vid', 'error');
+        } finally {
+            setOpeningGalleryImg2VidAssetId(null);
+        }
+    }, [mobile, openingGalleryImg2VidAssetId, showToast]);
+
     const handleGalleryTagClick = (tag: string) => {
         if (mobile && typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('mobileOpenGalleryTab'));
@@ -2426,6 +2446,17 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                     <PenSquare className="w-5 h-5" />
                                 </Button>
                             ) : null}
+                            <Button
+                                size="icon"
+                                variant="secondary"
+                                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                                onClick={() => void openGalleryAssetInImg2Vid(asset)}
+                                disabled={openingGalleryImg2VidAssetId === asset.id}
+                                aria-label="Open image in img2vid"
+                                title="Open in img2vid"
+                            >
+                                {openingGalleryImg2VidAssetId === asset.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
+                            </Button>
                             {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
                                 <Button
                                     size="icon"

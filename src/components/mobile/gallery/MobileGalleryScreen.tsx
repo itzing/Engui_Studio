@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AudioLines, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, Sparkles, Trash2, Video } from 'lucide-react';
+import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, Sparkles, Trash2, Video } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
+import { useToast } from '@/components/ui/toast';
+import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
 
 function TileOverlayActions({
   asset,
@@ -107,8 +109,10 @@ function PlaceholderTile() {
 
 export default function MobileGalleryScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
+  const [openingImg2VidAssetId, setOpeningImg2VidAssetId] = useState<string | null>(null);
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -151,6 +155,21 @@ export default function MobileGalleryScreen() {
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  const openAssetInImg2Vid = useCallback(async (asset: MobileGalleryAsset) => {
+    if (asset.type !== 'image' || openingImg2VidAssetId) return;
+    setOpeningImg2VidAssetId(asset.id);
+    try {
+      await prepareCreateReuseDraft({ kind: 'gallery-asset', id: asset.id }, 'img2vid');
+      closeViewer();
+      router.push('/m/create');
+    } catch (error) {
+      console.error('Failed to reuse mobile fullscreen gallery image for img2vid:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to open image in img2vid', 'error');
+    } finally {
+      setOpeningImg2VidAssetId(null);
+    }
+  }, [closeViewer, openingImg2VidAssetId, router, showToast]);
 
   useEffect(() => {
     if (virtualRows.length === 0 || totalCount === 0) return;
@@ -398,6 +417,17 @@ export default function MobileGalleryScreen() {
                   <PenSquare className="w-5 h-5" />
                 </Button>
               ) : null}
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                onClick={() => void openAssetInImg2Vid(asset)}
+                disabled={openingImg2VidAssetId === asset.id}
+                aria-label="Open image in img2vid"
+                title="Open in img2vid"
+              >
+                {openingImg2VidAssetId === asset.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
+              </Button>
               {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
                 <Button
                   size="icon"
