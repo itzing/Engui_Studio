@@ -448,6 +448,17 @@ export function GalleryVideoCarousel({
     setPaused(nextPaused);
   }, []);
 
+  const focusCarouselStage = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      stageRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const hideControls = useCallback(() => {
+    setIsUiHidden(true);
+    focusCarouselStage();
+  }, [focusCarouselStage]);
+
   const revealControls = useCallback(() => {
     if (!showControls) return;
     setIsUiHidden((current) => current ? false : current);
@@ -583,7 +594,11 @@ export function GalleryVideoCarousel({
 
       if (isHideControlsShortcut) {
         event.preventDefault();
-        setIsUiHidden((current) => !current);
+        setIsUiHidden((current) => {
+          const next = !current;
+          if (next) focusCarouselStage();
+          return next;
+        });
         return;
       }
 
@@ -618,7 +633,7 @@ export function GalleryVideoCarousel({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardControls, isLoading, totalMediaCount]);
+  }, [enableKeyboardControls, focusCarouselStage, isLoading, totalMediaCount]);
 
   useEffect(() => {
     const videos = Object.values(videoRefs.current);
@@ -801,7 +816,7 @@ export function GalleryVideoCarousel({
             className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              setIsUiHidden(true);
+              hideControls();
             }}
             aria-label="Hide carousel controls"
             title="Hide carousel controls"
@@ -858,6 +873,7 @@ export function GalleryVideoCarousel({
       <div
         ref={stageRef}
         data-testid="gallery-video-carousel"
+        tabIndex={-1}
         className={`relative h-full min-h-[100dvh] w-full touch-none select-none overflow-hidden bg-neutral-950 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

@@ -200,10 +200,25 @@ describe('GalleryVideoCarousel', () => {
     const controls = screen.getByTestId('gallery-carousel-controls');
     expect(stage.className).toContain('h-full');
     expect(stage.className).toContain('min-h-[100dvh]');
+    await waitFor(() => expect(stage.querySelector('video')?.parentElement?.style.transform).toContain('translate3d'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide carousel controls' }));
     expect(controls.className).toContain('opacity-0');
     expect(screen.queryByText('1 videos')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(stage));
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 200 });
+    await waitFor(() => expect(controls.className).toContain('opacity-100'));
+    expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide carousel controls' }));
+    await waitFor(() => expect(document.activeElement).toBe(stage));
+    const slot = stage.querySelector('video')?.parentElement as HTMLElement;
+    const pausedTransform = slot.style.transform;
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    await waitFor(() => expect(slot.style.transform).not.toBe(pausedTransform));
+    fireEvent.keyUp(window, { key: 'ArrowRight' });
 
     fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 200 });
     await waitFor(() => expect(controls.className).toContain('opacity-100'));
