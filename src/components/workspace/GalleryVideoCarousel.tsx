@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EyeOff, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { EyeOff, Film, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -128,6 +128,7 @@ function shouldIgnoreKeyboardShortcutTarget(target: EventTarget | null) {
 type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
+  initialVideosEnabled?: boolean;
   initialImagesEnabled?: boolean;
   initialIncludeLandscape?: boolean;
   initialIncludePortrait?: boolean;
@@ -140,6 +141,7 @@ type GalleryVideoCarouselProps = {
 export function GalleryVideoCarousel({
   workspaceId,
   onClose,
+  initialVideosEnabled = true,
   initialImagesEnabled = false,
   initialIncludeLandscape = true,
   initialIncludePortrait = true,
@@ -162,6 +164,7 @@ export function GalleryVideoCarousel({
   const pausedRef = useRef(false);
   const speedRef = useRef(initialSpeed);
   const scrubSpeedMultiplierRef = useRef(initialScrubSpeedMultiplier);
+  const videosEnabledRef = useRef(true);
   const imagesEnabledRef = useRef(false);
   const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
     includeLandscape: initialIncludeLandscape,
@@ -178,6 +181,7 @@ export function GalleryVideoCarousel({
   const [speed, setSpeed] = useState(initialSpeed);
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(initialScrubSpeedMultiplier);
   const [paused, setPaused] = useState(false);
+  const [videosEnabled, setVideosEnabled] = useState(initialVideosEnabled);
   const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
@@ -190,12 +194,13 @@ export function GalleryVideoCarousel({
 
   const remainingCount = Math.max(0, feedRef.current.length - nextIndex);
   const visibleCount = activeSlots.length;
-  const totalCount = sourceVideos.length;
+  const totalVideoCount = sourceVideos.length;
   const totalImageCount = sourceImages.length;
+  const totalMediaCount = totalVideoCount + totalImageCount;
   const visibleImageSlotCount = activeSlots.filter((slot) => slot.kind === 'images').length;
 
-  const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeImages: boolean) => {
-    const feed = buildGalleryCarouselFeed(videos, { images, includeImages });
+  const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
+    const feed = buildGalleryCarouselFeed(videos, { images, includeVideos, includeImages });
     feedRef.current = feed;
     activeSlotsRef.current = [];
     nextIndexRef.current = 0;
@@ -207,13 +212,13 @@ export function GalleryVideoCarousel({
     setPaused(false);
   }, []);
 
-  const loadAssets = useCallback(async (includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
+  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
-      resetPlayback([], [], includeImages);
+      resetPlayback([], [], includeVideos, includeImages);
       return;
     }
 
@@ -227,7 +232,7 @@ export function GalleryVideoCarousel({
     setFeedEnded(false);
     try {
       const [videos, images] = await Promise.all([
-        fetchAllGalleryAssets(workspaceId, 'video'),
+        includeVideos ? fetchAllGalleryAssets(workspaceId, 'video') : Promise.resolve([]),
         includeImages ? fetchAllGalleryAssets(workspaceId, 'image') : Promise.resolve([]),
       ]);
       const filteredVideos = videos.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO));
@@ -236,14 +241,14 @@ export function GalleryVideoCarousel({
       sourceImagesRef.current = filteredImages;
       setSourceVideos(filteredVideos);
       setSourceImages(filteredImages);
-      resetPlayback(filteredVideos, filteredImages, includeImages);
+      resetPlayback(filteredVideos, filteredImages, includeVideos, includeImages);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load gallery feed');
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
       setSourceVideos([]);
       setSourceImages([]);
-      resetPlayback([], [], includeImages);
+      resetPlayback([], [], includeVideos, includeImages);
     } finally {
       setIsLoading(false);
     }
@@ -254,6 +259,8 @@ export function GalleryVideoCarousel({
       includeLandscape: initialIncludeLandscape,
       includePortrait: initialIncludePortrait,
     };
+    videosEnabledRef.current = initialVideosEnabled;
+    setVideosEnabled(initialVideosEnabled);
     imagesEnabledRef.current = initialImagesEnabled;
     setImagesEnabled(initialImagesEnabled);
     ratioFilterRef.current = nextRatioFilter;
@@ -263,8 +270,8 @@ export function GalleryVideoCarousel({
     setSpeed(initialSpeed);
     scrubSpeedMultiplierRef.current = initialScrubSpeedMultiplier;
     setScrubSpeedMultiplier(initialScrubSpeedMultiplier);
-    void loadAssets(initialImagesEnabled, nextRatioFilter);
-  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, loadAssets]);
+    void loadAssets(initialVideosEnabled, initialImagesEnabled, nextRatioFilter);
+  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -447,7 +454,7 @@ export function GalleryVideoCarousel({
   }, [showControls]);
 
   const manualScrubTape = useCallback((deltaX: number) => {
-    if (!Number.isFinite(deltaX) || deltaX === 0 || isLoading || totalCount === 0) return;
+    if (!Number.isFinite(deltaX) || deltaX === 0 || isLoading || totalMediaCount === 0) return;
     if (activeSlotsRef.current.length === 0) {
       spawnNext();
     }
@@ -463,7 +470,7 @@ export function GalleryVideoCarousel({
 
     setFeedEnded(false);
     setActiveSlots(activeSlotsRef.current);
-  }, [fillAdjacentSlots, isLoading, spawnNext, totalCount, trimDistantSlots]);
+  }, [fillAdjacentSlots, isLoading, spawnNext, totalMediaCount, trimDistantSlots]);
 
   const pauseAndScrubTape = useCallback((deltaX: number) => {
     setMovementPaused(true);
@@ -471,7 +478,7 @@ export function GalleryVideoCarousel({
   }, [manualScrubTape, setMovementPaused]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (isLoading || totalCount === 0 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (isLoading || totalMediaCount === 0 || (event.pointerType === 'mouse' && event.button !== 0)) return;
     dragStateRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -479,7 +486,7 @@ export function GalleryVideoCarousel({
       hasDragged: false,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
-  }, [isLoading, totalCount]);
+  }, [isLoading, totalMediaCount]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const dragState = dragStateRef.current;
@@ -580,7 +587,7 @@ export function GalleryVideoCarousel({
         return;
       }
 
-      if (isLoading || totalCount === 0) return;
+      if (isLoading || totalMediaCount === 0) return;
 
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
@@ -611,7 +618,7 @@ export function GalleryVideoCarousel({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardControls, isLoading, totalCount]);
+  }, [enableKeyboardControls, isLoading, totalMediaCount]);
 
   useEffect(() => {
     const videos = Object.values(videoRefs.current);
@@ -648,17 +655,25 @@ export function GalleryVideoCarousel({
   const statusLabel = useMemo(() => {
     if (isLoading) return 'Loading carousel feed';
     if (error) return 'Unable to load feed';
-    if (totalCount === 0) return 'No gallery videos';
+    if (totalMediaCount === 0) return 'No selected gallery media';
     if (feedEnded) return 'End of feed';
     if (paused) return 'Movement paused';
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
-  }, [error, feedEnded, imagesEnabled, isLoading, paused, remainingCount, totalCount, visibleCount, visibleImageSlotCount]);
+  }, [error, feedEnded, imagesEnabled, isLoading, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
+
+  const handleVideosToggle = useCallback((nextEnabled: boolean) => {
+    if (!nextEnabled && !imagesEnabledRef.current) return;
+    setVideosEnabled(nextEnabled);
+    videosEnabledRef.current = nextEnabled;
+    void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current);
+  }, [loadAssets]);
 
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
+    if (!nextEnabled && !videosEnabledRef.current) return;
     setImagesEnabled(nextEnabled);
     imagesEnabledRef.current = nextEnabled;
-    void loadAssets(nextEnabled, ratioFilterRef.current);
+    void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current);
   }, [loadAssets]);
 
   const handleRatioToggle = useCallback((orientation: 'landscape' | 'portrait', nextEnabled: boolean) => {
@@ -669,7 +684,7 @@ export function GalleryVideoCarousel({
     ratioFilterRef.current = nextRatioFilter;
     setIncludeLandscape(nextRatioFilter.includeLandscape);
     setIncludePortrait(nextRatioFilter.includePortrait);
-    void loadAssets(imagesEnabledRef.current, nextRatioFilter);
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter);
   }, [loadAssets]);
 
   return (
@@ -699,13 +714,28 @@ export function GalleryVideoCarousel({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${videosEnabled ? 'border-cyan-400/35 bg-cyan-500/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={videosEnabled}
+              disabled={isLoading || (videosEnabled && !imagesEnabled)}
+              onChange={(event) => handleVideosToggle(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-cyan-400"
+              aria-label="Include videos"
+            />
+            <Film className="h-4 w-4" />
+            Videos
+          </label>
+          <label
             className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${imagesEnabled ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
             onClick={(event) => event.stopPropagation()}
           >
             <input
               type="checkbox"
               checked={imagesEnabled}
-              disabled={isLoading}
+              disabled={isLoading || (imagesEnabled && !videosEnabled)}
               onChange={(event) => handleImagesToggle(event.currentTarget.checked)}
               className="h-3.5 w-3.5 accent-emerald-400"
               aria-label="Include image slots"
@@ -785,9 +815,9 @@ export function GalleryVideoCarousel({
             className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              resetPlayback(sourceVideosRef.current, sourceImagesRef.current, imagesEnabledRef.current);
+              resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
             }}
-            disabled={isLoading || sourceVideosRef.current.length === 0}
+            disabled={isLoading || feedRef.current.length === 0}
           >
             <Shuffle className="mr-2 h-4 w-4" />
             Shuffle
@@ -798,7 +828,7 @@ export function GalleryVideoCarousel({
             className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              void loadAssets(imagesEnabledRef.current, ratioFilterRef.current);
+              void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
             }}
             disabled={isLoading}
             aria-label="Refresh video feed"
@@ -838,7 +868,7 @@ export function GalleryVideoCarousel({
             suppressClickRef.current = false;
             return;
           }
-          if (isLoading || totalCount === 0) return;
+          if (isLoading || totalMediaCount === 0) return;
           setPaused((value) => {
             const next = !value;
             pausedRef.current = next;
@@ -904,9 +934,9 @@ export function GalleryVideoCarousel({
             <div className="absolute inset-0 flex items-center justify-center p-6">
               <div className="max-w-md rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-200">{error}</div>
             </div>
-          ) : totalCount === 0 ? (
+          ) : totalMediaCount === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">No gallery videos in this workspace.</div>
+              <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">No selected gallery media in this workspace.</div>
             </div>
           ) : feedEnded ? (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -918,7 +948,7 @@ export function GalleryVideoCarousel({
                   className="h-8 rounded-md"
                   onClick={(event) => {
                     event.stopPropagation();
-                    resetPlayback(sourceVideosRef.current, sourceImagesRef.current, imagesEnabledRef.current);
+                    resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
                   }}
                 >
                   <Shuffle className="mr-2 h-4 w-4" />
@@ -929,7 +959,11 @@ export function GalleryVideoCarousel({
           ) : showControls && !paused && !isUiHidden ? (
             <div className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-2 text-xs text-white/55">
               <Play className="h-3.5 w-3.5" />
-              {imagesEnabled ? `${totalCount} videos · ${totalImageCount} images` : `${totalCount} videos`}
+              {videosEnabled && imagesEnabled
+                ? `${totalVideoCount} videos · ${totalImageCount} images`
+                : videosEnabled
+                  ? `${totalVideoCount} videos`
+                  : `${totalImageCount} images`}
             </div>
           ) : null}
       </div>

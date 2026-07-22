@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
+import { Film, Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const VERTICAL_SWIPE_DOMINANCE = 1.25;
 export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
+  const [videosEnabled, setVideosEnabled] = useState(true);
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [includeLandscape, setIncludeLandscape] = useState(true);
   const [includePortrait, setIncludePortrait] = useState(true);
@@ -55,6 +56,14 @@ export default function MobileGalleryCarouselScreen() {
 
   const speedLabel = useMemo(() => `${speed.toFixed(1)}x`, [speed]);
   const scrubLabel = useMemo(() => `${scrubSpeedMultiplier.toFixed(0)}x`, [scrubSpeedMultiplier]);
+  const handleVideosToggle = useCallback((nextEnabled: boolean) => {
+    if (!nextEnabled && !imagesEnabled) return;
+    setVideosEnabled(nextEnabled);
+  }, [imagesEnabled]);
+  const handleImagesToggle = useCallback((nextEnabled: boolean) => {
+    if (!nextEnabled && !videosEnabled) return;
+    setImagesEnabled(nextEnabled);
+  }, [videosEnabled]);
 
   const closePlayer = useCallback(() => {
     swipeCloseRef.current = { pointerId: null, startX: 0, startY: 0 };
@@ -98,19 +107,36 @@ export default function MobileGalleryCarouselScreen() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
         <section className="space-y-4 rounded-xl border border-border bg-card p-4">
-          <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${imagesEnabled ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-border bg-background/60 text-foreground'}`}>
-            <span className="inline-flex items-center gap-2">
-              <ImageIcon className="h-4 w-4" />
-              Images
-            </span>
-            <input
-              type="checkbox"
-              checked={imagesEnabled}
-              onChange={(event) => setImagesEnabled(event.currentTarget.checked)}
-              className="h-4 w-4 accent-emerald-400"
-              aria-label="Include image slots"
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${videosEnabled ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-100' : 'border-border bg-background/60 text-foreground'}`}>
+              <span className="inline-flex items-center gap-2">
+                <Film className="h-4 w-4" />
+                Videos
+              </span>
+              <input
+                type="checkbox"
+                checked={videosEnabled}
+                disabled={videosEnabled && !imagesEnabled}
+                onChange={(event) => handleVideosToggle(event.currentTarget.checked)}
+                className="h-4 w-4 accent-cyan-400"
+                aria-label="Include videos"
+              />
+            </label>
+            <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${imagesEnabled ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-border bg-background/60 text-foreground'}`}>
+              <span className="inline-flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                Images
+              </span>
+              <input
+                type="checkbox"
+                checked={imagesEnabled}
+                disabled={imagesEnabled && !videosEnabled}
+                onChange={(event) => handleImagesToggle(event.currentTarget.checked)}
+                className="h-4 w-4 accent-emerald-400"
+                aria-label="Include image slots"
+              />
+            </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${includeLandscape ? 'border-sky-500/40 bg-sky-500/10 text-sky-100' : 'border-border bg-background/60 text-foreground'}`}>
@@ -193,6 +219,7 @@ export default function MobileGalleryCarouselScreen() {
             >
               <GalleryVideoCarousel
                 workspaceId={workspaceId}
+                initialVideosEnabled={videosEnabled}
                 initialImagesEnabled={imagesEnabled}
                 initialIncludeLandscape={includeLandscape}
                 initialIncludePortrait={includePortrait}

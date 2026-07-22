@@ -77,7 +77,13 @@ describe('mobile Gallery carousel', () => {
     setViewport(844, 390);
     render(React.createElement(MobileGalleryCarouselScreen));
 
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('Include image slots'));
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(screen.getByLabelText('Include videos'));
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByLabelText('Include portrait assets'));
@@ -87,6 +93,7 @@ describe('mobile Gallery carousel', () => {
     expect(screen.queryByText('Поверните телефон')).toBeNull();
     expect(mockCarousel.props).toMatchObject({
       workspaceId: 'ws-1',
+      initialVideosEnabled: false,
       initialImagesEnabled: true,
       initialIncludeLandscape: true,
       initialIncludePortrait: false,

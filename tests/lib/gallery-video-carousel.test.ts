@@ -76,6 +76,26 @@ describe('gallery video carousel helpers', () => {
     expect(feed.filter((entry) => entry.kind === 'images').every((entry) => entry.kind === 'images' && entry.images.length === 5)).toBe(true);
   });
 
+  it('builds an image-only feed when videos are disabled', () => {
+    const videos = [{ id: 'v1' }, { id: 'v2' }];
+    const images = Array.from({ length: 6 }, (_, index) => ({
+      id: `image-${index + 1}`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+    }));
+
+    const feed = buildGalleryCarouselFeed(videos, {
+      includeVideos: false,
+      includeImages: true,
+      images,
+      random: () => 0.99,
+    });
+
+    expect(feed.map((entry) => entry.kind)).toEqual(['images', 'images']);
+    expect(feed.filter((entry) => entry.kind === 'video')).toHaveLength(0);
+    expect(feed.filter((entry) => entry.kind === 'images')).toHaveLength(2);
+  });
+
   it('preselects image slot groups by similar media shape', () => {
     const images = [
       { id: 'portrait-1', mediaWidth: 720, mediaHeight: 1280 },

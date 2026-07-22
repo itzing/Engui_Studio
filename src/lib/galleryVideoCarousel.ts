@@ -214,6 +214,7 @@ export function buildGalleryCarouselImageSlots<TImage extends GalleryCarouselMed
 export function buildGalleryCarouselFeed<TVideo extends { id: string }, TImage extends GalleryCarouselMediaLike>(
   videos: TVideo[],
   options: {
+    includeVideos?: boolean;
     includeImages?: boolean;
     images?: TImage[];
     random?: () => number;
@@ -222,6 +223,7 @@ export function buildGalleryCarouselFeed<TVideo extends { id: string }, TImage e
   } = {},
 ): Array<GalleryCarouselFeedItem<TVideo, TImage>> {
   const {
+    includeVideos = true,
     includeImages = false,
     images = [],
     random = Math.random,
@@ -229,7 +231,11 @@ export function buildGalleryCarouselFeed<TVideo extends { id: string }, TImage e
     imagesPerSlot = GALLERY_CAROUSEL_IMAGES_PER_SLOT,
   } = options;
   const safeVideosPerImageSlot = Math.max(1, Math.floor(videosPerImageSlot));
-  const shuffledVideos = shuffleGalleryVideoFeed(videos, random);
+  const shuffledVideos = includeVideos ? shuffleGalleryVideoFeed(videos, random) : [];
+  if (!includeVideos && includeImages) {
+    const imageOnlySlotCount = Math.ceil(images.length / imagesPerSlot);
+    return buildGalleryCarouselImageSlots(images, imageOnlySlotCount, random, imagesPerSlot);
+  }
   const imageSlotCount = includeImages && images.length > 0
     ? Math.floor(shuffledVideos.length / safeVideosPerImageSlot)
     : 0;

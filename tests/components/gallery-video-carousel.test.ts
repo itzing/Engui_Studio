@@ -317,6 +317,8 @@ describe('GalleryVideoCarousel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(String(fetchMock.mock.calls[0][0])).toContain('type=video');
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
     await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
 
@@ -332,6 +334,68 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('keeps at least one media type enabled and supports images-only playback', async () => {
+    const videoAssets = [{
+      id: 'video-1',
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: '/video-1.mp4',
+      previewUrl: '/video-1.mp4',
+      thumbnailUrl: '/video-1.png',
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: '2026-07-21T06:00:00Z',
+    }];
+    const imageAssets = Array.from({ length: 5 }, (_, index) => ({
+      id: `image-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'image',
+      originalUrl: `/image-${index + 1}.png`,
+      previewUrl: `/image-${index + 1}.png`,
+      thumbnailUrl: null,
+      prompt: `Image ${index + 1}`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      const type = search.get('type');
+      const assets = type === 'image' ? imageAssets : videoAssets;
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          assets,
+          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      initialVideosEnabled: false,
+      initialImagesEnabled: true,
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0][0])).toContain('type=image');
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
+    await waitFor(() => expect(screen.getByText('5 images')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('gallery-video-carousel').querySelector('img')).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText('Include videos'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(false);
+    await waitFor(() => expect(screen.getByText('1 videos · 5 images')).toBeTruthy());
   });
 
   it('filters carousel videos and images by selected ratio settings', async () => {
@@ -418,6 +482,6 @@ describe('GalleryVideoCarousel', () => {
     fireEvent.click(screen.getByLabelText('Include landscape assets'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    await waitFor(() => expect(screen.getByText('No gallery videos in this workspace.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No selected gallery media in this workspace.')).toBeTruthy());
   });
 });
