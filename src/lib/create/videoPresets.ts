@@ -69,18 +69,16 @@ export function saveVideoCreatePresets(presets: VideoCreatePreset[]) {
 
 export function createVideoCreatePreset(input: {
   modelId: string;
+  name: string;
   snapshot: VideoCreatePresetSnapshot;
-  existingPresets?: VideoCreatePreset[];
   now?: number;
 }): VideoCreatePreset {
   const now = input.now ?? Date.now();
-  const countForModel = (input.existingPresets || []).filter((preset) => preset.modelId === input.modelId).length;
-  const name = `Preset ${countForModel + 1}`;
 
   return {
     id: `video-preset-${now}-${Math.random().toString(36).slice(2, 8)}`,
     modelId: input.modelId,
-    name,
+    name: input.name.trim(),
     prompt: input.snapshot.prompt,
     showAdvanced: input.snapshot.showAdvanced,
     parameterValues: { ...input.snapshot.parameterValues },

@@ -7,7 +7,7 @@ Add compact presets to the shared Create video form so desktop and mobile `img2v
 ## Scope
 
 - Shared `VideoGenerationForm`, used by desktop and mobile Create video.
-- Presets save `prompt`, `showAdvanced`, and `parameterValues` for the current video model.
+- Presets ask for a user-provided name, then save `prompt`, `showAdvanced`, and `parameterValues` for the current video model.
 - The selected preset id is saved with the video workflow draft.
 - Preset selector supports deletion with inline two-click confirmation.
 - WAN video Prompt Helper controls become one compact row: helper icon, `Clear` checkbox, saved magic wand icon.

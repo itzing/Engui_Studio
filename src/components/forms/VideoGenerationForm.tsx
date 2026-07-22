@@ -62,6 +62,8 @@ export default function VideoGenerationForm() {
     const [videoPresets, setVideoPresets] = useState<VideoCreatePreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState('');
     const [isPresetSelectorOpen, setIsPresetSelectorOpen] = useState(false);
+    const [isPresetNameDialogOpen, setIsPresetNameDialogOpen] = useState(false);
+    const [presetNameDraft, setPresetNameDraft] = useState('');
     const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
@@ -472,11 +474,17 @@ export default function VideoGenerationForm() {
         });
     };
 
-    const saveCurrentPreset = () => {
+    const openPresetNameDialog = () => {
         if (!currentModel) return;
+        setPresetNameDraft('');
+        setIsPresetNameDialogOpen(true);
+    };
+
+    const saveCurrentPreset = () => {
+        if (!currentModel || !presetNameDraft.trim()) return;
         const preset = createVideoCreatePreset({
             modelId: currentModel.id,
-            existingPresets: videoPresets,
+            name: presetNameDraft,
             snapshot: {
                 prompt,
                 showAdvanced,
@@ -487,6 +495,8 @@ export default function VideoGenerationForm() {
         setVideoPresets(nextPresets);
         setSelectedPresetId(preset.id);
         setConfirmingPresetDeleteId(null);
+        setIsPresetNameDialogOpen(false);
+        setPresetNameDraft('');
     };
 
     const applyVideoPreset = (preset: VideoCreatePreset) => {
@@ -1332,7 +1342,7 @@ export default function VideoGenerationForm() {
                                         type="button"
                                         variant="outline"
                                         size="icon"
-                                        onClick={saveCurrentPreset}
+                                        onClick={openPresetNameDialog}
                                         disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
                                         className="h-10 w-10 shrink-0"
                                         aria-label="Save current img2vid preset"
@@ -1686,6 +1696,46 @@ export default function VideoGenerationForm() {
                             )}
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isPresetNameDialogOpen}
+                onOpenChange={(open) => {
+                    setIsPresetNameDialogOpen(open);
+                    if (!open) {
+                        setPresetNameDraft('');
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Name preset</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="video-create-preset-name">Name</Label>
+                        <Input
+                            id="video-create-preset-name"
+                            value={presetNameDraft}
+                            onChange={(event) => setPresetNameDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                                if (!isSubmitShortcut(event) && event.key !== 'Enter') return;
+                                event.preventDefault();
+                                saveCurrentPreset();
+                            }}
+                            autoFocus
+                            maxLength={80}
+                            placeholder="Preset name"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsPresetNameDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={saveCurrentPreset} disabled={!presetNameDraft.trim()}>
+                            Save
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

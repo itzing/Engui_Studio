@@ -40,7 +40,7 @@ describe('video create presets', () => {
 
     const preset = createVideoCreatePreset({
       modelId: 'wan22',
-      existingPresets: [makePreset('existing', 100)],
+      name: '  Cinematic move  ',
       snapshot: {
         prompt: 'move forward',
         showAdvanced: false,
@@ -51,7 +51,7 @@ describe('video create presets', () => {
     expect(preset).toMatchObject({
       id: 'video-preset-1234-i',
       modelId: 'wan22',
-      name: 'Preset 2',
+      name: 'Cinematic move',
       prompt: 'move forward',
       showAdvanced: false,
       parameterValues: { length: 121, seed: 42 },
