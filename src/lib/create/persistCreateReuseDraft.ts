@@ -198,6 +198,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       parameterValues?: Record<string, any>;
       imagePreviewUrl?: string;
       videoPreviewUrl?: string;
+      selectedPresetId?: string;
     }>('video', modelId);
     const nextImagePreviewUrl = detail.imageInputPath || parsedOptions.image_path || currentDraft?.imagePreviewUrl || '';
     const sourceImageGenerationSnapshot = normalizeSourceImageGenerationSnapshot(detail.sourceImageGenerationSnapshot)
@@ -216,6 +217,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
         parameterValues,
         imagePreviewUrl: nextImagePreviewUrl,
         videoPreviewUrl: typeof currentDraft?.videoPreviewUrl === 'string' ? currentDraft.videoPreviewUrl : '',
+        selectedPresetId: typeof currentDraft?.selectedPresetId === 'string' ? currentDraft.selectedPresetId : '',
       };
 
       setActiveMode('video');

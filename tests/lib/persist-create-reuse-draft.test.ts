@@ -292,6 +292,7 @@ describe('persistCreateReuseDraft', () => {
       },
       imagePreviewUrl: '/generations/old-frame.png',
       videoPreviewUrl: '',
+      selectedPresetId: 'preset-keep',
     });
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 
@@ -334,6 +335,7 @@ describe('persistCreateReuseDraft', () => {
       },
       imagePreviewUrl: '/generations/gallery/new-frame.png',
       videoPreviewUrl: '',
+      selectedPresetId: 'preset-keep',
     });
   });
 });
