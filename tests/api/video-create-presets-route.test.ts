@@ -95,6 +95,54 @@ describe('video create presets routes', () => {
     }));
   });
 
+  it('preserves createdAt and stores a newer updatedAt when overwriting a preset', async () => {
+    mockPrisma.preset.upsert.mockResolvedValue(buildPresetRecord());
+    mockPrisma.preset.findMany.mockResolvedValue([buildPresetRecord({
+      options: JSON.stringify({
+        modelId: 'wan22',
+        prompt: 'new camera move',
+        showAdvanced: false,
+        parameterValues: { length: 121 },
+        createdAt: 100,
+        updatedAt: 400,
+      }),
+    })]);
+
+    const response = await POST(new Request('http://localhost/api/create/video-presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: 'workspace-1',
+        preset: {
+          id: 'video-preset-1',
+          modelId: 'wan22',
+          name: 'Mobile preset',
+          prompt: 'new camera move',
+          showAdvanced: false,
+          parameterValues: { length: 121 },
+          createdAt: 100,
+          updatedAt: 400,
+        },
+      }),
+    }) as unknown as NextRequest);
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.preset.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'video-preset-1' },
+      update: expect.objectContaining({
+        name: 'Mobile preset',
+        options: JSON.stringify({
+          modelId: 'wan22',
+          prompt: 'new camera move',
+          showAdvanced: false,
+          parameterValues: { length: 121 },
+          createdAt: 100,
+          updatedAt: 400,
+        }),
+      }),
+    }));
+  });
+
   it('deletes a video preset only inside the active workspace', async () => {
     mockPrisma.preset.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.preset.findMany.mockResolvedValue([]);

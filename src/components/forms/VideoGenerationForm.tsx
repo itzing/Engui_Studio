@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeftRight, Check, ChevronDown, Loader2, Plus, Sparkles, Trash2, WandSparkles, X } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Loader2, Plus, Save, Sparkles, Trash2, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
@@ -30,6 +30,7 @@ import {
     saveServerVideoCreatePreset,
     shouldClearMissingVideoCreatePresetSelection,
     syncVideoCreatePresets,
+    updateVideoCreatePresetSnapshot,
     upsertVideoCreatePreset,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
@@ -74,6 +75,7 @@ export default function VideoGenerationForm() {
     const [isSyncingVideoPresets, setIsSyncingVideoPresets] = useState(false);
     const [isVideoDraftHydrated, setIsVideoDraftHydrated] = useState(false);
     const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
+    const [isConfirmingPresetOverwrite, setIsConfirmingPresetOverwrite] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
 
@@ -532,6 +534,7 @@ export default function VideoGenerationForm() {
         if (!currentModel) return;
         setPresetNameDraft('');
         setIsPresetNameDialogOpen(true);
+        setIsConfirmingPresetOverwrite(false);
     };
 
     const saveCurrentPreset = async () => {
@@ -553,11 +556,45 @@ export default function VideoGenerationForm() {
             setVideoPresets(nextPresets);
             setSelectedPresetId(preset.id);
             setConfirmingPresetDeleteId(null);
+            setIsConfirmingPresetOverwrite(false);
             setIsPresetNameDialogOpen(false);
             setPresetNameDraft('');
         } catch (error) {
             console.error('Failed to save video preset:', error);
             setMessage({ type: 'error', text: 'Failed to save preset' });
+        } finally {
+            setIsSyncingVideoPresets(false);
+        }
+    };
+
+    const overwriteSelectedPresetWithInlineConfirm = async () => {
+        if (!selectedPreset) return;
+        if (!isConfirmingPresetOverwrite) {
+            setIsConfirmingPresetOverwrite(true);
+            setConfirmingPresetDeleteId(null);
+            return;
+        }
+
+        const preset = updateVideoCreatePresetSnapshot({
+            preset: selectedPreset,
+            snapshot: {
+                prompt,
+                showAdvanced,
+                parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
+            },
+        });
+        setIsSyncingVideoPresets(true);
+        try {
+            const nextPresets = activeWorkspaceId
+                ? await saveServerVideoCreatePreset({ workspaceId: activeWorkspaceId, preset })
+                : upsertVideoCreatePreset(preset, videoPresets);
+            setVideoPresets(nextPresets);
+            setSelectedPresetId(preset.id);
+            setIsConfirmingPresetOverwrite(false);
+            setConfirmingPresetDeleteId(null);
+        } catch (error) {
+            console.error('Failed to update video preset:', error);
+            setMessage({ type: 'error', text: 'Failed to update preset' });
         } finally {
             setIsSyncingVideoPresets(false);
         }
@@ -580,6 +617,7 @@ export default function VideoGenerationForm() {
         setLoraLow4Weight(getWanLoraWeight(nextParameterValues, 'lora_low_4_weight'));
         setSelectedPresetId(preset.id);
         setConfirmingPresetDeleteId(null);
+        setIsConfirmingPresetOverwrite(false);
         setIsPresetSelectorOpen(false);
     };
 
@@ -597,6 +635,7 @@ export default function VideoGenerationForm() {
             setVideoPresets(nextPresets);
             if (selectedPresetId === presetId) {
                 setSelectedPresetId('');
+                setIsConfirmingPresetOverwrite(false);
             }
             setConfirmingPresetDeleteId(null);
         } catch (error) {
@@ -1412,7 +1451,19 @@ export default function VideoGenerationForm() {
                         {currentModel.id === 'wan22' ? (
                             <div className="space-y-1.5">
                                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
-                                <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                                <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant={isConfirmingPresetOverwrite ? 'default' : 'outline'}
+                                        size="icon"
+                                        onClick={() => void overwriteSelectedPresetWithInlineConfirm()}
+                                        disabled={!selectedPreset || isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
+                                        className={`h-10 w-10 shrink-0 ${isConfirmingPresetOverwrite ? 'bg-primary text-primary-foreground' : ''}`}
+                                        aria-label={isConfirmingPresetOverwrite ? `Confirm save ${selectedPreset?.name || 'selected preset'}` : 'Save current settings to selected img2vid preset'}
+                                        title={selectedPreset ? (isConfirmingPresetOverwrite ? 'Confirm save to selected preset' : 'Save to selected preset') : 'Select a preset to overwrite'}
+                                    >
+                                        {isConfirmingPresetOverwrite ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                                    </Button>
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1437,6 +1488,7 @@ export default function VideoGenerationForm() {
                                         size="icon"
                                         onClick={() => {
                                             setConfirmingPresetDeleteId(null);
+                                            setIsConfirmingPresetOverwrite(false);
                                             setIsPresetSelectorOpen(true);
                                         }}
                                         disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
@@ -1726,6 +1778,7 @@ export default function VideoGenerationForm() {
                                 onClick={() => {
                                     setSelectedPresetId('');
                                     setConfirmingPresetDeleteId(null);
+                                    setIsConfirmingPresetOverwrite(false);
                                     setIsPresetSelectorOpen(false);
                                 }}
                             >

@@ -94,9 +94,23 @@ export function createVideoCreatePreset(input: {
   };
 }
 
+export function updateVideoCreatePresetSnapshot(input: {
+  preset: VideoCreatePreset;
+  snapshot: VideoCreatePresetSnapshot;
+  now?: number;
+}): VideoCreatePreset {
+  return {
+    ...input.preset,
+    prompt: input.snapshot.prompt,
+    showAdvanced: input.snapshot.showAdvanced,
+    parameterValues: { ...input.snapshot.parameterValues },
+    updatedAt: input.now ?? Date.now(),
+  };
+}
+
 export function upsertVideoCreatePreset(preset: VideoCreatePreset, presets = loadVideoCreatePresets()): VideoCreatePreset[] {
   const withoutCurrent = presets.filter((entry) => entry.id !== preset.id);
-  const next = [{ ...preset, updatedAt: Date.now() }, ...withoutCurrent];
+  const next = [{ ...preset }, ...withoutCurrent].sort((a, b) => b.updatedAt - a.updatedAt);
   saveVideoCreatePresets(next);
   return next;
 }

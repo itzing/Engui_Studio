@@ -8,6 +8,7 @@ import {
   loadVideoCreatePresets,
   saveVideoCreatePresets,
   shouldClearMissingVideoCreatePresetSelection,
+  updateVideoCreatePresetSnapshot,
   upsertVideoCreatePreset,
   type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
@@ -71,6 +72,28 @@ describe('video create presets', () => {
     deleteVideoCreatePreset('second', loadVideoCreatePresets());
 
     expect(loadVideoCreatePresets().map((preset) => preset.id)).toEqual(['first']);
+  });
+
+  it('updates an existing preset snapshot without changing its identity or name', () => {
+    const updated = updateVideoCreatePresetSnapshot({
+      preset: makePreset('saved', 100),
+      snapshot: {
+        prompt: 'new camera move',
+        showAdvanced: false,
+        parameterValues: { length: 121, seed: 7 },
+      },
+      now: 300,
+    });
+
+    expect(updated).toMatchObject({
+      id: 'saved',
+      name: 'saved',
+      prompt: 'new camera move',
+      showAdvanced: false,
+      parameterValues: { length: 121, seed: 7 },
+      createdAt: 100,
+      updatedAt: 300,
+    });
   });
 
   it('does not clear a restored selection before presets hydrate', () => {
