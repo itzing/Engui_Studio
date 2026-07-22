@@ -15,6 +15,7 @@ export type VideoCreatePreset = VideoCreatePresetSnapshot & {
 };
 
 const VIDEO_PRESETS_STORAGE_KEY = 'engui.create.video.presets.v1';
+const VIDEO_PRESETS_API_PATH = '/api/create/video-presets';
 
 function getStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
@@ -67,6 +68,12 @@ export function saveVideoCreatePresets(presets: VideoCreatePreset[]) {
   storage.setItem(VIDEO_PRESETS_STORAGE_KEY, JSON.stringify(presets));
 }
 
+export function clearLocalVideoCreatePresets() {
+  const storage = getStorage();
+  if (!storage) return;
+  storage.removeItem(VIDEO_PRESETS_STORAGE_KEY);
+}
+
 export function createVideoCreatePreset(input: {
   modelId: string;
   name: string;
@@ -98,6 +105,77 @@ export function deleteVideoCreatePreset(presetId: string, presets = loadVideoCre
   const next = presets.filter((preset) => preset.id !== presetId);
   saveVideoCreatePresets(next);
   return next;
+}
+
+function buildVideoPresetQuery(workspaceId: string, modelId?: string) {
+  const params = new URLSearchParams({ workspaceId });
+  if (modelId) params.set('modelId', modelId);
+  return params.toString();
+}
+
+function normalizePresetList(value: unknown): VideoCreatePreset[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizePreset)
+    .filter((preset): preset is VideoCreatePreset => !!preset)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function readPresetResponse(response: Response): Promise<VideoCreatePreset[]> {
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.success) {
+    throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to sync video presets');
+  }
+  return normalizePresetList(data.presets);
+}
+
+export async function fetchVideoCreatePresets(input: { workspaceId: string; modelId?: string }): Promise<VideoCreatePreset[]> {
+  const response = await fetch(`${VIDEO_PRESETS_API_PATH}?${buildVideoPresetQuery(input.workspaceId, input.modelId)}`, {
+    cache: 'no-store',
+  });
+  return readPresetResponse(response);
+}
+
+export async function syncVideoCreatePresets(input: {
+  workspaceId: string;
+  presets: VideoCreatePreset[];
+}): Promise<VideoCreatePreset[]> {
+  const response = await fetch(VIDEO_PRESETS_API_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      workspaceId: input.workspaceId,
+      presets: input.presets,
+    }),
+  });
+  return readPresetResponse(response);
+}
+
+export async function saveServerVideoCreatePreset(input: {
+  workspaceId: string;
+  preset: VideoCreatePreset;
+}): Promise<VideoCreatePreset[]> {
+  const response = await fetch(VIDEO_PRESETS_API_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      workspaceId: input.workspaceId,
+      preset: input.preset,
+    }),
+  });
+  return readPresetResponse(response);
+}
+
+export async function deleteServerVideoCreatePreset(input: {
+  workspaceId: string;
+  presetId: string;
+}): Promise<VideoCreatePreset[]> {
+  const response = await fetch(`${VIDEO_PRESETS_API_PATH}/${encodeURIComponent(input.presetId)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspaceId: input.workspaceId }),
+  });
+  return readPresetResponse(response);
 }
 
 export function shouldClearMissingVideoCreatePresetSelection(input: {

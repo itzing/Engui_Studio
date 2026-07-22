@@ -21,10 +21,15 @@ import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflo
 import { extractImagePromptFromDataUrl, requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
 import { buildVideoSourcePromptCacheKey, readVideoSourcePromptCache, writeVideoSourcePromptCache } from '@/lib/create/videoSourcePromptCache';
 import {
+    clearLocalVideoCreatePresets,
     createVideoCreatePreset,
     deleteVideoCreatePreset,
+    deleteServerVideoCreatePreset,
+    fetchVideoCreatePresets,
     loadVideoCreatePresets,
+    saveServerVideoCreatePreset,
     shouldClearMissingVideoCreatePresetSelection,
+    syncVideoCreatePresets,
     upsertVideoCreatePreset,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
@@ -66,6 +71,7 @@ export default function VideoGenerationForm() {
     const [isPresetNameDialogOpen, setIsPresetNameDialogOpen] = useState(false);
     const [presetNameDraft, setPresetNameDraft] = useState('');
     const [hasLoadedVideoPresets, setHasLoadedVideoPresets] = useState(false);
+    const [isSyncingVideoPresets, setIsSyncingVideoPresets] = useState(false);
     const [isVideoDraftHydrated, setIsVideoDraftHydrated] = useState(false);
     const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
     const formRef = useRef<HTMLDivElement>(null);
@@ -290,9 +296,45 @@ export default function VideoGenerationForm() {
     }, []);
 
     useEffect(() => {
-        setVideoPresets(loadVideoCreatePresets());
-        setHasLoadedVideoPresets(true);
-    }, []);
+        let cancelled = false;
+
+        const loadPresets = async () => {
+            setHasLoadedVideoPresets(false);
+            const localPresets = loadVideoCreatePresets();
+            if (!activeWorkspaceId) {
+                setVideoPresets(localPresets);
+                setHasLoadedVideoPresets(true);
+                return;
+            }
+
+            setIsSyncingVideoPresets(true);
+            try {
+                const serverPresets = localPresets.length > 0
+                    ? await syncVideoCreatePresets({ workspaceId: activeWorkspaceId, presets: localPresets })
+                    : await fetchVideoCreatePresets({ workspaceId: activeWorkspaceId });
+                if (cancelled) return;
+                setVideoPresets(serverPresets);
+                if (localPresets.length > 0) {
+                    clearLocalVideoCreatePresets();
+                }
+            } catch (error) {
+                console.warn('Failed to load server video presets', error);
+                if (!cancelled) {
+                    setVideoPresets(localPresets);
+                }
+            } finally {
+                if (!cancelled) {
+                    setHasLoadedVideoPresets(true);
+                    setIsSyncingVideoPresets(false);
+                }
+            }
+        };
+
+        void loadPresets();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeWorkspaceId]);
 
     useEffect(() => {
         try {
@@ -492,7 +534,7 @@ export default function VideoGenerationForm() {
         setIsPresetNameDialogOpen(true);
     };
 
-    const saveCurrentPreset = () => {
+    const saveCurrentPreset = async () => {
         if (!currentModel || !presetNameDraft.trim()) return;
         const preset = createVideoCreatePreset({
             modelId: currentModel.id,
@@ -503,12 +545,22 @@ export default function VideoGenerationForm() {
                 parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
             },
         });
-        const nextPresets = upsertVideoCreatePreset(preset, videoPresets);
-        setVideoPresets(nextPresets);
-        setSelectedPresetId(preset.id);
-        setConfirmingPresetDeleteId(null);
-        setIsPresetNameDialogOpen(false);
-        setPresetNameDraft('');
+        setIsSyncingVideoPresets(true);
+        try {
+            const nextPresets = activeWorkspaceId
+                ? await saveServerVideoCreatePreset({ workspaceId: activeWorkspaceId, preset })
+                : upsertVideoCreatePreset(preset, videoPresets);
+            setVideoPresets(nextPresets);
+            setSelectedPresetId(preset.id);
+            setConfirmingPresetDeleteId(null);
+            setIsPresetNameDialogOpen(false);
+            setPresetNameDraft('');
+        } catch (error) {
+            console.error('Failed to save video preset:', error);
+            setMessage({ type: 'error', text: 'Failed to save preset' });
+        } finally {
+            setIsSyncingVideoPresets(false);
+        }
     };
 
     const applyVideoPreset = (preset: VideoCreatePreset) => {
@@ -531,18 +583,28 @@ export default function VideoGenerationForm() {
         setIsPresetSelectorOpen(false);
     };
 
-    const deletePresetWithInlineConfirm = (presetId: string) => {
+    const deletePresetWithInlineConfirm = async (presetId: string) => {
         if (confirmingPresetDeleteId !== presetId) {
             setConfirmingPresetDeleteId(presetId);
             return;
         }
 
-        const nextPresets = deleteVideoCreatePreset(presetId, videoPresets);
-        setVideoPresets(nextPresets);
-        if (selectedPresetId === presetId) {
-            setSelectedPresetId('');
+        setIsSyncingVideoPresets(true);
+        try {
+            const nextPresets = activeWorkspaceId
+                ? await deleteServerVideoCreatePreset({ workspaceId: activeWorkspaceId, presetId })
+                : deleteVideoCreatePreset(presetId, videoPresets);
+            setVideoPresets(nextPresets);
+            if (selectedPresetId === presetId) {
+                setSelectedPresetId('');
+            }
+            setConfirmingPresetDeleteId(null);
+        } catch (error) {
+            console.error('Failed to delete video preset:', error);
+            setMessage({ type: 'error', text: 'Failed to delete preset' });
+        } finally {
+            setIsSyncingVideoPresets(false);
         }
-        setConfirmingPresetDeleteId(null);
     };
 
     // Check if current model has LoRA parameters
@@ -1356,7 +1418,7 @@ export default function VideoGenerationForm() {
                                         variant="outline"
                                         size="icon"
                                         onClick={openPresetNameDialog}
-                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
                                         className="h-10 w-10 shrink-0"
                                         aria-label="Save current img2vid preset"
                                         title="Save current img2vid preset"
@@ -1377,7 +1439,7 @@ export default function VideoGenerationForm() {
                                             setConfirmingPresetDeleteId(null);
                                             setIsPresetSelectorOpen(true);
                                         }}
-                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
                                         className="h-10 w-10 shrink-0"
                                         aria-label="Select img2vid preset"
                                         title="Select img2vid preset"
@@ -1697,7 +1759,8 @@ export default function VideoGenerationForm() {
                                                 variant={isConfirmingDelete ? 'default' : 'ghost'}
                                                 size="icon"
                                                 className={`h-9 w-9 ${isConfirmingDelete ? 'bg-red-500 text-white hover:bg-red-400' : 'text-muted-foreground hover:text-red-300'}`}
-                                                onClick={() => deletePresetWithInlineConfirm(preset.id)}
+                                                onClick={() => void deletePresetWithInlineConfirm(preset.id)}
+                                                disabled={isSyncingVideoPresets}
                                                 aria-label={isConfirmingDelete ? `Confirm delete ${preset.name}` : `Delete ${preset.name}`}
                                                 title={isConfirmingDelete ? 'Confirm delete' : 'Delete preset'}
                                             >
@@ -1734,7 +1797,7 @@ export default function VideoGenerationForm() {
                             onKeyDown={(event) => {
                                 if (!isSubmitShortcut(event) && event.key !== 'Enter') return;
                                 event.preventDefault();
-                                saveCurrentPreset();
+                                void saveCurrentPreset();
                             }}
                             autoFocus
                             maxLength={80}
@@ -1745,7 +1808,7 @@ export default function VideoGenerationForm() {
                         <Button type="button" variant="outline" onClick={() => setIsPresetNameDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button type="button" onClick={saveCurrentPreset} disabled={!presetNameDraft.trim()}>
+                        <Button type="button" onClick={() => void saveCurrentPreset()} disabled={!presetNameDraft.trim() || isSyncingVideoPresets}>
                             Save
                         </Button>
                     </DialogFooter>
