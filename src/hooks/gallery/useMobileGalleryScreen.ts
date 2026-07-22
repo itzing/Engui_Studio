@@ -55,6 +55,28 @@ const PAGE_SIZE = 24;
 const TYPE_FILTERS = ['image', 'video', 'audio'] as const;
 type MediaFilter = typeof TYPE_FILTERS[number];
 
+export function normalizeGalleryMediaFilters(value: unknown): MediaFilter[] {
+  if (!Array.isArray(value)) return [...TYPE_FILTERS];
+  const normalized = TYPE_FILTERS.filter((filter) => value.includes(filter));
+  return normalized.length > 0 ? normalized : [...TYPE_FILTERS];
+}
+
+function parseStoredGalleryMediaFilters(value: string | null): MediaFilter[] | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed === 'all') return [...TYPE_FILTERS];
+    if (!Array.isArray(parsed)) return null;
+    return normalizeGalleryMediaFilters(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function serializeGalleryMediaFilters(filters: MediaFilter[]) {
+  return JSON.stringify(normalizeGalleryMediaFilters(filters));
+}
+
 export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile') {
   const { activeWorkspaceId, workspaces } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
@@ -77,10 +99,12 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const [restoreAbsoluteIndex, setRestoreAbsoluteIndex] = useState<number | null>(null);
   const loadingPagesRef = useRef<Set<number>>(new Set());
   const hydratedSelectionRef = useRef(false);
+  const loadGenerationRef = useRef(0);
 
   const storageKey = effectiveWorkspaceId ? `engui.gallery.lastViewed.${effectiveWorkspaceId}` : null;
   const desktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.v2.${effectiveWorkspaceId}` : null;
   const legacyDesktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.${effectiveWorkspaceId}` : null;
+  const mediaFilterStorageKey = effectiveWorkspaceId ? `engui.${surface}.gallery.mediaFilters.${effectiveWorkspaceId}` : null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -93,12 +117,16 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (surface === 'desktop') {
       const savedDesktop = desktopOverlayKey ? window.localStorage.getItem(desktopOverlayKey) : null;
       const savedLegacyDesktop = legacyDesktopOverlayKey ? window.localStorage.getItem(legacyDesktopOverlayKey) : null;
+      const savedMediaFilters = mediaFilterStorageKey ? parseStoredGalleryMediaFilters(window.localStorage.getItem(mediaFilterStorageKey)) : null;
       if (savedDesktop === 'all' || savedDesktop === 'common' || savedDesktop === 'draft' || savedDesktop === 'upscale') {
         setSemanticFilter(savedDesktop);
       } else if (savedLegacyDesktop === 'all' || savedLegacyDesktop === 'draft' || savedLegacyDesktop === 'upscale') {
         setSemanticFilter(savedLegacyDesktop);
       } else {
         setSemanticFilter('all');
+      }
+      if (savedMediaFilters) {
+        setSelectedFilters(savedMediaFilters);
       }
       setPrefsHydrated(true);
       return;
@@ -112,8 +140,12 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (saved === 'all' || saved === 'common' || saved === 'draft' || saved === 'upscale') {
       setSemanticFilter(saved);
     }
+    const savedMediaFilters = mediaFilterStorageKey ? parseStoredGalleryMediaFilters(window.localStorage.getItem(mediaFilterStorageKey)) : null;
+    if (savedMediaFilters) {
+      setSelectedFilters(savedMediaFilters);
+    }
     setPrefsHydrated(true);
-  }, [desktopOverlayKey, effectiveWorkspaceId, legacyDesktopOverlayKey, surface]);
+  }, [desktopOverlayKey, effectiveWorkspaceId, legacyDesktopOverlayKey, mediaFilterStorageKey, surface]);
 
   const loadedAssets = useMemo(() => {
     const entries = Object.values(loadedPages)
@@ -199,13 +231,15 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     setTotalCount(data.pagination.totalCount);
   }, []);
 
-  const loadPage = useCallback(async (pageNumber: number, options?: { focusAssetId?: string | null }) => {
+  const loadPage = useCallback(async (pageNumber: number, options?: { focusAssetId?: string | null; generation?: number }) => {
     if (pageNumber < 1 || loadingPagesRef.current.has(pageNumber)) return null;
     loadingPagesRef.current.add(pageNumber);
     try {
       const data = await fetchPage(pageNumber, options);
       if (data?.pagination) {
-        mergePage(data.pagination.page || pageNumber, data);
+        if (typeof options?.generation !== 'number' || options.generation === loadGenerationRef.current) {
+          mergePage(data.pagination.page || pageNumber, data);
+        }
       }
       return data;
     } finally {
@@ -219,10 +253,14 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       setTotalCount(0);
       setSelectedAssetId(null);
       setSelectedAbsoluteIndex(null);
+      loadGenerationRef.current += 1;
       hydratedSelectionRef.current = true;
       return;
     }
 
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    loadingPagesRef.current.clear();
     setIsLoading(true);
     setError(null);
     try {
@@ -231,7 +269,8 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
         : null;
 
       setLoadedPages({});
-      const focusData = await loadPage(1, { focusAssetId: savedSelection });
+      const focusData = await loadPage(1, { focusAssetId: savedSelection, generation });
+      if (generation !== loadGenerationRef.current) return;
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;
@@ -241,16 +280,15 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       await Promise.all(
         Array.from(pagesToLoad)
           .filter((page) => page !== focusData.pagination?.page)
-          .map((page) => loadPage(page)),
+          .map((page) => loadPage(page, { generation })),
       );
+      if (generation !== loadGenerationRef.current) return;
 
       const focusedAssetId = focusData.focus?.found ? focusData.focus.assetId : null;
       const focusedAbsoluteIndex = typeof focusData.focus?.absoluteIndex === 'number' ? focusData.focus.absoluteIndex : null;
       const fallbackAssetId = (focusData.assets || [])[0]?.id || null;
       const selectedId = focusedAssetId || fallbackAssetId;
-      const selectedIndex = focusedAbsoluteIndex ?? (selectedId && typeof assetIndexMap[selectedId] === 'number'
-        ? assetIndexMap[selectedId]
-        : (focusData.assets || []).length > 0 ? 0 : null);
+      const selectedIndex = focusedAbsoluteIndex ?? ((focusData.assets || []).length > 0 ? 0 : null);
 
       setSelectedAssetId(selectedId);
       setSelectedAbsoluteIndex(selectedIndex);
@@ -261,11 +299,15 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
 
       hydratedSelectionRef.current = true;
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
-      setLoadedPages({});
-      setTotalCount(0);
+      if (generation === loadGenerationRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
+        setLoadedPages({});
+        setTotalCount(0);
+      }
     } finally {
-      setIsLoading(false);
+      if (generation === loadGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [effectiveWorkspaceId, loadPage, query, storageKey]);
 
@@ -282,9 +324,9 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       }
       if (prev.includes(filter)) {
         const next = prev.filter((entry) => entry !== filter);
-        return next.length > 0 ? next : [...TYPE_FILTERS];
+        return normalizeGalleryMediaFilters(next);
       }
-      return [...prev, filter];
+      return normalizeGalleryMediaFilters([...prev, filter]);
     });
   }, []);
 
@@ -307,6 +349,11 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
     window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
   }, [desktopOverlayKey, effectiveWorkspaceId, prefsHydrated, semanticFilter, surface]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mediaFilterStorageKey || !prefsHydrated) return;
+    window.localStorage.setItem(mediaFilterStorageKey, serializeGalleryMediaFilters(selectedFilters));
+  }, [mediaFilterStorageKey, prefsHydrated, selectedFilters]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
@@ -341,12 +388,17 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (missingPages.length === 0) return;
 
     setIsLoadingMore(true);
+    const generation = loadGenerationRef.current;
     try {
-      await Promise.all(missingPages.map((page) => loadPage(page)));
+      await Promise.all(missingPages.map((page) => loadPage(page, { generation })));
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery range');
+      if (generation === loadGenerationRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery range');
+      }
     } finally {
-      setIsLoadingMore(false);
+      if (generation === loadGenerationRef.current) {
+        setIsLoadingMore(false);
+      }
     }
   }, [loadPage, loadedPages, totalCount]);
 
@@ -361,8 +413,12 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (!effectiveWorkspaceId) return;
     setIsLoading(true);
     setError(null);
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    loadingPagesRef.current.clear();
     try {
-      const focusData = await loadPage(1);
+      const focusData = await loadPage(1, { generation });
+      if (generation !== loadGenerationRef.current) return;
       if (!focusData?.pagination) return;
 
       const basePage = focusData.pagination.page;
@@ -372,14 +428,18 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       await Promise.all(
         Array.from(pagesToLoad)
           .filter((page) => page !== focusData.pagination?.page)
-          .map((page) => loadPage(page)),
+          .map((page) => loadPage(page, { generation })),
       );
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
-      setLoadedPages({});
-      setTotalCount(0);
+      if (generation === loadGenerationRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load gallery');
+        setLoadedPages({});
+        setTotalCount(0);
+      }
     } finally {
-      setIsLoading(false);
+      if (generation === loadGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [effectiveWorkspaceId, loadPage]);
 
