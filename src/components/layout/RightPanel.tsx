@@ -7,6 +7,7 @@ import { JobDetailsDialog } from '@/components/workspace/JobDetailsDialog';
 import { GalleryAssetDialog } from '@/components/workspace/GalleryAssetDialog';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { JobCardImageThumbnail } from '@/components/layout/JobCardImageThumbnail';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { Search, RefreshCw, Info, ChevronDown, Plus, Trash2, FolderPlus, Check, X, Image as ImageIcon, Video, AudioLines, Heart, PenSquare, Sparkles } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useToast } from '@/components/ui/toast';
@@ -886,10 +887,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }));
     };
 
-    const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
-        e.stopPropagation();
-        if (!confirm('Delete this finished job and clean up its local outputs when safe?')) return;
-
+    const handleDeleteJob = async (jobId: string) => {
         const ok = await deleteJob(jobId);
         if (!ok) {
             showToast('Failed to delete job', 'error');
@@ -2339,13 +2337,15 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
                                 {/* Top Right Action (Cancel for active, Delete for finished) */}
                                 {(job.status === 'completed' || job.status === 'failed') ? (
-                                    <button
-                                        onClick={(e) => void handleDeleteJob(e, job.id)}
+                                    <InlineConfirmDeleteButton
+                                        onConfirm={() => handleDeleteJob(job.id)}
+                                        stopPropagation
+                                        resetKey={job.id}
                                         className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-red-500 hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                        confirmClassName="absolute top-2 right-2 p-1.5 text-white bg-red-600 hover:bg-red-500 rounded-md opacity-100 transition-all"
                                         title="Delete"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                        iconClassName="w-3.5 h-3.5"
+                                    />
                                 ) : (
                                     <button
                                         onClick={(e) => void handleCancelJob(e, job.id)}

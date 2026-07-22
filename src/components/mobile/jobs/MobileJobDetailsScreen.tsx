@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Type, X } from 'lucide-react';
 
 type GalleryBucket = 'common' | 'draft';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
@@ -10,6 +10,7 @@ import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/per
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
@@ -410,7 +411,17 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 {job.type === 'video' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {(job.type === 'image' || job.type === 'video') ? <Button variant="outline" onClick={() => void upscaleJob()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
-                {isFinished ? <Button variant="destructive" onClick={() => void deleteJob()}><Trash2 className="mr-2 h-4 w-4" />Delete job</Button> : null}
+                {isFinished ? (
+                  <InlineConfirmDeleteButton
+                    onConfirm={deleteJob}
+                    resetKey={job.id}
+                    label="Delete job"
+                    confirmLabel="Confirm delete"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+                    confirmClassName="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
+                    iconClassName="h-4 w-4"
+                  />
+                ) : null}
               </div>
             </>
           ) : null}

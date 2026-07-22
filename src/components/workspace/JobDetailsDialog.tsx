@@ -5,10 +5,11 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ChevronLeft, ChevronRight, Download, Trash2, Copy, Sparkles, Type, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Copy, Sparkles, Type, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 
 interface JobDetailsDialogProps {
     job: Job | null;
@@ -276,7 +277,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     };
 
     const handleDelete = async () => {
-        if (!job || !confirm('Delete this finished job and clean up its local outputs when safe?')) return;
+        if (!job) return;
         const ok = await deleteJob(job.id);
         if (!ok) {
             showToast('Failed to delete job', 'error');
@@ -768,14 +769,13 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 </Button>
                             )}
                             {isFinished && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                    onClick={() => void handleDelete()}
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </Button>
+                                <InlineConfirmDeleteButton
+                                    onConfirm={handleDelete}
+                                    resetKey={job.id}
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                    confirmClassName="inline-flex h-10 w-10 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-500"
+                                    iconClassName="w-4 h-4"
+                                />
                             )}
                             {isRunning && (
                                 <Button

@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Trash2, Wand2, X, Ban, RotateCcw } from 'lucide-react';
+import { FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { useMobileJobsScreen, type MobileJobsScreenItem } from '@/hooks/jobs/useMobileJobsScreen';
 import type { MobileJobDetail } from '@/hooks/jobs/useMobileJobDetails';
 
@@ -129,17 +130,15 @@ function SelectedJobActions({
           <Ban className="h-4 w-4" />
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(job);
-          }}
+        <InlineConfirmDeleteButton
+          onConfirm={() => onDelete(job)}
+          stopPropagation
+          resetKey={job.id}
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
+          confirmClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-300/30 bg-red-600 text-white backdrop-blur-sm"
           aria-label="Delete job"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+          iconClassName="h-4 w-4"
+        />
       )}
     </div>
   );
@@ -384,11 +383,7 @@ export default function MobileJobsScreen() {
                           }
                           handleJobPress(item, absoluteIndex);
                         }}
-                        onDelete={(item) => {
-                          if (window.confirm('Delete this job?')) {
-                            void removeJob(item.id);
-                          }
-                        }}
+                        onDelete={(item) => void removeJob(item.id)}
                         onCancel={(item) => {
                           if (window.confirm('Cancel this job?')) {
                             void cancelActiveJob(item.id);
