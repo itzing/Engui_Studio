@@ -1,18 +1,33 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, Sparkles, Trash2, Video } from 'lucide-react';
+import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
+import { useViewportFormFactor } from '@/hooks/mobile/useViewportFormFactor';
 import { useToast } from '@/components/ui/toast';
 import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
-import { MOBILE_GALLERY_COLUMN_COUNT, getMobileGalleryRowSize } from '@/lib/mobile/galleryGrid';
+import {
+  MOBILE_GALLERY_COLUMN_COUNT,
+  TABLET_GALLERY_COLUMN_STORAGE_KEY,
+  TABLET_GALLERY_DEFAULT_COLUMN_COUNT,
+  TABLET_GALLERY_MAX_COLUMN_COUNT,
+  TABLET_GALLERY_MIN_COLUMN_COUNT,
+  getMobileGalleryRowSize,
+  normalizeTabletGalleryColumnCount,
+} from '@/lib/mobile/galleryGrid';
+
+function readInitialTabletGalleryColumns() {
+  if (typeof window === 'undefined') return TABLET_GALLERY_DEFAULT_COLUMN_COUNT;
+  return normalizeTabletGalleryColumnCount(window.localStorage.getItem(TABLET_GALLERY_COLUMN_STORAGE_KEY));
+}
 
 function TileOverlayActions({
   asset,
@@ -113,8 +128,10 @@ export default function MobileGalleryScreen() {
   const { showToast } = useToast();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
+  const formFactor = useViewportFormFactor();
   const [openingImg2VidAssetId, setOpeningImg2VidAssetId] = useState<string | null>(null);
   const [galleryGridWidth, setGalleryGridWidth] = useState(0);
+  const [tabletColumns, setTabletColumns] = useState(readInitialTabletGalleryColumns);
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -148,8 +165,10 @@ export default function MobileGalleryScreen() {
     restoreAbsoluteIndex,
   } = useMobileGalleryScreen('mobile');
 
-  const galleryRowSize = getMobileGalleryRowSize(galleryGridWidth);
-  const rowCount = Math.ceil(totalCount / MOBILE_GALLERY_COLUMN_COUNT);
+  const isTabletGallery = formFactor === 'tablet-landscape';
+  const galleryColumnCount = isTabletGallery ? tabletColumns : MOBILE_GALLERY_COLUMN_COUNT;
+  const galleryRowSize = getMobileGalleryRowSize(galleryGridWidth, galleryColumnCount);
+  const rowCount = Math.ceil(totalCount / galleryColumnCount);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
@@ -158,6 +177,12 @@ export default function MobileGalleryScreen() {
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isTabletGallery) return;
+    window.localStorage.setItem(TABLET_GALLERY_COLUMN_STORAGE_KEY, String(tabletColumns));
+  }, [isTabletGallery, tabletColumns]);
 
   useEffect(() => {
     if (isLoading || totalCount <= 0) {
@@ -204,18 +229,18 @@ export default function MobileGalleryScreen() {
     if (virtualRows.length === 0 || totalCount === 0) return;
     const firstRow = Math.max(0, virtualRows[0]?.index ?? 0);
     const lastRow = Math.max(firstRow, virtualRows[virtualRows.length - 1]?.index ?? 0);
-    const startIndex = Math.max(0, firstRow * MOBILE_GALLERY_COLUMN_COUNT - 18);
-    const endIndex = Math.min(totalCount - 1, ((lastRow + 1) * MOBILE_GALLERY_COLUMN_COUNT) + 18);
+    const startIndex = Math.max(0, firstRow * galleryColumnCount - galleryColumnCount * 6);
+    const endIndex = Math.min(totalCount - 1, ((lastRow + 1) * galleryColumnCount) + galleryColumnCount * 6);
     void ensureRangeLoaded(startIndex, endIndex);
-  }, [ensureRangeLoaded, totalCount, virtualRows]);
+  }, [ensureRangeLoaded, galleryColumnCount, totalCount, virtualRows]);
 
   useEffect(() => {
     if (restoreTick <= 0 || restoreHandledTickRef.current === restoreTick) return;
     if (typeof restoreAbsoluteIndex !== 'number' || restoreAbsoluteIndex < 0) return;
     restoreHandledTickRef.current = restoreTick;
-    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / MOBILE_GALLERY_COLUMN_COUNT), { align: 'center' });
-    void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 24), restoreAbsoluteIndex + 24);
-  }, [ensureRangeLoaded, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
+    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / galleryColumnCount), { align: 'center' });
+    void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - galleryColumnCount * 8), restoreAbsoluteIndex + galleryColumnCount * 8);
+  }, [ensureRangeLoaded, galleryColumnCount, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
@@ -232,81 +257,176 @@ export default function MobileGalleryScreen() {
     <MobileScreen>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="px-4 py-3 space-y-3">
-          <div className="space-y-2">
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-              {([
-                { key: 'all', label: 'All' },
-                { key: 'common', icon: ImageIcon, title: 'Common', activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
-                { key: 'draft', icon: PenSquare, title: 'Drafts', activeClass: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-                { key: 'upscale', icon: Sparkles, title: 'Upscale', activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
-              ] as const).map((item) => {
-                const active = semanticFilter === item.key;
-                const Icon = 'icon' in item ? item.icon : null;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setSemanticFilter(item.key)}
-                    title={'title' in item ? item.title : item.label}
-                    aria-label={'title' in item ? item.title : item.label}
-                    className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
-                      ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
-                      : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-                  >
-                    {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
-                  </button>
-                );
-              })}
+          {isTabletGallery ? (
+            <div data-testid="tablet-gallery-toolbar" className="flex items-center gap-2 overflow-x-auto pb-0.5">
+              <div className="flex shrink-0 items-center gap-1">
+                {([
+                  { key: 'all', label: 'All' },
+                  { key: 'common', icon: ImageIcon, title: 'Common', activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                  { key: 'draft', icon: PenSquare, title: 'Drafts', activeClass: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+                  { key: 'upscale', icon: Sparkles, title: 'Upscale', activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                ] as const).map((item) => {
+                  const active = semanticFilter === item.key;
+                  const Icon = 'icon' in item ? item.icon : null;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setSemanticFilter(item.key)}
+                      title={'title' in item ? item.title : item.label}
+                      aria-label={'title' in item ? item.title : item.label}
+                      className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                        ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                        : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                    >
+                      {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div data-testid="tablet-gallery-divider" aria-hidden="true" className="shrink-0 px-1 text-sm text-muted-foreground/65">|</div>
+              <div className="flex shrink-0 items-center gap-1">
+                {([
+                  { key: 'all', label: 'All' },
+                  { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                  { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                  { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+                ] as const).map((item) => {
+                  const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+                  const Icon = 'icon' in item ? item.icon : null;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => toggleMediaFilter(item.key)}
+                      className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                        ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                        : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                    >
+                      {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={toggleGalleryFavorites}
+                  className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  aria-label="Toggle favorites"
+                >
+                  <Heart className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleGalleryTrash}
+                  className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  aria-label="Toggle trash"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <div data-testid="tablet-gallery-divider" aria-hidden="true" className="shrink-0 px-1 text-sm text-muted-foreground/65">|</div>
+                <div className="flex h-8 w-[196px] shrink-0 items-center gap-2 rounded border border-border/40 bg-transparent px-2 text-muted-foreground">
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  <span className="w-[64px] shrink-0 text-[10px]">Columns: {tabletColumns}</span>
+                  <Slider
+                    aria-label="Gallery columns"
+                    min={TABLET_GALLERY_MIN_COLUMN_COUNT}
+                    max={TABLET_GALLERY_MAX_COLUMN_COUNT}
+                    step={1}
+                    value={[tabletColumns]}
+                    onValueChange={(value) => setTabletColumns(normalizeTabletGalleryColumnCount(value[0]))}
+                    className="min-w-0 flex-1"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
+                  aria-label="Refresh gallery"
+                  onClick={() => void refresh()}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-              {([
-                { key: 'all', label: 'All' },
-                { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
-                { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
-                { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
-              ] as const).map((item) => {
-                const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
-                const Icon = 'icon' in item ? item.icon : null;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => toggleMediaFilter(item.key)}
-                    className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
-                      ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
-                      : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-                  >
-                    {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
-                  </button>
-                );
-              })}
-              <button
-              type="button"
-              onClick={toggleGalleryFavorites}
-              className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-              aria-label="Toggle favorites"
-            >
-              <Heart className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={toggleGalleryTrash}
-              className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
-              aria-label="Toggle trash"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
-                aria-label="Refresh gallery"
-                onClick={() => void refresh()}
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </Button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {([
+                  { key: 'all', label: 'All' },
+                  { key: 'common', icon: ImageIcon, title: 'Common', activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                  { key: 'draft', icon: PenSquare, title: 'Drafts', activeClass: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+                  { key: 'upscale', icon: Sparkles, title: 'Upscale', activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                ] as const).map((item) => {
+                  const active = semanticFilter === item.key;
+                  const Icon = 'icon' in item ? item.icon : null;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setSemanticFilter(item.key)}
+                      title={'title' in item ? item.title : item.label}
+                      aria-label={'title' in item ? item.title : item.label}
+                      className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                        ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                        : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                    >
+                      {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {([
+                  { key: 'all', label: 'All' },
+                  { key: 'image', icon: ImageIcon, activeClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
+                  { key: 'video', icon: Video, activeClass: 'text-violet-400 border-violet-500/40 bg-violet-500/10' },
+                  { key: 'audio', icon: AudioLines, activeClass: 'text-orange-400 border-orange-500/40 bg-orange-500/10' },
+                ] as const).map((item) => {
+                  const active = item.key === 'all' ? isAllFilterActive : selectedFilters.includes(item.key);
+                  const Icon = 'icon' in item ? item.icon : null;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => toggleMediaFilter(item.key)}
+                      className={`h-8 min-w-8 px-2 rounded border text-[10px] transition-colors inline-flex items-center justify-center gap-1 shrink-0 ${active
+                        ? ('activeClass' in item ? item.activeClass : 'text-foreground border-border bg-background shadow-sm font-medium')
+                        : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                    >
+                      {Icon ? <Icon className="w-3.5 h-3.5" /> : item.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={toggleGalleryFavorites}
+                  className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${favoritesOnly ? 'text-pink-400 border-pink-500/40 bg-pink-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  aria-label="Toggle favorites"
+                >
+                  <Heart className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleGalleryTrash}
+                  className={`h-8 w-8 rounded border transition-colors inline-flex items-center justify-center shrink-0 ${showTrashed ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-muted-foreground border-border/40 bg-transparent grayscale opacity-40 hover:opacity-70 hover:border-border/70 hover:bg-muted/20'}`}
+                  aria-label="Toggle trash"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0"
+                  aria-label="Refresh gallery"
+                  onClick={() => void refresh()}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 text-base sm:text-sm" />
@@ -334,14 +454,14 @@ export default function MobileGalleryScreen() {
           <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
             <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
               {virtualRows.map((virtualRow) => {
-                const rowStart = virtualRow.index * MOBILE_GALLERY_COLUMN_COUNT;
+                const rowStart = virtualRow.index * galleryColumnCount;
                 return (
                   <div
                     key={virtualRow.key}
-                    className="absolute left-0 top-0 grid w-full grid-cols-3"
-                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    className="absolute left-0 top-0 grid w-full"
+                    style={{ transform: `translateY(${virtualRow.start}px)`, gridTemplateColumns: `repeat(${galleryColumnCount}, minmax(0, 1fr))` }}
                   >
-                    {Array.from({ length: MOBILE_GALLERY_COLUMN_COUNT }).map((_, columnIndex) => {
+                    {Array.from({ length: galleryColumnCount }).map((_, columnIndex) => {
                       const absoluteIndex = rowStart + columnIndex;
                       if (absoluteIndex >= totalCount) {
                         return <div key={`empty-${absoluteIndex}`} className="aspect-square bg-black" />;
