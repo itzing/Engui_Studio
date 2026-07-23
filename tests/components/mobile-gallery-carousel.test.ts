@@ -143,6 +143,26 @@ describe('mobile Gallery carousel', () => {
       initialScrubSpeedMultiplier: 4,
       showControls: false,
       enableKeyboardControls: false,
+      movementAxis: 'horizontal',
+    });
+  });
+
+  it('runs a bottom-to-top player in portrait when only landscape assets are selected', async () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText('Include portrait assets'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(screen.queryByText('Поверните телефон')).toBeNull();
+    expect(mockCarousel.props).toMatchObject({
+      initialIncludeLandscape: true,
+      initialIncludePortrait: false,
+      showControls: false,
+      enableKeyboardControls: false,
+      movementAxis: 'vertical',
     });
   });
 

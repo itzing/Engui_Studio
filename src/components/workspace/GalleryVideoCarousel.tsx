@@ -62,10 +62,12 @@ type CarouselSlot = {
 
 type DragState = {
   pointerId: number | null;
-  startX: number;
-  lastX: number;
+  startMain: number;
+  lastMain: number;
   hasDragged: boolean;
 };
+
+type CarouselMovementAxis = 'horizontal' | 'vertical';
 
 const PAGE_LIMIT = 100;
 const DEFAULT_VIDEO_RATIO = 9 / 16;
@@ -90,9 +92,23 @@ function readFeedEntryRatio(entry: GalleryCarouselFeedItem<GalleryCarouselAsset,
     : (Number.isFinite(entry.aspectRatio) && entry.aspectRatio > 0 ? entry.aspectRatio : DEFAULT_IMAGE_RATIO);
 }
 
-function buildSlotSize(entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>, stage: { width: number; height: number }, measuredRatios: Record<string, number>) {
+function buildSlotSize(entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>, stage: { width: number; height: number }, measuredRatios: Record<string, number>, movementAxis: CarouselMovementAxis) {
   const ratio = readFeedEntryRatio(entry, measuredRatios);
-  return getFullHeightGalleryCarouselSlotSize(ratio, stage.height);
+  if (movementAxis === 'vertical') {
+    const width = Math.max(1, stage.width);
+    const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : DEFAULT_VIDEO_RATIO;
+    const height = Math.max(1, width / safeRatio);
+    return {
+      width,
+      height,
+      x: 0,
+      y: Math.max(0, stage.height - height),
+    };
+  }
+  return {
+    ...getFullHeightGalleryCarouselSlotSize(ratio, stage.height),
+    x: 0,
+  };
 }
 
 async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video') {
@@ -142,6 +158,7 @@ type GalleryVideoCarouselProps = {
   initialScrubSpeedMultiplier?: number;
   showControls?: boolean;
   enableKeyboardControls?: boolean;
+  movementAxis?: CarouselMovementAxis;
 };
 
 export function GalleryVideoCarousel({
@@ -155,6 +172,7 @@ export function GalleryVideoCarousel({
   initialScrubSpeedMultiplier = DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER,
   showControls = true,
   enableKeyboardControls = true,
+  movementAxis = 'horizontal',
 }: GalleryVideoCarouselProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
@@ -177,7 +195,8 @@ export function GalleryVideoCarousel({
     includePortrait: initialIncludePortrait,
   });
   const measuredRatiosRef = useRef<Record<string, number>>({});
-  const dragStateRef = useRef<DragState>({ pointerId: null, startX: 0, lastX: 0, hasDragged: false });
+  const movementAxisRef = useRef<CarouselMovementAxis>(movementAxis);
+  const dragStateRef = useRef<DragState>({ pointerId: null, startMain: 0, lastMain: 0, hasDragged: false });
   const keyboardScrubDirectionRef = useRef<0 | -1 | 1>(0);
   const suppressClickRef = useRef(false);
   const [sourceVideos, setSourceVideos] = useState<GalleryCarouselAsset[]>([]);
@@ -204,6 +223,10 @@ export function GalleryVideoCarousel({
   const totalImageCount = sourceImages.length;
   const totalMediaCount = totalVideoCount + totalImageCount;
   const visibleImageSlotCount = activeSlots.filter((slot) => slot.kind === 'images').length;
+
+  useEffect(() => {
+    movementAxisRef.current = movementAxis;
+  }, [movementAxis]);
 
   const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
     const feed = buildGalleryCarouselFeed(videos, { images, includeVideos, includeImages });
@@ -344,16 +367,22 @@ export function GalleryVideoCarousel({
     if (stage.width <= 0 || stage.height <= 0 || nextFeedIndex >= feed.length) return;
 
     const entry = feed[nextFeedIndex];
-    const size = buildSlotSize(entry, stage, measuredRatiosRef.current);
+    const size = buildSlotSize(entry, stage, measuredRatiosRef.current, movementAxisRef.current);
     const trailingSlot = activeSlots[activeSlots.length - 1] || null;
     nextIndexRef.current = Math.max(nextIndexRef.current, nextFeedIndex + 1);
+    const x = movementAxisRef.current === 'vertical'
+      ? size.x
+      : getAdjacentGalleryCarouselSlotX(trailingSlot?.x ?? null, size.width);
+    const y = movementAxisRef.current === 'vertical'
+      ? (trailingSlot ? trailingSlot.y + trailingSlot.height - EDGE_OVERLAP_PX : size.y)
+      : size.y;
     const slot: CarouselSlot = {
       kind: entry.kind,
       feedIndex: nextFeedIndex,
       instanceId: `${entry.id}-${slotCounterRef.current}-${nextFeedIndex}`,
       entry,
-      x: getAdjacentGalleryCarouselSlotX(trailingSlot?.x ?? null, size.width),
-      y: size.y,
+      x,
+      y,
       width: size.width,
       height: size.height,
       imageCycleMs: entry.kind === 'images' ? 0 : undefined,
@@ -376,14 +405,14 @@ export function GalleryVideoCarousel({
     const entry = feedRef.current[previousFeedIndex];
     if (!entry) return;
 
-    const size = buildSlotSize(entry, stage, measuredRatiosRef.current);
+    const size = buildSlotSize(entry, stage, measuredRatiosRef.current, movementAxisRef.current);
     const slot: CarouselSlot = {
       kind: entry.kind,
       feedIndex: previousFeedIndex,
       instanceId: `${entry.id}-${slotCounterRef.current}-${previousFeedIndex}`,
       entry,
-      x: oldestSlot.x + oldestSlot.width - EDGE_OVERLAP_PX,
-      y: size.y,
+      x: movementAxisRef.current === 'vertical' ? size.x : oldestSlot.x + oldestSlot.width - EDGE_OVERLAP_PX,
+      y: movementAxisRef.current === 'vertical' ? oldestSlot.y - size.height + EDGE_OVERLAP_PX : size.y,
       width: size.width,
       height: size.height,
       imageCycleMs: entry.kind === 'images' ? 0 : undefined,
@@ -402,8 +431,12 @@ export function GalleryVideoCarousel({
       return;
     }
 
+    const stage = stageSizeRef.current;
     const newestSlot = activeSlots[activeSlots.length - 1];
-    if (shouldSpawnAdjacentGalleryCarouselSlot(newestSlot.x)) {
+    const shouldSpawn = movementAxisRef.current === 'vertical'
+      ? newestSlot.y + newestSlot.height <= stage.height + EDGE_OVERLAP_PX
+      : shouldSpawnAdjacentGalleryCarouselSlot(newestSlot.x);
+    if (shouldSpawn) {
       spawnNext();
     }
   }, [spawnNext]);
@@ -419,7 +452,10 @@ export function GalleryVideoCarousel({
     if (oldestSlot.feedIndex <= 0) return;
 
     const stage = stageSizeRef.current;
-    if (oldestSlot.x + oldestSlot.width <= stage.width + EDGE_OVERLAP_PX) {
+    const shouldSpawn = movementAxisRef.current === 'vertical'
+      ? oldestSlot.y >= -EDGE_OVERLAP_PX
+      : oldestSlot.x + oldestSlot.width <= stage.width + EDGE_OVERLAP_PX;
+    if (shouldSpawn) {
       spawnPrevious();
     }
   }, [spawnNext, spawnPrevious]);
@@ -448,22 +484,27 @@ export function GalleryVideoCarousel({
 
   const trimDistantSlots = useCallback((preserveAnchor: boolean) => {
     const stage = stageSizeRef.current;
-    const buffer = Math.max(stage.width * SLOT_TRIM_BUFFER_STAGE_RATIO, stage.height);
+    const isVertical = movementAxisRef.current === 'vertical';
+    const buffer = Math.max((isVertical ? stage.height : stage.width) * SLOT_TRIM_BUFFER_STAGE_RATIO, isVertical ? stage.width : stage.height);
     const previousSlots = activeSlotsRef.current;
-    const nextSlots = previousSlots.filter((slot) => (
-      slot.x < stage.width + slot.width + buffer
-      && slot.x + slot.width > -buffer
-    ));
+    const nextSlots = previousSlots.filter((slot) => {
+      if (isVertical) {
+        return slot.y < stage.height + slot.height + buffer
+          && slot.y + slot.height > -buffer;
+      }
+      return slot.x < stage.width + slot.width + buffer
+        && slot.x + slot.width > -buffer;
+    });
     if (nextSlots.length > 0 || previousSlots.length === 0 || !preserveAnchor) {
       activeSlotsRef.current = nextSlots;
       return;
     }
 
-    const viewportCenter = stage.width / 2;
+    const viewportCenter = (isVertical ? stage.height : stage.width) / 2;
     activeSlotsRef.current = [
       previousSlots.reduce((closestSlot, slot) => {
-        const closestDistance = Math.abs(closestSlot.x + closestSlot.width / 2 - viewportCenter);
-        const slotDistance = Math.abs(slot.x + slot.width / 2 - viewportCenter);
+        const closestDistance = Math.abs((isVertical ? closestSlot.y + closestSlot.height / 2 : closestSlot.x + closestSlot.width / 2) - viewportCenter);
+        const slotDistance = Math.abs((isVertical ? slot.y + slot.height / 2 : slot.x + slot.width / 2) - viewportCenter);
         return slotDistance < closestDistance ? slot : closestSlot;
       }, previousSlots[0]),
     ];
@@ -490,8 +531,8 @@ export function GalleryVideoCarousel({
     setIsUiHidden((current) => current ? false : current);
   }, [showControls]);
 
-  const manualScrubTape = useCallback((deltaX: number) => {
-    if (!Number.isFinite(deltaX) || deltaX === 0 || isLoading || totalMediaCount === 0) return;
+  const manualScrubTape = useCallback((deltaMain: number) => {
+    if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
     if (activeSlotsRef.current.length === 0) {
       spawnNext();
     }
@@ -499,27 +540,29 @@ export function GalleryVideoCarousel({
 
     activeSlotsRef.current = activeSlotsRef.current.map((slot) => ({
       ...slot,
-      x: slot.x + deltaX,
+      x: movementAxisRef.current === 'vertical' ? slot.x : slot.x + deltaMain,
+      y: movementAxisRef.current === 'vertical' ? slot.y + deltaMain : slot.y,
     }));
 
-    fillAdjacentSlots(deltaX > 0 ? 1 : -1);
+    fillAdjacentSlots(movementAxisRef.current === 'vertical' ? (deltaMain < 0 ? 1 : -1) : (deltaMain > 0 ? 1 : -1));
     trimDistantSlots(true);
 
     setFeedEnded(false);
     setActiveSlots(activeSlotsRef.current);
   }, [fillAdjacentSlots, isLoading, spawnNext, totalMediaCount, trimDistantSlots]);
 
-  const pauseAndScrubTape = useCallback((deltaX: number) => {
+  const pauseAndScrubTape = useCallback((deltaMain: number) => {
     setMovementPaused(true);
-    manualScrubTape(deltaX);
+    manualScrubTape(deltaMain);
   }, [manualScrubTape, setMovementPaused]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (isLoading || totalMediaCount === 0 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const pointerMain = movementAxisRef.current === 'vertical' ? event.clientY : event.clientX;
     dragStateRef.current = {
       pointerId: event.pointerId,
-      startX: event.clientX,
-      lastX: event.clientX,
+      startMain: pointerMain,
+      lastMain: pointerMain,
       hasDragged: false,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -529,14 +572,15 @@ export function GalleryVideoCarousel({
     const dragState = dragStateRef.current;
     if (dragState.pointerId !== event.pointerId) return;
 
-    const totalDelta = event.clientX - dragState.startX;
+    const pointerMain = movementAxisRef.current === 'vertical' ? event.clientY : event.clientX;
+    const totalDelta = pointerMain - dragState.startMain;
     if (!dragState.hasDragged && Math.abs(totalDelta) < DRAG_START_THRESHOLD_PX) return;
 
-    const deltaX = event.clientX - dragState.lastX;
+    const deltaMain = pointerMain - dragState.lastMain;
     dragState.hasDragged = true;
-    dragState.lastX = event.clientX;
+    dragState.lastMain = pointerMain;
     setIsDragging(true);
-    pauseAndScrubTape(deltaX);
+    pauseAndScrubTape(deltaMain);
     event.preventDefault();
   }, [pauseAndScrubTape]);
 
@@ -551,7 +595,7 @@ export function GalleryVideoCarousel({
       }, 0);
     }
 
-    dragStateRef.current = { pointerId: null, startX: 0, lastX: 0, hasDragged: false };
+    dragStateRef.current = { pointerId: null, startMain: 0, lastMain: 0, hasDragged: false };
     setIsDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }, []);
@@ -568,26 +612,32 @@ export function GalleryVideoCarousel({
         if (!pausedRef.current || isKeyboardScrubbing) {
           fillAdjacentSlots(keyboardScrubDirection < 0 ? -1 : 1);
         }
-        const distance = isKeyboardScrubbing
+        const horizontalDistance = isKeyboardScrubbing
           ? keyboardScrubDirection * deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current * scrubSpeedMultiplierRef.current
           : pausedRef.current ? 0 : deltaSeconds * BASE_SPEED_PX_PER_SECOND * speedRef.current;
+        const distance = movementAxisRef.current === 'vertical' && !isKeyboardScrubbing ? -horizontalDistance : horizontalDistance;
         let didCycleImages = false;
         activeSlotsRef.current = activeSlotsRef.current
           .map((slot) => {
             if (slot.kind !== 'images' || slot.entry.kind !== 'images' || slot.entry.images.length <= 1) {
-              return { ...slot, x: slot.x + distance };
+              return {
+                ...slot,
+                x: movementAxisRef.current === 'vertical' ? slot.x : slot.x + distance,
+                y: movementAxisRef.current === 'vertical' ? slot.y + distance : slot.y,
+              };
             }
             const imageCycleMs = (slot.imageCycleMs || 0) + deltaSeconds * 1000;
             didCycleImages = true;
             return {
               ...slot,
-              x: slot.x + distance,
+              x: movementAxisRef.current === 'vertical' ? slot.x : slot.x + distance,
+              y: movementAxisRef.current === 'vertical' ? slot.y + distance : slot.y,
               imageCycleMs,
               activeImageIndex: Math.floor(imageCycleMs / 1000) % slot.entry.images.length,
             };
           });
         if (distance !== 0) {
-          fillAdjacentSlots(distance < 0 ? -1 : 1);
+          fillAdjacentSlots(movementAxisRef.current === 'vertical' ? (distance < 0 ? 1 : -1) : (distance < 0 ? -1 : 1));
           trimDistantSlots(isKeyboardScrubbing);
         }
 
@@ -678,8 +728,8 @@ export function GalleryVideoCarousel({
     if (activeSlotsRef.current.length === 0) return;
     const stage = stageSizeRef.current;
     activeSlotsRef.current = activeSlotsRef.current.map((slot) => {
-      const size = buildSlotSize(slot.entry, stage, measuredRatios);
-      return { ...slot, width: size.width, height: size.height, y: size.y };
+      const size = buildSlotSize(slot.entry, stage, measuredRatios, movementAxisRef.current);
+      return { ...slot, width: size.width, height: size.height, x: movementAxisRef.current === 'vertical' ? size.x : slot.x, y: movementAxisRef.current === 'vertical' ? slot.y : size.y };
     });
     setActiveSlots(activeSlotsRef.current);
   }, [measuredRatios]);

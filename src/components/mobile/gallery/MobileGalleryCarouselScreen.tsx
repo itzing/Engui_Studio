@@ -62,6 +62,9 @@ export default function MobileGalleryCarouselScreen() {
 
   const speedLabel = useMemo(() => `${speed.toFixed(1)}x`, [speed]);
   const scrubLabel = useMemo(() => `${scrubSpeedMultiplier.toFixed(0)}x`, [scrubSpeedMultiplier]);
+  const isLandscapeOnlyFilter = includeLandscape && !includePortrait;
+  const shouldShowPortraitLandscapePlayer = started && !isLandscape && isLandscapeOnlyFilter;
+  const shouldShowCarouselPlayer = isLandscape || shouldShowPortraitLandscapePlayer;
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
@@ -257,7 +260,7 @@ export default function MobileGalleryCarouselScreen() {
           className="fixed inset-0 z-[90] bg-black text-white"
           data-testid="mobile-gallery-carousel-overlay"
         >
-          {isLandscape ? (
+          {shouldShowCarouselPlayer ? (
             <div
               className="h-full min-h-[100dvh] w-full"
               data-testid="mobile-gallery-carousel-swipe-surface"
@@ -276,6 +279,7 @@ export default function MobileGalleryCarouselScreen() {
                 initialScrubSpeedMultiplier={scrubSpeedMultiplier}
                 showControls={false}
                 enableKeyboardControls={false}
+                movementAxis={shouldShowPortraitLandscapePlayer ? 'vertical' : 'horizontal'}
               />
             </div>
           ) : (

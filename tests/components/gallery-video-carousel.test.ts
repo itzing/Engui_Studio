@@ -217,6 +217,46 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
+  it('moves the tape upward in vertical movement mode', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [
+          {
+            id: 'video-landscape',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-landscape.mp4',
+            previewUrl: '/video-landscape.mp4',
+            thumbnailUrl: '/video-landscape.png',
+            mediaWidth: 1280,
+            mediaHeight: 720,
+            addedToGalleryAt: '2026-07-21T06:00:00Z',
+          },
+        ],
+        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      initialIncludeLandscape: true,
+      initialIncludePortrait: false,
+      showControls: false,
+      enableKeyboardControls: false,
+      movementAxis: 'vertical',
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const stage = screen.getByTestId('gallery-video-carousel');
+    await waitFor(() => expect(stage.querySelector('video[src="/video-landscape.mp4"]')).toBeTruthy());
+    const slot = stage.querySelector('video')?.parentElement as HTMLElement;
+
+    await waitFor(() => expect(slot.style.transform).toMatch(/translate3d\(0px, -\d+(?:\.\d+)?px, 0\)/));
+  });
+
   it('fills the fullscreen viewport and lets users hide and reveal carousel controls', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
