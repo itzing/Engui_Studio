@@ -446,6 +446,7 @@ export function useMobileJobsScreen() {
   return {
     totalCount,
     pageSize: PAGE_SIZE,
+    loadedEntries,
     itemsByAbsoluteIndex,
     loadedViewerItems,
     isLoading,
