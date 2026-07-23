@@ -241,6 +241,8 @@ describe('TabletCreateWorkspace', () => {
     expect(imageThumb.className).toContain('object-contain');
     expect(videoThumb.className).toContain('object-contain');
     expect(videoButton.className).toContain('h-full');
+    expect(videoButton.className).toContain('items-center');
+    expect(videoButton.className).toContain('justify-center');
     expect(videoButton.className).not.toContain('max-h');
     expect(videoButton.querySelector('svg')).toBeTruthy();
   });

@@ -757,7 +757,7 @@ function TabletJobsStrip({
                     key={job.id}
                     type="button"
                     className={cn(
-                      'relative aspect-square h-full shrink-0 overflow-hidden rounded-md border bg-black transition-colors',
+                      'relative flex aspect-square h-full shrink-0 items-center justify-center overflow-hidden rounded-md border bg-black transition-colors',
                       selected ? 'border-primary ring-2 ring-primary/50' : 'border-border/70 hover:border-primary/50',
                     )}
                     onClick={() => onSelect(job)}

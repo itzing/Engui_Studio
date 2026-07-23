@@ -12,6 +12,7 @@ import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscree
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
 import { useToast } from '@/components/ui/toast';
 import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
+import { MOBILE_GALLERY_COLUMN_COUNT, getMobileGalleryRowSize } from '@/lib/mobile/galleryGrid';
 
 function TileOverlayActions({
   asset,
@@ -113,6 +114,7 @@ export default function MobileGalleryScreen() {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
   const [openingImg2VidAssetId, setOpeningImg2VidAssetId] = useState<string | null>(null);
+  const [galleryGridWidth, setGalleryGridWidth] = useState(0);
   const {
     totalCount,
     itemsByAbsoluteIndex,
@@ -146,15 +148,42 @@ export default function MobileGalleryScreen() {
     restoreAbsoluteIndex,
   } = useMobileGalleryScreen('mobile');
 
-  const rowCount = Math.ceil(totalCount / 3);
+  const galleryRowSize = getMobileGalleryRowSize(galleryGridWidth);
+  const rowCount = Math.ceil(totalCount / MOBILE_GALLERY_COLUMN_COUNT);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 128,
+    estimateSize: () => galleryRowSize,
     overscan: 6,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    if (isLoading || totalCount <= 0) {
+      setGalleryGridWidth(0);
+      return;
+    }
+
+    const element = parentRef.current;
+    if (!element) return;
+
+    const updateWidth = () => setGalleryGridWidth(element.clientWidth);
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isLoading, totalCount]);
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [galleryRowSize, rowVirtualizer]);
 
   const openAssetInImg2Vid = useCallback(async (asset: MobileGalleryAsset) => {
     if (asset.type !== 'image' || openingImg2VidAssetId) return;
@@ -175,8 +204,8 @@ export default function MobileGalleryScreen() {
     if (virtualRows.length === 0 || totalCount === 0) return;
     const firstRow = Math.max(0, virtualRows[0]?.index ?? 0);
     const lastRow = Math.max(firstRow, virtualRows[virtualRows.length - 1]?.index ?? 0);
-    const startIndex = Math.max(0, firstRow * 3 - 18);
-    const endIndex = Math.min(totalCount - 1, ((lastRow + 1) * 3) + 18);
+    const startIndex = Math.max(0, firstRow * MOBILE_GALLERY_COLUMN_COUNT - 18);
+    const endIndex = Math.min(totalCount - 1, ((lastRow + 1) * MOBILE_GALLERY_COLUMN_COUNT) + 18);
     void ensureRangeLoaded(startIndex, endIndex);
   }, [ensureRangeLoaded, totalCount, virtualRows]);
 
@@ -184,7 +213,7 @@ export default function MobileGalleryScreen() {
     if (restoreTick <= 0 || restoreHandledTickRef.current === restoreTick) return;
     if (typeof restoreAbsoluteIndex !== 'number' || restoreAbsoluteIndex < 0) return;
     restoreHandledTickRef.current = restoreTick;
-    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / 3), { align: 'center' });
+    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / MOBILE_GALLERY_COLUMN_COUNT), { align: 'center' });
     void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - 24), restoreAbsoluteIndex + 24);
   }, [ensureRangeLoaded, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
 
@@ -305,14 +334,14 @@ export default function MobileGalleryScreen() {
           <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
             <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
               {virtualRows.map((virtualRow) => {
-                const rowStart = virtualRow.index * 3;
+                const rowStart = virtualRow.index * MOBILE_GALLERY_COLUMN_COUNT;
                 return (
                   <div
                     key={virtualRow.key}
                     className="absolute left-0 top-0 grid w-full grid-cols-3"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    {Array.from({ length: 3 }).map((_, columnIndex) => {
+                    {Array.from({ length: MOBILE_GALLERY_COLUMN_COUNT }).map((_, columnIndex) => {
                       const absoluteIndex = rowStart + columnIndex;
                       if (absoluteIndex >= totalCount) {
                         return <div key={`empty-${absoluteIndex}`} className="aspect-square bg-black" />;
