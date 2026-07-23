@@ -39,6 +39,7 @@ function setViewport(width: number, height: number) {
 describe('mobile Gallery carousel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     window.ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -50,6 +51,39 @@ describe('mobile Gallery carousel', () => {
       workspaces: [{ id: 'ws-1' }],
     };
     setViewport(390, 844);
+  });
+
+  it('restores carousel settings from local device storage', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: false,
+      imagesEnabled: true,
+      includeLandscape: true,
+      includePortrait: false,
+      speed: 1.6,
+      scrubSpeedMultiplier: 7,
+    }));
+    setViewport(844, 390);
+
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    await waitFor(() => expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false));
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('1.6x')).toBeTruthy();
+    expect(screen.getByText('7x')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(mockCarousel.props).toMatchObject({
+      initialVideosEnabled: false,
+      initialImagesEnabled: true,
+      initialIncludeLandscape: true,
+      initialIncludePortrait: false,
+      initialSpeed: 1.6,
+      initialScrubSpeedMultiplier: 7,
+    });
   });
 
   it('adds Carousel between Jobs and Gallery in mobile navigation', () => {
@@ -81,9 +115,17 @@ describe('mobile Gallery carousel', () => {
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('Include image slots'));
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(false);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      videosEnabled: true,
+      imagesEnabled: true,
+    });
     fireEvent.click(screen.getByLabelText('Include videos'));
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      videosEnabled: false,
+      imagesEnabled: true,
+    });
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByLabelText('Include portrait assets'));

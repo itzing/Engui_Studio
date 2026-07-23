@@ -9,6 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
 import { useStudio } from '@/lib/context/StudioContext';
+import {
+  getDefaultGalleryCarouselSettings,
+  readStoredGalleryCarouselSettings,
+  writeStoredGalleryCarouselSettings,
+  type GalleryCarouselSettings,
+} from '@/lib/galleryCarouselSettings';
 
 function readLandscape() {
   if (typeof window === 'undefined') return false;
@@ -56,14 +62,57 @@ export default function MobileGalleryCarouselScreen() {
 
   const speedLabel = useMemo(() => `${speed.toFixed(1)}x`, [speed]);
   const scrubLabel = useMemo(() => `${scrubSpeedMultiplier.toFixed(0)}x`, [scrubSpeedMultiplier]);
+
+  const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
+    writeStoredGalleryCarouselSettings(workspaceId, {
+      videosEnabled,
+      imagesEnabled,
+      includeLandscape,
+      includePortrait,
+      speed,
+      scrubSpeedMultiplier,
+      ...overrides,
+    });
+  }, [imagesEnabled, includeLandscape, includePortrait, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
+
+  useEffect(() => {
+    const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings());
+    setVideosEnabled(storedSettings.videosEnabled);
+    setImagesEnabled(storedSettings.imagesEnabled);
+    setIncludeLandscape(storedSettings.includeLandscape);
+    setIncludePortrait(storedSettings.includePortrait);
+    setSpeed(storedSettings.speed);
+    setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
+  }, [workspaceId]);
+
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabled) return;
     setVideosEnabled(nextEnabled);
-  }, [imagesEnabled]);
+    persistSettings({ videosEnabled: nextEnabled });
+  }, [imagesEnabled, persistSettings]);
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !videosEnabled) return;
     setImagesEnabled(nextEnabled);
-  }, [videosEnabled]);
+    persistSettings({ imagesEnabled: nextEnabled });
+  }, [persistSettings, videosEnabled]);
+  const handleLandscapeToggle = useCallback((nextEnabled: boolean) => {
+    setIncludeLandscape(nextEnabled);
+    persistSettings({ includeLandscape: nextEnabled });
+  }, [persistSettings]);
+  const handlePortraitToggle = useCallback((nextEnabled: boolean) => {
+    setIncludePortrait(nextEnabled);
+    persistSettings({ includePortrait: nextEnabled });
+  }, [persistSettings]);
+  const handleSpeedChange = useCallback((value: number[]) => {
+    const nextSpeed = value[0] || 1;
+    setSpeed(nextSpeed);
+    persistSettings({ speed: nextSpeed });
+  }, [persistSettings]);
+  const handleScrubSpeedMultiplierChange = useCallback((value: number[]) => {
+    const nextScrubSpeedMultiplier = value[0] || 4;
+    setScrubSpeedMultiplier(nextScrubSpeedMultiplier);
+    persistSettings({ scrubSpeedMultiplier: nextScrubSpeedMultiplier });
+  }, [persistSettings]);
 
   const closePlayer = useCallback(() => {
     swipeCloseRef.current = { pointerId: null, startX: 0, startY: 0 };
@@ -144,7 +193,7 @@ export default function MobileGalleryCarouselScreen() {
               <input
                 type="checkbox"
                 checked={includeLandscape}
-                onChange={(event) => setIncludeLandscape(event.currentTarget.checked)}
+                onChange={(event) => handleLandscapeToggle(event.currentTarget.checked)}
                 className="h-4 w-4 accent-sky-400"
                 aria-label="Include landscape assets"
               />
@@ -154,7 +203,7 @@ export default function MobileGalleryCarouselScreen() {
               <input
                 type="checkbox"
                 checked={includePortrait}
-                onChange={(event) => setIncludePortrait(event.currentTarget.checked)}
+                onChange={(event) => handlePortraitToggle(event.currentTarget.checked)}
                 className="h-4 w-4 accent-fuchsia-400"
                 aria-label="Include portrait assets"
               />
@@ -171,7 +220,7 @@ export default function MobileGalleryCarouselScreen() {
               max={2.4}
               step={0.1}
               value={[speed]}
-              onValueChange={(value) => setSpeed(value[0] || 1)}
+              onValueChange={handleSpeedChange}
             />
           </div>
 
@@ -185,7 +234,7 @@ export default function MobileGalleryCarouselScreen() {
               max={10}
               step={1}
               value={[scrubSpeedMultiplier]}
-              onValueChange={(value) => setScrubSpeedMultiplier(value[0] || 4)}
+              onValueChange={handleScrubSpeedMultiplierChange}
             />
           </div>
         </section>

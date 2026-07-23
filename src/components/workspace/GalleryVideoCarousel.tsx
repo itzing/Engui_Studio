@@ -5,6 +5,12 @@ import { EyeOff, Film, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuf
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
+  getDefaultGalleryCarouselSettings,
+  readStoredGalleryCarouselSettings,
+  writeStoredGalleryCarouselSettings,
+  type GalleryCarouselSettings,
+} from '@/lib/galleryCarouselSettings';
+import {
   buildGalleryCarouselFeed,
   matchesGalleryCarouselRatioFilter,
   type GalleryCarouselFeedItem,
@@ -254,24 +260,44 @@ export function GalleryVideoCarousel({
     }
   }, [resetPlayback, workspaceId]);
 
+  const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
+    writeStoredGalleryCarouselSettings(workspaceId, {
+      videosEnabled: videosEnabledRef.current,
+      imagesEnabled: imagesEnabledRef.current,
+      includeLandscape: ratioFilterRef.current.includeLandscape,
+      includePortrait: ratioFilterRef.current.includePortrait,
+      speed: speedRef.current,
+      scrubSpeedMultiplier: scrubSpeedMultiplierRef.current,
+      ...overrides,
+    });
+  }, [workspaceId]);
+
   useEffect(() => {
-    const nextRatioFilter = {
+    const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings({
+      videosEnabled: initialVideosEnabled,
+      imagesEnabled: initialImagesEnabled,
       includeLandscape: initialIncludeLandscape,
       includePortrait: initialIncludePortrait,
+      speed: initialSpeed,
+      scrubSpeedMultiplier: initialScrubSpeedMultiplier,
+    }));
+    const nextRatioFilter = {
+      includeLandscape: storedSettings.includeLandscape,
+      includePortrait: storedSettings.includePortrait,
     };
-    videosEnabledRef.current = initialVideosEnabled;
-    setVideosEnabled(initialVideosEnabled);
-    imagesEnabledRef.current = initialImagesEnabled;
-    setImagesEnabled(initialImagesEnabled);
+    videosEnabledRef.current = storedSettings.videosEnabled;
+    setVideosEnabled(storedSettings.videosEnabled);
+    imagesEnabledRef.current = storedSettings.imagesEnabled;
+    setImagesEnabled(storedSettings.imagesEnabled);
     ratioFilterRef.current = nextRatioFilter;
-    setIncludeLandscape(initialIncludeLandscape);
-    setIncludePortrait(initialIncludePortrait);
-    speedRef.current = initialSpeed;
-    setSpeed(initialSpeed);
-    scrubSpeedMultiplierRef.current = initialScrubSpeedMultiplier;
-    setScrubSpeedMultiplier(initialScrubSpeedMultiplier);
-    void loadAssets(initialVideosEnabled, initialImagesEnabled, nextRatioFilter);
-  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets]);
+    setIncludeLandscape(storedSettings.includeLandscape);
+    setIncludePortrait(storedSettings.includePortrait);
+    speedRef.current = storedSettings.speed;
+    setSpeed(storedSettings.speed);
+    scrubSpeedMultiplierRef.current = storedSettings.scrubSpeedMultiplier;
+    setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
+    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter);
+  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -681,15 +707,17 @@ export function GalleryVideoCarousel({
     if (!nextEnabled && !imagesEnabledRef.current) return;
     setVideosEnabled(nextEnabled);
     videosEnabledRef.current = nextEnabled;
+    persistSettings({ videosEnabled: nextEnabled });
     void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current);
-  }, [loadAssets]);
+  }, [loadAssets, persistSettings]);
 
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !videosEnabledRef.current) return;
     setImagesEnabled(nextEnabled);
     imagesEnabledRef.current = nextEnabled;
+    persistSettings({ imagesEnabled: nextEnabled });
     void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current);
-  }, [loadAssets]);
+  }, [loadAssets, persistSettings]);
 
   const handleRatioToggle = useCallback((orientation: 'landscape' | 'portrait', nextEnabled: boolean) => {
     const nextRatioFilter = {
@@ -699,8 +727,23 @@ export function GalleryVideoCarousel({
     ratioFilterRef.current = nextRatioFilter;
     setIncludeLandscape(nextRatioFilter.includeLandscape);
     setIncludePortrait(nextRatioFilter.includePortrait);
+    persistSettings(nextRatioFilter);
     void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter);
-  }, [loadAssets]);
+  }, [loadAssets, persistSettings]);
+
+  const handleSpeedChange = useCallback((value: number[]) => {
+    const nextSpeed = value[0] || 1;
+    speedRef.current = nextSpeed;
+    setSpeed(nextSpeed);
+    persistSettings({ speed: nextSpeed });
+  }, [persistSettings]);
+
+  const handleScrubSpeedMultiplierChange = useCallback((value: number[]) => {
+    const nextScrubSpeedMultiplier = value[0] || DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER;
+    scrubSpeedMultiplierRef.current = nextScrubSpeedMultiplier;
+    setScrubSpeedMultiplier(nextScrubSpeedMultiplier);
+    persistSettings({ scrubSpeedMultiplier: nextScrubSpeedMultiplier });
+  }, [persistSettings]);
 
   return (
     <div
@@ -793,7 +836,7 @@ export function GalleryVideoCarousel({
               max={2.4}
               step={0.1}
               value={[speed]}
-              onValueChange={(value) => setSpeed(value[0] || 1)}
+              onValueChange={handleSpeedChange}
               onClick={(event) => event.stopPropagation()}
             />
             <span className="w-8 text-right text-xs tabular-nums text-white/55">{speed.toFixed(1)}x</span>
@@ -805,7 +848,7 @@ export function GalleryVideoCarousel({
               max={MAX_KEYBOARD_SCRUB_SPEED_MULTIPLIER}
               step={1}
               value={[scrubSpeedMultiplier]}
-              onValueChange={(value) => setScrubSpeedMultiplier(value[0] || DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER)}
+              onValueChange={handleScrubSpeedMultiplierChange}
               onClick={(event) => event.stopPropagation()}
             />
             <span className="w-9 text-right text-xs tabular-nums text-white/55">{scrubSpeedMultiplier.toFixed(0)}x</span>

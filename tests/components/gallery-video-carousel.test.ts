@@ -10,6 +10,7 @@ import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarouse
 describe('GalleryVideoCarousel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     window.ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -19,6 +20,54 @@ describe('GalleryVideoCarousel', () => {
     window.cancelAnimationFrame = (id: number) => window.clearTimeout(id);
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve()) as any;
     HTMLMediaElement.prototype.pause = vi.fn();
+  });
+
+  it('restores persisted carousel settings for the workspace device', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: false,
+      imagesEnabled: true,
+      includeLandscape: false,
+      includePortrait: true,
+      speed: 1.8,
+      scrubSpeedMultiplier: 8,
+    }));
+    const imageAssets = Array.from({ length: 5 }, (_, index) => ({
+      id: `image-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'image',
+      originalUrl: `/image-${index + 1}.png`,
+      previewUrl: `/image-${index + 1}.png`,
+      thumbnailUrl: null,
+      prompt: `Image ${index + 1}`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(search.get('type')).toBe('image');
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          assets: imageAssets,
+          pagination: { page: 1, limit: 100, totalCount: imageAssets.length, hasNextPage: false },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('5 images')).toBeTruthy());
+    expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText('1.8x')).toBeTruthy();
+    expect(screen.getByText('8x')).toBeTruthy();
   });
 
   it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
@@ -343,12 +392,20 @@ describe('GalleryVideoCarousel', () => {
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('type=image'))).toBe(true);
     await waitFor(() => expect(screen.getByText('2 videos · 5 images')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      videosEnabled: true,
+      imagesEnabled: true,
+    });
 
     fireEvent.click(screen.getByLabelText('Include image slots'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      videosEnabled: true,
+      imagesEnabled: false,
+    });
   });
 
   it('keeps at least one media type enabled and supports images-only playback', async () => {
