@@ -226,7 +226,7 @@ describe('TabletCreateWorkspace', () => {
     await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
   });
 
-  it('shows contained strip thumbnails and a play icon for video jobs', () => {
+  it('shows full-height contained strip thumbnails without a strip header', () => {
     render(React.createElement(TabletCreateWorkspace, {
       activeMode: 'image',
       onModeChange: vi.fn(),
@@ -234,10 +234,15 @@ describe('TabletCreateWorkspace', () => {
 
     const imageThumb = screen.getByAltText('z-image');
     const videoThumb = screen.getByAltText('wan22');
+    const videoButton = screen.getByRole('button', { name: 'Preview wan22' });
 
+    expect(screen.queryByText('Jobs')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh jobs' })).toBeNull();
     expect(imageThumb.className).toContain('object-contain');
     expect(videoThumb.className).toContain('object-contain');
-    expect(screen.getByRole('button', { name: 'Preview wan22' }).querySelector('svg')).toBeTruthy();
+    expect(videoButton.className).toContain('h-full');
+    expect(videoButton.className).not.toContain('max-h');
+    expect(videoButton.querySelector('svg')).toBeTruthy();
   });
 
   it('resizes the jobs strip by dragging the top edge with a one-third viewport cap', () => {
