@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
@@ -367,9 +368,19 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                 <Trash2 className="w-4 h-4" />
               </Button>
               {asset.trashed && (
-                <Button variant="destructive" size="sm" onClick={onPermanentDelete}>
-                  Delete forever
-                </Button>
+                <InlineConfirmDeleteButton
+                  onConfirm={onPermanentDelete}
+                  resetKey={asset.id}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90"
+                  confirmClassName="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-red-600 px-3 text-sm font-medium text-white shadow-sm hover:bg-red-500"
+                  title="Delete forever"
+                  confirmTitle="Confirm permanent delete"
+                  ariaLabel="Delete gallery asset forever"
+                  confirmAriaLabel="Confirm delete gallery asset forever"
+                  label="Delete forever"
+                  confirmLabel="Confirm"
+                  iconClassName="w-4 h-4"
+                />
               )}
             </div>
           </div>

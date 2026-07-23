@@ -120,17 +120,19 @@ function SelectedJobActions({
         </button>
       ) : null}
       {job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing' ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onCancel(job);
-          }}
+        <InlineConfirmDeleteButton
+          onConfirm={() => onCancel(job)}
+          stopPropagation
+          resetKey={job.id}
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
-          aria-label="Cancel job"
-        >
-          <Ban className="h-4 w-4" />
-        </button>
+          confirmClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/30 bg-amber-600 text-white backdrop-blur-sm"
+          title="Cancel"
+          confirmTitle="Confirm cancel"
+          ariaLabel="Cancel job"
+          confirmAriaLabel="Confirm cancel job"
+          icon={<Ban className="h-4 w-4" />}
+          iconClassName="h-4 w-4"
+        />
       ) : (
         <InlineConfirmDeleteButton
           onConfirm={() => onDelete(job)}
@@ -346,14 +348,21 @@ export default function MobileJobsScreen() {
               variant="ghost"
               size="sm"
               className="ml-auto h-8 rounded border border-border/40 px-3 text-xs"
-              onClick={() => {
-                if (window.confirm('Delete all completed and failed jobs in this workspace?')) {
-                  void clearFinished();
-                }
-              }}
+              asChild
             >
-              <X className="mr-1.5 h-3.5 w-3.5" />
-              Clear finished
+              <InlineConfirmDeleteButton
+                onConfirm={() => void clearFinished()}
+                className="inline-flex h-8 items-center justify-center rounded border border-border/40 px-3 text-xs"
+                confirmClassName="inline-flex h-8 items-center justify-center rounded border border-red-300/30 bg-red-600 px-3 text-xs text-white"
+                title="Clear finished jobs"
+                confirmTitle="Confirm clear finished jobs"
+                ariaLabel="Clear finished jobs"
+                confirmAriaLabel="Confirm clear finished jobs"
+                label="Clear finished"
+                confirmLabel="Confirm"
+                icon={<X className="mr-1.5 h-3.5 w-3.5" />}
+                iconClassName="mr-1.5 h-3.5 w-3.5"
+              />
             </Button>
           </div>
         </div>
@@ -403,11 +412,7 @@ export default function MobileJobsScreen() {
                           handleJobPress(item, absoluteIndex);
                         }}
                         onDelete={(item) => void removeJob(item.id)}
-                        onCancel={(item) => {
-                          if (window.confirm('Cancel this job?')) {
-                            void cancelActiveJob(item.id);
-                          }
-                        }}
+                        onCancel={(item) => void cancelActiveJob(item.id)}
                         onReuse={(item) => void reuseJob(item.id)}
                         onUpscale={(item) => void upscaleJob(item)}
                       />

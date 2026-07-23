@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Undo2, Upload } from 'lucide-react';
+import { CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { GalleryFullscreenViewer, type GalleryFullscreenViewerItem } from '@/components/workspace/GalleryFullscreenViewer';
 import {
   Dialog,
@@ -1239,7 +1240,6 @@ export default function CharacterManagerPanel() {
 
   const moveCharacterToTrash = async () => {
     if (!selectedCharacter || selectedCharacter.deletedAt) return;
-    if (!confirm(`Move ${selectedCharacter.name} to trash?`)) return;
 
     setIsTrashMutating(true);
     try {
@@ -1522,10 +1522,20 @@ export default function CharacterManagerPanel() {
                     <CopyPlus className="w-3.5 h-3.5 mr-1" />
                     Clone
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8 text-xs text-red-300 hover:text-red-200" onClick={moveCharacterToTrash} disabled={!selectedCharacterId || isTrashMutating}>
-                    <Trash2 className="w-3.5 h-3.5 mr-1" />
-                    {isTrashMutating ? 'Deleting...' : 'Delete'}
-                  </Button>
+                  <InlineConfirmDeleteButton
+                    onConfirm={moveCharacterToTrash}
+                    disabled={!selectedCharacterId || isTrashMutating}
+                    resetKey={selectedCharacterId}
+                    className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input bg-background px-3 text-xs font-medium text-red-300 ring-offset-background transition-colors hover:bg-accent hover:text-red-200 disabled:pointer-events-none disabled:opacity-50"
+                    confirmClassName="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-300/30 bg-red-600 px-3 text-xs font-medium text-white ring-offset-background transition-colors hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
+                    title={selectedCharacter ? `Move ${selectedCharacter.name} to trash` : 'Move character to trash'}
+                    confirmTitle={selectedCharacter ? `Confirm move ${selectedCharacter.name} to trash` : 'Confirm move character to trash'}
+                    ariaLabel="Move character to trash"
+                    confirmAriaLabel="Confirm move character to trash"
+                    label={isTrashMutating ? 'Deleting...' : 'Delete'}
+                    confirmLabel="Confirm"
+                    iconClassName="w-3.5 h-3.5"
+                  />
                 </>
               )}
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>

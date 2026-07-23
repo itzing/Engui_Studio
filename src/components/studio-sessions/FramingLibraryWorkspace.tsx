@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowDown, ArrowUp, Copy, Crop, FlipHorizontal2, ImageIcon, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Crop, FlipHorizontal2, ImageIcon, Plus, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { StudioFramingPresetSummary, StudioPoseSummary, StudioSessionPoseOrientation } from '@/lib/studio-sessions/types';
 
@@ -289,7 +290,7 @@ function PresetCard({ preset, onEdit, onDuplicate, onDelete, onMoveUp, onMoveDow
             <Button type="button" size="icon" variant="ghost" onClick={onMoveUp} className="h-8 w-8 text-white/60 hover:bg-white/[0.06] hover:text-white"><ArrowUp className="h-4 w-4" /></Button>
             <Button type="button" size="icon" variant="ghost" onClick={onMoveDown} className="h-8 w-8 text-white/60 hover:bg-white/[0.06] hover:text-white"><ArrowDown className="h-4 w-4" /></Button>
             <Button type="button" size="icon" variant="ghost" onClick={onDuplicate} className="h-8 w-8 text-white/60 hover:bg-white/[0.06] hover:text-white"><Copy className="h-4 w-4" /></Button>
-            <Button type="button" size="icon" variant="ghost" onClick={onDelete} className="h-8 w-8 text-white/60 hover:bg-red-500/15 hover:text-red-200"><Trash2 className="h-4 w-4" /></Button>
+            <InlineConfirmDeleteButton onConfirm={onDelete} resetKey={preset.id} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/60 hover:bg-red-500/15 hover:text-red-200" confirmClassName="inline-flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-500" title="Delete framing preset" confirmTitle={`Confirm delete ${preset.title}`} ariaLabel="Delete framing preset" confirmAriaLabel="Confirm delete framing preset" iconClassName="h-4 w-4" />
           </div>
         </div>
         <PlacementPreview preset={preset} />
@@ -469,7 +470,6 @@ export default function FramingLibraryWorkspace() {
 
   async function cleanFramingPreviews() {
     if (!editingId) return;
-    if (!confirm('Delete preview/test assets for this framing preset only? Normal shot results are not touched.')) return;
     const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(editingId)}/preview`, { method: 'DELETE' });
     const data = await response.json();
     if (!response.ok || !data?.success) { setError(data?.error || 'Failed to clean preview assets'); return; }
@@ -484,7 +484,6 @@ export default function FramingLibraryWorkspace() {
   }
 
   async function deletePreset(id: string) {
-    if (!confirm('Delete this framing preset? Existing materialized runs/shots keep their saved snapshots.')) return;
     const response = await fetch(`/api/studio/framing-presets/${encodeURIComponent(id)}`, { method: 'DELETE' });
     const data = await response.json();
     if (!response.ok || !data?.success) { setError(data?.error || 'Failed to delete framing preset'); return; }
@@ -545,7 +544,7 @@ export default function FramingLibraryWorkspace() {
               <Field label="Description"><Input value={draft.description} onChange={(event) => updateDraft((current) => ({ ...current, description: event.target.value }))} className="border-white/10 bg-black/30 text-white" /></Field>
               <label className="block"><div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/35">Helper prompt</div><textarea value={draft.helperPrompt} onChange={(event) => updateDraft((current) => ({ ...current, helperPrompt: event.target.value }))} className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" placeholder="lower-left full-body composition with extra negative space above" /></label>
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-cyan-100">Pose + framing test</div><div className="mt-1 text-xs text-cyan-100/60">Render a free control PNG first. Z-Image preview launch is optional and requires explicit confirmation.</div></div><Button type="button" variant="outline" onClick={() => void cleanFramingPreviews()} disabled={!editingId} className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]">Clean previews</Button></div>
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-cyan-100">Pose + framing test</div><div className="mt-1 text-xs text-cyan-100/60">Render a free control PNG first. Z-Image preview launch is optional and requires explicit confirmation.</div></div><InlineConfirmDeleteButton onConfirm={() => void cleanFramingPreviews()} disabled={!editingId} resetKey={editingId} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/[0.08]" confirmClassName="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-300/30 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500" title="Clean previews" confirmTitle="Confirm clean previews" ariaLabel="Clean framing previews" confirmAriaLabel="Confirm clean framing previews" label="Clean previews" confirmLabel="Confirm" iconClassName="h-4 w-4" /></div>
                 <div className="mt-3 grid gap-2"><select value={previewPoseId} onChange={(event) => { setPreviewPoseId(event.target.value); setPreviewResult(null); }} disabled={!editingId || poses.length === 0} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white disabled:opacity-50">{poses.map((pose) => <option key={pose.id} value={pose.id}>{pose.title} · {pose.openPose.hasKeypoints ? 'OpenPose' : 'text-only'}</option>)}</select><Button type="button" onClick={() => void renderFramingPreview()} disabled={!editingId || !previewPoseId || previewBusy} className="bg-cyan-500 text-white hover:bg-cyan-400 disabled:opacity-50"><ImageIcon className="mr-2 h-4 w-4" />{previewBusy ? 'Rendering…' : editingId ? 'Render control preview' : 'Save preset before preview'}</Button></div>
                 {!editingId ? <div className="mt-2 text-xs text-cyan-100/55">Save the preset first, then render a scoped preview asset.</div> : null}
                 {previewResult ? <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25">{previewResult.previewUrl ? <img src={previewResult.previewUrl} alt="OpenPose framing preview" className="max-h-80 w-full object-contain" /> : <div className="flex min-h-32 items-center justify-center p-4 text-center text-sm text-white/55">{previewResult.message || 'Text-only framing guidance will be used.'}</div>}<div className="space-y-2 p-3 text-xs text-white/55"><div>{previewResult.mode === 'openpose_control' ? `OpenPose control · ${previewResult.width}×${previewResult.height} · ${previewResult.pointCount ?? 0} body points` : 'Text-only fallback'}</div>{previewResult.helperPrompt ? <div className="text-white/40">Helper: {previewResult.helperPrompt}</div> : null}{previewResult.mode === 'openpose_control' ? <Button type="button" variant="outline" onClick={() => void launchZImagePreviewWithState()} disabled={previewLaunchBusy} className="mt-2 w-full border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 disabled:opacity-50">{previewLaunchBusy ? 'Launching…' : 'Launch Z-Image ControlNet preview…'}</Button> : null}{previewLaunchMessage ? <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 p-2 text-emerald-100">{previewLaunchMessage}</div> : null}</div></div> : null}

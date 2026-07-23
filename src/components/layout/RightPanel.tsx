@@ -904,10 +904,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         showToast('Job deleted', 'success');
     };
 
-    const handleCancelJob = async (e: React.MouseEvent, jobId: string) => {
-        e.stopPropagation();
-        if (!confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
-
+    const handleCancelJob = async (jobId: string) => {
         const result = await cancelJob(jobId);
         if (!result.success) {
             showToast('Failed to cancel job', 'error');
@@ -933,8 +930,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     };
 
     const handleClearFinishedJobs = async () => {
-        if (!confirm('Delete all finished jobs in this workspace? Active jobs will be kept.')) return;
-
         const result = await clearFinishedJobs(activeWorkspaceId);
         if (!result.success) {
             showToast(result.error || 'Failed to clear finished jobs', 'error');
@@ -952,8 +947,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const handleCancelAllActiveJobs = async () => {
         if (activeJobsCount === 0 || isCancellingAllJobs) return;
-        if (!confirm(`Cancel all ${activeJobsCount} active job${activeJobsCount === 1 ? '' : 's'} in this workspace? They will become failed with reason cancelled.`)) return;
-
         setIsCancellingAllJobs(true);
         try {
             const result = await cancelActiveJobs(activeWorkspaceId);
@@ -1557,7 +1550,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     };
 
     const handleGalleryPermanentDelete = async (asset: GalleryAsset) => {
-        if (!confirm('Delete this gallery asset forever? This will remove stored files too.')) return;
         try {
             const response = await fetch(`/api/gallery/assets/${asset.id}?permanent=true`, { method: 'DELETE' });
             const data = await response.json();
@@ -1578,7 +1570,6 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const handleEmptyGalleryTrash = async () => {
         if (!activeWorkspaceId || isEmptyingTrash) return;
-        if (!confirm('Empty gallery trash for this workspace? This permanently deletes trashed assets and files.')) return;
         setIsEmptyingTrash(true);
         try {
             const response = await fetch(`/api/gallery/trash?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, { method: 'DELETE' });
@@ -1939,26 +1930,34 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                             )}
                             {panelMode === 'jobs' && (
                                 <div className="flex items-center gap-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
+                                    <InlineConfirmDeleteButton
+                                        onConfirm={() => void handleCancelAllActiveJobs()}
+                                        className="inline-flex h-6 items-center justify-center gap-1 rounded-md px-2 text-[10px] text-red-400 hover:text-red-300"
+                                        confirmClassName="inline-flex h-6 items-center justify-center gap-1 rounded-md bg-red-600 px-2 text-[10px] text-white hover:bg-red-500"
                                         title="Cancel all active jobs"
-                                        onClick={() => void handleCancelAllActiveJobs()}
+                                        confirmTitle={`Confirm cancel ${activeJobsCount} active job${activeJobsCount === 1 ? '' : 's'}`}
+                                        ariaLabel="Cancel all active jobs"
+                                        confirmAriaLabel="Confirm cancel all active jobs"
+                                        label={isCancellingAllJobs ? 'Cancelling...' : 'Cancel all'}
+                                        confirmLabel="Confirm"
+                                        icon={<X className="w-3 h-3" />}
+                                        iconClassName="w-3 h-3"
                                         disabled={activeJobsCount === 0 || isCancellingAllJobs}
-                                    >
-                                        {isCancellingAllJobs ? 'Cancelling...' : 'Cancel all'}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-[10px] text-red-400 hover:text-red-300"
+                                    />
+                                    <InlineConfirmDeleteButton
+                                        onConfirm={() => void handleClearFinishedJobs()}
+                                        className="inline-flex h-6 items-center justify-center gap-1 rounded-md px-2 text-[10px] text-red-400 hover:text-red-300"
+                                        confirmClassName="inline-flex h-6 items-center justify-center gap-1 rounded-md bg-red-600 px-2 text-[10px] text-white hover:bg-red-500"
                                         title="Delete all finished jobs"
-                                        onClick={() => void handleClearFinishedJobs()}
+                                        confirmTitle="Confirm clear finished jobs"
+                                        ariaLabel="Delete all finished jobs"
+                                        confirmAriaLabel="Confirm delete all finished jobs"
+                                        label="Clear finished"
+                                        confirmLabel="Confirm"
+                                        icon={<Trash2 className="w-3 h-3" />}
+                                        iconClassName="w-3 h-3"
                                         disabled={finishedJobsCount === 0}
-                                    >
-                                        Clear finished
-                                    </Button>
+                                    />
                                 </div>
                             )}
                             <Button
@@ -2001,14 +2000,20 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         {isBackfillingDerivatives ? 'Generating...' : 'Backfill previews'}
                                     </button>
                                     {showTrashed && (
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleEmptyGalleryTrash()}
+                                        <InlineConfirmDeleteButton
+                                            onConfirm={() => void handleEmptyGalleryTrash()}
                                             disabled={isEmptyingTrash}
-                                            className="text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50"
-                                        >
-                                            {isEmptyingTrash ? 'Deleting...' : 'Empty trash'}
-                                        </button>
+                                            className="inline-flex items-center justify-center gap-1 rounded px-2 py-1 text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50"
+                                            confirmClassName="inline-flex items-center justify-center gap-1 rounded bg-red-600 px-2 py-1 text-[10px] text-white hover:bg-red-500 disabled:opacity-50"
+                                            title="Empty gallery trash"
+                                            confirmTitle="Confirm empty gallery trash"
+                                            ariaLabel="Empty gallery trash"
+                                            confirmAriaLabel="Confirm empty gallery trash"
+                                            label={isEmptyingTrash ? 'Deleting...' : 'Empty trash'}
+                                            confirmLabel="Confirm"
+                                            icon={<Trash2 className="w-3 h-3" />}
+                                            iconClassName="w-3 h-3"
+                                        />
                                     )}
                                     {gallerySearchQuery !== debouncedGallerySearchQuery && (
                                         <div className="text-blue-400">Updating...</div>
@@ -2367,13 +2372,19 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         iconClassName="w-3.5 h-3.5"
                                     />
                                 ) : (
-                                    <button
-                                        onClick={(e) => void handleCancelJob(e, job.id)}
+                                    <InlineConfirmDeleteButton
+                                        onConfirm={() => void handleCancelJob(job.id)}
+                                        stopPropagation
+                                        resetKey={job.id}
                                         className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                                        confirmClassName="absolute top-2 right-2 p-1.5 text-white bg-amber-600 hover:bg-amber-500 rounded-md opacity-100 transition-all"
                                         title="Cancel"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
+                                        confirmTitle="Confirm cancel"
+                                        ariaLabel="Cancel job"
+                                        confirmAriaLabel="Confirm cancel job"
+                                        icon={<X className="w-3.5 h-3.5" />}
+                                        iconClassName="w-3.5 h-3.5"
+                                    />
                                 )}
                             </div>
                         );

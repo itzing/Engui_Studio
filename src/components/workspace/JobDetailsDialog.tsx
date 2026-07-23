@@ -288,7 +288,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     };
 
     const handleCancel = async () => {
-        if (!job || !confirm('Cancel this running job? It will become failed with reason cancelled.')) return;
+        if (!job) return;
         const result = await cancelJob(job.id);
         if (!result.success) {
             showToast('Failed to cancel job', 'error');
@@ -778,14 +778,18 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 />
                             )}
                             {isRunning && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
-                                    onClick={() => void handleCancel()}
-                                >
-                                    <X className="w-4 h-4" />
-                                </Button>
+                                <InlineConfirmDeleteButton
+                                    onConfirm={handleCancel}
+                                    resetKey={job.id}
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-md text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                    confirmClassName="inline-flex h-10 w-10 items-center justify-center rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                                    title="Cancel"
+                                    confirmTitle="Confirm cancel"
+                                    ariaLabel="Cancel job"
+                                    confirmAriaLabel="Confirm cancel job"
+                                    icon={<X className="w-4 h-4" />}
+                                    iconClassName="w-4 h-4"
+                                />
                             )}
                         </div>
                     </div>

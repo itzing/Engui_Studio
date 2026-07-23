@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, File, Folder, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { ArrowUp, File, Folder, Pencil, RefreshCw, Upload } from 'lucide-react';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 
 type VolumeInfo = {
   name: string;
@@ -753,10 +754,6 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
   async function handleDeleteCurrentFolder() {
     if (!activeVolume || !currentPath) return;
 
-    const folderName = getFileName(currentPath);
-    const confirmed = confirm(`Delete folder "${folderName}" with all nested contents?`);
-    if (!confirmed) return;
-
     const parts = currentPath.split('/').filter(Boolean);
     const parentParts = parts.slice(0, -1);
     const parentPath = parentParts.length > 0 ? `${parentParts.join('/')}/` : '';
@@ -768,9 +765,6 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
 
   async function handleDeleteSelected() {
     if (!activeVolume || selectedKeys.length === 0) return;
-
-    const confirmed = confirm(`Delete ${selectedKeys.length} selected item(s)?`);
-    if (!confirmed) return;
 
     const targets = [...selectedKeys];
     await executeDeletePlan(targets, currentPath || activeVolume, currentPath);
@@ -901,15 +895,20 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                   Rename
                 </Button>
               )}
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDeleteSelected}
+              <InlineConfirmDeleteButton
+                onConfirm={handleDeleteSelected}
                 disabled={selectedKeys.length === 0 || isDeleting || uploadActive}
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Delete ({selectedKeys.length})
-              </Button>
+                resetKey={`${selectedKeys.join('|')}:${currentPath}`}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+                confirmClassName="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-red-600 px-3 text-sm font-medium text-white shadow-sm hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
+                title="Delete selected items"
+                confirmTitle={`Confirm delete ${selectedKeys.length} selected item(s)`}
+                ariaLabel="Delete selected items"
+                confirmAriaLabel="Confirm delete selected items"
+                label={`Delete (${selectedKeys.length})`}
+                confirmLabel="Confirm"
+                iconClassName="w-4 h-4"
+              />
               {isDeleting && (
                 <Button
                   variant="outline"
@@ -1085,16 +1084,20 @@ export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialo
                 >
                   {allVisibleSelected ? 'Clear visible' : 'Select visible'}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                  onClick={handleDeleteCurrentFolder}
+                <InlineConfirmDeleteButton
+                  onConfirm={handleDeleteCurrentFolder}
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs text-destructive hover:text-destructive"
+                  confirmClassName="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-red-600 px-2 text-xs text-white hover:bg-red-500"
                   disabled={!currentPath || isDeleting || uploadActive}
-                >
-                  <Trash2 className="w-3 h-3 mr-1" />
-                  Delete folder
-                </Button>
+                  resetKey={currentPath}
+                  title="Delete current folder"
+                  confirmTitle={currentPath ? `Confirm delete folder ${getFileName(currentPath)}` : 'Confirm delete folder'}
+                  ariaLabel="Delete current folder"
+                  confirmAriaLabel="Confirm delete current folder"
+                  label="Delete folder"
+                  confirmLabel="Confirm"
+                  iconClassName="w-3 h-3"
+                />
                 <Button
                   variant="ghost"
                   size="sm"

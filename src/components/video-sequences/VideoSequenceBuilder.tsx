@@ -32,6 +32,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
 import { buildLoraPairs, filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
 import { cn } from '@/lib/utils';
@@ -1362,8 +1363,6 @@ export default function VideoSequenceBuilder() {
 
   async function deleteActiveSequence() {
     if (!activeSequence || !workspaceId) return;
-    const confirmed = window.confirm(`Delete sequence "${activeSequence.title}"? This removes its segments too.`);
-    if (!confirmed) return;
 
     await runAction('delete-sequence', async () => {
       await fetchJson<{ success: true; deleted: true }>(`/api/video-sequences/${activeSequence.id}`, {
@@ -1762,14 +1761,21 @@ export default function VideoSequenceBuilder() {
             >
               <Save className="h-4 w-4" />
             </ToolbarIconButton>
-            <ToolbarIconButton
-              label="Delete active sequence"
-              tooltip={getHeaderActionTooltip('deleteSequence')}
-              onClick={deleteActiveSequence}
-              disabled={!activeSequence || !!busy}
-            >
-              {busy === 'delete-sequence' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            </ToolbarIconButton>
+            <ActionTooltip tooltip={getHeaderActionTooltip('deleteSequence')}>
+              <InlineConfirmDeleteButton
+                onConfirm={deleteActiveSequence}
+                resetKey={activeSequence?.id ?? null}
+                disabled={!activeSequence || !!busy}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 disabled:opacity-40"
+                confirmClassName="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300/30 bg-red-600 text-white hover:bg-red-500 disabled:opacity-40"
+                title="Delete active sequence"
+                confirmTitle={activeSequence ? `Confirm delete ${activeSequence.title}` : 'Confirm delete active sequence'}
+                ariaLabel="Delete active sequence"
+                confirmAriaLabel="Confirm delete active sequence"
+                icon={busy === 'delete-sequence' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                iconClassName="h-4 w-4"
+              />
+            </ActionTooltip>
             <ToolbarIconButton
               label="Generate selected segment"
               tooltip={getHeaderActionTooltip('generate')}

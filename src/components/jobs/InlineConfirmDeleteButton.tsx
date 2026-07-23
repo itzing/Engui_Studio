@@ -15,7 +15,10 @@ type InlineConfirmDeleteButtonProps = {
   ariaLabel?: string;
   confirmAriaLabel?: string;
   iconClassName?: string;
+  icon?: React.ReactNode;
+  confirmIcon?: React.ReactNode;
   stopPropagation?: boolean;
+  preventDefault?: boolean;
   resetKey?: string | null;
 };
 
@@ -31,7 +34,10 @@ export function InlineConfirmDeleteButton({
   ariaLabel = 'Delete job',
   confirmAriaLabel = 'Confirm delete job',
   iconClassName = 'h-4 w-4',
+  icon,
+  confirmIcon,
   stopPropagation = false,
+  preventDefault = false,
   resetKey = null,
 }: InlineConfirmDeleteButtonProps) {
   const [isConfirming, setIsConfirming] = useState(false);
@@ -52,6 +58,7 @@ export function InlineConfirmDeleteButton({
       disabled={disabled}
       onClick={(event) => {
         if (stopPropagation) event.stopPropagation();
+        if (preventDefault) event.preventDefault();
         if (disabled) return;
         if (!isConfirming) {
           setIsConfirming(true);
@@ -65,7 +72,7 @@ export function InlineConfirmDeleteButton({
       aria-label={isConfirming ? confirmAriaLabel : ariaLabel}
       data-confirming-delete={isConfirming ? 'true' : 'false'}
     >
-      {isConfirming ? <Check className={iconClassName} /> : <Trash2 className={iconClassName} />}
+      {isConfirming ? (confirmIcon || <Check className={iconClassName} />) : (icon || <Trash2 className={iconClassName} />)}
       {label ? <span>{isConfirming ? confirmLabel : label}</span> : null}
     </button>
   );
