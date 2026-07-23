@@ -9,7 +9,8 @@ The tablet landscape `/m/create` workspace has a right-side preview panel and a 
 - Keep the gesture scoped to the tablet Create workspace component.
 - Track the active job's position within the loaded Jobs strip entries.
 - Add horizontal touch gesture handling to the preview media surface only in asset mode.
-- Trigger navigation only for image previews so video/audio controls are not affected.
+- Trigger navigation for image previews and no-output placeholders so processing jobs do not trap navigation.
+- Keep completed video/audio controls outside this gesture so playback controls are not affected.
 - Use the same direction convention as the Gallery viewer: swipe left for next, swipe right for previous.
 - Keep the selected strip item scrolled into view when selection changes.
 

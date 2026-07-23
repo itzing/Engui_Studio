@@ -352,4 +352,86 @@ describe('TabletCreateWorkspace', () => {
 
     await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
   });
+
+  it('keeps preview swipes available when the selected job has no output yet', async () => {
+    const firstImageJob = {
+      id: 'job-1',
+      modelId: 'z-image',
+      type: 'image',
+      status: 'completed',
+      prompt: 'First job prompt',
+      createdAt: 1000,
+      resultUrl: '/result.png',
+      thumbnailUrl: '/thumb.png',
+    };
+    const processingImageJob = {
+      id: 'job-processing',
+      modelId: 'z-image',
+      type: 'image',
+      status: 'processing',
+      prompt: 'Processing job prompt',
+      createdAt: 4000,
+      resultUrl: null,
+      thumbnailUrl: null,
+    };
+
+    mockJobsState.current = buildJobsState({
+      totalCount: 2,
+      loadedEntries: [
+        { job: firstImageJob, absoluteIndex: 0 },
+        { job: processingImageJob, absoluteIndex: 1 },
+      ],
+    });
+
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path.includes('/api/jobs/job-processing')) {
+        return new Response(JSON.stringify({
+          success: true,
+          job: {
+            ...processingImageJob,
+            executionMs: null,
+            outputs: [],
+          },
+        }));
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        job: {
+          ...firstImageJob,
+          executionMs: 2500,
+          outputs: [{
+            outputId: 'output-1',
+            type: 'image',
+            url: '/result.png',
+            previewUrl: '/result-preview.png',
+            thumbnailUrl: '/thumb.png',
+            savedBuckets: [],
+            galleryAssetId: null,
+            galleryAssetIdsByBucket: {},
+          }],
+        },
+      }));
+    }) as typeof fetch;
+
+    render(React.createElement(TabletCreateWorkspace, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
+
+    let previewSurface = screen.getByTestId('tablet-preview-media-surface');
+    fireEvent.touchStart(previewSurface, { touches: [{ clientX: 520, clientY: 220 }] });
+    fireEvent.touchEnd(previewSurface, { changedTouches: [{ clientX: 440, clientY: 222 }] });
+
+    await waitFor(() => expect(screen.getAllByText('Running').length).toBeGreaterThan(0));
+
+    previewSurface = screen.getByTestId('tablet-preview-media-surface');
+    fireEvent.touchStart(previewSurface, { touches: [{ clientX: 440, clientY: 220 }] });
+    fireEvent.touchEnd(previewSurface, { changedTouches: [{ clientX: 510, clientY: 218 }] });
+
+    await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
+  });
 });

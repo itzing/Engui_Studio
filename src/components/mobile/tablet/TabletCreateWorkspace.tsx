@@ -1025,10 +1025,10 @@ function TabletJobPreviewPanel({
   const output = getPrimaryOutput(detail);
   const mediaUrl = getPreviewUrl(job, output);
   const previewType = output?.type || job?.type;
+  const hasRenderedMedia = !!mediaUrl;
   const canUsePreviewSwipe = viewMode === 'asset'
     && !!job
-    && previewType === 'image'
-    && !!mediaUrl
+    && (previewType === 'image' || !hasRenderedMedia)
     && (canSwipeToPreviousJob || canSwipeToNextJob);
 
   const handlePreviewTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
