@@ -30,6 +30,7 @@ interface GalleryFullscreenViewerProps {
   onToggleFavorite?: (itemId: string) => Promise<boolean | void>;
   renderHeaderActions?: (itemId: string) => React.ReactNode;
   renderFooterActions?: (item: GalleryFullscreenViewerItem, meta: { canMarkUpscale: boolean }) => React.ReactNode;
+  enableTouchSwipeNavigation?: boolean;
 }
 
 type SlideshowMode = 'stop' | 'loop' | 'random';
@@ -57,6 +58,7 @@ export function GalleryFullscreenViewer({
   onToggleFavorite,
   renderHeaderActions,
   renderFooterActions,
+  enableTouchSwipeNavigation = false,
 }: GalleryFullscreenViewerProps) {
   const previousOpenRef = useRef(false);
   const singleTapTimeoutRef = useRef<number | null>(null);
@@ -87,6 +89,7 @@ export function GalleryFullscreenViewer({
   const slideshowEnabled = isDesktop && items.length > 1;
   const canGoPrevious = safeIndex > 0;
   const canGoNext = safeIndex < items.length - 1;
+  const touchSwipeNavigationEnabled = !isDesktop || enableTouchSwipeNavigation;
 
   const slides = useMemo<ViewerSlide[]>(() => items.map((item) => ({
     id: item.id,
@@ -168,7 +171,7 @@ export function GalleryFullscreenViewer({
     }
 
     previousOpenRef.current = open;
-  }, [open]);
+  }, [open, resetCurrentVideo, resetVideoByItemId]);
 
   useEffect(() => {
     if (!open) return;
@@ -378,7 +381,7 @@ export function GalleryFullscreenViewer({
   }, [currentZoom]);
 
   const handleMobileGestureStart = useCallback((event: React.TouchEvent) => {
-    if (isDesktop) return;
+    if (!touchSwipeNavigationEnabled) return;
     if (isEffectivelyZoomed()) {
       mobileGestureStartRef.current = null;
       return;
@@ -390,17 +393,17 @@ export function GalleryFullscreenViewer({
     const touch = event.touches[0];
     if (!touch) return;
     mobileGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, [isDesktop, isEffectivelyZoomed]);
+  }, [isEffectivelyZoomed, touchSwipeNavigationEnabled]);
 
   const handleMobileGestureMove = useCallback((event: React.TouchEvent) => {
-    if (isDesktop) return;
+    if (!touchSwipeNavigationEnabled) return;
     if (isEffectivelyZoomed() || event.touches.length !== 1) {
       mobileGestureStartRef.current = null;
     }
-  }, [isDesktop, isEffectivelyZoomed]);
+  }, [isEffectivelyZoomed, touchSwipeNavigationEnabled]);
 
   const handleMobileGestureEnd = useCallback((event: React.TouchEvent) => {
-    if (isDesktop) return;
+    if (!touchSwipeNavigationEnabled) return;
     if (isEffectivelyZoomed()) {
       mobileGestureStartRef.current = null;
       return;
@@ -429,7 +432,7 @@ export function GalleryFullscreenViewer({
     if (deltaX >= 40) {
       goToPrevious();
     }
-  }, [goToNext, goToPrevious, isDesktop, isEffectivelyZoomed]);
+  }, [goToNext, goToPrevious, isEffectivelyZoomed, touchSwipeNavigationEnabled]);
 
   const getNextSlideshowIndex = useCallback(() => {
     if (items.length <= 1) return safeIndex;

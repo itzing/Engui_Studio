@@ -539,6 +539,7 @@ export default function MobileGalleryScreen() {
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
         onIndexChange={updateViewerIndex}
         onClose={closeViewer}
+        enableTouchSwipeNavigation={isTabletGallery}
         onOpenInfo={(itemId) => {
           const asset = loadedViewerItems.find((entry) => entry.id === itemId);
           if (asset) {

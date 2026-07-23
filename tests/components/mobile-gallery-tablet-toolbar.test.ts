@@ -15,6 +15,7 @@ const mockToggleGalleryFavorites = vi.hoisted(() => vi.fn());
 const mockToggleGalleryTrash = vi.hoisted(() => vi.fn());
 const mockEnsureRangeLoaded = vi.hoisted(() => vi.fn(async () => undefined));
 const mockFormFactor = vi.hoisted(() => ({ current: 'phone-portrait' }));
+const mockGalleryFullscreenViewer = vi.hoisted(() => vi.fn(() => null));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -33,7 +34,7 @@ vi.mock('@/lib/create/reuseToCreate', () => ({
 }));
 
 vi.mock('@/components/workspace/GalleryFullscreenViewer', () => ({
-  GalleryFullscreenViewer: () => null,
+  GalleryFullscreenViewer: mockGalleryFullscreenViewer,
 }));
 
 vi.mock('@/hooks/gallery/useMobileGalleryScreen', () => ({
@@ -92,6 +93,8 @@ describe('MobileGalleryScreen tablet toolbar', () => {
     expect(screen.queryByText(/Columns:/)).toBeNull();
     expect(screen.queryAllByTestId('tablet-gallery-divider')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Refresh gallery' })).toBeTruthy();
+    const viewerProps = mockGalleryFullscreenViewer.mock.calls[mockGalleryFullscreenViewer.mock.calls.length - 1]?.[0] as { enableTouchSwipeNavigation?: boolean };
+    expect(viewerProps.enableTouchSwipeNavigation).toBe(false);
   });
 
   it('renders iPad filters, columns, and refresh in one tablet-only row', () => {
@@ -105,5 +108,7 @@ describe('MobileGalleryScreen tablet toolbar', () => {
     expect(within(toolbar).getByText('Columns: 8')).toBeTruthy();
     expect(within(toolbar).getByRole('button', { name: 'Refresh gallery' })).toBeTruthy();
     expect(toolbar.querySelector('[aria-label="Gallery columns"]')).toBeTruthy();
+    const viewerProps = mockGalleryFullscreenViewer.mock.calls[mockGalleryFullscreenViewer.mock.calls.length - 1]?.[0] as { enableTouchSwipeNavigation?: boolean };
+    expect(viewerProps.enableTouchSwipeNavigation).toBe(true);
   });
 });
