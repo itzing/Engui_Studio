@@ -262,4 +262,94 @@ describe('TabletCreateWorkspace', () => {
 
     expect(strip.getAttribute('style')).toContain('height: 256px');
   });
+
+  it('navigates between jobs with horizontal swipes on the image preview surface', async () => {
+    const firstImageJob = {
+      id: 'job-1',
+      modelId: 'z-image',
+      type: 'image',
+      status: 'completed',
+      prompt: 'First job prompt',
+      createdAt: 1000,
+      resultUrl: '/result.png',
+      thumbnailUrl: '/thumb.png',
+    };
+    const secondImageJob = {
+      id: 'job-3',
+      modelId: 'z-image',
+      type: 'image',
+      status: 'completed',
+      prompt: 'Third job prompt',
+      createdAt: 3000,
+      resultUrl: '/third-result.png',
+      thumbnailUrl: '/third-thumb.png',
+    };
+
+    mockJobsState.current = buildJobsState({
+      totalCount: 2,
+      loadedEntries: [
+        { job: firstImageJob, absoluteIndex: 0 },
+        { job: secondImageJob, absoluteIndex: 1 },
+      ],
+    });
+
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path.includes('/api/jobs/job-3')) {
+        return new Response(JSON.stringify({
+          success: true,
+          job: {
+            ...secondImageJob,
+            executionMs: 3200,
+            outputs: [{
+              outputId: 'output-1',
+              type: 'image',
+              url: '/third-result.png',
+              previewUrl: '/third-result-preview.png',
+              thumbnailUrl: '/third-thumb.png',
+              savedBuckets: [],
+              galleryAssetId: null,
+              galleryAssetIdsByBucket: {},
+            }],
+          },
+        }));
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        job: {
+          ...firstImageJob,
+          executionMs: 2500,
+          outputs: [{
+            outputId: 'output-1',
+            type: 'image',
+            url: '/result.png',
+            previewUrl: '/result-preview.png',
+            thumbnailUrl: '/thumb.png',
+            savedBuckets: [],
+            galleryAssetId: null,
+            galleryAssetIdsByBucket: {},
+          }],
+        },
+      }));
+    }) as typeof fetch;
+
+    render(React.createElement(TabletCreateWorkspace, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
+
+    const previewSurface = screen.getByTestId('tablet-preview-media-surface');
+    fireEvent.touchStart(previewSurface, { touches: [{ clientX: 520, clientY: 220 }] });
+    fireEvent.touchEnd(previewSurface, { changedTouches: [{ clientX: 440, clientY: 222 }] });
+
+    await waitFor(() => expect(screen.getByAltText('Third job prompt')).toBeTruthy());
+
+    fireEvent.touchStart(previewSurface, { touches: [{ clientX: 440, clientY: 220 }] });
+    fireEvent.touchEnd(previewSurface, { changedTouches: [{ clientX: 510, clientY: 218 }] });
+
+    await waitFor(() => expect(screen.getByAltText('First job prompt')).toBeTruthy());
+  });
 });

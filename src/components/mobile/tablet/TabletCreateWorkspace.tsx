@@ -73,6 +73,7 @@ type LoadedJobEntry = {
 
 const STRIP_MIN_HEIGHT = 112;
 const STRIP_DEFAULT_HEIGHT = 168;
+const PREVIEW_SWIPE_THRESHOLD = 40;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -710,6 +711,7 @@ function TabletJobsStrip({
   onResizePointerEnd: (event: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const handleScroll = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -719,6 +721,17 @@ function TabletJobsStrip({
     const lastLoadedIndex = entries[entries.length - 1]?.absoluteIndex ?? 0;
     onLoadRange(lastLoadedIndex + 1, Math.min(totalCount - 1, lastLoadedIndex + 72));
   }, [entries, onLoadRange, totalCount]);
+
+  useEffect(() => {
+    if (!selectedJobId) return;
+    const selectedElement = itemRefs.current.get(selectedJobId);
+    if (!selectedElement || typeof selectedElement.scrollIntoView !== 'function') return;
+    selectedElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [selectedJobId]);
 
   return (
     <section
@@ -755,6 +768,13 @@ function TabletJobsStrip({
                 return (
                   <button
                     key={job.id}
+                    ref={(element) => {
+                      if (element) {
+                        itemRefs.current.set(job.id, element);
+                      } else {
+                        itemRefs.current.delete(job.id);
+                      }
+                    }}
                     type="button"
                     className={cn(
                       'relative flex aspect-square h-full shrink-0 items-center justify-center overflow-hidden rounded-md border bg-black transition-colors',
@@ -981,6 +1001,9 @@ function TabletJobPreviewPanel({
   onUpscale,
   onCancel,
   onDelete,
+  canSwipeToPreviousJob,
+  canSwipeToNextJob,
+  onSwipeJob,
 }: {
   job: MobileJobsScreenItem | null;
   detail: TabletJobDetail | null;
@@ -994,9 +1017,62 @@ function TabletJobPreviewPanel({
   onUpscale: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  canSwipeToPreviousJob: boolean;
+  canSwipeToNextJob: boolean;
+  onSwipeJob: (direction: 'previous' | 'next') => void;
 }) {
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const output = getPrimaryOutput(detail);
   const mediaUrl = getPreviewUrl(job, output);
+  const previewType = output?.type || job?.type;
+  const canUsePreviewSwipe = viewMode === 'asset'
+    && !!job
+    && previewType === 'image'
+    && !!mediaUrl
+    && (canSwipeToPreviousJob || canSwipeToNextJob);
+
+  const handlePreviewTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (!canUsePreviewSwipe || event.touches.length !== 1) {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    if (!touch) return;
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, [canUsePreviewSwipe]);
+
+  const handlePreviewTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) {
+      swipeStartRef.current = null;
+    }
+  }, []);
+
+  const handlePreviewTouchCancel = useCallback(() => {
+    swipeStartRef.current = null;
+  }, []);
+
+  const handlePreviewTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!canUsePreviewSwipe || !start || event.changedTouches.length !== 1) return;
+
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < PREVIEW_SWIPE_THRESHOLD || Math.abs(deltaY) > Math.abs(deltaX)) return;
+
+    if (deltaX < 0 && canSwipeToNextJob) {
+      onSwipeJob('next');
+      return;
+    }
+
+    if (deltaX > 0 && canSwipeToPreviousJob) {
+      onSwipeJob('previous');
+    }
+  }, [canSwipeToNextJob, canSwipeToPreviousJob, canUsePreviewSwipe, onSwipeJob]);
 
   return (
     <section className="flex h-full min-h-0 flex-col border-l border-border/70 bg-background">
@@ -1046,16 +1122,24 @@ function TabletJobPreviewPanel({
         <TabletJobInfo job={job} detail={detail} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-3">
+          <div
+            className="flex min-h-0 flex-1 items-center justify-center bg-black p-3"
+            data-testid="tablet-preview-media-surface"
+            onTouchStart={handlePreviewTouchStart}
+            onTouchMove={handlePreviewTouchMove}
+            onTouchEnd={handlePreviewTouchEnd}
+            onTouchCancel={handlePreviewTouchCancel}
+            style={{ touchAction: canUsePreviewSwipe ? 'pan-y' : undefined }}
+          >
             {isDetailLoading ? (
               <div className="flex items-center gap-2 text-sm text-white/70">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading preview...
               </div>
             ) : mediaUrl ? (
-              (output?.type || job.type) === 'video' ? (
+              previewType === 'video' ? (
                 <video src={mediaUrl} poster={output?.thumbnailUrl || job.thumbnailUrl || undefined} controls playsInline className="max-h-full max-w-full object-contain" />
-            ) : (output?.type || job.type) === 'audio' ? (
+            ) : previewType === 'audio' ? (
               <audio src={mediaUrl} controls className="w-full" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
@@ -1124,6 +1208,24 @@ export default function TabletCreateWorkspace({
     if (!selectedJobId) return null;
     return loadedEntries.find((entry) => entry.job.id === selectedJobId)?.job || null;
   }, [loadedEntries, selectedJobId]);
+
+  const selectedLoadedEntryIndex = useMemo(() => {
+    if (!selectedJobId) return -1;
+    return loadedEntries.findIndex((entry) => entry.job.id === selectedJobId);
+  }, [loadedEntries, selectedJobId]);
+
+  const selectLoadedJobAtIndex = useCallback((index: number) => {
+    const entry = loadedEntries[index];
+    if (!entry) return;
+    setSelectedJobId(entry.job.id);
+    setPreviewViewMode('asset');
+  }, [loadedEntries]);
+
+  const navigatePreviewJob = useCallback((direction: 'previous' | 'next') => {
+    if (selectedLoadedEntryIndex < 0) return;
+    const nextIndex = direction === 'next' ? selectedLoadedEntryIndex + 1 : selectedLoadedEntryIndex - 1;
+    selectLoadedJobAtIndex(nextIndex);
+  }, [selectLoadedJobAtIndex, selectedLoadedEntryIndex]);
 
   useEffect(() => {
     if (totalCount > 0) {
@@ -1321,6 +1423,9 @@ export default function TabletCreateWorkspace({
             onUpscale={upscaleSelectedJob}
             onCancel={cancelSelectedJob}
             onDelete={deleteSelectedJob}
+            canSwipeToPreviousJob={selectedLoadedEntryIndex > 0}
+            canSwipeToNextJob={selectedLoadedEntryIndex >= 0 && selectedLoadedEntryIndex < loadedEntries.length - 1}
+            onSwipeJob={navigatePreviewJob}
           />
         </main>
       </div>
