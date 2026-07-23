@@ -78,7 +78,9 @@ const DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 4;
 const MIN_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 2;
 const MAX_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 10;
 const EDGE_OVERLAP_PX = 2;
-const SLOT_TRIM_BUFFER_STAGE_RATIO = 1.5;
+const HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 1.5;
+const VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 0.2;
+const VERTICAL_SLOT_TRIM_BUFFER_MIN_PX = 120;
 
 function readVideoAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -109,6 +111,13 @@ function buildSlotSize(entry: GalleryCarouselFeedItem<GalleryCarouselAsset, Gall
     ...getFullHeightGalleryCarouselSlotSize(ratio, stage.height),
     x: 0,
   };
+}
+
+function getSlotTrimBuffer(stage: { width: number; height: number }, isVertical: boolean) {
+  if (isVertical) {
+    return Math.max(stage.height * VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO, VERTICAL_SLOT_TRIM_BUFFER_MIN_PX);
+  }
+  return Math.max(stage.width * HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO, stage.height);
 }
 
 async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video') {
@@ -176,6 +185,7 @@ export function GalleryVideoCarousel({
 }: GalleryVideoCarouselProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
+  const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const stageSizeRef = useRef({ width: 1280, height: 720 });
   const activeSlotsRef = useRef<CarouselSlot[]>([]);
   const feedRef = useRef<Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>>([]);
@@ -485,7 +495,7 @@ export function GalleryVideoCarousel({
   const trimDistantSlots = useCallback((preserveAnchor: boolean) => {
     const stage = stageSizeRef.current;
     const isVertical = movementAxisRef.current === 'vertical';
-    const buffer = Math.max((isVertical ? stage.height : stage.width) * SLOT_TRIM_BUFFER_STAGE_RATIO, isVertical ? stage.width : stage.height);
+    const buffer = getSlotTrimBuffer(stage, isVertical);
     const previousSlots = activeSlotsRef.current;
     const nextSlots = previousSlots.filter((slot) => {
       if (isVertical) {
@@ -530,6 +540,21 @@ export function GalleryVideoCarousel({
     if (!showControls) return;
     setIsUiHidden((current) => current ? false : current);
   }, [showControls]);
+
+  const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement) => {
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    if (playRequestedVideoInstanceIdsRef.current.has(instanceId)) return;
+
+    playRequestedVideoInstanceIdsRef.current.add(instanceId);
+    const result = video.play();
+    if (result && typeof result.catch === 'function') {
+      void result.catch(() => {
+        playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+      });
+    }
+  }, []);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
@@ -712,19 +737,6 @@ export function GalleryVideoCarousel({
   }, [enableKeyboardControls, focusCarouselStage, isLoading, totalMediaCount]);
 
   useEffect(() => {
-    const videos = Object.values(videoRefs.current);
-    for (const video of videos) {
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      const result = video.play();
-      if (result && typeof result.catch === 'function') {
-        result.catch(() => {});
-      }
-    }
-  }, [activeSlots]);
-
-  useEffect(() => {
     if (activeSlotsRef.current.length === 0) return;
     const stage = stageSizeRef.current;
     activeSlotsRef.current = activeSlotsRef.current.map((slot) => {
@@ -733,6 +745,20 @@ export function GalleryVideoCarousel({
     });
     setActiveSlots(activeSlotsRef.current);
   }, [measuredRatios]);
+
+  useEffect(() => {
+    const activeInstanceIds = new Set(activeSlots.map((slot) => slot.instanceId));
+    Object.keys(videoRefs.current).forEach((instanceId) => {
+      if (!activeInstanceIds.has(instanceId)) {
+        delete videoRefs.current[instanceId];
+      }
+    });
+    Array.from(playRequestedVideoInstanceIdsRef.current).forEach((instanceId) => {
+      if (!activeInstanceIds.has(instanceId)) {
+        playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+      }
+    });
+  }, [activeSlots]);
 
   const handleMetadata = useCallback((asset: GalleryCarouselAsset, video: HTMLVideoElement) => {
     if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
@@ -1002,6 +1028,7 @@ export function GalleryVideoCarousel({
                   ref={(node) => {
                     if (node) {
                       videoRefs.current[slot.instanceId] = node;
+                      requestVideoPlayback(slot.instanceId, node);
                     } else {
                       delete videoRefs.current[slot.instanceId];
                     }
@@ -1013,7 +1040,10 @@ export function GalleryVideoCarousel({
                   autoPlay
                   playsInline
                   preload="metadata"
-                  onLoadedMetadata={(event) => handleMetadata(slot.entry.asset, event.currentTarget)}
+                  onLoadedMetadata={(event) => {
+                    handleMetadata(slot.entry.asset, event.currentTarget);
+                    requestVideoPlayback(slot.instanceId, event.currentTarget);
+                  }}
                   className="h-full w-full object-cover"
                 />
               ) : (() => {

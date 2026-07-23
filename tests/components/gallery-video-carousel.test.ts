@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
@@ -18,7 +18,7 @@ describe('GalleryVideoCarousel', () => {
     } as typeof ResizeObserver;
     window.requestAnimationFrame = (callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 16);
     window.cancelAnimationFrame = (id: number) => window.clearTimeout(id);
-    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve()) as any;
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve()) as unknown as typeof HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.pause = vi.fn();
   });
 
@@ -108,6 +108,45 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.keyDown(window, { code: 'Space', key: ' ' });
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
+  });
+
+  it('does not repeat playback requests for mounted videos on every frame', async () => {
+    const playMock = HTMLMediaElement.prototype.play as unknown as ReturnType<typeof vi.fn>;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [
+          {
+            id: 'video-1',
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: '/video-1.mp4',
+            previewUrl: '/video-1.mp4',
+            thumbnailUrl: '/video-1.png',
+            mediaWidth: 720,
+            mediaHeight: 1280,
+            addedToGalleryAt: '2026-07-21T06:00:00Z',
+          },
+        ],
+        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      showControls: false,
+      enableKeyboardControls: false,
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(playMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+    });
+
+    expect(playMock).toHaveBeenCalledTimes(1);
   });
 
   it('pauses movement and keeps it paused after dragging the tape', async () => {
@@ -255,6 +294,67 @@ describe('GalleryVideoCarousel', () => {
     const slot = stage.querySelector('video')?.parentElement as HTMLElement;
 
     await waitFor(() => expect(slot.style.transform).toMatch(/translate3d\(0px, -\d+(?:\.\d+)?px, 0\)/));
+  });
+
+  it('trims vertical movement slots to a small nearby buffer after scrubbing', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const videoAssets = Array.from({ length: 32 }, (_, index) => ({
+      id: `video-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index + 1}.mp4`,
+      previewUrl: `/video-${index + 1}.mp4`,
+      thumbnailUrl: `/video-${index + 1}.png`,
+      mediaWidth: 1280,
+      mediaHeight: 720,
+      addedToGalleryAt: `2026-07-21T06:${String(index).padStart(2, '0')}:00Z`,
+    }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: videoAssets,
+        pagination: { page: 1, limit: 100, totalCount: videoAssets.length, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialIncludeLandscape: true,
+        initialIncludePortrait: false,
+        showControls: false,
+        enableKeyboardControls: false,
+        movementAxis: 'vertical',
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video')).toBeTruthy());
+
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientY: 800 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientY: -5000 });
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'touch', clientY: -5000 });
+
+      await waitFor(() => {
+        const activeVideoCount = stage.querySelectorAll('video').length;
+        expect(activeVideoCount).toBeGreaterThan(0);
+        expect(activeVideoCount).toBeLessThanOrEqual(8);
+      });
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 
   it('fills the fullscreen viewport and lets users hide and reveal carousel controls', async () => {
