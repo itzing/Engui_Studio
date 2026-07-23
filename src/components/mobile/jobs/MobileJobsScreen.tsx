@@ -344,26 +344,19 @@ export default function MobileJobsScreen() {
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded border border-border/40" onClick={() => void refresh()} aria-label="Refresh jobs">
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto h-8 rounded border border-border/40 px-3 text-xs"
-              asChild
-            >
-              <InlineConfirmDeleteButton
-                onConfirm={() => void clearFinished()}
-                className="inline-flex h-8 items-center justify-center rounded border border-border/40 px-3 text-xs"
-                confirmClassName="inline-flex h-8 items-center justify-center rounded border border-red-300/30 bg-red-600 px-3 text-xs text-white"
-                title="Clear finished jobs"
-                confirmTitle="Confirm clear finished jobs"
-                ariaLabel="Clear finished jobs"
-                confirmAriaLabel="Confirm clear finished jobs"
-                label="Clear finished"
-                confirmLabel="Confirm"
-                icon={<X className="mr-1.5 h-3.5 w-3.5" />}
-                iconClassName="mr-1.5 h-3.5 w-3.5"
-              />
-            </Button>
+            <InlineConfirmDeleteButton
+              onConfirm={() => void clearFinished()}
+              className="ml-auto inline-flex h-8 items-center justify-center rounded border border-border/40 px-3 text-xs"
+              confirmClassName="ml-auto inline-flex h-8 items-center justify-center rounded border border-red-300/30 bg-red-600 px-3 text-xs text-white"
+              title="Clear finished jobs"
+              confirmTitle="Confirm clear finished jobs"
+              ariaLabel="Clear finished jobs"
+              confirmAriaLabel="Confirm clear finished jobs"
+              label="Clear finished"
+              confirmLabel="Confirm"
+              icon={<X className="mr-1.5 h-3.5 w-3.5" />}
+              iconClassName="mr-1.5 h-3.5 w-3.5"
+            />
           </div>
         </div>
 

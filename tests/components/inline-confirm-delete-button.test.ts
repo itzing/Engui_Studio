@@ -31,4 +31,20 @@ describe('InlineConfirmDeleteButton', () => {
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(browserConfirm).not.toHaveBeenCalled();
   });
+
+  it('reserves label space for both idle and confirming labels', () => {
+    render(React.createElement(InlineConfirmDeleteButton, {
+      onConfirm: vi.fn(),
+      className: 'delete',
+      label: 'Clear finished',
+      confirmLabel: 'Confirm',
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+
+    const button = screen.getByRole('button', { name: 'Confirm delete job' });
+    expect(button.textContent).toContain('Clear finished');
+    expect(button.textContent).toContain('Confirm');
+    expect(button.querySelectorAll('.invisible')).toHaveLength(1);
+  });
 });

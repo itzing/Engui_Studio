@@ -33,3 +33,8 @@ Replace disruptive browser `confirm()` calls with inline confirmation controls o
 - `npx prisma validate`: pass.
 - `npm run build`: pass.
 - Production service restart and smoke checks after implementation.
+
+## Follow-up: Position Stability
+
+- 2026-07-23: Fixed mobile Jobs `Clear finished` inline-confirm staying aligned to the right when armed.
+- Shared text-label inline confirmations now reserve width for both the idle and confirm labels, so switching to `Confirm` does not shrink or move the button.

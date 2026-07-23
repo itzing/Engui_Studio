@@ -73,7 +73,12 @@ export function InlineConfirmDeleteButton({
       data-confirming-delete={isConfirming ? 'true' : 'false'}
     >
       {isConfirming ? (confirmIcon || <Check className={iconClassName} />) : (icon || <Trash2 className={iconClassName} />)}
-      {label ? <span>{isConfirming ? confirmLabel : label}</span> : null}
+      {label ? (
+        <span className="grid">
+          <span className={`col-start-1 row-start-1 ${isConfirming ? 'invisible' : ''}`}>{label}</span>
+          <span className={`col-start-1 row-start-1 ${isConfirming ? '' : 'invisible'}`}>{confirmLabel}</span>
+        </span>
+      ) : null}
     </button>
   );
 }
