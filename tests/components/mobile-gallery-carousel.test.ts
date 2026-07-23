@@ -98,7 +98,7 @@ describe('mobile Gallery carousel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     expect(screen.getByTestId('mobile-gallery-carousel-overlay')).toBeTruthy();
-    expect(screen.getByText('Поверните телефон')).toBeTruthy();
+    expect(screen.getByText('Rotate your phone')).toBeTruthy();
     expect(screen.queryByTestId('mock-gallery-video-carousel')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -132,7 +132,7 @@ describe('mobile Gallery carousel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
-    expect(screen.queryByText('Поверните телефон')).toBeNull();
+    expect(screen.queryByText('Rotate your phone')).toBeNull();
     expect(mockCarousel.props).toMatchObject({
       workspaceId: 'ws-1',
       initialVideosEnabled: false,
@@ -156,7 +156,7 @@ describe('mobile Gallery carousel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
-    expect(screen.queryByText('Поверните телефон')).toBeNull();
+    expect(screen.queryByText('Rotate your phone')).toBeNull();
     expect(mockCarousel.props).toMatchObject({
       initialIncludeLandscape: true,
       initialIncludePortrait: false,

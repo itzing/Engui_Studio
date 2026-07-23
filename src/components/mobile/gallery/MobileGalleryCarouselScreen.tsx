@@ -288,7 +288,7 @@ export default function MobileGalleryCarouselScreen() {
                 <div className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white">
                   <RotateCcw className="h-7 w-7" />
                 </div>
-                <div className="text-2xl font-semibold">Поверните телефон</div>
+                <div className="text-2xl font-semibold">Rotate your phone</div>
                 <Button
                   type="button"
                   variant="secondary"

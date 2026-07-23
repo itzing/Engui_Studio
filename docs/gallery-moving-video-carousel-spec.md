@@ -35,7 +35,7 @@ On mobile, a `Carousel` item appears in the bottom navigation between `Jobs` and
 
 ### Mobile Landscape Gate
 
-After `Start`, mobile shows a blocking fullscreen layer above the app shell. In portrait orientation, the layer displays `Поверните телефон` and a close button. Closing returns to settings. When the device is landscape, the layer runs the same moving carousel tape fullscreen across the viewport width and height without visible carousel controls. Tap toggles movement pause/resume. Horizontal drag pauses movement and scrubs the tape; vertical swipe up or down closes the fullscreen layer and returns to settings. Visible videos continue playing and image slots continue cycling when movement is paused.
+After `Start`, mobile shows a blocking fullscreen layer above the app shell. In portrait orientation, the layer displays `Rotate your phone` and a close button. Closing returns to settings. When the device is landscape, the layer runs the same moving carousel tape fullscreen across the viewport width and height without visible carousel controls. Tap toggles movement pause/resume. Horizontal drag pauses movement and scrubs the tape; vertical swipe up or down closes the fullscreen layer and returns to settings. Visible videos continue playing and image slots continue cycling when movement is paused.
 
 ### Scene
 
