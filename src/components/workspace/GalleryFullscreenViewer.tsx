@@ -83,6 +83,7 @@ export function GalleryFullscreenViewer({
   const [isSlideshowPlaying, setIsSlideshowPlaying] = useState(false);
   const [slideshowCountdownSeconds, setSlideshowCountdownSeconds] = useState<number | null>(null);
   const [currentZoom, setCurrentZoom] = useState(1);
+  const [videoControlsItemId, setVideoControlsItemId] = useState<string | null>(null);
 
   const safeIndex = useMemo(() => clampIndex(currentIndex, items.length), [currentIndex, items.length]);
   const currentItem = useMemo(() => items[safeIndex] || null, [items, safeIndex]);
@@ -168,6 +169,7 @@ export function GalleryFullscreenViewer({
       setIsIntervalPopoverOpen(false);
       setSlideshowCountdownSeconds(null);
       setCurrentZoom(1);
+      setVideoControlsItemId(null);
     }
 
     previousOpenRef.current = open;
@@ -182,6 +184,7 @@ export function GalleryFullscreenViewer({
     }
 
     previousVideoItemIdRef.current = currentItem?.type === 'video' ? currentItem.id : null;
+    setVideoControlsItemId(null);
   }, [currentItem?.id, currentItem?.type, open, resetVideoByItemId]);
 
   useEffect(() => {
@@ -620,12 +623,19 @@ export function GalleryFullscreenViewer({
 
             if (customSlide.type === 'video') {
               const isActiveVideo = customSlide.id === currentItem?.id;
+              const showNativeVideoControls = isActiveVideo && videoControlsItemId === customSlide.id;
               return (
                 <div
                   className="flex h-full w-full items-center justify-center p-0"
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isActiveVideo) {
+                      setVideoControlsItemId(customSlide.id);
+                    }
+                  }}
                 >
                   <video
+                    data-testid="gallery-fullscreen-video"
                     ref={(element) => {
                       if (element) {
                         videoRefsRef.current.set(customSlide.id, element);
@@ -643,9 +653,10 @@ export function GalleryFullscreenViewer({
                     src={customSlide.src}
                     poster={customSlide.poster}
                     className="block h-full w-full object-contain"
-                    controls
+                    controls={showNativeVideoControls}
                     autoPlay={isActiveVideo}
                     loop
+                    muted
                     playsInline
                     preload={isActiveVideo ? 'auto' : 'metadata'}
                   />

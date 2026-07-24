@@ -7,8 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MockLightboxProps = {
   open?: boolean;
+  index?: number;
+  slides?: Array<unknown>;
   render?: {
     controls?: () => React.ReactNode;
+    slide?: (args: { slide: unknown }) => React.ReactNode;
     slideContainer?: (args: { children: React.ReactNode }) => React.ReactElement;
   };
 };
@@ -21,7 +24,8 @@ vi.mock('yet-another-react-lightbox', async () => {
     default: (props: MockLightboxProps) => {
       if (!props.open) return null;
 
-      const slide = ReactActual.createElement('div', null, 'slide');
+      const currentSlide = props.slides?.[props.index ?? 0] || {};
+      const slide = props.render?.slide?.({ slide: currentSlide }) || ReactActual.createElement('div', null, 'slide');
       const wrappedSlide = props.render?.slideContainer?.({ children: slide }) || slide;
       const swipeSurface = ReactActual.isValidElement(wrappedSlide)
         ? ReactActual.cloneElement(wrappedSlide as React.ReactElement<Record<string, unknown>>, { 'data-testid': 'swipe-surface' })
@@ -54,6 +58,8 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
     vi.clearAllMocks();
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
     window.localStorage.clear();
+    Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
+    Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: vi.fn() });
   });
 
   it('keeps desktop-width touch swipes disabled by default', async () => {
@@ -98,5 +104,34 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
 
     expect(onIndexChange).toHaveBeenNthCalledWith(1, 2);
     expect(onIndexChange).toHaveBeenNthCalledWith(2, 0);
+  });
+
+  it('autoplays looped active videos without native controls until the video is tapped', async () => {
+    const videoItems = [
+      { id: 'asset-1', url: '/asset-1.jpg', type: 'image' as const },
+      { id: 'asset-2', url: '/asset-2.mp4', posterUrl: '/asset-2.jpg', type: 'video' as const },
+    ];
+
+    render(React.createElement(GalleryFullscreenViewer, {
+      open: true,
+      items: videoItems,
+      currentIndex: 1,
+      onIndexChange: vi.fn(),
+      onClose: vi.fn(),
+    }));
+
+    const video = await screen.findByTestId('gallery-fullscreen-video');
+
+    expect(video.getAttribute('src')).toBe('/asset-2.mp4');
+    expect(video.getAttribute('poster')).toBe('/asset-2.jpg');
+    expect(video.hasAttribute('autoplay')).toBe(true);
+    expect(video.hasAttribute('loop')).toBe(true);
+    expect(video.hasAttribute('playsinline')).toBe(true);
+    expect((video as HTMLVideoElement).muted).toBe(true);
+    expect(video.hasAttribute('controls')).toBe(false);
+
+    fireEvent.click(video.parentElement as HTMLElement);
+
+    await waitFor(() => expect(video.hasAttribute('controls')).toBe(true));
   });
 });
