@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getPromptVersions } from '@/lib/promptVersions';
+import { getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
 import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
 
 export const dynamic = 'force-dynamic';
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
         prompt: promptVersions.originalPrompt || null,
         promptTemplate: promptVersions.originalPrompt || null,
         resolvedPrompt: promptVersions.resolvedPrompt,
+        sourceImagePrompt: asset.type === 'video' ? getSourceImagePrompt(snapshot) || null : null,
         modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
         ...mediaDimensions,
         addedToGalleryAt: asset.addedToGalleryAt,

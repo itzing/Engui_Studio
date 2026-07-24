@@ -8,6 +8,7 @@ import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDelete
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
+type GalleryPromptMode = PromptVersionMode | 'sourceImage';
 import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
@@ -27,6 +28,7 @@ export type GalleryAssetDialogAsset = {
   prompt?: string | null;
   promptTemplate?: string | null;
   resolvedPrompt?: string | null;
+  sourceImagePrompt?: string | null;
   modelId?: string | null;
   addedToGalleryAt: string;
 };
@@ -50,14 +52,22 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [isEnriching, setIsEnriching] = useState(false);
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
-  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
+  const [promptMode, setPromptMode] = useState<GalleryPromptMode>('original');
   const { showToast } = useToast();
   const promptVersions = getPromptVersions({
     prompt: asset?.prompt,
     promptTemplate: asset?.promptTemplate,
     resolvedPrompt: asset?.resolvedPrompt,
   });
-  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
+  const hasSourceImagePrompt = asset?.type === 'video' && !!asset.sourceImagePrompt;
+  const promptModeOptions = [
+    { mode: 'original' as const, label: hasSourceImagePrompt ? 'Video' : 'Original' },
+    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: 'Resolved' }] : []),
+    ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
+  ];
+  const selectedPrompt = promptMode === 'sourceImage'
+    ? asset?.sourceImagePrompt || ''
+    : getPromptForMode(promptVersions, promptMode);
 
   useEffect(() => {
     setTagsInput((asset?.userTags || []).join(', '));
@@ -206,16 +216,16 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">Prompt</span>
-                    {promptVersions.hasResolvedPrompt ? (
+                    {promptModeOptions.length > 1 ? (
                       <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
-                        {(['original', 'resolved'] as const).map((mode) => (
+                        {promptModeOptions.map(({ mode, label }) => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => setPromptMode(mode)}
                             className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                           >
-                            {mode === 'original' ? 'Original' : 'Resolved'}
+                            {label}
                           </button>
                         ))}
                       </div>

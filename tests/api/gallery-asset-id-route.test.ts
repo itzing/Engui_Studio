@@ -95,4 +95,45 @@ describe('GET /api/gallery/assets/[id]', () => {
       resolvedPrompt: 'portrait, blonde hair',
     });
   });
+
+  it('returns source image prompt for video assets', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: '/original.mp4',
+      previewUrl: '/preview.mp4',
+      thumbnailUrl: '/thumb.jpg',
+      favorited: false,
+      trashed: false,
+      userTags: JSON.stringify([]),
+      autoTags: JSON.stringify([]),
+      sourceJobId: 'job-1',
+      sourceOutputId: 'output-1',
+      derivativeStatus: 'completed',
+      enrichmentStatus: 'completed',
+      generationSnapshot: JSON.stringify({
+        prompt: 'video motion prompt',
+        modelId: 'wan22',
+        sourceImageGenerationSnapshot: {
+          prompt: 'source image prompt',
+          modelId: 'z-image',
+        },
+      }),
+      addedToGalleryAt: new Date('2026-04-20T10:00:00Z'),
+      updatedAt: new Date('2026-04-20T10:05:00Z'),
+    });
+
+    const response = await GET(new Request('http://localhost/api/gallery/assets/asset-1') as any, {
+      params: Promise.resolve({ id: 'asset-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.asset).toMatchObject({
+      type: 'video',
+      prompt: 'video motion prompt',
+      sourceImagePrompt: 'source image prompt',
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
-import { getPromptVersions } from '@/lib/promptVersions';
+import { getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
 import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
@@ -36,6 +36,7 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
     prompt: promptVersions.originalPrompt || null,
     promptTemplate: promptVersions.originalPrompt || null,
     resolvedPrompt: promptVersions.resolvedPrompt,
+    sourceImagePrompt: asset.type === 'video' ? getSourceImagePrompt(snapshot) || null : null,
     modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
     ...mediaDimensions,
     hasSceneSnapshot: !!(snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' && snapshot.sceneSnapshot.templateId === 'scene_template_v2'),

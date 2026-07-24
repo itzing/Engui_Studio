@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPromptForMode, getPromptVersions } from '@/lib/promptVersions';
+import { getPromptForMode, getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
 
 describe('prompt version helpers', () => {
   it('extracts original and resolved prompts from options', () => {
@@ -32,5 +32,14 @@ describe('prompt version helpers', () => {
     expect(versions.hasResolvedPrompt).toBe(false);
     expect(versions.resolvedPrompt).toBeNull();
     expect(getPromptForMode(versions, 'resolved')).toBe('portrait');
+  });
+
+  it('extracts the prompt from a source image generation snapshot', () => {
+    expect(getSourceImagePrompt({
+      prompt: 'video prompt',
+      sourceImageGenerationSnapshot: {
+        prompt: 'source image prompt',
+      },
+    })).toBe('source image prompt');
   });
 });

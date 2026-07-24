@@ -14,12 +14,14 @@ import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
+type GalleryPromptMode = PromptVersionMode | 'sourceImage';
+
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
-  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
+  const [promptMode, setPromptMode] = useState<GalleryPromptMode>('original');
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
@@ -32,7 +34,15 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     promptTemplate: asset?.promptTemplate,
     resolvedPrompt: asset?.resolvedPrompt,
   }), [asset]);
-  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
+  const hasSourceImagePrompt = asset?.type === 'video' && !!asset.sourceImagePrompt;
+  const promptModeOptions = useMemo(() => [
+    { mode: 'original' as const, label: hasSourceImagePrompt ? 'Video' : 'Original' },
+    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: 'Resolved' }] : []),
+    ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
+  ], [hasSourceImagePrompt, promptVersions.hasResolvedPrompt]);
+  const selectedPrompt = promptMode === 'sourceImage'
+    ? asset?.sourceImagePrompt || ''
+    : getPromptForMode(promptVersions, promptMode);
 
   const downloadAsset = async () => {
     if (!asset) return;
@@ -190,16 +200,16 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-muted-foreground">Prompt</div>
-                      {promptVersions.hasResolvedPrompt ? (
+                      {promptModeOptions.length > 1 ? (
                         <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
-                          {(['original', 'resolved'] as const).map((mode) => (
+                          {promptModeOptions.map(({ mode, label }) => (
                             <button
                               key={mode}
                               type="button"
                               onClick={() => setPromptMode(mode)}
                               className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
                             >
-                              {mode === 'original' ? 'Original' : 'Resolved'}
+                              {label}
                             </button>
                           ))}
                         </div>

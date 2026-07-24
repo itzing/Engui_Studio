@@ -56,3 +56,12 @@ export function getPromptVersions(input: {
 export function getPromptForMode(versions: PromptVersions, mode: PromptVersionMode) {
   return mode === 'resolved' && versions.resolvedPrompt ? versions.resolvedPrompt : versions.originalPrompt;
 }
+
+export function getSourceImagePrompt(options?: unknown): string {
+  const parsedOptions = parseRecord(options);
+  const sourceImageSnapshot = parseRecord(parsedOptions.sourceImageGenerationSnapshot);
+  return firstPromptText(
+    sourceImageSnapshot.promptTemplate,
+    sourceImageSnapshot.prompt,
+  );
+}
