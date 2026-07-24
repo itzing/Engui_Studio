@@ -3,7 +3,7 @@ import MobileGalleryCarouselScreen from '@/components/mobile/gallery/MobileGalle
 
 export default function MobileCarouselPage() {
   return (
-    <MobileAppShell>
+    <MobileAppShell allowPhoneLandscape>
       <MobileGalleryCarouselScreen />
     </MobileAppShell>
   );

@@ -33,7 +33,7 @@ import { getMobileTabForPathname, mobileNavItems } from '@/components/mobile/mob
 function setViewport(width: number, height: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
-  window.dispatchEvent(new Event('resize'));
+  fireEvent.resize(window);
 }
 
 describe('mobile Gallery carousel', () => {
@@ -163,6 +163,28 @@ describe('mobile Gallery carousel', () => {
       showControls: false,
       enableKeyboardControls: false,
       movementAxis: 'vertical',
+    });
+  });
+
+  it('renders portrait-enabled playback after the phone rotates to landscape', async () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('Include landscape assets'));
+    expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    expect(screen.getByText('Rotate your phone')).toBeTruthy();
+    expect(screen.queryByTestId('mock-gallery-video-carousel')).toBeNull();
+
+    setViewport(844, 390);
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(screen.queryByText('Rotate your phone')).toBeNull();
+    expect(mockCarousel.props).toMatchObject({
+      initialIncludeLandscape: false,
+      initialIncludePortrait: true,
+      movementAxis: 'horizontal',
     });
   });
 

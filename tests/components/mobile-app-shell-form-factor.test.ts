@@ -55,6 +55,16 @@ describe('MobileAppShell form-factor gates', () => {
     expect(screen.queryByTestId('mobile-bottom-nav')).toBeNull();
   });
 
+  it('allows phone landscape for route-level fullscreen experiences', () => {
+    setViewport(844, 390);
+
+    render(React.createElement(MobileAppShell, { allowPhoneLandscape: true }, React.createElement('main', null, 'carousel-ui')));
+
+    expect(screen.getByText('carousel-ui')).toBeTruthy();
+    expect(screen.getByTestId('mobile-bottom-nav')).toBeTruthy();
+    expect(screen.queryByText('Rotate your phone')).toBeNull();
+  });
+
   it('blocks tablet portrait with a rotate-to-landscape panel', () => {
     setViewport(768, 1024);
 

@@ -19,10 +19,16 @@ function MobileOrientationGate({ title }: { title: string }) {
   );
 }
 
-export default function MobileAppShell({ children }: { children: ReactNode }) {
+export default function MobileAppShell({
+  children,
+  allowPhoneLandscape = false,
+}: {
+  children: ReactNode;
+  allowPhoneLandscape?: boolean;
+}) {
   const formFactor = useViewportFormFactor();
 
-  if (formFactor === 'phone-landscape') {
+  if (formFactor === 'phone-landscape' && !allowPhoneLandscape) {
     return <MobileOrientationGate title="Rotate your phone" />;
   }
 
