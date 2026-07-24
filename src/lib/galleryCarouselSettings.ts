@@ -3,6 +3,7 @@ import type { GalleryCarouselRatioFilter } from '@/lib/galleryVideoCarousel';
 export type GalleryCarouselSettings = GalleryCarouselRatioFilter & {
   videosEnabled: boolean;
   imagesEnabled: boolean;
+  onlyFavorites: boolean;
   speed: number;
   scrubSpeedMultiplier: number;
 };
@@ -25,6 +26,7 @@ function normalizeGalleryCarouselSettings(value: unknown, fallback: GalleryCarou
   return {
     videosEnabled: videosEnabled || !imagesEnabled,
     imagesEnabled,
+    onlyFavorites: typeof stored.onlyFavorites === 'boolean' ? stored.onlyFavorites : fallback.onlyFavorites,
     includeLandscape: typeof stored.includeLandscape === 'boolean' ? stored.includeLandscape : fallback.includeLandscape,
     includePortrait: typeof stored.includePortrait === 'boolean' ? stored.includePortrait : fallback.includePortrait,
     speed: clampNumber(stored.speed, fallback.speed, 0.4, 2.4),
@@ -40,6 +42,7 @@ export function getDefaultGalleryCarouselSettings(overrides: Partial<GalleryCaro
   return normalizeGalleryCarouselSettings(overrides, {
     videosEnabled: true,
     imagesEnabled: false,
+    onlyFavorites: false,
     includeLandscape: true,
     includePortrait: true,
     speed: DEFAULT_SPEED,

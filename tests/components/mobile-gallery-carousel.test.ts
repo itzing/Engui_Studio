@@ -57,6 +57,7 @@ describe('mobile Gallery carousel', () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: false,
       imagesEnabled: true,
+      onlyFavorites: true,
       includeLandscape: true,
       includePortrait: false,
       speed: 1.6,
@@ -69,6 +70,7 @@ describe('mobile Gallery carousel', () => {
     await waitFor(() => expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false));
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
     expect(screen.getByText('1.6x')).toBeTruthy();
@@ -79,6 +81,7 @@ describe('mobile Gallery carousel', () => {
     expect(mockCarousel.props).toMatchObject({
       initialVideosEnabled: false,
       initialImagesEnabled: true,
+      initialOnlyFavorites: true,
       initialIncludeLandscape: true,
       initialIncludePortrait: false,
       initialSpeed: 1.6,
@@ -119,6 +122,11 @@ describe('mobile Gallery carousel', () => {
       videosEnabled: true,
       imagesEnabled: true,
     });
+    fireEvent.click(screen.getByLabelText('Only favorites'));
+    expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      onlyFavorites: true,
+    });
     fireEvent.click(screen.getByLabelText('Include videos'));
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
@@ -137,6 +145,7 @@ describe('mobile Gallery carousel', () => {
       workspaceId: 'ws-1',
       initialVideosEnabled: false,
       initialImagesEnabled: true,
+      initialOnlyFavorites: true,
       initialIncludeLandscape: true,
       initialIncludePortrait: false,
       initialSpeed: 1,

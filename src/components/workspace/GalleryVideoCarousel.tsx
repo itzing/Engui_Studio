@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EyeOff, Film, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { EyeOff, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -32,6 +32,7 @@ type GalleryCarouselAsset = {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   aspectRatio?: string | null;
+  favorited?: boolean;
   addedToGalleryAt: string;
 };
 
@@ -120,7 +121,7 @@ function getSlotTrimBuffer(stage: { width: number; height: number }, isVertical:
   return Math.max(stage.width * HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO, stage.height);
 }
 
-async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video') {
+async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video', onlyFavorites: boolean) {
   const assets: GalleryCarouselAsset[] = [];
   let page = 1;
   let hasNextPage = true;
@@ -134,6 +135,9 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video
       bucket: 'all',
       type,
     });
+    if (onlyFavorites) {
+      search.set('favoritesOnly', 'true');
+    }
     const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
     const data = await response.json() as GalleryCarouselResponse;
     if (!response.ok || !data.success || !Array.isArray(data.assets) || !data.pagination) {
@@ -163,6 +167,7 @@ type GalleryVideoCarouselProps = {
   initialImagesEnabled?: boolean;
   initialIncludeLandscape?: boolean;
   initialIncludePortrait?: boolean;
+  initialOnlyFavorites?: boolean;
   initialSpeed?: number;
   initialScrubSpeedMultiplier?: number;
   showControls?: boolean;
@@ -177,6 +182,7 @@ export function GalleryVideoCarousel({
   initialImagesEnabled = false,
   initialIncludeLandscape = true,
   initialIncludePortrait = true,
+  initialOnlyFavorites = false,
   initialSpeed = 1,
   initialScrubSpeedMultiplier = DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER,
   showControls = true,
@@ -200,6 +206,7 @@ export function GalleryVideoCarousel({
   const scrubSpeedMultiplierRef = useRef(initialScrubSpeedMultiplier);
   const videosEnabledRef = useRef(true);
   const imagesEnabledRef = useRef(false);
+  const onlyFavoritesRef = useRef(initialOnlyFavorites);
   const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
     includeLandscape: initialIncludeLandscape,
     includePortrait: initialIncludePortrait,
@@ -218,6 +225,7 @@ export function GalleryVideoCarousel({
   const [paused, setPaused] = useState(false);
   const [videosEnabled, setVideosEnabled] = useState(initialVideosEnabled);
   const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
+  const [onlyFavorites, setOnlyFavorites] = useState(initialOnlyFavorites);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
   const [isLoading, setIsLoading] = useState(false);
@@ -251,7 +259,7 @@ export function GalleryVideoCarousel({
     setPaused(false);
   }, []);
 
-  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
+  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter, onlyFavoritedAssets: boolean) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
@@ -271,8 +279,8 @@ export function GalleryVideoCarousel({
     setFeedEnded(false);
     try {
       const [videos, images] = await Promise.all([
-        includeVideos ? fetchAllGalleryAssets(workspaceId, 'video') : Promise.resolve([]),
-        includeImages ? fetchAllGalleryAssets(workspaceId, 'image') : Promise.resolve([]),
+        includeVideos ? fetchAllGalleryAssets(workspaceId, 'video', onlyFavoritedAssets) : Promise.resolve([]),
+        includeImages ? fetchAllGalleryAssets(workspaceId, 'image', onlyFavoritedAssets) : Promise.resolve([]),
       ]);
       const filteredVideos = videos.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO));
       const filteredImages = images.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO));
@@ -297,6 +305,7 @@ export function GalleryVideoCarousel({
     writeStoredGalleryCarouselSettings(workspaceId, {
       videosEnabled: videosEnabledRef.current,
       imagesEnabled: imagesEnabledRef.current,
+      onlyFavorites: onlyFavoritesRef.current,
       includeLandscape: ratioFilterRef.current.includeLandscape,
       includePortrait: ratioFilterRef.current.includePortrait,
       speed: speedRef.current,
@@ -311,6 +320,7 @@ export function GalleryVideoCarousel({
       imagesEnabled: initialImagesEnabled,
       includeLandscape: initialIncludeLandscape,
       includePortrait: initialIncludePortrait,
+      onlyFavorites: initialOnlyFavorites,
       speed: initialSpeed,
       scrubSpeedMultiplier: initialScrubSpeedMultiplier,
     }));
@@ -322,6 +332,8 @@ export function GalleryVideoCarousel({
     setVideosEnabled(storedSettings.videosEnabled);
     imagesEnabledRef.current = storedSettings.imagesEnabled;
     setImagesEnabled(storedSettings.imagesEnabled);
+    onlyFavoritesRef.current = storedSettings.onlyFavorites;
+    setOnlyFavorites(storedSettings.onlyFavorites);
     ratioFilterRef.current = nextRatioFilter;
     setIncludeLandscape(storedSettings.includeLandscape);
     setIncludePortrait(storedSettings.includePortrait);
@@ -329,8 +341,8 @@ export function GalleryVideoCarousel({
     setSpeed(storedSettings.speed);
     scrubSpeedMultiplierRef.current = storedSettings.scrubSpeedMultiplier;
     setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
-    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter);
-  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
+    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter, storedSettings.onlyFavorites);
+  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -347,6 +359,10 @@ export function GalleryVideoCarousel({
   useEffect(() => {
     imagesEnabledRef.current = imagesEnabled;
   }, [imagesEnabled]);
+
+  useEffect(() => {
+    onlyFavoritesRef.current = onlyFavorites;
+  }, [onlyFavorites]);
 
   useEffect(() => {
     measuredRatiosRef.current = measuredRatios;
@@ -772,19 +788,19 @@ export function GalleryVideoCarousel({
   const statusLabel = useMemo(() => {
     if (isLoading) return 'Loading carousel feed';
     if (error) return 'Unable to load feed';
-    if (totalMediaCount === 0) return 'No selected gallery media';
+    if (totalMediaCount === 0) return onlyFavorites ? 'No selected favorite gallery media' : 'No selected gallery media';
     if (feedEnded) return 'End of feed';
     if (paused) return 'Movement paused';
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
-  }, [error, feedEnded, imagesEnabled, isLoading, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
+  }, [error, feedEnded, imagesEnabled, isLoading, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabledRef.current) return;
     setVideosEnabled(nextEnabled);
     videosEnabledRef.current = nextEnabled;
     persistSettings({ videosEnabled: nextEnabled });
-    void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current);
+    void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current);
   }, [loadAssets, persistSettings]);
 
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
@@ -792,7 +808,14 @@ export function GalleryVideoCarousel({
     setImagesEnabled(nextEnabled);
     imagesEnabledRef.current = nextEnabled;
     persistSettings({ imagesEnabled: nextEnabled });
-    void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current);
+    void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current, onlyFavoritesRef.current);
+  }, [loadAssets, persistSettings]);
+
+  const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
+    setOnlyFavorites(nextEnabled);
+    onlyFavoritesRef.current = nextEnabled;
+    persistSettings({ onlyFavorites: nextEnabled });
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, nextEnabled);
   }, [loadAssets, persistSettings]);
 
   const handleRatioToggle = useCallback((orientation: 'landscape' | 'portrait', nextEnabled: boolean) => {
@@ -804,7 +827,7 @@ export function GalleryVideoCarousel({
     setIncludeLandscape(nextRatioFilter.includeLandscape);
     setIncludePortrait(nextRatioFilter.includePortrait);
     persistSettings(nextRatioFilter);
-    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter);
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter, onlyFavoritesRef.current);
   }, [loadAssets, persistSettings]);
 
   const handleSpeedChange = useCallback((value: number[]) => {
@@ -905,6 +928,21 @@ export function GalleryVideoCarousel({
             />
             Portrait
           </label>
+          <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${onlyFavorites ? 'border-rose-400/35 bg-rose-500/10 text-rose-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={onlyFavorites}
+              disabled={isLoading}
+              onChange={(event) => handleOnlyFavoritesToggle(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-rose-400"
+              aria-label="Only favorites"
+            />
+            <Heart className={`h-4 w-4 ${onlyFavorites ? 'fill-current' : ''}`} />
+            Only favorites
+          </label>
           <div className="flex w-[220px] items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
             <span className="text-xs text-white/55">Speed</span>
             <Slider
@@ -962,7 +1000,7 @@ export function GalleryVideoCarousel({
             className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
+              void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current);
             }}
             disabled={isLoading}
             aria-label="Refresh video feed"
@@ -1075,7 +1113,9 @@ export function GalleryVideoCarousel({
             </div>
           ) : totalMediaCount === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">No selected gallery media in this workspace.</div>
+              <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">
+                {onlyFavorites ? 'No selected favorite gallery media in this workspace.' : 'No selected gallery media in this workspace.'}
+              </div>
             </div>
           ) : feedEnded ? (
             <div className="absolute inset-0 flex items-center justify-center">

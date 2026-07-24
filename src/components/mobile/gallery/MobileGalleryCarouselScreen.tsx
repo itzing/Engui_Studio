@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
+import { Film, Heart, Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ export default function MobileGalleryCarouselScreen() {
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [videosEnabled, setVideosEnabled] = useState(true);
   const [imagesEnabled, setImagesEnabled] = useState(false);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [includeLandscape, setIncludeLandscape] = useState(true);
   const [includePortrait, setIncludePortrait] = useState(true);
   const [speed, setSpeed] = useState(1);
@@ -70,18 +71,20 @@ export default function MobileGalleryCarouselScreen() {
     writeStoredGalleryCarouselSettings(workspaceId, {
       videosEnabled,
       imagesEnabled,
+      onlyFavorites,
       includeLandscape,
       includePortrait,
       speed,
       scrubSpeedMultiplier,
       ...overrides,
     });
-  }, [imagesEnabled, includeLandscape, includePortrait, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
+  }, [imagesEnabled, includeLandscape, includePortrait, onlyFavorites, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
 
   useEffect(() => {
     const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings());
     setVideosEnabled(storedSettings.videosEnabled);
     setImagesEnabled(storedSettings.imagesEnabled);
+    setOnlyFavorites(storedSettings.onlyFavorites);
     setIncludeLandscape(storedSettings.includeLandscape);
     setIncludePortrait(storedSettings.includePortrait);
     setSpeed(storedSettings.speed);
@@ -98,6 +101,10 @@ export default function MobileGalleryCarouselScreen() {
     setImagesEnabled(nextEnabled);
     persistSettings({ imagesEnabled: nextEnabled });
   }, [persistSettings, videosEnabled]);
+  const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
+    setOnlyFavorites(nextEnabled);
+    persistSettings({ onlyFavorites: nextEnabled });
+  }, [persistSettings]);
   const handleLandscapeToggle = useCallback((nextEnabled: boolean) => {
     setIncludeLandscape(nextEnabled);
     persistSettings({ includeLandscape: nextEnabled });
@@ -190,6 +197,20 @@ export default function MobileGalleryCarouselScreen() {
             </label>
           </div>
 
+          <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${onlyFavorites ? 'border-rose-500/40 bg-rose-500/10 text-rose-100' : 'border-border bg-background/60 text-foreground'}`}>
+            <span className="inline-flex items-center gap-2">
+              <Heart className={`h-4 w-4 ${onlyFavorites ? 'fill-current' : ''}`} />
+              Only favorites
+            </span>
+            <input
+              type="checkbox"
+              checked={onlyFavorites}
+              onChange={(event) => handleOnlyFavoritesToggle(event.currentTarget.checked)}
+              className="h-4 w-4 accent-rose-400"
+              aria-label="Only favorites"
+            />
+          </label>
+
           <div className="grid grid-cols-2 gap-2">
             <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${includeLandscape ? 'border-sky-500/40 bg-sky-500/10 text-sky-100' : 'border-border bg-background/60 text-foreground'}`}>
               <span>Landscape</span>
@@ -273,6 +294,7 @@ export default function MobileGalleryCarouselScreen() {
                 workspaceId={workspaceId}
                 initialVideosEnabled={videosEnabled}
                 initialImagesEnabled={imagesEnabled}
+                initialOnlyFavorites={onlyFavorites}
                 initialIncludeLandscape={includeLandscape}
                 initialIncludePortrait={includePortrait}
                 initialSpeed={speed}

@@ -26,6 +26,7 @@ describe('GalleryVideoCarousel', () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: false,
       imagesEnabled: true,
+      onlyFavorites: true,
       includeLandscape: false,
       includePortrait: true,
       speed: 1.8,
@@ -47,6 +48,7 @@ describe('GalleryVideoCarousel', () => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
       expect(search.get('type')).toBe('image');
+      expect(search.get('favoritesOnly')).toBe('true');
       return {
         ok: true,
         json: async () => ({
@@ -64,6 +66,7 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.getByText('5 images')).toBeTruthy());
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText('1.8x')).toBeTruthy();
@@ -545,6 +548,45 @@ describe('GalleryVideoCarousel', () => {
     expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
       videosEnabled: true,
       imagesEnabled: false,
+    });
+  });
+
+  it('reloads the feed with favorite-only gallery requests when Only favorites is toggled', async () => {
+    const videoAssets = [{
+      id: 'video-1',
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: '/video-1.mp4',
+      previewUrl: '/video-1.mp4',
+      thumbnailUrl: '/video-1.png',
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      favorited: true,
+      addedToGalleryAt: '2026-07-21T06:00:00Z',
+    }];
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: videoAssets,
+        pagination: { page: 1, limit: 100, totalCount: videoAssets.length, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('favoritesOnly=true');
+    expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(screen.getByLabelText('Only favorites'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1][0])).toContain('favoritesOnly=true');
+    expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      onlyFavorites: true,
     });
   });
 
