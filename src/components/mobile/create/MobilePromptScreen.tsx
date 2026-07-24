@@ -8,11 +8,14 @@ import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
 import { useToast } from '@/components/ui/toast';
+import PromptTemplateTextarea from '@/components/prompt-wildcards/PromptTemplateTextarea';
+import { useStudio } from '@/lib/context/StudioContext';
 import { requestZImagePromptRewrite } from '@/lib/create/imagePromptHelper';
 
 export default function MobilePromptScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { activeWorkspaceId } = useStudio();
   const [isZImageRewriteLoading, setIsZImageRewriteLoading] = useState(false);
   const [zImageRewriteError, setZImageRewriteError] = useState<string | null>(null);
   const {
@@ -118,9 +121,10 @@ export default function MobilePromptScreen() {
                   </Button>
                 ) : null}
               </div>
-              <textarea
+              <PromptTemplateTextarea
                 value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
+                onChange={setPrompt}
+                workspaceId={activeWorkspaceId}
                 placeholder="Describe the image you want to generate..."
                 className="min-h-[42vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-base text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"
               />

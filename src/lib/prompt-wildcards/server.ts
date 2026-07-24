@@ -6,6 +6,7 @@ import {
   toPromptWildcardSummary,
   validatePromptWildcardKey,
 } from './utils';
+import { getPromptWildcardVariants, normalizePromptWildcardVariant } from './variants';
 
 const defaultPromptWildcards = [
   {
@@ -109,6 +110,24 @@ export async function expandPromptWildcards(input: string, workspaceId: string |
   const byKey = new Map(wildcards.map((wildcard) => [wildcard.key, wildcard]));
   const replacements = new Map<string, PromptWildcardReplacement>();
   let prompt = input;
+
+  prompt = prompt.replace(/\{([A-Za-z][A-Za-z0-9_]*):([^{}\n]+)\}/g, (match, key: string, rawVariant: string) => {
+    const wildcard = byKey.get(key);
+    if (!wildcard) return match;
+
+    const requestedVariant = normalizePromptWildcardVariant(rawVariant);
+    const selectedVariant = getPromptWildcardVariants(wildcard.value)
+      .find((variant) => normalizePromptWildcardVariant(variant) === requestedVariant);
+    if (!selectedVariant) return match;
+
+    replacements.set(`${key}:${selectedVariant}`, {
+      key,
+      name: wildcard.name,
+      placeholder: match,
+      variant: selectedVariant,
+    });
+    return selectedVariant;
+  });
 
   for (let pass = 0; pass < 5; pass += 1) {
     let changed = false;

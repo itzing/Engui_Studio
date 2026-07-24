@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolvePromptVariants } from '@/lib/generation/promptVariants';
+import { getPromptWildcardVariants, normalizePromptWildcardVariant, splitPromptVariantOptions } from '@/lib/prompt-wildcards/variants';
 
 describe('resolvePromptVariants', () => {
   it('selects one option from each brace group deterministically by seed', () => {
@@ -26,5 +27,24 @@ describe('resolvePromptVariants', () => {
     );
 
     expect(variants.size).toBeGreaterThan(1);
+  });
+});
+
+describe('prompt wildcard variant helpers', () => {
+  it('extracts variants from a wildcard value', () => {
+    expect(getPromptWildcardVariants('{blue eyes|green eyes|hazel eyes}')).toEqual([
+      'blue eyes',
+      'green eyes',
+      'hazel eyes',
+    ]);
+  });
+
+  it('keeps escaped separators inside variant options', () => {
+    expect(splitPromptVariantOptions('red\\|gold|blue')).toEqual(['red\\|gold', 'blue']);
+  });
+
+  it('normalizes fixed variant tokens for matching', () => {
+    expect(normalizePromptWildcardVariant('  blue   eyes  ')).toBe('blue eyes');
+    expect(normalizePromptWildcardVariant('bad\n{value}')).toBe('bad value');
   });
 });

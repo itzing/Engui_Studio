@@ -1,4 +1,5 @@
 import type { PromptWildcardStatus, PromptWildcardSummary } from './types';
+import { getPromptWildcardVariants } from './variants';
 
 type PersistedPromptWildcard = {
   id: string;
@@ -52,6 +53,7 @@ export function toPromptWildcardSummary(record: PersistedPromptWildcard): Prompt
     key: record.key,
     name: record.name,
     value: record.value,
+    variants: getPromptWildcardVariants(record.value),
     status: normalizePromptWildcardStatus(record.status),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),

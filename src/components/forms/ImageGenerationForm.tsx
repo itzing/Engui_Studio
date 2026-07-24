@@ -12,6 +12,7 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import PromptTemplateTextarea from '@/components/prompt-wildcards/PromptTemplateTextarea';
 import {
     type ImageCreateDraftSnapshot,
     createImageDraftSnapshot,
@@ -80,7 +81,6 @@ export default function ImageGenerationForm() {
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
     const [promptEditorDraft, setPromptEditorDraft] = useState('');
-    const promptEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
     const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
     const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
     const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
@@ -240,20 +240,6 @@ export default function ImageGenerationForm() {
         setPrompt(promptEditorDraft);
         setIsPromptEditorOpen(false);
     };
-
-    useEffect(() => {
-        if (!isPromptEditorOpen) {
-            return;
-        }
-
-        const timeout = window.setTimeout(() => {
-            const editor = promptEditorTextareaRef.current;
-            editor?.focus();
-            editor?.setSelectionRange(editor.value.length, editor.value.length);
-        }, 0);
-
-        return () => window.clearTimeout(timeout);
-    }, [isPromptEditorOpen]);
 
     const selectedZImageLoraSlots = useMemo(() => {
         return zImageDynamicLoraParamNames
@@ -1477,10 +1463,11 @@ export default function ImageGenerationForm() {
                                         <DialogTitle>Edit image prompt</DialogTitle>
                                         <DialogDescription>Use the larger editor for long prompts. Press Ctrl+Enter to save and close.</DialogDescription>
                                     </DialogHeader>
-                                    <textarea
-                                        ref={promptEditorTextareaRef}
+                                    <PromptTemplateTextarea
                                         value={promptEditorDraft}
-                                        onChange={(event) => setPromptEditorDraft(event.target.value)}
+                                        onChange={setPromptEditorDraft}
+                                        workspaceId={activeWorkspaceId}
+                                        autoFocus
                                         onKeyDown={(event) => {
                                             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
                                                 event.preventDefault();
@@ -1489,7 +1476,7 @@ export default function ImageGenerationForm() {
                                         }}
                                         className="min-h-[60vh] w-full resize-y rounded-lg border border-border bg-secondary/50 p-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary"
                                         placeholder={t('generationForm.describeYourImage')}
-                                        data-testid="image-create-prompt-editor-textarea"
+                                        testId="image-create-prompt-editor-textarea"
                                     />
                                     <DialogFooter className="gap-2 sm:space-x-0">
                                         <Button type="button" variant="outline" onClick={() => setIsPromptEditorOpen(false)}>

@@ -1,3 +1,5 @@
+import { splitPromptVariantOptions } from '@/lib/prompt-wildcards/variants';
+
 function hashString(input: string): number {
   let hash = 2166136261;
 
@@ -9,37 +11,6 @@ function hashString(input: string): number {
   return hash >>> 0;
 }
 
-function splitVariantOptions(input: string): string[] {
-  const options: string[] = [];
-  let current = '';
-  let escaped = false;
-
-  for (const char of input) {
-    if (escaped) {
-      current += char;
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaped = true;
-      current += char;
-      continue;
-    }
-
-    if (char === '|') {
-      options.push(current);
-      current = '';
-      continue;
-    }
-
-    current += char;
-  }
-
-  options.push(current);
-  return options.map((option) => option.trim()).filter(Boolean);
-}
-
 export function resolvePromptVariants(input: string, seed: number | string | null | undefined): string {
   if (!input || !input.includes('{') || !input.includes('|')) {
     return input;
@@ -49,7 +20,7 @@ export function resolvePromptVariants(input: string, seed: number | string | nul
   let groupIndex = 0;
 
   return input.replace(/\{([^{}\n]*\|[^{}\n]*)\}/g, (match, content: string) => {
-    const options = splitVariantOptions(content);
+    const options = splitPromptVariantOptions(content);
 
     if (options.length < 2) {
       return match;

@@ -204,6 +204,9 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
       }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     vi.stubGlobal('URL', {
@@ -241,6 +244,9 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
       }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
 
@@ -267,6 +273,9 @@ describe('ImageGenerationForm prompt draft selector', () => {
       const url = String(input);
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
       }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
@@ -313,6 +322,9 @@ describe('ImageGenerationForm prompt draft selector', () => {
           renderedPrompt: '',
           warnings: [],
         });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });

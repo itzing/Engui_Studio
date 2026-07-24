@@ -6,6 +6,7 @@ export interface PromptWildcardSummary {
   key: string;
   name: string;
   value: string;
+  variants: string[];
   status: PromptWildcardStatus;
   createdAt: string;
   updatedAt: string;
@@ -15,4 +16,5 @@ export interface PromptWildcardReplacement {
   key: string;
   name: string;
   placeholder: string;
+  variant?: string;
 }
