@@ -95,6 +95,60 @@ describe('video create presets routes', () => {
     }));
   });
 
+  it('strips source image snapshots before storing video presets', async () => {
+    mockPrisma.preset.upsert.mockResolvedValue(buildPresetRecord());
+    mockPrisma.preset.findMany.mockResolvedValue([buildPresetRecord({
+      options: JSON.stringify({
+        modelId: 'wan22',
+        prompt: 'move forward',
+        showAdvanced: true,
+        parameterValues: {
+          length: 81,
+          sourceImageGenerationSnapshot: { prompt: 'source image prompt' },
+        },
+        createdAt: 100,
+        updatedAt: 200,
+      }),
+    })]);
+
+    const response = await POST(new Request('http://localhost/api/create/video-presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: 'workspace-1',
+        preset: {
+          id: 'video-preset-1',
+          modelId: 'wan22',
+          name: 'Mobile preset',
+          prompt: 'move forward',
+          showAdvanced: true,
+          parameterValues: {
+            length: 81,
+            sourceImageGenerationSnapshot: { prompt: 'source image prompt' },
+          },
+          createdAt: 100,
+          updatedAt: 200,
+        },
+      }),
+    }) as unknown as NextRequest);
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.preset.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        options: JSON.stringify({
+          modelId: 'wan22',
+          prompt: 'move forward',
+          showAdvanced: true,
+          parameterValues: { length: 81 },
+          createdAt: 100,
+          updatedAt: 200,
+        }),
+      }),
+    }));
+    expect(payload.presets[0].parameterValues).toEqual({ length: 81 });
+  });
+
   it('preserves createdAt and stores a newer updatedAt when overwriting a preset', async () => {
     mockPrisma.preset.upsert.mockResolvedValue(buildPresetRecord());
     mockPrisma.preset.findMany.mockResolvedValue([buildPresetRecord({

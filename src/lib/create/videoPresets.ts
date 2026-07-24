@@ -26,6 +26,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+export function sanitizeVideoPresetParameterValues(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {};
+  const parameterValues = { ...value };
+  delete parameterValues.sourceImageGenerationSnapshot;
+  return parameterValues;
+}
+
+export function applyVideoPresetParameterValues(input: {
+  presetParameterValues: unknown;
+  currentParameterValues: unknown;
+}): Record<string, unknown> {
+  const nextParameterValues = sanitizeVideoPresetParameterValues(input.presetParameterValues);
+  if (isRecord(input.currentParameterValues) && isRecord(input.currentParameterValues.sourceImageGenerationSnapshot)) {
+    nextParameterValues.sourceImageGenerationSnapshot = input.currentParameterValues.sourceImageGenerationSnapshot;
+  }
+  return nextParameterValues;
+}
+
 function normalizePreset(value: unknown): VideoCreatePreset | null {
   if (!isRecord(value)) return null;
   const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : '';
@@ -39,7 +57,7 @@ function normalizePreset(value: unknown): VideoCreatePreset | null {
     name,
     prompt: typeof value.prompt === 'string' ? value.prompt : '',
     showAdvanced: value.showAdvanced === true,
-    parameterValues: isRecord(value.parameterValues) ? value.parameterValues : {},
+    parameterValues: sanitizeVideoPresetParameterValues(value.parameterValues),
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
   };
@@ -65,7 +83,11 @@ export function loadVideoCreatePresets(): VideoCreatePreset[] {
 export function saveVideoCreatePresets(presets: VideoCreatePreset[]) {
   const storage = getStorage();
   if (!storage) return;
-  storage.setItem(VIDEO_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  const sanitizedPresets = presets.map((preset) => ({
+    ...preset,
+    parameterValues: sanitizeVideoPresetParameterValues(preset.parameterValues),
+  }));
+  storage.setItem(VIDEO_PRESETS_STORAGE_KEY, JSON.stringify(sanitizedPresets));
 }
 
 export function clearLocalVideoCreatePresets() {
@@ -88,7 +110,7 @@ export function createVideoCreatePreset(input: {
     name: input.name.trim(),
     prompt: input.snapshot.prompt,
     showAdvanced: input.snapshot.showAdvanced,
-    parameterValues: { ...input.snapshot.parameterValues },
+    parameterValues: sanitizeVideoPresetParameterValues(input.snapshot.parameterValues),
     createdAt: now,
     updatedAt: now,
   };
@@ -103,7 +125,7 @@ export function updateVideoCreatePresetSnapshot(input: {
     ...input.preset,
     prompt: input.snapshot.prompt,
     showAdvanced: input.snapshot.showAdvanced,
-    parameterValues: { ...input.snapshot.parameterValues },
+    parameterValues: sanitizeVideoPresetParameterValues(input.snapshot.parameterValues),
     updatedAt: input.now ?? Date.now(),
   };
 }

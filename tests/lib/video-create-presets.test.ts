@@ -3,9 +3,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  applyVideoPresetParameterValues,
   createVideoCreatePreset,
   deleteVideoCreatePreset,
   loadVideoCreatePresets,
+  sanitizeVideoPresetParameterValues,
   saveVideoCreatePresets,
   shouldClearMissingVideoCreatePresetSelection,
   updateVideoCreatePresetSnapshot,
@@ -57,6 +59,74 @@ describe('video create presets', () => {
       prompt: 'move forward',
       showAdvanced: false,
       parameterValues: { length: 121, seed: 42 },
+    });
+  });
+
+  it('strips source image snapshots from saved preset parameter values', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1234);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const preset = createVideoCreatePreset({
+      modelId: 'wan22',
+      name: 'Camera move',
+      snapshot: {
+        prompt: 'move forward',
+        showAdvanced: true,
+        parameterValues: {
+          length: 121,
+          sourceImageGenerationSnapshot: { prompt: 'source image prompt' },
+        },
+      },
+    });
+
+    expect(preset.parameterValues).toEqual({ length: 121 });
+
+    const updated = updateVideoCreatePresetSnapshot({
+      preset,
+      snapshot: {
+        prompt: 'move closer',
+        showAdvanced: true,
+        parameterValues: {
+          length: 81,
+          sourceImageGenerationSnapshot: { prompt: 'other source prompt' },
+        },
+      },
+      now: 300,
+    });
+
+    expect(updated.parameterValues).toEqual({ length: 81 });
+    expect(sanitizeVideoPresetParameterValues(null)).toEqual({});
+  });
+
+  it('strips source image snapshots before writing presets to local storage', () => {
+    saveVideoCreatePresets([{
+      ...makePreset('saved', 100),
+      parameterValues: {
+        length: 81,
+        sourceImageGenerationSnapshot: { prompt: 'source image prompt' },
+      },
+    }]);
+
+    const rawPresets = JSON.parse(window.localStorage.getItem('engui.create.video.presets.v1') || '[]');
+    expect(rawPresets[0].parameterValues).toEqual({ length: 81 });
+    expect(loadVideoCreatePresets()[0].parameterValues).toEqual({ length: 81 });
+  });
+
+  it('preserves the current source image snapshot when applying preset parameter values', () => {
+    const nextParameterValues = applyVideoPresetParameterValues({
+      presetParameterValues: {
+        length: 121,
+        sourceImageGenerationSnapshot: { prompt: 'stale preset source prompt' },
+      },
+      currentParameterValues: {
+        steps: 4,
+        sourceImageGenerationSnapshot: { prompt: 'current source prompt' },
+      },
+    });
+
+    expect(nextParameterValues).toEqual({
+      length: 121,
+      sourceImageGenerationSnapshot: { prompt: 'current source prompt' },
     });
   });
 

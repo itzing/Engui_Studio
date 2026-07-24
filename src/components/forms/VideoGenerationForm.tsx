@@ -27,11 +27,13 @@ import {
     deleteServerVideoCreatePreset,
     fetchVideoCreatePresets,
     loadVideoCreatePresets,
+    sanitizeVideoPresetParameterValues,
     saveServerVideoCreatePreset,
     shouldClearMissingVideoCreatePresetSelection,
     syncVideoCreatePresets,
     updateVideoCreatePresetSnapshot,
     upsertVideoCreatePreset,
+    applyVideoPresetParameterValues,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
 
@@ -545,7 +547,7 @@ export default function VideoGenerationForm() {
             snapshot: {
                 prompt,
                 showAdvanced,
-                parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
+                parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
             },
         });
         setIsSyncingVideoPresets(true);
@@ -580,7 +582,7 @@ export default function VideoGenerationForm() {
             snapshot: {
                 prompt,
                 showAdvanced,
-                parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
+                parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
             },
         });
         setIsSyncingVideoPresets(true);
@@ -603,9 +605,10 @@ export default function VideoGenerationForm() {
     const applyVideoPreset = (preset: VideoCreatePreset) => {
         setPrompt(preset.prompt || '');
         setShowAdvanced(preset.showAdvanced === true);
-        const nextParameterValues = preset.parameterValues && typeof preset.parameterValues === 'object'
-            ? { ...preset.parameterValues }
-            : {};
+        const nextParameterValues = applyVideoPresetParameterValues({
+            presetParameterValues: preset.parameterValues,
+            currentParameterValues: parameterValues,
+        });
         setParameterValues(nextParameterValues);
         setLoraHigh1Weight(getWanLoraWeight(nextParameterValues, 'lora_high_1_weight'));
         setLoraLow1Weight(getWanLoraWeight(nextParameterValues, 'lora_low_1_weight'));

@@ -19,6 +19,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function sanitizeParameterValues(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {};
+  const parameterValues = { ...value };
+  delete parameterValues.sourceImageGenerationSnapshot;
+  return parameterValues;
+}
+
 function readOptions(value: string | null | undefined): Record<string, unknown> {
   if (!value) return {};
   try {
@@ -42,7 +49,7 @@ function normalizePreset(input: unknown): VideoCreatePreset | null {
     name,
     prompt: typeof input.prompt === 'string' ? input.prompt : '',
     showAdvanced: input.showAdvanced === true,
-    parameterValues: isRecord(input.parameterValues) ? input.parameterValues : {},
+    parameterValues: sanitizeParameterValues(input.parameterValues),
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
     updatedAt: typeof input.updatedAt === 'number' ? input.updatedAt : Date.now(),
   };

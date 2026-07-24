@@ -19,6 +19,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function sanitizeParameterValues(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {};
+  const parameterValues = { ...value };
+  delete parameterValues.sourceImageGenerationSnapshot;
+  return parameterValues;
+}
+
 function toPreset(record: {
   id: string;
   name: string;
@@ -42,7 +49,7 @@ function toPreset(record: {
     name: record.name,
     prompt: typeof options.prompt === 'string' ? options.prompt : '',
     showAdvanced: options.showAdvanced === true,
-    parameterValues: isRecord(options.parameterValues) ? options.parameterValues : {},
+    parameterValues: sanitizeParameterValues(options.parameterValues),
     createdAt: typeof options.createdAt === 'number' ? options.createdAt : record.createdAt.getTime(),
     updatedAt: typeof options.updatedAt === 'number' ? options.updatedAt : record.createdAt.getTime(),
   };
