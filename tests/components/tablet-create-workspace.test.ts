@@ -247,6 +247,26 @@ describe('TabletCreateWorkspace', () => {
     expect(videoButton.querySelector('svg')).toBeTruthy();
   });
 
+  it('autoplays selected video job previews in a loop', async () => {
+    render(React.createElement(TabletCreateWorkspace, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview wan22' }));
+
+    await waitFor(() => {
+      const video = document.querySelector('video') as HTMLVideoElement | null;
+      expect(video).toBeTruthy();
+      expect(video?.getAttribute('src')).toBe('/video.mp4');
+      expect(video?.autoplay).toBe(true);
+      expect(video?.loop).toBe(true);
+      expect(video?.muted).toBe(true);
+      expect(video?.playsInline).toBe(true);
+      expect(video?.controls).toBe(true);
+    });
+  });
+
   it('resizes the jobs strip by dragging the top edge with a one-third viewport cap', () => {
     render(React.createElement(TabletCreateWorkspace, {
       activeMode: 'image',

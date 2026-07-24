@@ -1138,7 +1138,7 @@ function TabletJobPreviewPanel({
               </div>
             ) : mediaUrl ? (
               previewType === 'video' ? (
-                <video src={mediaUrl} poster={output?.thumbnailUrl || job.thumbnailUrl || undefined} controls playsInline className="max-h-full max-w-full object-contain" />
+                <video src={mediaUrl} poster={output?.thumbnailUrl || job.thumbnailUrl || undefined} controls autoPlay loop muted playsInline className="max-h-full max-w-full object-contain" />
             ) : previewType === 'audio' ? (
               <audio src={mediaUrl} controls className="w-full" />
             ) : (
