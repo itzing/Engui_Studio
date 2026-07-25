@@ -152,6 +152,76 @@ describe('GalleryVideoCarousel', () => {
     expect(playMock).toHaveBeenCalledTimes(1);
   });
 
+  it('retries playback for video slots that mount after user interaction', async () => {
+    let userInteracted = false;
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const playCalls: string[] = [];
+    const playMock = vi.fn(function (this: HTMLMediaElement) {
+      const src = this.getAttribute('src') || '';
+      playCalls.push(src);
+      return userInteracted ? Promise.resolve() : Promise.reject(new Error('Autoplay blocked'));
+    }) as unknown as typeof HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = playMock;
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: [1, 2, 3].map((index) => ({
+          id: `video-${index}`,
+          workspaceId: 'ws-1',
+          type: 'video',
+          originalUrl: `/video-${index}.mp4`,
+          previewUrl: `/video-${index}.mp4`,
+          thumbnailUrl: `/video-${index}.png`,
+          mediaWidth: 2880,
+          mediaHeight: 720,
+          addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+        })),
+        pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialIncludeLandscape: true,
+        initialIncludePortrait: false,
+        initialSpeed: 0,
+        showControls: false,
+        enableKeyboardControls: false,
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+      await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+      expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeNull();
+
+      userInteracted = true;
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 0 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 3200 });
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 3200 });
+
+      await waitFor(() => expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy());
+      await waitFor(() => expect(playCalls.filter((src) => src === '/video-3.mp4').length).toBeGreaterThan(0));
+    } finally {
+      randomSpy.mockRestore();
+      rectSpy.mockRestore();
+    }
+  });
+
   it('pauses movement and keeps it paused after dragging the tape', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

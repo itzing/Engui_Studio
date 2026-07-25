@@ -192,6 +192,8 @@ export function GalleryVideoCarousel({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
   const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
+  const playInteractionRetryVideoInstanceIdsRef = useRef<Set<string>>(new Set());
+  const userPlaybackInteractionRef = useRef(false);
   const stageSizeRef = useRef({ width: 1280, height: 720 });
   const activeSlotsRef = useRef<CarouselSlot[]>([]);
   const feedRef = useRef<Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>>([]);
@@ -557,20 +559,39 @@ export function GalleryVideoCarousel({
     setIsUiHidden((current) => current ? false : current);
   }, [showControls]);
 
-  const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement) => {
+  const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement, forceInteractionRetry = false) => {
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
-    if (playRequestedVideoInstanceIdsRef.current.has(instanceId)) return;
+    const alreadyRequested = playRequestedVideoInstanceIdsRef.current.has(instanceId);
+    const alreadyRetriedAfterInteraction = playInteractionRetryVideoInstanceIdsRef.current.has(instanceId);
+    if (alreadyRequested && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
 
     playRequestedVideoInstanceIdsRef.current.add(instanceId);
+    if (forceInteractionRetry) {
+      playInteractionRetryVideoInstanceIdsRef.current.add(instanceId);
+    }
     const result = video.play();
     if (result && typeof result.catch === 'function') {
       void result.catch(() => {
         playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+        playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
       });
     }
   }, []);
+
+  const retryMountedVideoPlayback = useCallback(() => {
+    Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
+      if (video.paused || video.readyState > 0) {
+        requestVideoPlayback(instanceId, video, true);
+      }
+    });
+  }, [requestVideoPlayback]);
+
+  const unlockVideoPlayback = useCallback(() => {
+    userPlaybackInteractionRef.current = true;
+    retryMountedVideoPlayback();
+  }, [retryMountedVideoPlayback]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
@@ -599,6 +620,7 @@ export function GalleryVideoCarousel({
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (isLoading || totalMediaCount === 0 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    unlockVideoPlayback();
     const pointerMain = movementAxisRef.current === 'vertical' ? event.clientY : event.clientX;
     dragStateRef.current = {
       pointerId: event.pointerId,
@@ -607,7 +629,7 @@ export function GalleryVideoCarousel({
       hasDragged: false,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
-  }, [isLoading, totalMediaCount]);
+  }, [isLoading, totalMediaCount, unlockVideoPlayback]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const dragState = dragStateRef.current;
@@ -728,6 +750,7 @@ export function GalleryVideoCarousel({
       }
 
       event.preventDefault();
+      unlockVideoPlayback();
       setPaused((current) => {
         const next = !current;
         pausedRef.current = next;
@@ -750,7 +773,7 @@ export function GalleryVideoCarousel({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardControls, focusCarouselStage, isLoading, totalMediaCount]);
+  }, [enableKeyboardControls, focusCarouselStage, isLoading, totalMediaCount, unlockVideoPlayback]);
 
   useEffect(() => {
     if (activeSlotsRef.current.length === 0) return;
@@ -774,7 +797,15 @@ export function GalleryVideoCarousel({
         playRequestedVideoInstanceIdsRef.current.delete(instanceId);
       }
     });
-  }, [activeSlots]);
+    Array.from(playInteractionRetryVideoInstanceIdsRef.current).forEach((instanceId) => {
+      if (!activeInstanceIds.has(instanceId)) {
+        playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+      }
+    });
+    if (userPlaybackInteractionRef.current) {
+      retryMountedVideoPlayback();
+    }
+  }, [activeSlots, retryMountedVideoPlayback]);
 
   const handleMetadata = useCallback((asset: GalleryCarouselAsset, video: HTMLVideoElement) => {
     if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
@@ -1042,6 +1073,7 @@ export function GalleryVideoCarousel({
             return;
           }
           if (isLoading || totalMediaCount === 0) return;
+          unlockVideoPlayback();
           setPaused((value) => {
             const next = !value;
             pausedRef.current = next;
@@ -1082,6 +1114,8 @@ export function GalleryVideoCarousel({
                     handleMetadata(slot.entry.asset, event.currentTarget);
                     requestVideoPlayback(slot.instanceId, event.currentTarget);
                   }}
+                  onCanPlay={(event) => requestVideoPlayback(slot.instanceId, event.currentTarget)}
+                  onLoadedData={(event) => requestVideoPlayback(slot.instanceId, event.currentTarget)}
                   className="h-full w-full object-cover"
                 />
               ) : (() => {
