@@ -42,7 +42,7 @@ const mockModel = {
   type: 'image',
   inputs: ['text'],
   optionalInputs: [],
-  parameters: [],
+  parameters: [{ name: 'seed', default: 123, type: 'number' }],
   capabilities: {},
   api: { type: 'runpod', endpoint: 'endpoint-1' },
 };
@@ -180,7 +180,9 @@ function Harness() {
     React.createElement('div', { 'data-testid': 'prompt' }, state.prompt),
     React.createElement('div', { 'data-testid': 'selected-title' }, state.selectedPromptDocumentTitle),
     React.createElement('button', { type: 'button', onClick: () => state.selectPromptDocument('draft-1') }, 'Select draft'),
+    React.createElement('button', { type: 'button', onClick: () => state.setPrompt('Batch prompt') }, 'Set prompt'),
     React.createElement('button', { type: 'button', onClick: () => void state.submit() }, 'Submit'),
+    React.createElement('button', { type: 'button', onClick: () => void state.submitBatch(3) }, 'Batch 3'),
   );
 }
 
@@ -238,5 +240,119 @@ describe('useImageCreateState mobile prompt draft flow', () => {
 
     expect(mockSubmitImageGeneration.mock.calls[0]?.[0]?.prompt).toContain('second appearance');
     expect(mockSubmitImageGeneration.mock.calls[0]?.[0]?.sourcePromptDocumentTitle).toBe('Scene Draft');
+  });
+
+  it('submits mobile batches sequentially with unique explicit seeds', async () => {
+    const randomSpy = vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0.2)
+      .mockReturnValueOnce(0.3)
+      .mockReturnValueOnce(0.4);
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(Harness));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Batch 3' }));
+
+    await waitFor(() => {
+      expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(3);
+    });
+
+    expect(mockSubmitImageGeneration.mock.calls.map((call) => call[0].randomizeSeed)).toEqual([false, false, false]);
+    const seeds = mockSubmitImageGeneration.mock.calls.map((call) => call[0].parameterValues.seed);
+    expect(new Set(seeds).size).toBe(3);
+    expect(seeds).toEqual([
+      Math.floor(0.1 * 2147483647) + 1,
+      Math.floor(0.2 * 2147483647) + 1,
+      Math.floor(0.3 * 2147483647) + 1,
+    ]);
+    expect(mockAddJob).toHaveBeenCalledTimes(3);
+
+    randomSpy.mockRestore();
+  });
+
+  it('preserves the normal single-submit randomize seed behavior for Gen 1', async () => {
+    mockSubmitImageGeneration.mockResolvedValueOnce({
+      success: true,
+      job: {
+        id: 'job-single',
+        modelId: 'mock-image',
+        type: 'image',
+        status: 'queued',
+        prompt: 'Batch prompt',
+        createdAt: Date.now(),
+        options: {},
+      },
+      nextSeed: 987654321,
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(Harness));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockSubmitImageGeneration.mock.calls[0]?.[0]?.randomizeSeed).toBe(false);
+    expect(mockSubmitImageGeneration.mock.calls[0]?.[0]?.parameterValues).toEqual({});
+  });
+
+  it('stops a mobile batch on the first failed submit', async () => {
+    mockSubmitImageGeneration
+      .mockResolvedValueOnce({
+        success: true,
+        job: {
+          id: 'job-ok',
+          modelId: 'mock-image',
+          type: 'image',
+          status: 'queued',
+          prompt: 'Batch prompt',
+          createdAt: Date.now(),
+          options: {},
+        },
+        nextSeed: null,
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: 'RunPod unavailable',
+        nextSeed: null,
+      });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(Harness));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Batch 3' }));
+
+    await waitFor(() => {
+      expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockAddJob).toHaveBeenCalledTimes(1);
   });
 });

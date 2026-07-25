@@ -5,10 +5,10 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSelectPromptDocument, mockClearPromptDocument, mockSubmit } = vi.hoisted(() => ({
+const { mockSelectPromptDocument, mockClearPromptDocument, mockSubmitBatch } = vi.hoisted(() => ({
   mockSelectPromptDocument: vi.fn(),
   mockClearPromptDocument: vi.fn(),
-  mockSubmit: vi.fn(async () => true),
+  mockSubmitBatch: vi.fn(async () => true),
 }));
 
 const mobileCreateState = vi.hoisted(() => ({ current: null as any }));
@@ -75,7 +75,9 @@ function buildState(overrides: Record<string, any> = {}) {
     selectPromptDocument: mockSelectPromptDocument,
     clearPromptDocument: mockClearPromptDocument,
     isGenerating: false,
-    submit: mockSubmit,
+    batchProgress: null,
+    submit: vi.fn(),
+    submitBatch: mockSubmitBatch,
     message: null,
     setMessage: vi.fn(),
     isLoadingMedia: false,
@@ -145,5 +147,42 @@ describe('MobileCreateHome prompt draft tile', () => {
     fireEvent.click(fullscreen);
 
     expect(screen.queryByTestId('mobile-create-reference-fullscreen')).toBeNull();
+  });
+
+  it('shows equal batch generate actions and submits the selected count', () => {
+    mobileCreateState.current = buildState();
+
+    render(React.createElement(MobileCreateHome, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    const gen1 = screen.getByRole('button', { name: /gen 1/i });
+    const gen3 = screen.getByRole('button', { name: /gen 3/i });
+    const gen6 = screen.getByRole('button', { name: /gen 6/i });
+
+    expect(gen1).toBeTruthy();
+    expect(gen3).toBeTruthy();
+    expect(gen6).toBeTruthy();
+
+    fireEvent.click(gen3);
+
+    expect(mockSubmitBatch).toHaveBeenCalledWith(3);
+  });
+
+  it('shows active batch progress while generation is starting', () => {
+    mobileCreateState.current = buildState({
+      isGenerating: true,
+      batchProgress: { total: 6, started: 2 },
+    });
+
+    render(React.createElement(MobileCreateHome, {
+      activeMode: 'image',
+      onModeChange: vi.fn(),
+    }));
+
+    expect(screen.getByRole('button', { name: /2\/6/i })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /gen 1/i })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /gen 3/i })).toHaveProperty('disabled', true);
   });
 });

@@ -58,7 +58,8 @@ export default function MobileCreateHome({
     selectPromptDocument,
     clearPromptDocument,
     isGenerating,
-    submit,
+    batchProgress,
+    submitBatch,
     message,
     setMessage,
     isLoadingMedia,
@@ -363,32 +364,37 @@ export default function MobileCreateHome({
       ) : null}
 
       <div className="z-20 shrink-0 border-t border-border bg-background/95 px-4 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-        <div className="space-y-3">
-          <Button
-            className="w-full"
-            size="lg"
-            disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
-            onClick={async () => {
-              await submit();
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Starting generation...
-              </>
-            ) : isPromptDraftSyncing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing draft...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Generate
-              </>
-            )}
-          </Button>
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 3, 6].map((count) => {
+            const isActiveBatch = isGenerating && batchProgress?.total === count;
+            const label = isActiveBatch
+              ? `${batchProgress.started}/${batchProgress.total}`
+              : `Gen ${count}`;
+
+            return (
+              <Button
+                key={count}
+                className="min-w-0 px-2"
+                size="lg"
+                disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
+                onClick={async () => {
+                  await submitBatch(count);
+                }}
+              >
+                {isGenerating || isPromptDraftSyncing ? (
+                  <>
+                    {isActiveBatch || (isPromptDraftSyncing && count === 1) ? <Loader2 className="mr-1.5 h-4 w-4 shrink-0 animate-spin" /> : null}
+                    <span className="truncate">{isPromptDraftSyncing && count === 1 ? 'Syncing' : label}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1.5 h-4 w-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </>
+                )}
+              </Button>
+            );
+          })}
         </div>
       </div>
     </MobileScreen>

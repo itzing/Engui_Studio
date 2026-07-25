@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
 import {
   createImageDraftSnapshot,
+  generateRandomSeed,
   mergeImageDraftParameterValues,
   normalizeRandomizeSeed,
   type ImageCreateDraftSnapshot,
@@ -26,6 +27,11 @@ const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 type FlashMessage = {
   type: 'success' | 'error';
   text: string;
+} | null;
+
+type BatchProgress = {
+  total: number;
+  started: number;
 } | null;
 
 const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
@@ -53,6 +59,7 @@ export function useImageCreateState() {
   const [secondaryInputRef, setSecondaryInputRef] = useState<CreateMediaRef | null>(null);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>(null);
   const [message, setMessage] = useState<FlashMessage>(null);
   const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
   const [isLoadingLoras, setIsLoadingLoras] = useState(false);
@@ -460,14 +467,28 @@ export function useImageCreateState() {
     handleParameterChange(paramName, rawValue === '' ? '' : Number(rawValue));
   }, [handleParameterChange]);
 
-  const submit = useCallback(async () => {
+  const submitBatch = useCallback(async (count: number) => {
     if (!currentModel) {
       setTimedMessage({ type: 'error', text: 'Model is not ready yet' });
       return false;
     }
 
+    const normalizedCount = Math.max(1, Math.floor(count));
+    const hasSeedParameter = currentModel.parameters.some((param) => param.name === 'seed');
+    const shouldForceUniqueSeeds = normalizedCount > 1 && hasSeedParameter;
+    const usedSeeds = new Set<number>();
+    const nextUniqueSeed = () => {
+      let seed = generateRandomSeed();
+      while (usedSeeds.has(seed)) {
+        seed = generateRandomSeed();
+      }
+      usedSeeds.add(seed);
+      return seed;
+    };
+
     setMessage(null);
     setIsGenerating(true);
+    setBatchProgress({ total: normalizedCount, started: 0 });
     let promptForSubmit = prompt;
     let sceneSnapshotForSubmit = sceneSnapshot;
     let sourcePromptDocumentIdForSubmit = selectedPromptDocumentId || null;
@@ -484,46 +505,84 @@ export function useImageCreateState() {
       } catch (error) {
         setTimedMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to sync prompt draft' });
         setIsGenerating(false);
+        setBatchProgress(null);
         setIsPromptDraftSyncing(false);
         return false;
       }
       setIsPromptDraftSyncing(false);
     }
 
-    const result = await submitImageGeneration({
-      currentModel,
-      prompt: promptForSubmit,
-      parameterValues,
-      randomizeSeed,
-      activeWorkspaceId,
-      settings,
-      imageFile,
-      imageFile2,
-      imagePreviewUrl: previewUrl,
-      imagePreviewUrl2: previewUrl2,
-      dimensions: null,
-      sceneSnapshot: sceneSnapshotForSubmit,
-      sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
-      sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
-    });
+    let started = 0;
+    let failedError = '';
 
-    if (result.success) {
+    for (let index = 0; index < normalizedCount; index += 1) {
+      const runParameterValues = shouldForceUniqueSeeds
+        ? {
+            ...parameterValues,
+            seed: nextUniqueSeed(),
+          }
+        : { ...parameterValues };
+
+      const result = await submitImageGeneration({
+        currentModel,
+        prompt: promptForSubmit,
+        parameterValues: runParameterValues,
+        randomizeSeed: shouldForceUniqueSeeds ? false : randomizeSeed,
+        activeWorkspaceId,
+        settings,
+        imageFile,
+        imageFile2,
+        imagePreviewUrl: previewUrl,
+        imagePreviewUrl2: previewUrl2,
+        dimensions: null,
+        sceneSnapshot: sceneSnapshotForSubmit,
+        sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
+        sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
+      });
+
+      if (!result.success) {
+        failedError = result.error;
+        break;
+      }
+
       addJob(result.job);
-      setTimedMessage({ type: 'success', text: 'Generation started' });
-    } else {
-      setTimedMessage({ type: 'error', text: result.error });
+      started += 1;
+      if (!shouldForceUniqueSeeds && result.nextSeed !== null) {
+        setParameterValues((prev) => ({
+          ...prev,
+          seed: result.nextSeed,
+        }));
+      }
+      setBatchProgress({ total: normalizedCount, started });
     }
 
-    if (result.nextSeed !== null) {
+    if (shouldForceUniqueSeeds && started > 0) {
       setParameterValues((prev) => ({
         ...prev,
-        seed: result.nextSeed,
+        seed: nextUniqueSeed(),
       }));
     }
 
+    if (failedError) {
+      setTimedMessage({
+        type: 'error',
+        text: started > 0
+          ? `Started ${started} of ${normalizedCount}. Failed: ${failedError}`
+          : failedError,
+      });
+    } else {
+      setTimedMessage({
+        type: 'success',
+        text: normalizedCount === 1 ? 'Generation started' : `${normalizedCount} generations started`,
+      });
+    }
+
     setIsGenerating(false);
-    return result.success;
+    setBatchProgress(null);
+    return started === normalizedCount;
   }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
+
+  const submit = useCallback(async () => submitBatch(1), [submitBatch]);
 
   const runSavedPromptHelperInstruction = useCallback(async () => {
     if (!currentModel || !promptHelperInstruction.trim() || isPromptHelperLoading || isPromptDraftSelected) {
@@ -650,9 +709,11 @@ export function useImageCreateState() {
     secondaryImageRequired,
     isLoadingMedia,
     isGenerating,
+    batchProgress,
     message,
     setMessage,
     submit,
+    submitBatch,
     selectModel: async (modelId: string) => {
       await switchModel(modelId, currentSnapshot);
     },
