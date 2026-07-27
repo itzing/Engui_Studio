@@ -8,8 +8,25 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 
 const closeViewerMock = vi.fn();
+const ensureRangeLoadedMock = vi.fn();
+const carouselPropsMock = vi.hoisted(() => ({
+  props: null as Record<string, unknown> | null,
+}));
+const virtualizerMock = vi.hoisted(() => ({
+  rows: [] as Array<{ index: number; key?: string; start?: number }>,
+  scrollToIndex: vi.fn(),
+}));
 
 let viewerOpen = false;
+let galleryHookOverrides: Record<string, unknown> = {};
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: () => ({
+    getVirtualItems: () => virtualizerMock.rows,
+    getTotalSize: () => 1000,
+    scrollToIndex: virtualizerMock.scrollToIndex,
+  }),
+}));
 
 vi.mock('@/hooks/gallery/useMobileGalleryScreen', () => ({
   useMobileGalleryScreen: () => ({
@@ -30,7 +47,7 @@ vi.mock('@/hooks/gallery/useMobileGalleryScreen', () => ({
     toggleGalleryFavorites: vi.fn(),
     toggleGalleryTrash: vi.fn(),
     refresh: vi.fn(),
-    ensureRangeLoaded: vi.fn(),
+    ensureRangeLoaded: ensureRangeLoadedMock,
     selectedAssetId: null,
     selectedAbsoluteIndex: null,
     handleTilePress: vi.fn(),
@@ -43,6 +60,8 @@ vi.mock('@/hooks/gallery/useMobileGalleryScreen', () => ({
     toggleTrash: vi.fn(),
     restoreTick: 0,
     restoreAbsoluteIndex: null,
+    workspaceId: 'ws-1',
+    ...galleryHookOverrides,
   }),
 }));
 
@@ -59,18 +78,32 @@ vi.mock('@/components/workspace/GalleryAssetDialog', () => ({
   ),
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
+}));
+
 vi.mock('@/components/workspace/GalleryVideoCarousel', () => ({
-  GalleryVideoCarousel: ({ onClose }: { onClose?: () => void }) => React.createElement(
-    'div',
-    { 'data-testid': 'mock-gallery-video-carousel' },
-    React.createElement('button', { type: 'button', onClick: onClose }, 'Close carousel'),
-  ),
+  GalleryVideoCarousel: (props: Record<string, unknown>) => {
+    carouselPropsMock.props = props;
+    return React.createElement(
+      'div',
+      { 'data-testid': 'mock-gallery-video-carousel' },
+      React.createElement('button', { type: 'button', onClick: props.onClose as () => void }, 'Close carousel'),
+    );
+  },
 }));
 
 describe('DesktopGalleryOverlay Escape handling', () => {
   beforeEach(() => {
     viewerOpen = false;
+    galleryHookOverrides = {};
+    carouselPropsMock.props = null;
+    virtualizerMock.rows = [];
     closeViewerMock.mockReset();
+    ensureRangeLoadedMock.mockReset();
+    virtualizerMock.scrollToIndex.mockReset();
     window.ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -115,6 +148,33 @@ describe('DesktopGalleryOverlay Escape handling', () => {
     expect(screen.queryByTestId('gallery-video-carousel-modal')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     expect(closeViewerMock).not.toHaveBeenCalled();
+  });
+
+  it('anchors Carousel to the visible gallery window when the selected asset is stale', () => {
+    const onClose = vi.fn();
+    virtualizerMock.rows = [
+      { index: 5, key: 'row-5', start: 500 },
+      { index: 6, key: 'row-6', start: 600 },
+      { index: 7, key: 'row-7', start: 700 },
+    ];
+    galleryHookOverrides = {
+      totalCount: 120,
+      selectedAssetId: 'asset-1',
+      selectedAbsoluteIndex: 1,
+      itemsByAbsoluteIndex: {
+        36: { id: 'asset-36', type: 'image' },
+        39: { id: 'asset-39', type: 'video' },
+        42: { id: 'asset-42', type: 'image' },
+      },
+    };
+
+    render(React.createElement(DesktopGalleryOverlay, { open: true, onClose }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open video carousel' }));
+
+    expect(carouselPropsMock.props).toMatchObject({
+      currentGalleryAssetId: 'asset-39',
+    });
   });
 
   it('closes the desktop gallery after successful img2vid reuse from details', () => {

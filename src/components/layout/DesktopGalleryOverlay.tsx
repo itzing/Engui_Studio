@@ -113,6 +113,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   const [detailsAsset, setDetailsAsset] = useState<MobileGalleryAsset | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [carouselOpen, setCarouselOpen] = useState(false);
+  const [carouselAnchorAssetId, setCarouselAnchorAssetId] = useState<string | null>(null);
   const [openingImg2VidAssetId, setOpeningImg2VidAssetId] = useState<string | null>(null);
   const {
     totalCount,
@@ -202,6 +203,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         event.preventDefault();
         event.stopImmediatePropagation();
         setCarouselOpen(false);
+        setCarouselAnchorAssetId(null);
         return;
       }
 
@@ -215,7 +217,10 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   }, [carouselOpen, closeViewer, detailsOpen, onClose, open, viewerOpen]);
 
   useEffect(() => {
-    if (!open) setCarouselOpen(false);
+    if (!open) {
+      setCarouselOpen(false);
+      setCarouselAnchorAssetId(null);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -266,6 +271,41 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     return loadedViewerItems.findIndex((entry) => entry.id === selectedAssetId);
   }, [loadedViewerItems, selectedAssetId]);
 
+  const visibleAbsoluteRange = useMemo(() => {
+    if (virtualRows.length === 0 || totalCount === 0) return null;
+    const firstRow = Math.max(0, virtualRows[0]?.index ?? 0);
+    const lastRow = Math.max(firstRow, virtualRows[virtualRows.length - 1]?.index ?? firstRow);
+    return {
+      start: firstRow * columns,
+      end: Math.min(totalCount - 1, ((lastRow + 1) * columns) - 1),
+    };
+  }, [columns, totalCount, virtualRows]);
+
+  const visibleCarouselAnchorAssetId = useMemo(() => {
+    if (!visibleAbsoluteRange) return null;
+    const centerIndex = Math.floor((visibleAbsoluteRange.start + visibleAbsoluteRange.end) / 2);
+    const offsets = Array.from({ length: Math.max(1, visibleAbsoluteRange.end - visibleAbsoluteRange.start + 1) }, (_, index) => index);
+    for (const offset of offsets) {
+      const lowerIndex = centerIndex - offset;
+      const upperIndex = centerIndex + offset;
+      const lowerAsset = lowerIndex >= visibleAbsoluteRange.start ? itemsByAbsoluteIndex[lowerIndex] : null;
+      if (lowerAsset && lowerAsset.type !== 'audio') return lowerAsset.id;
+      const upperAsset = offset > 0 && upperIndex <= visibleAbsoluteRange.end ? itemsByAbsoluteIndex[upperIndex] : null;
+      if (upperAsset && upperAsset.type !== 'audio') return upperAsset.id;
+    }
+    return null;
+  }, [itemsByAbsoluteIndex, visibleAbsoluteRange]);
+
+  const selectedAssetIsVisible = selectedAbsoluteIndex !== null
+    && Boolean(visibleAbsoluteRange)
+    && selectedAbsoluteIndex >= (visibleAbsoluteRange?.start ?? 0)
+    && selectedAbsoluteIndex <= (visibleAbsoluteRange?.end ?? -1);
+
+  const openCarousel = useCallback(() => {
+    setCarouselAnchorAssetId(selectedAssetIsVisible ? selectedAssetId : (visibleCarouselAnchorAssetId || selectedAssetId));
+    setCarouselOpen(true);
+  }, [selectedAssetId, selectedAssetIsVisible, visibleCarouselAnchorAssetId]);
+
   const carouselGalleryOrderFilter = useMemo(() => ({
     bucket: semanticFilter,
     query,
@@ -308,7 +348,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <button
           type="button"
-          onClick={() => setCarouselOpen(true)}
+          onClick={openCarousel}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded border border-emerald-400/30 bg-emerald-500/10 px-3 text-xs text-emerald-100 transition-colors hover:bg-emerald-500/15 hover:text-white"
           aria-label="Open video carousel"
         >
@@ -509,8 +549,11 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         >
           <GalleryVideoCarousel
             workspaceId={workspaceId}
-            onClose={() => setCarouselOpen(false)}
-            currentGalleryAssetId={selectedAssetId}
+            onClose={() => {
+              setCarouselOpen(false);
+              setCarouselAnchorAssetId(null);
+            }}
+            currentGalleryAssetId={carouselAnchorAssetId || selectedAssetId}
             galleryOrderFilter={carouselGalleryOrderFilter}
           />
         </div>
