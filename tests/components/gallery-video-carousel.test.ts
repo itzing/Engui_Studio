@@ -430,7 +430,7 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
-  it('fills the fullscreen viewport and lets users hide and reveal carousel controls', async () => {
+  it('fills the fullscreen viewport and reveals desktop carousel controls only in the top hover area', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -459,37 +459,37 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.getByText('1 videos')).toBeTruthy());
 
     const stage = screen.getByTestId('gallery-video-carousel');
+    const controlsHoverArea = screen.getByTestId('gallery-carousel-controls-hover-area');
     const controls = screen.getByTestId('gallery-carousel-controls');
     expect(stage.className).toContain('h-full');
     expect(stage.className).toContain('min-h-[100dvh]');
     await waitFor(() => expect(stage.querySelector('video')?.parentElement?.style.transform).toContain('translate3d'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide carousel controls' }));
     expect(controls.className).toContain('opacity-0');
-    expect(screen.queryByText('1 videos')).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(stage));
+
+    fireEvent.pointerEnter(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    await waitFor(() => expect(controls.className).toContain('opacity-100'));
 
     fireEvent.keyDown(window, { code: 'Space', key: ' ' });
-    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 200 });
-    await waitFor(() => expect(controls.className).toContain('opacity-100'));
     expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide carousel controls' }));
-    await waitFor(() => expect(document.activeElement).toBe(stage));
+    fireEvent.pointerLeave(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    expect(controls.className).toContain('opacity-0');
+
     const slot = stage.querySelector('video')?.parentElement as HTMLElement;
     const pausedTransform = slot.style.transform;
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     await waitFor(() => expect(slot.style.transform).not.toBe(pausedTransform));
     fireEvent.keyUp(window, { key: 'ArrowRight' });
 
-    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 200 });
+    fireEvent.pointerEnter(controlsHoverArea, { pointerId: 2, pointerType: 'mouse' });
     await waitFor(() => expect(controls.className).toContain('opacity-100'));
 
-    fireEvent.keyDown(window, { key: 'h' });
+    fireEvent.pointerLeave(controlsHoverArea, { pointerId: 2, pointerType: 'mouse' });
     expect(controls.className).toContain('opacity-0');
 
-    fireEvent.keyDown(window, { key: 'H' });
-    expect(controls.className).toContain('opacity-100');
+    fireEvent.pointerMove(stage, { pointerId: 3, pointerType: 'mouse', clientX: 640, clientY: 360 });
+    expect(controls.className).toContain('opacity-0');
   });
 
   it('restores played clips when scrubbing backward after they leave the forward edge', async () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EyeOff, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -235,7 +235,7 @@ export function GalleryVideoCarousel({
   const [feedEnded, setFeedEnded] = useState(false);
   const [measuredRatios, setMeasuredRatios] = useState<Record<string, number>>({});
   const [isDragging, setIsDragging] = useState(false);
-  const [isUiHidden, setIsUiHidden] = useState(false);
+  const [isUiHidden, setIsUiHidden] = useState(showControls);
 
   const remainingCount = Math.max(0, feedRef.current.length - nextIndex);
   const visibleCount = activeSlots.length;
@@ -543,16 +543,9 @@ export function GalleryVideoCarousel({
     setPaused(nextPaused);
   }, []);
 
-  const focusCarouselStage = useCallback(() => {
-    window.requestAnimationFrame(() => {
-      stageRef.current?.focus({ preventScroll: true });
-    });
-  }, []);
-
   const hideControls = useCallback(() => {
     setIsUiHidden(true);
-    focusCarouselStage();
-  }, [focusCarouselStage]);
+  }, []);
 
   const revealControls = useCallback(() => {
     if (!showControls) return;
@@ -727,19 +720,8 @@ export function GalleryVideoCarousel({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!enableKeyboardControls) return;
-      const isHideControlsShortcut = event.key.toLowerCase() === 'h';
-      if (event.code !== 'Space' && event.key !== ' ' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && !isHideControlsShortcut) return;
+      if (event.code !== 'Space' && event.key !== ' ' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       if (shouldIgnoreKeyboardShortcutTarget(event.target)) return;
-
-      if (isHideControlsShortcut) {
-        event.preventDefault();
-        setIsUiHidden((current) => {
-          const next = !current;
-          if (next) focusCarouselStage();
-          return next;
-        });
-        return;
-      }
 
       if (isLoading || totalMediaCount === 0) return;
 
@@ -773,7 +755,7 @@ export function GalleryVideoCarousel({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardControls, focusCarouselStage, isLoading, totalMediaCount, unlockVideoPlayback]);
+  }, [enableKeyboardControls, isLoading, totalMediaCount, unlockVideoPlayback]);
 
   useEffect(() => {
     if (activeSlotsRef.current.length === 0) return;
@@ -878,11 +860,16 @@ export function GalleryVideoCarousel({
   return (
     <div
       className="relative h-full min-h-[100dvh] overflow-hidden bg-black"
-      onPointerMove={revealControls}
     >
       {showControls ? (
         <div
-          className={`absolute left-0 right-0 top-0 z-20 flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-opacity duration-150 ${isUiHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+          className="absolute left-0 right-0 top-0 z-20 min-h-20 pb-3"
+          data-testid="gallery-carousel-controls-hover-area"
+          onPointerEnter={revealControls}
+          onPointerLeave={hideControls}
+        >
+        <div
+          className={`flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-opacity duration-150 ${isUiHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
           data-testid="gallery-carousel-controls"
         >
         <div className="min-w-0">
@@ -1004,20 +991,6 @@ export function GalleryVideoCarousel({
             className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              hideControls();
-            }}
-            aria-label="Hide carousel controls"
-            title="Hide carousel controls"
-          >
-            <EyeOff className="mr-2 h-4 w-4" />
-            Hide UI
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
-            onClick={(event) => {
-              event.stopPropagation();
               resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
             }}
             disabled={isLoading || feedRef.current.length === 0}
@@ -1054,6 +1027,7 @@ export function GalleryVideoCarousel({
               <X className="h-4 w-4" />
             </Button>
           ) : null}
+        </div>
         </div>
         </div>
       ) : null}
@@ -1169,7 +1143,7 @@ export function GalleryVideoCarousel({
                 </Button>
               </div>
             </div>
-          ) : showControls && !paused && !isUiHidden ? (
+          ) : showControls && !paused ? (
             <div className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/45 px-3 py-2 text-xs text-white/55">
               <Play className="h-3.5 w-3.5" />
               {videosEnabled && imagesEnabled
