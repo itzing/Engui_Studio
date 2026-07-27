@@ -6,7 +6,7 @@ import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/mode
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeftRight, Check, ChevronDown, Loader2, Plus, Save, Sparkles, Trash2, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
@@ -15,6 +15,7 @@ import { LoRASelector, type LoRAFile } from '@/components/lora/LoRASelector';
 import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
+import PromptTemplateTextarea from '@/components/prompt-wildcards/PromptTemplateTextarea';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { filterLorasForModel } from '@/lib/lora/modelFilters';
@@ -62,6 +63,8 @@ export default function VideoGenerationForm() {
     const [showReuseSuccess, setShowReuseSuccess] = useState(false);
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
+    const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
+    const [promptEditorDraft, setPromptEditorDraft] = useState('');
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
     const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
     const [promptHelperEmptyPrompt, setPromptHelperEmptyPrompt] = useState(false);
@@ -438,6 +441,19 @@ export default function VideoGenerationForm() {
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
         return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+    };
+
+    const openPromptEditor = () => {
+        if (!isDesktopCreateSurface || isPromptHelperLoading) {
+            return;
+        }
+        setPromptEditorDraft(prompt);
+        setIsPromptEditorOpen(true);
+    };
+
+    const savePromptEditor = () => {
+        setPrompt(promptEditorDraft);
+        setIsPromptEditorOpen(false);
     };
 
     const submitPromptHelper = async ({
@@ -1428,10 +1444,14 @@ export default function VideoGenerationForm() {
                                 placeholder={t('generationForm.describeYourVideo')}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
+                                onFocus={openPromptEditor}
                                 disabled={isPromptHelperLoading}
                                 data-testid="video-create-prompt-textarea"
                             />
                         </div>
+                        {isDesktopCreateSurface && (
+                            <div className="text-[11px] text-muted-foreground">Focus the prompt to edit it in a larger window. Press Ctrl+Enter there to save.</div>
+                        )}
                         {isWanPromptHelperVisible && (
                             <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
                                 <Button
@@ -1898,6 +1918,40 @@ export default function VideoGenerationForm() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {isDesktopCreateSurface && (
+                <Dialog open={isPromptEditorOpen} onOpenChange={setIsPromptEditorOpen}>
+                    <DialogContent className="max-w-5xl border-border bg-background text-foreground">
+                        <DialogHeader>
+                            <DialogTitle>Edit video prompt</DialogTitle>
+                            <DialogDescription>Use the larger editor for long prompts. Press Ctrl+Enter to save and close.</DialogDescription>
+                        </DialogHeader>
+                        <PromptTemplateTextarea
+                            value={promptEditorDraft}
+                            onChange={setPromptEditorDraft}
+                            workspaceId={activeWorkspaceId}
+                            autoFocus
+                            onKeyDown={(event) => {
+                                if (isSubmitShortcut(event)) {
+                                    event.preventDefault();
+                                    savePromptEditor();
+                                }
+                            }}
+                            className="min-h-[60vh] w-full resize-y rounded-lg border border-border bg-secondary/50 p-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary"
+                            placeholder={t('generationForm.describeYourVideo')}
+                            testId="video-create-prompt-editor-textarea"
+                        />
+                        <DialogFooter className="gap-2 sm:space-x-0">
+                            <Button type="button" variant="outline" onClick={() => setIsPromptEditorOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="button" onClick={savePromptEditor}>
+                                Save prompt
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             <Dialog
                 open={isPromptHelperOpen}

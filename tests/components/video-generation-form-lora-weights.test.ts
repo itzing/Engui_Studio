@@ -108,6 +108,12 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       if (url.includes('/api/lora?workspaceId=ws-1')) {
         return jsonResponse({ success: true, loras: [] });
       }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
   });
@@ -244,6 +250,62 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear prompt' }));
 
     expect(promptTextarea.value).toBe('');
+  });
+
+  it('edits the desktop Create Video prompt in a larger prompt editor dialog', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'small prompt' } });
+    fireEvent.focus(promptTextarea);
+
+    const editorTextarea = await screen.findByTestId('video-create-prompt-editor-textarea') as HTMLTextAreaElement;
+    expect(editorTextarea.value).toBe('small prompt');
+
+    fireEvent.change(editorTextarea, { target: { value: 'expanded video prompt' } });
+    expect(promptTextarea.value).toBe('small prompt');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save prompt' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('video-create-prompt-editor-textarea')).toBeNull();
+    });
+    expect(promptTextarea.value).toBe('expanded video prompt');
+  });
+
+  it('cancels the desktop Create Video prompt editor without changing the prompt', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'original video prompt' } });
+    fireEvent.focus(promptTextarea);
+
+    const editorTextarea = await screen.findByTestId('video-create-prompt-editor-textarea') as HTMLTextAreaElement;
+    fireEvent.change(editorTextarea, { target: { value: 'discarded edit' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('video-create-prompt-editor-textarea')).toBeNull();
+    });
+    expect(promptTextarea.value).toBe('original video prompt');
   });
 
   it('sends an empty prompt when the WAN22 Prompt Helper empty-prompt option is enabled', async () => {
