@@ -169,15 +169,44 @@ function matchesCarouselMedia(asset: CarouselFeedAsset, options: {
   return matchesGalleryCarouselRatioFilter(asset, options.ratioFilter, asset.type === 'video' ? DEFAULT_VIDEO_RATIO : DEFAULT_IMAGE_RATIO);
 }
 
+function toDisplayAsset(asset: CarouselFeedAsset) {
+  return {
+    id: asset.id,
+    workspaceId: asset.workspaceId,
+    type: asset.type,
+    originalUrl: asset.originalUrl,
+    previewUrl: asset.previewUrl,
+    thumbnailUrl: asset.thumbnailUrl,
+    prompt: asset.prompt,
+    mediaWidth: asset.mediaWidth,
+    mediaHeight: asset.mediaHeight,
+    aspectRatio: asset.aspectRatio,
+    favorited: asset.favorited,
+    addedToGalleryAt: asset.addedToGalleryAt,
+  };
+}
+
 function toFeedItem(asset: CarouselFeedAsset) {
   if (asset.type === 'video') {
-    return { kind: 'video' as const, id: asset.id, asset };
+    return { kind: 'video' as const, id: asset.id, asset: toDisplayAsset(asset) };
   }
   return {
     kind: 'images' as const,
     id: asset.id,
-    images: [asset],
+    images: [toDisplayAsset(asset)],
     aspectRatio: readGalleryCarouselAssetRatio(asset, DEFAULT_IMAGE_RATIO),
+  };
+}
+
+function toDisplayFeedItem(entry: GalleryCarouselFeedItem<CarouselFeedAsset, CarouselFeedAsset>) {
+  if (entry.kind === 'video') {
+    return { kind: 'video' as const, id: entry.id, asset: toDisplayAsset(entry.asset) };
+  }
+  return {
+    kind: 'images' as const,
+    id: entry.id,
+    images: entry.images.map(toDisplayAsset),
+    aspectRatio: entry.aspectRatio,
   };
 }
 
@@ -337,7 +366,7 @@ export async function GET(request: NextRequest) {
         includeVideos,
         includeImages,
         random: createSeededRandom(seed),
-      }) as Array<GalleryCarouselFeedItem<CarouselFeedAsset, CarouselFeedAsset>>;
+      }).map(toDisplayFeedItem);
 
       if (feed.length === 0) {
         return NextResponse.json({
