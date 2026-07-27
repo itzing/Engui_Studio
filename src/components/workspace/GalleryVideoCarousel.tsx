@@ -278,12 +278,57 @@ export function GalleryVideoCarousel({
 
   const resetFeed = useCallback((feed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>, startIndex = 0) => {
     const safeStartIndex = Math.min(Math.max(0, Math.floor(startIndex)), Math.max(0, feed.length - 1));
+    const stage = stageSizeRef.current;
+    const slotSeed = slotCounterRef.current + 1;
+    const currentEntry = feed[safeStartIndex];
+    const currentSize = currentEntry ? buildSlotSize(currentEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+    const currentSlot: CarouselSlot | null = currentEntry && currentSize ? {
+      kind: currentEntry.kind,
+      feedIndex: safeStartIndex,
+      instanceId: `${currentEntry.id}-${slotSeed}-${safeStartIndex}`,
+      entry: currentEntry,
+      x: currentSize.x,
+      y: currentSize.y,
+      width: currentSize.width,
+      height: currentSize.height,
+      imageCycleMs: currentEntry.kind === 'images' ? 0 : undefined,
+      activeImageIndex: currentEntry.kind === 'images' ? 0 : undefined,
+    } : null;
+    const previousEntry = currentSlot ? feed[safeStartIndex - 1] : null;
+    const nextEntry = currentSlot ? feed[safeStartIndex + 1] : null;
+    const previousSize = previousEntry ? buildSlotSize(previousEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+    const nextSize = nextEntry ? buildSlotSize(nextEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+    const previousSlot: CarouselSlot | null = previousEntry && previousSize && currentSlot ? {
+      kind: previousEntry.kind,
+      feedIndex: safeStartIndex - 1,
+      instanceId: `${previousEntry.id}-${slotSeed}-${safeStartIndex - 1}`,
+      entry: previousEntry,
+      x: movementAxisRef.current === 'vertical' ? previousSize.x : currentSlot.x + currentSlot.width - EDGE_OVERLAP_PX,
+      y: movementAxisRef.current === 'vertical' ? currentSlot.y - previousSize.height + EDGE_OVERLAP_PX : previousSize.y,
+      width: previousSize.width,
+      height: previousSize.height,
+      imageCycleMs: previousEntry.kind === 'images' ? 0 : undefined,
+      activeImageIndex: previousEntry.kind === 'images' ? 0 : undefined,
+    } : null;
+    const nextSlot: CarouselSlot | null = nextEntry && nextSize && currentSlot ? {
+      kind: nextEntry.kind,
+      feedIndex: safeStartIndex + 1,
+      instanceId: `${nextEntry.id}-${slotSeed}-${safeStartIndex + 1}`,
+      entry: nextEntry,
+      x: movementAxisRef.current === 'vertical' ? nextSize.x : currentSlot.x - nextSize.width + EDGE_OVERLAP_PX,
+      y: movementAxisRef.current === 'vertical' ? currentSlot.y + currentSlot.height - EDGE_OVERLAP_PX : nextSize.y,
+      width: nextSize.width,
+      height: nextSize.height,
+      imageCycleMs: nextEntry.kind === 'images' ? 0 : undefined,
+      activeImageIndex: nextEntry.kind === 'images' ? 0 : undefined,
+    } : null;
+    const seededSlots = [previousSlot, currentSlot, nextSlot].filter((slot): slot is CarouselSlot => Boolean(slot));
     feedRef.current = feed;
-    activeSlotsRef.current = [];
-    nextIndexRef.current = safeStartIndex;
-    slotCounterRef.current += 1;
-    setActiveSlots([]);
-    setNextIndex(safeStartIndex);
+    activeSlotsRef.current = seededSlots;
+    nextIndexRef.current = seededSlots.length > 0 ? seededSlots[seededSlots.length - 1].feedIndex + 1 : safeStartIndex;
+    slotCounterRef.current = slotSeed;
+    setActiveSlots(seededSlots);
+    setNextIndex(nextIndexRef.current);
     setFeedEnded(feed.length === 0);
     pausedRef.current = false;
     setPaused(false);

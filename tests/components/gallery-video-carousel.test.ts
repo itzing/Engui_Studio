@@ -115,7 +115,7 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
-  it('starts gallery order playback from the selected gallery asset and preserves adjacent order', async () => {
+  it('starts gallery order playback from the selected gallery asset and mounts both adjacent sides', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -165,7 +165,7 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
-      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy();
       expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy();
 
       fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 0 });
@@ -228,7 +228,7 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('img[src="/image-2.png"]')).toBeTruthy());
-      expect(stage.querySelector('img[src="/image-1.png"]')).toBeNull();
+      expect(stage.querySelector('img[src="/image-1.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/image-3.png"]')).toBeTruthy();
     } finally {
       rectSpy.mockRestore();
