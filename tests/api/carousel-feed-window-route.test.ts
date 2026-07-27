@@ -114,4 +114,35 @@ describe('GET /api/carousel/feed-window', () => {
     expect(beforeJson.current.id).toBe('video-3');
     expect(beforeJson.pagination.beforeCursor).toBe(1);
   });
+
+  it('returns stable shuffle windows for the same seed and cursor', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue(
+      Array.from({ length: 8 }, (_, index) => makeAsset(`video-${index + 1}`, index + 1)),
+    );
+
+    const firstResponse = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=shuffle&seed=test-seed&includeVideos=true&includeImages=false&includeLandscape=true&includePortrait=true&before=0&after=3') as any);
+    const secondResponse = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=shuffle&seed=test-seed&includeVideos=true&includeImages=false&includeLandscape=true&includePortrait=true&before=0&after=3') as any);
+    const firstJson = await firstResponse.json();
+    const secondJson = await secondResponse.json();
+
+    expect(firstJson.seed).toBe('test-seed');
+    expect(secondJson.seed).toBe('test-seed');
+    expect([
+      firstJson.current.id,
+      ...firstJson.next.map((entry: any) => entry.id),
+    ]).toEqual([
+      secondJson.current.id,
+      ...secondJson.next.map((entry: any) => entry.id),
+    ]);
+
+    const afterResponse = await GET(new Request(`http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=shuffle&seed=test-seed&direction=after&cursor=${firstJson.pagination.afterCursor}&includeVideos=true&includeImages=false&includeLandscape=true&includePortrait=true&before=0&after=2`) as any);
+    const afterJson = await afterResponse.json();
+
+    expect(afterJson.seed).toBe('test-seed');
+    expect(afterJson.current.id).not.toBe(firstJson.current.id);
+    expect([
+      firstJson.current.id,
+      ...firstJson.next.map((entry: any) => entry.id),
+    ]).not.toContain(afterJson.current.id);
+  });
 });

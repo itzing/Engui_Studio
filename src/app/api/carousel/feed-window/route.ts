@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
 import {
+  buildGalleryCarouselFeed,
   matchesGalleryCarouselRatioFilter,
   readGalleryCarouselAssetRatio,
   resolveGalleryCarouselDimensions,
+  type GalleryCarouselFeedItem,
   type GalleryCarouselRatioFilter,
 } from '@/lib/galleryVideoCarousel';
 
@@ -18,6 +20,7 @@ const DEFAULT_VIDEO_RATIO = 9 / 16;
 const DEFAULT_IMAGE_RATIO = 1;
 
 type CarouselWindowDirection = 'around' | 'before' | 'after';
+type CarouselFeedSource = 'galleryOrder' | 'shuffle';
 
 type CarouselFeedAsset = {
   id: string;
@@ -77,6 +80,26 @@ function parseOptionalIndex(value: string | null) {
   if (value === null) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function normalizeSeed(value: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createSeededRandom(seed: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return () => {
+    hash += 0x6D2B79F5;
+    let value = hash;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function parseBoolean(value: string | null, fallback = false) {
@@ -158,6 +181,45 @@ function toFeedItem(asset: CarouselFeedAsset) {
   };
 }
 
+function sliceFeedWindow<TFeedItem>(
+  feed: TFeedItem[],
+  options: {
+    direction: CarouselWindowDirection;
+    cursorIndex: number | null;
+    anchorIndex: number;
+    beforeLimit: number;
+    afterLimit: number;
+  },
+) {
+  const resolvedAnchorIndex = options.direction === 'before'
+    ? Math.max(0, (options.cursorIndex ?? options.anchorIndex) - 1)
+    : options.direction === 'after'
+      ? Math.min(feed.length - 1, (options.cursorIndex ?? options.anchorIndex) + 1)
+      : options.anchorIndex;
+  const startIndex = options.direction === 'before'
+    ? Math.max(0, resolvedAnchorIndex - options.beforeLimit + 1)
+    : Math.max(0, resolvedAnchorIndex - options.beforeLimit);
+  const endIndexExclusive = options.direction === 'after'
+    ? Math.min(feed.length, resolvedAnchorIndex + options.afterLimit)
+    : Math.min(feed.length, resolvedAnchorIndex + options.afterLimit + 1);
+  const windowItems = feed.slice(startIndex, endIndexExclusive);
+  const windowAnchorOffset = Math.max(0, Math.min(resolvedAnchorIndex - startIndex, windowItems.length - 1));
+
+  return {
+    previous: windowItems.slice(0, windowAnchorOffset),
+    current: windowItems[windowAnchorOffset] || null,
+    next: windowItems.slice(windowAnchorOffset + 1),
+    pagination: {
+      totalCount: feed.length,
+      anchorIndex: resolvedAnchorIndex,
+      hasBefore: startIndex > 0,
+      hasAfter: endIndexExclusive < feed.length,
+      beforeCursor: startIndex > 0 ? startIndex : null,
+      afterCursor: endIndexExclusive < feed.length ? endIndexExclusive - 1 : null,
+    },
+  };
+}
+
 function chooseAnchorIndex(sourceAssets: CarouselFeedAsset[], filteredAssets: Array<{ asset: CarouselFeedAsset; sourceIndex: number }>, anchorAssetId: string | null) {
   if (filteredAssets.length === 0) return -1;
   if (!anchorAssetId) return 0;
@@ -187,7 +249,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
-    const source = searchParams.get('source') || 'galleryOrder';
+    const source = (searchParams.get('source') || 'galleryOrder') as CarouselFeedSource;
     const direction = (searchParams.get('direction') || 'around') as CarouselWindowDirection;
     const anchorAssetId = searchParams.get('anchorAssetId')?.trim() || null;
     const cursorIndex = parseOptionalIndex(searchParams.get('cursor'));
@@ -203,11 +265,12 @@ export async function GET(request: NextRequest) {
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
+    const seed = normalizeSeed(searchParams.get('seed'));
 
     if (!workspaceId) {
       return NextResponse.json({ success: false, error: 'workspaceId is required' }, { status: 400 });
     }
-    if (source !== 'galleryOrder') {
+    if (source !== 'galleryOrder' && source !== 'shuffle') {
       return NextResponse.json({ success: false, error: 'Unsupported carousel feed source' }, { status: 400 });
     }
     if (!['around', 'before', 'after'].includes(direction)) {
@@ -266,6 +329,67 @@ export async function GET(request: NextRequest) {
       return acc;
     }, { videos: 0, images: 0, total: 0 });
 
+    if (source === 'shuffle') {
+      const videos = includeVideos ? filteredAssets.map(({ asset }) => asset).filter(asset => asset.type === 'video') : [];
+      const images = includeImages ? filteredAssets.map(({ asset }) => asset).filter(asset => asset.type === 'image') : [];
+      const feed = buildGalleryCarouselFeed(videos, {
+        images,
+        includeVideos,
+        includeImages,
+        random: createSeededRandom(seed),
+      }) as Array<GalleryCarouselFeedItem<CarouselFeedAsset, CarouselFeedAsset>>;
+
+      if (feed.length === 0) {
+        return NextResponse.json({
+          success: true,
+          source,
+          seed,
+          direction,
+          previous: [],
+          current: null,
+          next: [],
+          pagination: {
+            totalCount: 0,
+            anchorIndex: null,
+            hasBefore: false,
+            hasAfter: false,
+            beforeCursor: null,
+            afterCursor: null,
+          },
+          counts,
+        }, {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            Pragma: 'no-cache',
+            Expires: '0',
+          },
+        });
+      }
+
+      const windowData = sliceFeedWindow(feed, {
+        direction,
+        cursorIndex,
+        anchorIndex: 0,
+        beforeLimit,
+        afterLimit,
+      });
+
+      return NextResponse.json({
+        success: true,
+        source,
+        seed,
+        direction,
+        ...windowData,
+        counts,
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      });
+    }
+
     if (filteredAssets.length === 0) {
       return NextResponse.json({
         success: true,
@@ -293,39 +417,20 @@ export async function GET(request: NextRequest) {
     }
 
     const aroundAnchorIndex = chooseAnchorIndex(sourceAssets, filteredAssets, anchorAssetId);
-    const resolvedAnchorIndex = direction === 'before'
-      ? Math.max(0, (cursorIndex ?? aroundAnchorIndex) - 1)
-      : direction === 'after'
-        ? Math.min(filteredAssets.length - 1, (cursorIndex ?? aroundAnchorIndex) + 1)
-        : aroundAnchorIndex;
-
-    const startIndex = direction === 'before'
-      ? Math.max(0, resolvedAnchorIndex - beforeLimit + 1)
-      : Math.max(0, resolvedAnchorIndex - beforeLimit);
-    const endIndexExclusive = direction === 'after'
-      ? Math.min(filteredAssets.length, resolvedAnchorIndex + afterLimit)
-      : Math.min(filteredAssets.length, resolvedAnchorIndex + afterLimit + 1);
-    const windowAssets = filteredAssets.slice(startIndex, endIndexExclusive);
-    const windowAnchorOffset = Math.max(0, Math.min(resolvedAnchorIndex - startIndex, windowAssets.length - 1));
-    const previous = windowAssets.slice(0, windowAnchorOffset).map(({ asset }) => toFeedItem(asset));
-    const current = windowAssets[windowAnchorOffset] ? toFeedItem(windowAssets[windowAnchorOffset].asset) : null;
-    const next = windowAssets.slice(windowAnchorOffset + 1).map(({ asset }) => toFeedItem(asset));
+    const feed = filteredAssets.map(({ asset }) => toFeedItem(asset));
+    const windowData = sliceFeedWindow(feed, {
+      direction,
+      cursorIndex,
+      anchorIndex: aroundAnchorIndex,
+      beforeLimit,
+      afterLimit,
+    });
 
     return NextResponse.json({
       success: true,
       source,
       direction,
-      previous,
-      current,
-      next,
-      pagination: {
-        totalCount: filteredAssets.length,
-        anchorIndex: resolvedAnchorIndex,
-        hasBefore: startIndex > 0,
-        hasAfter: endIndexExclusive < filteredAssets.length,
-        beforeCursor: startIndex > 0 ? startIndex : null,
-        afterCursor: endIndexExclusive < filteredAssets.length ? endIndexExclusive - 1 : null,
-      },
+      ...windowData,
       counts,
     }, {
       headers: {

@@ -102,25 +102,22 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
+    const videoAssets = [
+      {
+        id: 'video-1',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-1.mp4',
+        previewUrl: '/video-1.mp4',
+        thumbnailUrl: '/video-1.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-1',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-1.mp4',
-            previewUrl: '/video-1.mp4',
-            thumbnailUrl: '/video-1.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -484,25 +481,22 @@ describe('GalleryVideoCarousel', () => {
 
   it('does not repeat playback requests for mounted videos on every frame', async () => {
     const playMock = HTMLMediaElement.prototype.play as unknown as ReturnType<typeof vi.fn>;
+    const videoAssets = [
+      {
+        id: 'video-1',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-1.mp4',
+        previewUrl: '/video-1.mp4',
+        thumbnailUrl: '/video-1.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-1',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-1.mp4',
-            previewUrl: '/video-1.mp4',
-            thumbnailUrl: '/video-1.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -542,23 +536,20 @@ describe('GalleryVideoCarousel', () => {
       left: 0,
       toJSON: () => ({}),
     } as DOMRect);
+    const videoAssets = [1, 2, 3].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 2880,
+      mediaHeight: 720,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [1, 2, 3].map((index) => ({
-          id: `video-${index}`,
-          workspaceId: 'ws-1',
-          type: 'video',
-          originalUrl: `/video-${index}.mp4`,
-          previewUrl: `/video-${index}.mp4`,
-          thumbnailUrl: `/video-${index}.png`,
-          mediaWidth: 2880,
-          mediaHeight: 720,
-          addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-        })),
-        pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -592,36 +583,33 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('pauses movement and keeps it paused after dragging the tape', async () => {
+    const videoAssets = [
+      {
+        id: 'video-1',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-1.mp4',
+        previewUrl: '/video-1.mp4',
+        thumbnailUrl: '/video-1.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+      {
+        id: 'video-2',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-2.mp4',
+        previewUrl: '/video-2.mp4',
+        thumbnailUrl: '/video-2.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:01:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-1',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-1.mp4',
-            previewUrl: '/video-1.mp4',
-            thumbnailUrl: '/video-1.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-          {
-            id: 'video-2',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-2.mp4',
-            previewUrl: '/video-2.mp4',
-            thumbnailUrl: '/video-2.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:01:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 2, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -641,25 +629,22 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('scrubs with held physical arrow keys and ignores keyboard shortcuts from form controls', async () => {
+    const videoAssets = [
+      {
+        id: 'video-1',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-1.mp4',
+        previewUrl: '/video-1.mp4',
+        thumbnailUrl: '/video-1.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-1',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-1.mp4',
-            previewUrl: '/video-1.mp4',
-            thumbnailUrl: '/video-1.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -699,25 +684,22 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('moves the tape upward in vertical movement mode', async () => {
+    const videoAssets = [
+      {
+        id: 'video-landscape',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-landscape.mp4',
+        previewUrl: '/video-landscape.mp4',
+        thumbnailUrl: '/video-landscape.png',
+        mediaWidth: 1280,
+        mediaHeight: 720,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-landscape',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-landscape.mp4',
-            previewUrl: '/video-landscape.mp4',
-            thumbnailUrl: '/video-landscape.png',
-            mediaWidth: 1280,
-            mediaHeight: 720,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -763,11 +745,7 @@ describe('GalleryVideoCarousel', () => {
     }));
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: videoAssets,
-        pagination: { page: 1, limit: 100, totalCount: videoAssets.length, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -800,25 +778,22 @@ describe('GalleryVideoCarousel', () => {
   });
 
   it('fills the fullscreen viewport and reveals desktop carousel controls only in the top hover area', async () => {
+    const videoAssets = [
+      {
+        id: 'video-1',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-1.mp4',
+        previewUrl: '/video-1.mp4',
+        thumbnailUrl: '/video-1.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [
-          {
-            id: 'video-1',
-            workspaceId: 'ws-1',
-            type: 'video',
-            originalUrl: '/video-1.mp4',
-            previewUrl: '/video-1.mp4',
-            thumbnailUrl: '/video-1.png',
-            mediaWidth: 720,
-            mediaHeight: 1280,
-            addedToGalleryAt: '2026-07-21T06:00:00Z',
-          },
-        ],
-        pagination: { page: 1, limit: 100, totalCount: 1, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -863,23 +838,20 @@ describe('GalleryVideoCarousel', () => {
 
   it('restores played clips when scrubbing backward after they leave the forward edge', async () => {
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const videoAssets = [1, 2, 3].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({
-        success: true,
-        assets: [1, 2, 3].map((index) => ({
-          id: `video-${index}`,
-          workspaceId: 'ws-1',
-          type: 'video',
-          originalUrl: `/video-${index}.mp4`,
-          previewUrl: `/video-${index}.mp4`,
-          thumbnailUrl: `/video-${index}.png`,
-          mediaWidth: 720,
-          mediaHeight: 1280,
-          addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-        })),
-        pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
-      }),
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -946,15 +918,13 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      const type = search.get('type');
-      const assets = type === 'image' ? imageAssets : videoAssets;
+      const assets = [
+        ...(search.get('includeVideos') === 'true' ? videoAssets : []),
+        ...(search.get('includeImages') === 'true' ? imageAssets : []),
+      ];
       return {
         ok: true,
-        json: async () => ({
-          success: true,
-          assets,
-          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
-        }),
+        json: async () => makeCarouselWindowResponse(assets, 0),
       };
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -962,7 +932,10 @@ describe('GalleryVideoCarousel', () => {
     render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(String(fetchMock.mock.calls[0][0])).toContain('type=video');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/carousel/feed-window');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('source=shuffle');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('includeVideos=true');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('includeImages=false');
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
@@ -970,8 +943,8 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.click(screen.getByLabelText('Include image slots'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('type=image'))).toBe(true);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1][0])).toContain('includeImages=true');
     await waitFor(() => expect(screen.getByText('2 videos · 5 images')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
     expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
@@ -981,7 +954,7 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.click(screen.getByLabelText('Include image slots'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(screen.getByText('2 videos')).toBeTruthy());
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(false);
     expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
@@ -1003,14 +976,13 @@ describe('GalleryVideoCarousel', () => {
       favorited: true,
       addedToGalleryAt: '2026-07-21T06:00:00Z',
     }];
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        success: true,
-        assets: videoAssets,
-        pagination: { page: 1, limit: 100, totalCount: videoAssets.length, hasNextPage: false },
-      }),
-    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return {
+        ok: true,
+        json: async () => makeCarouselWindowResponse(videoAssets, 0),
+      };
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
@@ -1056,15 +1028,13 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      const type = search.get('type');
-      const assets = type === 'image' ? imageAssets : videoAssets;
+      const assets = [
+        ...(search.get('includeVideos') === 'true' ? videoAssets : []),
+        ...(search.get('includeImages') === 'true' ? imageAssets : []),
+      ];
       return {
         ok: true,
-        json: async () => ({
-          success: true,
-          assets,
-          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
-        }),
+        json: async () => makeCarouselWindowResponse(assets, 0),
       };
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -1076,7 +1046,8 @@ describe('GalleryVideoCarousel', () => {
     }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(String(fetchMock.mock.calls[0][0])).toContain('type=image');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('includeVideos=false');
+    expect(String(fetchMock.mock.calls[0][0])).toContain('includeImages=true');
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
@@ -1085,7 +1056,7 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.click(screen.getByLabelText('Include videos'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(false);
     await waitFor(() => expect(screen.getByText('1 videos · 5 images')).toBeTruthy());
@@ -1145,15 +1116,19 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      const type = search.get('type');
-      const assets = type === 'image' ? imageAssets : videoAssets;
+      const includeLandscape = search.get('includeLandscape') === 'true';
+      const includePortrait = search.get('includePortrait') === 'true';
+      const filterByRatio = (asset: any) => {
+        const isLandscape = asset.mediaWidth >= asset.mediaHeight;
+        return isLandscape ? includeLandscape : includePortrait;
+      };
+      const assets = [
+        ...(search.get('includeVideos') === 'true' ? videoAssets.filter(filterByRatio) : []),
+        ...(search.get('includeImages') === 'true' ? imageAssets.filter(filterByRatio) : []),
+      ];
       return {
         ok: true,
-        json: async () => ({
-          success: true,
-          assets,
-          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
-        }),
+        json: async () => makeCarouselWindowResponse(assets, 0),
       };
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -1165,7 +1140,7 @@ describe('GalleryVideoCarousel', () => {
       initialIncludePortrait: false,
     }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText('1 videos · 1 images')).toBeTruthy());
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
@@ -1174,7 +1149,7 @@ describe('GalleryVideoCarousel', () => {
 
     fireEvent.click(screen.getByLabelText('Include landscape assets'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('No selected gallery media in this workspace.')).toBeTruthy());
   });
 });
