@@ -266,6 +266,14 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     return loadedViewerItems.findIndex((entry) => entry.id === selectedAssetId);
   }, [loadedViewerItems, selectedAssetId]);
 
+  const carouselGalleryOrderFilter = useMemo(() => ({
+    bucket: semanticFilter,
+    query,
+    includeTrashed: showTrashed,
+    onlyTrashed: showTrashed,
+    favoritesOnly,
+  }), [favoritesOnly, query, semanticFilter, showTrashed]);
+
   const sidebar = (
     <aside className="w-[320px] shrink-0 border-l border-r-0 border-white/10 bg-zinc-950/95 backdrop-blur-sm p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -499,7 +507,13 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
           data-testid="gallery-video-carousel-modal"
           className="fixed inset-0 z-[70] bg-black text-white"
         >
-          <GalleryVideoCarousel workspaceId={workspaceId} onClose={() => setCarouselOpen(false)} />
+          <GalleryVideoCarousel
+            workspaceId={workspaceId}
+            onClose={() => setCarouselOpen(false)}
+            playbackMode="galleryOrder"
+            initialAnchorAssetId={selectedAssetId}
+            galleryOrderFilter={carouselGalleryOrderFilter}
+          />
         </div>
       ) : null}
 

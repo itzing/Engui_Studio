@@ -69,6 +69,14 @@ type DragState = {
 };
 
 type CarouselMovementAxis = 'horizontal' | 'vertical';
+type CarouselPlaybackMode = 'shuffle' | 'galleryOrder';
+type GalleryOrderFilter = {
+  bucket?: 'all' | 'common' | 'draft' | 'upscale';
+  query?: string;
+  includeTrashed?: boolean;
+  onlyTrashed?: boolean;
+  favoritesOnly?: boolean;
+};
 
 const PAGE_LIMIT = 100;
 const DEFAULT_VIDEO_RATIO = 9 / 16;
@@ -121,7 +129,7 @@ function getSlotTrimBuffer(stage: { width: number; height: number }, isVertical:
   return Math.max(stage.width * HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO, stage.height);
 }
 
-async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video', onlyFavorites: boolean) {
+async function fetchAllGalleryAssets(workspaceId: string, type: 'all' | 'image' | 'video', onlyFavorites: boolean, galleryOrderFilter?: GalleryOrderFilter) {
   const assets: GalleryCarouselAsset[] = [];
   let page = 1;
   let hasNextPage = true;
@@ -135,7 +143,19 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video
       bucket: 'all',
       type,
     });
-    if (onlyFavorites) {
+    if (galleryOrderFilter?.bucket) {
+      search.set('bucket', galleryOrderFilter.bucket);
+    }
+    if (galleryOrderFilter?.query?.trim()) {
+      search.set('q', galleryOrderFilter.query.trim());
+    }
+    if (galleryOrderFilter?.includeTrashed) {
+      search.set('includeTrashed', 'true');
+    }
+    if (galleryOrderFilter?.onlyTrashed) {
+      search.set('onlyTrashed', 'true');
+    }
+    if (onlyFavorites || galleryOrderFilter?.favoritesOnly) {
       search.set('favoritesOnly', 'true');
     }
     const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
@@ -144,7 +164,7 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'image' | 'video
       throw new Error(data.error || `Failed to load gallery ${type}s`);
     }
 
-    assets.push(...data.assets.filter((asset) => asset.type === type));
+    assets.push(...data.assets.filter((asset) => type === 'all' ? asset.type !== 'audio' : asset.type === type));
     hasNextPage = Boolean(data.pagination.hasNextPage);
     page += 1;
   }
@@ -173,6 +193,9 @@ type GalleryVideoCarouselProps = {
   showControls?: boolean;
   enableKeyboardControls?: boolean;
   movementAxis?: CarouselMovementAxis;
+  playbackMode?: CarouselPlaybackMode;
+  initialAnchorAssetId?: string | null;
+  galleryOrderFilter?: GalleryOrderFilter;
 };
 
 export function GalleryVideoCarousel({
@@ -188,6 +211,9 @@ export function GalleryVideoCarousel({
   showControls = true,
   enableKeyboardControls = true,
   movementAxis = 'horizontal',
+  playbackMode = 'shuffle',
+  initialAnchorAssetId = null,
+  galleryOrderFilter,
 }: GalleryVideoCarouselProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
@@ -199,6 +225,7 @@ export function GalleryVideoCarousel({
   const feedRef = useRef<Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>>([]);
   const sourceVideosRef = useRef<GalleryCarouselAsset[]>([]);
   const sourceImagesRef = useRef<GalleryCarouselAsset[]>([]);
+  const sourceOrderedAssetsRef = useRef<GalleryCarouselAsset[]>([]);
   const nextIndexRef = useRef(0);
   const lastFrameTimestampRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -248,23 +275,55 @@ export function GalleryVideoCarousel({
     movementAxisRef.current = movementAxis;
   }, [movementAxis]);
 
-  const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
-    const feed = buildGalleryCarouselFeed(videos, { images, includeVideos, includeImages });
+  const resetFeed = useCallback((feed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>, startIndex = 0) => {
+    const safeStartIndex = Math.min(Math.max(0, Math.floor(startIndex)), Math.max(0, feed.length - 1));
     feedRef.current = feed;
     activeSlotsRef.current = [];
-    nextIndexRef.current = 0;
+    nextIndexRef.current = safeStartIndex;
     slotCounterRef.current += 1;
     setActiveSlots([]);
-    setNextIndex(0);
+    setNextIndex(safeStartIndex);
     setFeedEnded(feed.length === 0);
     pausedRef.current = false;
     setPaused(false);
   }, []);
 
+  const buildShuffleFeed = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => (
+    buildGalleryCarouselFeed(videos, { images, includeVideos, includeImages })
+  ), []);
+
+  const buildGalleryOrderFeed = useCallback((assets: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
+    const filteredAssets = assets.filter((asset) => {
+      if (asset.type === 'video' && !includeVideos) return false;
+      if (asset.type === 'image' && !includeImages) return false;
+      if (asset.type !== 'video' && asset.type !== 'image') return false;
+      return matchesGalleryCarouselRatioFilter(asset, ratioFilter, asset.type === 'video' ? DEFAULT_VIDEO_RATIO : DEFAULT_IMAGE_RATIO);
+    });
+
+    const feed = filteredAssets.map((asset): GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> => {
+      if (asset.type === 'video') {
+        return { kind: 'video', id: asset.id, asset };
+      }
+      return {
+        kind: 'images',
+        id: asset.id,
+        images: [asset],
+        aspectRatio: readGalleryCarouselAssetRatio(asset, DEFAULT_IMAGE_RATIO),
+      };
+    });
+    const startIndex = initialAnchorAssetId ? feed.findIndex((entry) => entry.id === initialAnchorAssetId) : -1;
+    return { feed, startIndex: startIndex >= 0 ? startIndex : 0 };
+  }, [initialAnchorAssetId]);
+
+  const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
+    resetFeed(buildShuffleFeed(videos, images, includeVideos, includeImages), 0);
+  }, [buildShuffleFeed, resetFeed]);
+
   const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter, onlyFavoritedAssets: boolean) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
+      sourceOrderedAssetsRef.current = [];
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
       resetPlayback([], [], includeVideos, includeImages);
@@ -280,6 +339,24 @@ export function GalleryVideoCarousel({
     setNextIndex(0);
     setFeedEnded(false);
     try {
+      if (playbackMode === 'galleryOrder') {
+        const orderedAssets = await fetchAllGalleryAssets(workspaceId, 'all', onlyFavoritedAssets, galleryOrderFilter);
+        const filteredVideos = includeVideos
+          ? orderedAssets.filter((asset) => asset.type === 'video' && matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO))
+          : [];
+        const filteredImages = includeImages
+          ? orderedAssets.filter((asset) => asset.type === 'image' && matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO))
+          : [];
+        const { feed, startIndex } = buildGalleryOrderFeed(orderedAssets, includeVideos, includeImages, ratioFilter);
+        sourceOrderedAssetsRef.current = orderedAssets;
+        sourceVideosRef.current = filteredVideos;
+        sourceImagesRef.current = filteredImages;
+        setSourceVideos(filteredVideos);
+        setSourceImages(filteredImages);
+        resetFeed(feed, startIndex);
+        return;
+      }
+
       const [videos, images] = await Promise.all([
         includeVideos ? fetchAllGalleryAssets(workspaceId, 'video', onlyFavoritedAssets) : Promise.resolve([]),
         includeImages ? fetchAllGalleryAssets(workspaceId, 'image', onlyFavoritedAssets) : Promise.resolve([]),
@@ -288,6 +365,7 @@ export function GalleryVideoCarousel({
       const filteredImages = images.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO));
       sourceVideosRef.current = filteredVideos;
       sourceImagesRef.current = filteredImages;
+      sourceOrderedAssetsRef.current = [];
       setSourceVideos(filteredVideos);
       setSourceImages(filteredImages);
       resetPlayback(filteredVideos, filteredImages, includeVideos, includeImages);
@@ -295,13 +373,14 @@ export function GalleryVideoCarousel({
       setError(loadError instanceof Error ? loadError.message : 'Failed to load gallery feed');
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
+      sourceOrderedAssetsRef.current = [];
       setSourceVideos([]);
       setSourceImages([]);
       resetPlayback([], [], includeVideos, includeImages);
     } finally {
       setIsLoading(false);
     }
-  }, [resetPlayback, workspaceId]);
+  }, [buildGalleryOrderFeed, galleryOrderFilter, playbackMode, resetFeed, resetPlayback, workspaceId]);
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
@@ -991,12 +1070,17 @@ export function GalleryVideoCarousel({
             className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
+              if (playbackMode === 'galleryOrder') {
+                const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
+                resetFeed(feed, startIndex);
+                return;
+              }
               resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
             }}
             disabled={isLoading || feedRef.current.length === 0}
           >
-            <Shuffle className="mr-2 h-4 w-4" />
-            Shuffle
+            {playbackMode === 'galleryOrder' ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
+            {playbackMode === 'galleryOrder' ? 'Restart' : 'Shuffle'}
           </Button>
           <Button
             variant="ghost"
@@ -1135,11 +1219,16 @@ export function GalleryVideoCarousel({
                   className="h-8 rounded-md"
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (playbackMode === 'galleryOrder') {
+                      const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
+                      resetFeed(feed, startIndex);
+                      return;
+                    }
                     resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
                   }}
                 >
-                  <Shuffle className="mr-2 h-4 w-4" />
-                  Shuffle again
+                  {playbackMode === 'galleryOrder' ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
+                  {playbackMode === 'galleryOrder' ? 'Restart' : 'Shuffle again'}
                 </Button>
               </div>
             </div>
