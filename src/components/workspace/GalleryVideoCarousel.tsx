@@ -48,6 +48,29 @@ type GalleryCarouselResponse = {
   error?: string;
 };
 
+type CarouselFeedWindowPagination = {
+  totalCount: number;
+  anchorIndex: number | null;
+  hasBefore: boolean;
+  hasAfter: boolean;
+  beforeCursor: number | null;
+  afterCursor: number | null;
+};
+
+type CarouselFeedWindowResponse = {
+  success: boolean;
+  previous?: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>;
+  current?: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> | null;
+  next?: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>;
+  pagination?: CarouselFeedWindowPagination;
+  counts?: {
+    videos: number;
+    images: number;
+    total: number;
+  };
+  error?: string;
+};
+
 type CarouselSlot = {
   kind: 'video' | 'images';
   feedIndex: number;
@@ -95,6 +118,8 @@ const VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 0.2;
 const VERTICAL_SLOT_TRIM_BUFFER_MIN_PX = 120;
 const DEFAULT_INITIAL_NEIGHBOR_COUNT = 1;
 const GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT = 3;
+const GALLERY_VIEW_WINDOW_SIDE_LIMIT = 12;
+const GALLERY_VIEW_PREFETCH_LIMIT = 24;
 
 function readVideoAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -177,6 +202,62 @@ async function fetchAllGalleryAssets(workspaceId: string, type: 'all' | 'image' 
   return assets;
 }
 
+async function fetchCarouselFeedWindow(
+  workspaceId: string,
+  options: {
+    direction: 'around' | 'before' | 'after';
+    cursor?: number | null;
+    anchorAssetId?: string | null;
+    includeVideos: boolean;
+    includeImages: boolean;
+    ratioFilter: GalleryCarouselRatioFilter;
+    onlyFavorites: boolean;
+    before: number;
+    after: number;
+    galleryOrderFilter?: GalleryOrderFilter;
+  },
+) {
+  const search = new URLSearchParams({
+    workspaceId,
+    source: 'galleryOrder',
+    direction: options.direction,
+    includeVideos: String(options.includeVideos),
+    includeImages: String(options.includeImages),
+    includeLandscape: String(options.ratioFilter.includeLandscape),
+    includePortrait: String(options.ratioFilter.includePortrait),
+    favoritesOnly: String(options.onlyFavorites || Boolean(options.galleryOrderFilter?.favoritesOnly)),
+    before: String(options.before),
+    after: String(options.after),
+    sort: 'newest',
+  });
+  if (options.cursor !== undefined && options.cursor !== null) {
+    search.set('cursor', String(options.cursor));
+  }
+  if (options.anchorAssetId) {
+    search.set('anchorAssetId', options.anchorAssetId);
+  }
+  if (options.galleryOrderFilter?.bucket) {
+    search.set('bucket', options.galleryOrderFilter.bucket);
+  }
+  if (options.galleryOrderFilter?.query?.trim()) {
+    search.set('q', options.galleryOrderFilter.query.trim());
+  }
+  if (options.galleryOrderFilter?.includeTrashed) {
+    search.set('includeTrashed', 'true');
+  }
+  if (options.galleryOrderFilter?.onlyTrashed) {
+    search.set('onlyTrashed', 'true');
+  }
+
+  const response = await fetch(`/api/carousel/feed-window?${search.toString()}`, { cache: 'no-store' });
+  const data = await response.json() as CarouselFeedWindowResponse;
+  if (!response.ok || !data.success || !data.pagination) {
+    throw new Error(data.error || 'Failed to load carousel feed window');
+  }
+
+  return data;
+}
+
 function shouldIgnoreKeyboardShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -230,7 +311,9 @@ export function GalleryVideoCarousel({
   const feedRef = useRef<Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>>([]);
   const sourceVideosRef = useRef<GalleryCarouselAsset[]>([]);
   const sourceImagesRef = useRef<GalleryCarouselAsset[]>([]);
-  const sourceOrderedAssetsRef = useRef<GalleryCarouselAsset[]>([]);
+  const carouselWindowPaginationRef = useRef<CarouselFeedWindowPagination | null>(null);
+  const isLoadingBeforeWindowRef = useRef(false);
+  const isLoadingAfterWindowRef = useRef(false);
   const nextIndexRef = useRef(0);
   const lastFrameTimestampRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -265,6 +348,7 @@ export function GalleryVideoCarousel({
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingWindow, setIsLoadingWindow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedEnded, setFeedEnded] = useState(false);
   const [measuredRatios, setMeasuredRatios] = useState<Record<string, number>>({});
@@ -361,53 +445,8 @@ export function GalleryVideoCarousel({
     buildGalleryCarouselFeed(videos, { images, includeVideos, includeImages })
   ), []);
 
-  const buildGalleryOrderFeed = useCallback((assets: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
-    const filteredAssets = assets
-      .map((asset, sourceIndex) => ({ asset, sourceIndex }))
-      .filter(({ asset }) => {
-        if (asset.type === 'video' && !includeVideos) return false;
-        if (asset.type === 'image' && !includeImages) return false;
-        if (asset.type !== 'video' && asset.type !== 'image') return false;
-        return matchesGalleryCarouselRatioFilter(asset, ratioFilter, asset.type === 'video' ? DEFAULT_VIDEO_RATIO : DEFAULT_IMAGE_RATIO);
-      });
-
-    const feed = filteredAssets.map(({ asset }): GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> => {
-      if (asset.type === 'video') {
-        return { kind: 'video', id: asset.id, asset };
-      }
-      return {
-        kind: 'images',
-        id: asset.id,
-        images: [asset],
-        aspectRatio: readGalleryCarouselAssetRatio(asset, DEFAULT_IMAGE_RATIO),
-      };
-    });
-    const exactStartIndex = currentGalleryAssetId ? feed.findIndex((entry) => entry.id === currentGalleryAssetId) : -1;
-    if (exactStartIndex >= 0 || !currentGalleryAssetId) {
-      return { feed, startIndex: exactStartIndex >= 0 ? exactStartIndex : 0 };
-    }
-
-    const sourceStartIndex = assets.findIndex((asset) => asset.id === currentGalleryAssetId);
-    if (sourceStartIndex < 0) {
-      return { feed, startIndex: 0 };
-    }
-
-    let nearestStartIndex = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    let nearestDirection = Number.POSITIVE_INFINITY;
-    filteredAssets.forEach(({ sourceIndex }, feedIndex) => {
-      const distance = Math.abs(sourceIndex - sourceStartIndex);
-      const direction = sourceIndex >= sourceStartIndex ? 0 : 1;
-      if (distance < nearestDistance || (distance === nearestDistance && direction < nearestDirection)) {
-        nearestStartIndex = feedIndex;
-        nearestDistance = distance;
-        nearestDirection = direction;
-      }
-    });
-    return { feed, startIndex: nearestStartIndex };
-  }, [currentGalleryAssetId]);
-
   const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
+    carouselWindowPaginationRef.current = null;
     resetFeed(buildShuffleFeed(videos, images, includeVideos, includeImages), 0);
   }, [buildShuffleFeed, resetFeed]);
 
@@ -415,9 +454,9 @@ export function GalleryVideoCarousel({
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
-      sourceOrderedAssetsRef.current = [];
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
+      carouselWindowPaginationRef.current = null;
       resetPlayback([], [], includeVideos, includeImages);
       return;
     }
@@ -430,22 +469,43 @@ export function GalleryVideoCarousel({
     setActiveSlots([]);
     setNextIndex(0);
     setFeedEnded(false);
+    carouselWindowPaginationRef.current = null;
     try {
       if (useGalleryView) {
-        const orderedAssets = await fetchAllGalleryAssets(workspaceId, 'all', onlyFavoritedAssets, galleryOrderFilter);
-        const filteredVideos = includeVideos
-          ? orderedAssets.filter((asset) => asset.type === 'video' && matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO))
-          : [];
-        const filteredImages = includeImages
-          ? orderedAssets.filter((asset) => asset.type === 'image' && matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO))
-          : [];
-        const { feed, startIndex } = buildGalleryOrderFeed(orderedAssets, includeVideos, includeImages, ratioFilter);
-        sourceOrderedAssetsRef.current = orderedAssets;
-        sourceVideosRef.current = filteredVideos;
-        sourceImagesRef.current = filteredImages;
-        setSourceVideos(filteredVideos);
-        setSourceImages(filteredImages);
-        resetFeed(feed, startIndex, { pause: true, seedNeighborCount: GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT });
+        const windowData = await fetchCarouselFeedWindow(workspaceId, {
+          direction: 'around',
+          anchorAssetId: currentGalleryAssetId,
+          includeVideos,
+          includeImages,
+          ratioFilter,
+          onlyFavorites: onlyFavoritedAssets,
+          before: GALLERY_VIEW_WINDOW_SIDE_LIMIT,
+          after: GALLERY_VIEW_WINDOW_SIDE_LIMIT,
+          galleryOrderFilter,
+        });
+        const feed = [
+          ...(windowData.previous || []),
+          ...(windowData.current ? [windowData.current] : []),
+          ...(windowData.next || []),
+        ];
+        carouselWindowPaginationRef.current = windowData.pagination || null;
+        sourceVideosRef.current = [];
+        sourceImagesRef.current = [];
+        setSourceVideos(Array.from({ length: windowData.counts?.videos || 0 }, (_, index) => ({
+          id: `carousel-video-count-${index}`,
+          workspaceId,
+          type: 'video' as const,
+          originalUrl: '',
+          addedToGalleryAt: '',
+        })));
+        setSourceImages(Array.from({ length: windowData.counts?.images || 0 }, (_, index) => ({
+          id: `carousel-image-count-${index}`,
+          workspaceId,
+          type: 'image' as const,
+          originalUrl: '',
+          addedToGalleryAt: '',
+        })));
+        resetFeed(feed, windowData.previous?.length || 0, { pause: true, seedNeighborCount: GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT });
         return;
       }
 
@@ -457,7 +517,6 @@ export function GalleryVideoCarousel({
       const filteredImages = images.filter((asset) => matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_IMAGE_RATIO));
       sourceVideosRef.current = filteredVideos;
       sourceImagesRef.current = filteredImages;
-      sourceOrderedAssetsRef.current = [];
       setSourceVideos(filteredVideos);
       setSourceImages(filteredImages);
       resetPlayback(filteredVideos, filteredImages, includeVideos, includeImages);
@@ -465,14 +524,14 @@ export function GalleryVideoCarousel({
       setError(loadError instanceof Error ? loadError.message : 'Failed to load gallery feed');
       sourceVideosRef.current = [];
       sourceImagesRef.current = [];
-      sourceOrderedAssetsRef.current = [];
+      carouselWindowPaginationRef.current = null;
       setSourceVideos([]);
       setSourceImages([]);
       resetPlayback([], [], includeVideos, includeImages);
     } finally {
       setIsLoading(false);
     }
-  }, [buildGalleryOrderFeed, galleryOrderFilter, resetFeed, resetPlayback, workspaceId]);
+  }, [currentGalleryAssetId, galleryOrderFilter, resetFeed, resetPlayback, workspaceId]);
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
@@ -544,6 +603,87 @@ export function GalleryVideoCarousel({
   useEffect(() => {
     measuredRatiosRef.current = measuredRatios;
   }, [measuredRatios]);
+
+  const extendGalleryViewWindow = useCallback(async (direction: 'before' | 'after') => {
+    if (!workspaceId || !galleryViewEnabledRef.current) return;
+    const pagination = carouselWindowPaginationRef.current;
+    if (!pagination) return;
+    if (direction === 'before') {
+      if (!pagination.hasBefore || pagination.beforeCursor === null || isLoadingBeforeWindowRef.current) return;
+      isLoadingBeforeWindowRef.current = true;
+    } else {
+      if (!pagination.hasAfter || pagination.afterCursor === null || isLoadingAfterWindowRef.current) return;
+      isLoadingAfterWindowRef.current = true;
+    }
+
+    setIsLoadingWindow(true);
+    try {
+      const windowData = await fetchCarouselFeedWindow(workspaceId, {
+        direction,
+        cursor: direction === 'before' ? pagination.beforeCursor : pagination.afterCursor,
+        anchorAssetId: currentGalleryAssetId,
+        includeVideos: videosEnabledRef.current,
+        includeImages: imagesEnabledRef.current,
+        ratioFilter: ratioFilterRef.current,
+        onlyFavorites: onlyFavoritesRef.current,
+        before: direction === 'before' ? GALLERY_VIEW_PREFETCH_LIMIT : 0,
+        after: direction === 'after' ? GALLERY_VIEW_PREFETCH_LIMIT : 0,
+        galleryOrderFilter,
+      });
+      const nextItems = [
+        ...(windowData.previous || []),
+        ...(windowData.current ? [windowData.current] : []),
+        ...(windowData.next || []),
+      ];
+      const mergedPagination = windowData.pagination
+        ? direction === 'before'
+          ? {
+              ...windowData.pagination,
+              hasAfter: pagination.hasAfter,
+              afterCursor: pagination.afterCursor,
+            }
+          : {
+              ...windowData.pagination,
+              hasBefore: pagination.hasBefore,
+              beforeCursor: pagination.beforeCursor,
+            }
+        : pagination;
+      if (nextItems.length === 0) {
+        carouselWindowPaginationRef.current = mergedPagination;
+        return;
+      }
+
+      const existingIds = new Set(feedRef.current.map((entry) => entry.id));
+      const newItems = nextItems.filter((entry) => !existingIds.has(entry.id));
+      if (newItems.length === 0) {
+        carouselWindowPaginationRef.current = mergedPagination;
+        return;
+      }
+
+      if (direction === 'before') {
+        feedRef.current = [...newItems, ...feedRef.current];
+        nextIndexRef.current += newItems.length;
+        activeSlotsRef.current = activeSlotsRef.current.map((slot) => ({
+          ...slot,
+          feedIndex: slot.feedIndex + newItems.length,
+        }));
+        setNextIndex(nextIndexRef.current);
+        setActiveSlots(activeSlotsRef.current);
+      } else {
+        feedRef.current = [...feedRef.current, ...newItems];
+      }
+      carouselWindowPaginationRef.current = mergedPagination;
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load carousel feed window');
+    } finally {
+      if (direction === 'before') {
+        isLoadingBeforeWindowRef.current = false;
+      } else {
+        isLoadingAfterWindowRef.current = false;
+      }
+      setIsLoadingWindow(isLoadingBeforeWindowRef.current || isLoadingAfterWindowRef.current);
+    }
+  }, [currentGalleryAssetId, galleryOrderFilter, workspaceId]);
 
   useEffect(() => {
     const element = stageRef.current;
@@ -628,7 +768,10 @@ export function GalleryVideoCarousel({
   const maybeSpawnNext = useCallback(() => {
     const activeSlots = activeSlotsRef.current;
     const nextFeedIndex = activeSlots.length > 0 ? activeSlots[activeSlots.length - 1].feedIndex + 1 : nextIndexRef.current;
-    if (nextFeedIndex >= feedRef.current.length) return;
+    if (nextFeedIndex >= feedRef.current.length) {
+      void extendGalleryViewWindow('after');
+      return;
+    }
     if (activeSlots.length === 0) {
       spawnNext();
       return;
@@ -642,7 +785,7 @@ export function GalleryVideoCarousel({
     if (shouldSpawn) {
       spawnNext();
     }
-  }, [spawnNext]);
+  }, [extendGalleryViewWindow, spawnNext]);
 
   const maybeSpawnPrevious = useCallback(() => {
     const activeSlots = activeSlotsRef.current;
@@ -652,7 +795,10 @@ export function GalleryVideoCarousel({
     }
 
     const oldestSlot = activeSlots[0];
-    if (oldestSlot.feedIndex <= 0) return;
+    if (oldestSlot.feedIndex <= 0) {
+      void extendGalleryViewWindow('before');
+      return;
+    }
 
     const stage = stageSizeRef.current;
     const shouldSpawn = movementAxisRef.current === 'vertical'
@@ -661,7 +807,7 @@ export function GalleryVideoCarousel({
     if (shouldSpawn) {
       spawnPrevious();
     }
-  }, [spawnNext, spawnPrevious]);
+  }, [extendGalleryViewWindow, spawnNext, spawnPrevious]);
 
   const fillAdjacentSlots = useCallback((direction: -1 | 1) => {
     if (activeSlotsRef.current.length === 0) {
@@ -979,9 +1125,10 @@ export function GalleryVideoCarousel({
     if (totalMediaCount === 0) return onlyFavorites ? 'No selected favorite gallery media' : 'No selected gallery media';
     if (feedEnded) return 'End of feed';
     if (paused) return 'Movement paused';
+    if (isLoadingWindow) return 'Loading nearby carousel media';
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
-  }, [error, feedEnded, imagesEnabled, isLoading, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
+  }, [error, feedEnded, imagesEnabled, isLoading, isLoadingWindow, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabledRef.current) return;
@@ -1188,8 +1335,7 @@ export function GalleryVideoCarousel({
             onClick={(event) => {
               event.stopPropagation();
               if (galleryViewEnabledRef.current) {
-                const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
-                resetFeed(feed, startIndex);
+                void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, true);
                 return;
               }
               resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
@@ -1286,6 +1432,7 @@ export function GalleryVideoCarousel({
                   playsInline
                   preload="metadata"
                   onLoadedMetadata={(event) => {
+                    if (slot.entry.kind !== 'video') return;
                     handleMetadata(slot.entry.asset, event.currentTarget);
                     requestVideoPlayback(slot.instanceId, event.currentTarget);
                   }}
@@ -1337,8 +1484,7 @@ export function GalleryVideoCarousel({
                   onClick={(event) => {
                     event.stopPropagation();
                     if (galleryViewEnabledRef.current) {
-                      const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
-                      resetFeed(feed, startIndex);
+                      void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, true);
                       return;
                     }
                     resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);

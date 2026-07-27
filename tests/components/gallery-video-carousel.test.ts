@@ -7,6 +7,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
 
+function makeCarouselWindowResponse(assets: any[], currentIndex: number) {
+  const toFeedItem = (asset: any) => asset.type === 'image'
+    ? { kind: 'images', id: asset.id, images: [asset], aspectRatio: asset.mediaWidth / asset.mediaHeight }
+    : { kind: 'video', id: asset.id, asset };
+  return {
+    success: true,
+    previous: assets.slice(0, currentIndex).map(toFeedItem),
+    current: assets[currentIndex] ? toFeedItem(assets[currentIndex]) : null,
+    next: assets.slice(currentIndex + 1).map(toFeedItem),
+    pagination: {
+      totalCount: assets.length,
+      anchorIndex: currentIndex,
+      hasBefore: false,
+      hasAfter: false,
+      beforeCursor: null,
+      afterCursor: null,
+    },
+    counts: {
+      videos: assets.filter((asset) => asset.type === 'video').length,
+      images: assets.filter((asset) => asset.type === 'image').length,
+      total: assets.length,
+    },
+  };
+}
+
 describe('GalleryVideoCarousel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,14 +73,15 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      expect(search.get('type')).toBe('all');
+      expect(url).toContain('/api/carousel/feed-window');
+      expect(search.get('source')).toBe('galleryOrder');
+      expect(search.get('includeVideos')).toBe('false');
+      expect(search.get('includeImages')).toBe('true');
       expect(search.get('favoritesOnly')).toBe('true');
       return {
         ok: true,
         json: async () => ({
-          success: true,
-          assets: imageAssets,
-          pagination: { page: 1, limit: 100, totalCount: imageAssets.length, hasNextPage: false },
+          ...makeCarouselWindowResponse(imageAssets, 0),
         }),
       };
     });
@@ -130,12 +156,13 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      expect(search.get('type')).toBe('all');
+      expect(url).toContain('/api/carousel/feed-window');
+      expect(search.get('source')).toBe('galleryOrder');
+      expect(search.get('anchorAssetId')).toBe('video-2');
       return {
         ok: true,
         json: async () => ({
-          success: true,
-          assets: [1, 2, 3].map((index) => ({
+          ...makeCarouselWindowResponse([1, 2, 3].map((index) => ({
             id: `video-${index}`,
             workspaceId: 'ws-1',
             type: 'video',
@@ -145,8 +172,7 @@ describe('GalleryVideoCarousel', () => {
             mediaWidth: 1280,
             mediaHeight: 720,
             addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-          })),
-          pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
+          })), 1),
         }),
       };
     });
@@ -195,8 +221,7 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        success: true,
-        assets: Array.from({ length: 9 }, (_, index) => ({
+        ...makeCarouselWindowResponse(Array.from({ length: 9 }, (_, index) => ({
           id: `video-${index + 1}`,
           workspaceId: 'ws-1',
           type: 'video',
@@ -206,8 +231,7 @@ describe('GalleryVideoCarousel', () => {
           mediaWidth: 1280,
           mediaHeight: 720,
           addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-        })),
-        pagination: { page: 1, limit: 100, totalCount: 9, hasNextPage: false },
+        })), 4),
       }),
     }));
     vi.stubGlobal('fetch', fetchMock);
@@ -257,12 +281,13 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      expect(search.get('type')).toBe('all');
+      expect(url).toContain('/api/carousel/feed-window');
+      expect(search.get('anchorAssetId')).toBe('video-4');
       return {
         ok: true,
         json: async () => ({
-          success: true,
-          assets: assets.map((asset, index) => ({
+          ...makeCarouselWindowResponse(assets
+            .map((asset, index) => ({
             id: asset.id,
             workspaceId: 'ws-1',
             type: 'video',
@@ -272,8 +297,8 @@ describe('GalleryVideoCarousel', () => {
             mediaWidth: asset.width,
             mediaHeight: asset.height,
             addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-          })),
-          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
+          }))
+            .filter((asset) => asset.mediaWidth > asset.mediaHeight), 2),
         }),
       };
     });
@@ -315,12 +340,12 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      expect(search.get('type')).toBe('all');
+      expect(url).toContain('/api/carousel/feed-window');
+      expect(search.get('anchorAssetId')).toBe('image-2');
       return {
         ok: true,
         json: async () => ({
-          success: true,
-          assets: [1, 2, 3].map((index) => ({
+          ...makeCarouselWindowResponse([1, 2, 3].map((index) => ({
             id: `image-${index}`,
             workspaceId: 'ws-1',
             type: 'image',
@@ -330,8 +355,7 @@ describe('GalleryVideoCarousel', () => {
             mediaWidth: 1280,
             mediaHeight: 720,
             addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
-          })),
-          pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
+          })), 1),
         }),
       };
     });
@@ -352,6 +376,107 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(stage.querySelector('img[src="/image-2.png"]')).toBeTruthy());
       expect(stage.querySelector('img[src="/image-1.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/image-3.png"]')).toBeTruthy();
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('prefetches the next carousel window while scrubbing gallery view', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const firstWindowAssets = [1, 2].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 2880,
+      mediaHeight: 720,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const nextWindowAssets = [3, 4].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 2880,
+      mediaHeight: 720,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(url).toContain('/api/carousel/feed-window');
+      if (search.get('direction') === 'after') {
+        return {
+          ok: true,
+          json: async () => ({
+            ...makeCarouselWindowResponse(nextWindowAssets, 0),
+            pagination: {
+              totalCount: 4,
+              anchorIndex: 2,
+              hasBefore: true,
+              hasAfter: false,
+              beforeCursor: 2,
+              afterCursor: null,
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          ...makeCarouselWindowResponse(firstWindowAssets, 0),
+          pagination: {
+            totalCount: 4,
+            anchorIndex: 0,
+            hasBefore: false,
+            hasAfter: true,
+            beforeCursor: null,
+            afterCursor: 1,
+          },
+          counts: { videos: 4, images: 0, total: 4 },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialGalleryViewEnabled: true,
+        currentGalleryAssetId: 'video-1',
+        initialIncludeLandscape: true,
+        initialIncludePortrait: false,
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 0 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 3200 });
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 3200 });
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      expect(String(fetchMock.mock.calls[1][0])).toContain('direction=after');
+      fireEvent.pointerDown(stage, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 0 });
+      fireEvent.pointerMove(stage, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 3200 });
+      fireEvent.pointerUp(stage, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 3200 });
+
+      await waitFor(() => expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy());
     } finally {
       rectSpy.mockRestore();
     }
