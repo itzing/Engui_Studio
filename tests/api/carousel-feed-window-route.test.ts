@@ -71,6 +71,30 @@ describe('GET /api/carousel/feed-window', () => {
     expect(json.counts).toEqual({ videos: 3, images: 0, total: 3 });
   });
 
+  it('resolves a non-favorite anchor to the nearest favorite without falling back to the first favorite', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([
+      makeAsset('video-1', 1, { favorited: true }),
+      makeAsset('video-2', 2, { favorited: false }),
+      makeAsset('video-3', 3, { favorited: true }),
+      makeAsset('video-4', 4, { favorited: true }),
+    ]);
+
+    const response = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=galleryOrder&anchorAssetId=video-2&includeVideos=true&includeImages=false&includeLandscape=true&includePortrait=true&favoritesOnly=true&before=1&after=1') as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.galleryAsset.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.not.objectContaining({ favorited: true }),
+    }));
+    expect(json.current.id).toBe('video-3');
+    expect(json.previous.map((entry: any) => entry.id)).toEqual(['video-1']);
+    expect(json.next.map((entry: any) => entry.id)).toEqual(['video-4']);
+    expect(json.pagination).toMatchObject({
+      totalCount: 3,
+      anchorIndex: 1,
+    });
+  });
+
   it('loads additional before and after windows by cursor', async () => {
     mockPrisma.galleryAsset.findMany.mockResolvedValue(
       Array.from({ length: 8 }, (_, index) => makeAsset(`video-${index + 1}`, index + 1)),

@@ -56,6 +56,12 @@ function HookProbe({ surface = 'mobile' }: { surface?: 'mobile' | 'desktop' }) {
     'div',
     null,
     React.createElement('button', { type: 'button', onClick: () => gallery.toggleMediaFilter('video') }, 'toggle video'),
+    React.createElement('button', { type: 'button', onClick: () => gallery.toggleGalleryFavorites() }, 'toggle favorites'),
+    React.createElement(
+      'div',
+      { 'data-testid': 'favorites-only' },
+      gallery.favoritesOnly ? 'true' : 'false',
+    ),
     React.createElement(
       'div',
       { 'data-testid': 'asset-types' },
@@ -91,6 +97,27 @@ describe('useMobileGalleryScreen media filters', () => {
 
     expect(requestedUrl.searchParams.get('type')).toBe('image,audio');
     expect(JSON.parse(window.localStorage.getItem('latest-selected-filters') || '[]')).toEqual(['image', 'audio']);
+  });
+
+  it('persists the mobile favorites-only gallery filter per workspace', async () => {
+    window.localStorage.setItem('engui.mobile.gallery.favoritesOnly.ws-1', 'true');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => galleryResponse([makeAsset('image-1', 'image')]),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(HookProbe));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('favorites-only').textContent).toBe('true'));
+    expect(new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams.get('favoritesOnly')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle favorites' }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('engui.mobile.gallery.favoritesOnly.ws-1')).toBe('false');
+    });
   });
 
   it('hydrates desktop media type filters from desktop local storage', async () => {

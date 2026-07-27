@@ -105,6 +105,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const desktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.v2.${effectiveWorkspaceId}` : null;
   const legacyDesktopOverlayKey = effectiveWorkspaceId ? `engui.desktop.gallery.semanticFilter.${effectiveWorkspaceId}` : null;
   const mediaFilterStorageKey = effectiveWorkspaceId ? `engui.${surface}.gallery.mediaFilters.${effectiveWorkspaceId}` : null;
+  const mobileFavoritesStorageKey = effectiveWorkspaceId ? `engui.mobile.gallery.favoritesOnly.${effectiveWorkspaceId}` : null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -144,8 +145,11 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (savedMediaFilters) {
       setSelectedFilters(savedMediaFilters);
     }
+    if (mobileFavoritesStorageKey) {
+      setFavoritesOnly(window.localStorage.getItem(mobileFavoritesStorageKey) === 'true');
+    }
     setPrefsHydrated(true);
-  }, [desktopOverlayKey, effectiveWorkspaceId, legacyDesktopOverlayKey, mediaFilterStorageKey, surface]);
+  }, [desktopOverlayKey, effectiveWorkspaceId, legacyDesktopOverlayKey, mediaFilterStorageKey, mobileFavoritesStorageKey, surface]);
 
   const loadedAssets = useMemo(() => {
     const entries = Object.values(loadedPages)
@@ -354,6 +358,11 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (typeof window === 'undefined' || !mediaFilterStorageKey || !prefsHydrated) return;
     window.localStorage.setItem(mediaFilterStorageKey, serializeGalleryMediaFilters(selectedFilters));
   }, [mediaFilterStorageKey, prefsHydrated, selectedFilters]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mobileFavoritesStorageKey || !prefsHydrated || surface !== 'mobile') return;
+    window.localStorage.setItem(mobileFavoritesStorageKey, favoritesOnly ? 'true' : 'false');
+  }, [favoritesOnly, mobileFavoritesStorageKey, prefsHydrated, surface]);
 
   useEffect(() => {
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;

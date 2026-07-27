@@ -239,7 +239,6 @@ export async function GET(request: NextRequest) {
         ...(onlyTrashed ? { trashed: true } : includeTrashed ? {} : { trashed: false }),
         type: { in: ['image', 'video'] },
         ...(bucket && bucket !== 'all' ? { bucket } : {}),
-        ...(onlyFavorites ? { favorited: true } : {}),
       },
       orderBy: sort === 'oldest'
         ? { addedToGalleryAt: 'asc' }
@@ -259,7 +258,7 @@ export async function GET(request: NextRequest) {
 
     const filteredAssets = sourceAssets
       .map((asset, sourceIndex) => ({ asset, sourceIndex }))
-      .filter(({ asset }) => matchesCarouselMedia(asset, { includeVideos, includeImages, ratioFilter }));
+      .filter(({ asset }) => (!onlyFavorites || asset.favorited) && matchesCarouselMedia(asset, { includeVideos, includeImages, ratioFilter }));
     const counts = filteredAssets.reduce((acc, { asset }) => {
       if (asset.type === 'video') acc.videos += 1;
       if (asset.type === 'image') acc.images += 1;
