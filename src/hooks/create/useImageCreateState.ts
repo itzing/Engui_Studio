@@ -236,7 +236,7 @@ export function useImageCreateState() {
         const data = await response.json();
 
         if (!cancelled) {
-          const nextLoras = data.success && Array.isArray(data.loras) ? data.loras : [];
+          const nextLoras: LoRAFile[] = data.success && Array.isArray(data.loras) ? data.loras : [];
           const modelLoras = currentModel ? filterLorasForModel(nextLoras, currentModel.id) : nextLoras;
           setAvailableLoras(modelLoras);
           if (data.success && currentModel && hasLoRAParameter) {
@@ -458,9 +458,7 @@ export function useImageCreateState() {
 
   const handleNumericParameterInput = useCallback((paramName: string, rawValue: string) => {
     if (/^loraWeight\d*$/.test(paramName)) {
-      if (/^-?\d*(\.\d*)?$/.test(rawValue)) {
-        handleParameterChange(paramName, rawValue);
-      }
+      handleParameterChange(paramName, rawValue);
       return;
     }
 

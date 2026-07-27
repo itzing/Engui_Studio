@@ -328,6 +328,21 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(JSON.parse(cleared)).toEqual({});
   });
 
+  it('preserves raw WAN LoRA weight text and reports validation errors', () => {
+    const added = setWanLoraPairInConfig('{}', 1, {
+      highPath: '/runpod-volume/loras/dramatic_high.safetensors',
+      lowPath: '/runpod-volume/loras/dramatic_low.safetensors',
+    });
+    const weighted = setWanLoraWeightInConfig(added, 1, 'high', '-');
+    const parsed = JSON.parse(weighted);
+
+    expect(parsed.lora_high_1_weight).toBe('-');
+
+    const slots = getSelectedWanLoraSlots(weighted, []);
+    expect(slots[0].highWeightRaw).toBe('-');
+    expect(slots[0].highWeightError).toBeTruthy();
+  });
+
   it('merges the visible steps control into segment generation options', () => {
     expect(JSON.parse(buildSegmentGenerationOptionsJson('{}', ''))).toEqual({ steps: 4 });
     expect(JSON.parse(buildSegmentGenerationOptionsJson('{"cfg":1.5,"steps":8,"width":1024,"height":576,"aspectRatio":"16:9"}', '12'))).toEqual({

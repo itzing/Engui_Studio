@@ -16,6 +16,7 @@ import { LoRAPairSelector } from '@/components/lora/LoRAPairSelector';
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 import { useI18n } from '@/lib/i18n/context';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
+import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { extractImagePromptFromDataUrl, requestImagePromptImprovement } from '@/lib/create/imagePromptHelper';
@@ -85,21 +86,21 @@ export default function VideoGenerationForm() {
     const [showLoRADialog, setShowLoRADialog] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<LoRAFile[]>([]);
     const [isLoadingLoras, setIsLoadingLoras] = useState(false);
-    const [loraHigh1Weight, setLoraHigh1Weight] = useState(0.8);
+    const [loraHigh1Weight, setLoraHigh1Weight] = useState<number | string>(0.8);
     const hasRestoredDraftRef = useRef(false);
     const isApplyingDraftModelRef = useRef(false);
     const hydratedModelRef = useRef<string | null>(null);
-    const [loraLow1Weight, setLoraLow1Weight] = useState(0.8);
-    const [loraHigh2Weight, setLoraHigh2Weight] = useState(0.8);
-    const [loraLow2Weight, setLoraLow2Weight] = useState(0.8);
-    const [loraHigh3Weight, setLoraHigh3Weight] = useState(0.8);
-    const [loraLow3Weight, setLoraLow3Weight] = useState(0.8);
-    const [loraHigh4Weight, setLoraHigh4Weight] = useState(0.8);
-    const [loraLow4Weight, setLoraLow4Weight] = useState(0.8);
+    const [loraLow1Weight, setLoraLow1Weight] = useState<number | string>(0.8);
+    const [loraHigh2Weight, setLoraHigh2Weight] = useState<number | string>(0.8);
+    const [loraLow2Weight, setLoraLow2Weight] = useState<number | string>(0.8);
+    const [loraHigh3Weight, setLoraHigh3Weight] = useState<number | string>(0.8);
+    const [loraLow3Weight, setLoraLow3Weight] = useState<number | string>(0.8);
+    const [loraHigh4Weight, setLoraHigh4Weight] = useState<number | string>(0.8);
+    const [loraLow4Weight, setLoraLow4Weight] = useState<number | string>(0.8);
 
     const getWanLoraWeight = (values: Record<string, any>, key: string, fallback = 0.8) => {
-        const value = Number(values[key]);
-        return Number.isFinite(value) ? value : fallback;
+        const value = values[key];
+        return value === undefined || value === null || value === '' ? fallback : value;
     };
 
     const getParameterValuesWithWanLoraWeights = (values: Record<string, any>) => {
@@ -118,12 +119,33 @@ export default function VideoGenerationForm() {
         };
     };
 
-    const handleWanLoraWeightChange = (paramName: string, weight: number, setter: React.Dispatch<React.SetStateAction<number>>) => {
+    const handleWanLoraWeightChange = (paramName: string, weight: string, setter: React.Dispatch<React.SetStateAction<number | string>>) => {
         setter(weight);
         setParameterValues(prev => ({
             ...prev,
             [paramName]: weight,
         }));
+    };
+
+    const getWanLoraWeightSubmitError = () => {
+        if (currentModel.id !== 'wan22') return null;
+
+        const pairs = [
+            { highPath: parameterValues.lora_high_1, lowPath: parameterValues.lora_low_1, highWeight: loraHigh1Weight, lowWeight: loraLow1Weight },
+            { highPath: parameterValues.lora_high_2, lowPath: parameterValues.lora_low_2, highWeight: loraHigh2Weight, lowWeight: loraLow2Weight },
+            { highPath: parameterValues.lora_high_3, lowPath: parameterValues.lora_low_3, highWeight: loraHigh3Weight, lowWeight: loraLow3Weight },
+            { highPath: parameterValues.lora_high_4, lowPath: parameterValues.lora_low_4, highWeight: loraHigh4Weight, lowWeight: loraLow4Weight },
+        ];
+
+        for (const pair of pairs) {
+            if (!String(pair.highPath ?? '').trim() && !String(pair.lowPath ?? '').trim()) continue;
+            const highError = getLoraWeightInputError(pair.highWeight);
+            if (highError) return highError;
+            const lowError = getLoraWeightInputError(pair.lowWeight);
+            if (lowError) return lowError;
+        }
+
+        return null;
     };
 
     useEffect(() => {
@@ -998,6 +1020,12 @@ export default function VideoGenerationForm() {
         setMessage(null);
 
         if (!prompt && !imageFile) return;
+
+        const loraWeightError = getWanLoraWeightSubmitError();
+        if (loraWeightError) {
+            setMessage({ type: 'error', text: loraWeightError });
+            return;
+        }
 
         setIsGenerating(true);
 

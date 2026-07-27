@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
+import { getLoraWeightInputError, getLoraWeightNumber } from '@/lib/lora/loraWeightInput';
 import { buildLoraPairs, filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
 import { cn } from '@/lib/utils';
 
@@ -212,8 +213,12 @@ type WanLoraSlot = {
   lowPath: string;
   highWeight: number;
   lowWeight: number;
-  highLoRA?: LoRAFile;
-  lowLoRA?: LoRAFile;
+  highWeightRaw: unknown;
+  lowWeightRaw: unknown;
+  highWeightError: string | null;
+  lowWeightError: string | null;
+  highLoRA: LoRAFile | undefined;
+  lowLoRA: LoRAFile | undefined;
   label: string;
 };
 
@@ -266,12 +271,18 @@ export function getSelectedWanLoraSlots(loraConfigJson: string, availableLoras: 
 
       const highLoRA = availableLoras.find((lora) => lora.s3Path === highPath);
       const lowLoRA = availableLoras.find((lora) => lora.s3Path === lowPath);
+      const highWeightRaw: unknown = config[`lora_high_${index}_weight`] ?? defaultWanLoraWeight;
+      const lowWeightRaw: unknown = config[`lora_low_${index}_weight`] ?? defaultWanLoraWeight;
       return {
         index,
         highPath,
         lowPath,
-        highWeight: numberFromUnknown(config[`lora_high_${index}_weight`], defaultWanLoraWeight),
-        lowWeight: numberFromUnknown(config[`lora_low_${index}_weight`], defaultWanLoraWeight),
+        highWeight: getLoraWeightNumber(highWeightRaw, defaultWanLoraWeight),
+        lowWeight: getLoraWeightNumber(lowWeightRaw, defaultWanLoraWeight),
+        highWeightRaw,
+        lowWeightRaw,
+        highWeightError: getLoraWeightInputError(highWeightRaw),
+        lowWeightError: getLoraWeightInputError(lowWeightRaw),
         highLoRA,
         lowLoRA,
         label: highLoRA?.name || lowLoRA?.name || highLoRA?.fileName || lowLoRA?.fileName || `LoRA pair ${index}`,
@@ -316,7 +327,7 @@ export function setWanLoraPairInConfig(
   return JSON.stringify(config, null, 2);
 }
 
-export function setWanLoraWeightInConfig(loraConfigJson: string, index: number, component: 'high' | 'low', weight: number) {
+export function setWanLoraWeightInConfig(loraConfigJson: string, index: number, component: 'high' | 'low', weight: number | string) {
   const config = parseJsonObjectText(loraConfigJson);
   config[`lora_${component}_${index}_weight`] = weight;
   return JSON.stringify(config, null, 2);
@@ -1070,7 +1081,7 @@ export default function VideoSequenceBuilder() {
     const nextItem = findSequencePreviewTimelineItem(previewTimeline, nextTime);
     setPreviewHasEnded(false);
     setPreviewTime(nextTime);
-    if (nextItem?.segment.id === activePreviewSegment?.id && previewVideoRef.current) {
+    if (nextItem && nextItem.segment.id === activePreviewSegment?.id && previewVideoRef.current) {
       previewVideoRef.current.currentTime = Math.max(0, nextTime - nextItem.start);
     }
   }
@@ -1246,11 +1257,9 @@ export default function VideoSequenceBuilder() {
   }
 
   function updateLoraSlotWeight(index: number, component: 'high' | 'low', value: string) {
-    const nextWeight = Number(value);
-    if (!Number.isFinite(nextWeight)) return;
     setSegmentDraft((draft) => ({
       ...draft,
-      loraConfigJson: setWanLoraWeightInConfig(draft.loraConfigJson, index, component, nextWeight),
+      loraConfigJson: setWanLoraWeightInConfig(draft.loraConfigJson, index, component, value),
     }));
   }
 
@@ -2207,15 +2216,14 @@ export default function VideoSequenceBuilder() {
                                 {slot.highLoRA?.fileName ?? slot.highPath}
                               </div>
                               <Input
-                                type="number"
-                                min="-5"
-                                max="5"
-                                step="0.05"
-                                value={slot.highWeight}
+                                type="text"
+                                inputMode="decimal"
+                                value={String(slot.highWeightRaw)}
                                 onChange={(event) => updateLoraSlotWeight(slot.index, 'high', event.target.value)}
-                                className="h-8 border-white/10 bg-zinc-900 text-xs"
+                                className={`h-8 border-white/10 bg-zinc-900 text-xs ${slot.highWeightError ? 'border-red-500/60 focus-visible:ring-red-500/50' : ''}`}
                                 aria-label={`High LoRA ${slot.index} weight`}
                               />
+                              {slot.highWeightError ? <div className="text-[11px] text-red-300">{slot.highWeightError}</div> : null}
                             </div>
                             <div className="min-w-0 space-y-2">
                               <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Low</div>
@@ -2223,15 +2231,14 @@ export default function VideoSequenceBuilder() {
                                 {slot.lowLoRA?.fileName ?? slot.lowPath}
                               </div>
                               <Input
-                                type="number"
-                                min="-5"
-                                max="5"
-                                step="0.05"
-                                value={slot.lowWeight}
+                                type="text"
+                                inputMode="decimal"
+                                value={String(slot.lowWeightRaw)}
                                 onChange={(event) => updateLoraSlotWeight(slot.index, 'low', event.target.value)}
-                                className="h-8 border-white/10 bg-zinc-900 text-xs"
+                                className={`h-8 border-white/10 bg-zinc-900 text-xs ${slot.lowWeightError ? 'border-red-500/60 focus-visible:ring-red-500/50' : ''}`}
                                 aria-label={`Low LoRA ${slot.index} weight`}
                               />
+                              {slot.lowWeightError ? <div className="text-[11px] text-red-300">{slot.lowWeightError}</div> : null}
                             </div>
                           </div>
                         </div>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useI18n } from '@/lib/i18n/context';
+import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { buildLoraPairs, getLoraSearchText } from '@/lib/lora/modelFilters';
 
 export interface LoRAFile {
@@ -27,12 +28,12 @@ export interface LoRAFile {
 export interface LoRAPairSelectorProps {
   highValue: string; // S3 path of selected high LoRA
   lowValue: string; // S3 path of selected low LoRA
-  highWeight: number; // Weight for high LoRA (-5 to 5)
-  lowWeight: number; // Weight for low LoRA (-5 to 5)
+  highWeight: number | string; // Weight for high LoRA (-10 to 10)
+  lowWeight: number | string; // Weight for low LoRA (-10 to 10)
   onHighChange: (value: string) => void;
   onLowChange: (value: string) => void;
-  onHighWeightChange: (weight: number) => void;
-  onLowWeightChange: (weight: number) => void;
+  onHighWeightChange: (weight: string) => void;
+  onLowWeightChange: (weight: string) => void;
   availableLoras: LoRAFile[];
   onManageClick: () => void;
 }
@@ -75,6 +76,9 @@ export function LoRAPairSelector({
       return searchText.includes(query);
     });
   }, [loraPairs, searchQuery]);
+
+  const highWeightError = getLoraWeightInputError(highWeight);
+  const lowWeightError = getLoraWeightInputError(lowWeight);
 
   // Find selected pair
   const selectedPair = useMemo(() => {
@@ -175,19 +179,13 @@ export function LoRAPairSelector({
                     <Label htmlFor="high-weight" className="text-xs">{t('loraManagement.selector.weight')}</Label>
                     <Input
                       id="high-weight"
-                      type="number"
-                      min="-5"
-                      max="5"
-                      step="0.05"
+                      type="text"
+                      inputMode="decimal"
                       value={highWeight}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= -5 && val <= 5) {
-                          onHighWeightChange(val);
-                        }
-                      }}
-                      className="h-8 text-sm"
+                      onChange={(e) => onHighWeightChange(e.target.value)}
+                      className={`h-8 text-sm ${highWeightError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                     />
+                    {highWeightError ? <div className="text-xs text-destructive">{highWeightError}</div> : null}
                   </div>
                 </>
               )}
@@ -212,19 +210,13 @@ export function LoRAPairSelector({
                     <Label htmlFor="low-weight" className="text-xs">{t('loraManagement.selector.weight')}</Label>
                     <Input
                       id="low-weight"
-                      type="number"
-                      min="-5"
-                      max="5"
-                      step="0.05"
+                      type="text"
+                      inputMode="decimal"
                       value={lowWeight}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= -5 && val <= 5) {
-                          onLowWeightChange(val);
-                        }
-                      }}
-                      className="h-8 text-sm"
+                      onChange={(e) => onLowWeightChange(e.target.value)}
+                      className={`h-8 text-sm ${lowWeightError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                     />
+                    {lowWeightError ? <div className="text-xs text-destructive">{lowWeightError}</div> : null}
                   </div>
                 </>
               )}

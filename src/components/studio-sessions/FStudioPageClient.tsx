@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { useStudio } from '@/lib/context/StudioContext';
 import type { CharacterSummary } from '@/lib/characters/types';
+import { getLoraWeightInputError, getLoraWeightNumber } from '@/lib/lora/loraWeightInput';
 import type { StudioCollectionItemSummary, StudioCollectionSummary, StudioFramingPresetSummary, StudioPhotoSessionSummary, StudioPortfolioSummary, StudioPoseCategorySummary, StudioPoseSetSummary, StudioRunFramingPolicy, StudioSessionPoseOrientation, StudioSessionPoseSnapshot, StudioSessionRunSummary, StudioSessionShotRevisionSummary, StudioSessionShotSummary, StudioSessionShotVersionSummary } from '@/lib/studio-sessions/types';
 
 type StudioRunLoraFile = {
@@ -242,9 +243,12 @@ function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPh
 
   async function save() {
     if (!dirty || saving) return;
+    const nextSession = session;
+    const nextDraft = draft;
+    if (!nextSession || !nextDraft) return;
     setSaving(true);
     try {
-      await onSave(session.id, draft);
+      await onSave(nextSession.id, nextDraft);
     } finally {
       setSaving(false);
     }
@@ -728,12 +732,13 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     if (!path) return null;
     const weightName = loraWeightName(slotName);
     const rawWeight = loraSettingsDraft[weightName];
-    const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
     return {
       slotName,
       weightName,
       path,
-      weight: Number.isFinite(weight) ? weight : 1,
+      rawWeight: rawWeight ?? 1,
+      weight: getLoraWeightNumber(rawWeight ?? 1),
+      weightError: getLoraWeightInputError(rawWeight ?? 1),
       matchedLoRA: availableLoras.find((lora) => lora.s3Path === path) ?? null,
     };
   }).filter((slot): slot is NonNullable<typeof slot> => slot !== null), [availableLoras, loraSettingsDraft, loraSlotNames, loraWeightName]);
@@ -870,6 +875,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       setSettingsError('ControlNet strength must be between 0 and 2.');
       return;
     }
+    const invalidLoraSlot = selectedLoraSlots.find((slot) => slot.weightError);
+    if (invalidLoraSlot?.weightError) {
+      setSettingsError(invalidLoraSlot.weightError);
+      return;
+    }
     setSavingSettings(true);
     setSettingsError(null);
     try {
@@ -906,6 +916,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
 
   const launchRun = async () => {
     if (!run || launching) return;
+    const invalidLoraSlot = selectedLoraSlots.find((slot) => slot.weightError);
+    if (invalidLoraSlot?.weightError) {
+      setLaunchError(invalidLoraSlot.weightError);
+      return;
+    }
     setLaunching(true);
     setLaunchMessage(null);
     setLaunchError(null);
@@ -1008,7 +1023,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
         <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} />
           <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
             <div className="flex items-center justify-between gap-3"><div><div className="text-xs uppercase tracking-[0.16em] text-white/35">LoRAs</div><div className="mt-1 text-xs text-white/40">Selected LoRAs are used on the next launch.</div></div><div className="text-xs text-white/35">{selectedLoraSlots.length}/8</div></div>
-            {selectedLoraSlots.length > 0 ? <div className="space-y-2">{selectedLoraSlots.map((slot) => <div key={slot.slotName} className="rounded-xl border border-white/10 bg-white/[0.035] p-3"><div className="mb-2 flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-medium text-white/85">{slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}</div><div className="mt-1 text-xs text-white/40">Weight {slot.weight.toFixed(2)}</div></div><Button type="button" variant="outline" size="sm" onClick={() => { updateLoraDraft(slot.slotName, ''); updateLoraDraft(slot.weightName, 1); }} className="h-7 border-white/10 bg-white/[0.04] px-2 text-xs text-white/65 hover:bg-white/[0.08]">Clear</Button></div><div className="flex items-center gap-2"><Input type="text" inputMode="decimal" value={String(loraSettingsDraft[slot.weightName] ?? slot.weight)} onChange={(event) => updateLoraDraft(slot.weightName, event.target.value)} className="h-8 w-24 border-white/10 bg-black/30 text-sm text-white" /><span className="text-xs text-white/35">weight</span></div></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 px-4 py-5 text-sm text-white/40">No LoRAs selected yet.</div>}
+            {selectedLoraSlots.length > 0 ? <div className="space-y-2">{selectedLoraSlots.map((slot) => <div key={slot.slotName} className="rounded-xl border border-white/10 bg-white/[0.035] p-3"><div className="mb-2 flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-medium text-white/85">{slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}</div><div className="mt-1 text-xs text-white/40">Weight {slot.weight.toFixed(2)}</div></div><Button type="button" variant="outline" size="sm" onClick={() => { updateLoraDraft(slot.slotName, ''); updateLoraDraft(slot.weightName, 1); }} className="h-7 border-white/10 bg-white/[0.04] px-2 text-xs text-white/65 hover:bg-white/[0.08]">Clear</Button></div><div className="space-y-1"><div className="flex items-center gap-2"><Input type="text" inputMode="decimal" value={String(loraSettingsDraft[slot.weightName] ?? slot.rawWeight)} onChange={(event) => updateLoraDraft(slot.weightName, event.target.value)} className={`h-8 w-24 border-white/10 bg-black/30 text-sm text-white ${slot.weightError ? 'border-red-500/60 focus-visible:ring-red-500/50' : ''}`} /><span className="text-xs text-white/35">weight</span></div>{slot.weightError ? <div className="text-xs text-red-300">{slot.weightError}</div> : <div className="text-xs text-white/35">Range -10 to 10</div>}</div></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 px-4 py-5 text-sm text-white/40">No LoRAs selected yet.</div>}
             {nextEmptyLoraSlot ? <Button type="button" variant="outline" onClick={() => setShowRunLoraSelector(true)} className="w-full border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]"><Plus className="mr-2 h-4 w-4" />Add LoRA</Button> : null}
           </div>
           <label className="block rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65"><span className="text-xs uppercase tracking-[0.16em] text-white/35">ControlNet strength</span><Input type="number" min={0} max={2} step={0.05} value={controlStrengthDraft} onChange={(event) => setControlStrengthDraft(event.target.value)} className="mt-3 border-white/10 bg-black/30 text-white" /><span className="mt-2 block text-xs text-white/40">Used when a framing/OpenPose control image is attached. Default is 1.</span></label>

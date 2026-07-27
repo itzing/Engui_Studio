@@ -22,6 +22,7 @@ import {
 import { requestImagePromptImprovement, requestZImagePromptRewrite, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
+import { getLoraWeightInputError, getLoraWeightNumber } from '@/lib/lora/loraWeightInput';
 import { filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
 import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDraftPersistence';
 import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
@@ -249,13 +250,14 @@ export default function ImageGenerationForm() {
                 const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
                 const weightParamName = zImageLoraWeightByName[name];
                 const rawWeight = weightParamName ? parameterValues[weightParamName] : undefined;
-                const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
                 return {
                     paramName: name,
                     path,
                     matchedLoRA,
                     weightParamName,
-                    weight: Number.isFinite(weight) ? weight : 1,
+                    rawWeight: rawWeight ?? 1,
+                    weight: getLoraWeightNumber(rawWeight ?? 1),
+                    weightError: getLoraWeightInputError(rawWeight ?? 1),
                 };
             })
             .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
@@ -742,9 +744,7 @@ export default function ImageGenerationForm() {
 
     const handleNumericParameterInput = (paramName: string, rawValue: string) => {
         if (/^loraWeight\d*$/.test(paramName)) {
-            if (/^-?\d*(\.\d*)?$/.test(rawValue)) {
-                handleParameterChange(paramName, rawValue);
-            }
+            handleParameterChange(paramName, rawValue);
             return;
         }
 
@@ -1007,6 +1007,12 @@ export default function ImageGenerationForm() {
         setMessage(null);
 
         if (currentModel.inputs.includes('text') && !prompt && !isPromptDraftSelected) {
+            return;
+        }
+
+        const invalidLoraSlot = selectedZImageLoraSlots.find((slot) => slot.weightError);
+        if (invalidLoraSlot?.weightError) {
+            setMessage({ type: 'error', text: invalidLoraSlot.weightError });
             return;
         }
 
@@ -1632,15 +1638,18 @@ export default function ImageGenerationForm() {
                                                     </Button>
                                                 </div>
                                                 {slot.weightParamName && (
-                                                    <div className="flex items-center gap-3">
-                                                        <Input
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            value={parameterValues[slot.weightParamName] ?? slot.weight}
-                                                            className="h-8 w-32 text-sm"
-                                                            onChange={(e) => handleNumericParameterInput(slot.weightParamName!, e.target.value)}
-                                                        />
-                                                        <span className="text-xs text-muted-foreground">Adjust LoRA weight</span>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-3">
+                                                            <Input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={parameterValues[slot.weightParamName] ?? slot.weight}
+                                                                className={`h-8 w-32 text-sm ${slot.weightError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                                                                onChange={(e) => handleNumericParameterInput(slot.weightParamName!, e.target.value)}
+                                                            />
+                                                            <span className="text-xs text-muted-foreground">Adjust LoRA weight (-10 to 10)</span>
+                                                        </div>
+                                                        {slot.weightError ? <div className="text-xs text-destructive">{slot.weightError}</div> : null}
                                                     </div>
                                                 )}
                                             </div>
@@ -1723,7 +1732,7 @@ export default function ImageGenerationForm() {
                                     <>
                                         <Input
                                             type={/^loraWeight\d*$/.test(param.name) ? 'text' : 'number'}
-                                            inputMode={/^loraWeight\d*$/.test(param.name) ? 'text' : undefined}
+                                            inputMode={/^loraWeight\d*$/.test(param.name) ? 'decimal' : undefined}
                                             name={param.name}
                                             value={parameterValues[param.name] ?? param.default}
                                             onChange={(e) => handleNumericParameterInput(param.name, e.target.value)}
@@ -1732,6 +1741,9 @@ export default function ImageGenerationForm() {
                                             step={/^loraWeight\d*$/.test(param.name) ? undefined : param.step}
                                             className="h-8 text-sm"
                                         />
+                                        {/^loraWeight\d*$/.test(param.name) && getLoraWeightInputError(parameterValues[param.name] ?? param.default) ? (
+                                            <div className="text-xs text-destructive">{getLoraWeightInputError(parameterValues[param.name] ?? param.default)}</div>
+                                        ) : null}
                                         {param.name === 'seed' && (
                                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                                 <input

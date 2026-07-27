@@ -35,22 +35,22 @@ vi.mock('@/components/lora/LoRAPairSelector', () => ({
     onHighWeightChange,
     onLowWeightChange,
   }: {
-    highWeight: number;
-    lowWeight: number;
-    onHighWeightChange: (weight: number) => void;
-    onLowWeightChange: (weight: number) => void;
+    highWeight: number | string;
+    lowWeight: number | string;
+    onHighWeightChange: (weight: string) => void;
+    onLowWeightChange: (weight: string) => void;
   }) => React.createElement(
     'div',
     null,
     React.createElement('input', {
       'aria-label': 'high-weight',
       value: highWeight,
-      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onHighWeightChange(Number(event.target.value)),
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onHighWeightChange(event.target.value),
     }),
     React.createElement('input', {
       'aria-label': 'low-weight',
       value: lowWeight,
-      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onLowWeightChange(Number(event.target.value)),
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => onLowWeightChange(event.target.value),
     }),
   ),
 }));
@@ -126,8 +126,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     await waitFor(() => {
       const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts.wan22.draft.parameterValues).toMatchObject({
-        lora_high_1_weight: 1,
-        lora_low_1_weight: 1,
+        lora_high_1_weight: '1',
+        lora_low_1_weight: '1',
       });
     });
 

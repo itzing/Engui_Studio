@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
+import { getLoraWeightInputError, getLoraWeightNumber, LORA_WEIGHT_MAX, LORA_WEIGHT_MIN } from '@/lib/lora/loraWeightInput';
 import { getLoraSearchText } from '@/lib/lora/modelFilters';
 import { MODELS } from '@/lib/models/modelConfig';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
@@ -133,13 +134,14 @@ export default function MobileAdvancedScreen() {
       const matchedLoRA = availableLoras.find((lora) => lora.s3Path === path);
       const weightParamName = loraWeightByName[paramName];
       const rawWeight = weightParamName ? parameterValues[weightParamName] : undefined;
-      const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight ?? 1);
       return {
         paramName,
         path,
         matchedLoRA,
         weightParamName,
-        weight: Number.isFinite(weight) ? weight : 1,
+        rawWeight: rawWeight ?? 1,
+        weight: getLoraWeightNumber(rawWeight ?? 1),
+        weightError: getLoraWeightInputError(rawWeight ?? 1),
       };
     })
     .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
@@ -274,14 +276,27 @@ export default function MobileAdvancedScreen() {
                     {slot.weightParamName ? (
                       <div className="space-y-2">
                         <Slider
-                          value={[Math.max(-3, Math.min(3, slot.weight))]}
-                          min={-3}
-                          max={3}
+                          value={[Math.max(LORA_WEIGHT_MIN, Math.min(LORA_WEIGHT_MAX, slot.weight))]}
+                          min={LORA_WEIGHT_MIN}
+                          max={LORA_WEIGHT_MAX}
                           step={0.05}
                           onValueChange={(value) => handleParameterChange(slot.weightParamName, value[0] ?? 1)}
                         />
+                        <div className="space-y-1">
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={parameterValues[slot.weightParamName] ?? slot.rawWeight}
+                            className={`text-base sm:text-sm ${slot.weightError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                            onChange={(event) => handleNumericParameterInput(slot.weightParamName, event.target.value)}
+                            aria-label={`LoRA ${slot.paramName} weight`}
+                          />
+                          {slot.weightError ? <div className="text-xs text-destructive">{slot.weightError}</div> : (
+                            <div className="text-xs text-muted-foreground">Weight from -10 to 10</div>
+                          )}
+                        </div>
                         <div className="grid grid-cols-7 gap-1">
-                          {[-3, -2, -1, 0, 1, 2, 3].map((mark) => (
+                          {[-10, -5, -1, 0, 1, 5, 10].map((mark) => (
                             <button
                               key={mark}
                               type="button"

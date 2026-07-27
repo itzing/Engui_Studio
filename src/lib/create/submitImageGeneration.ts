@@ -1,5 +1,6 @@
 import type { StudioSettings } from '@/lib/context/StudioContext';
 import { loadFileFromPath } from '@/lib/fileUtils';
+import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { isInputVisible, type ModelConfig } from '@/lib/models/modelConfig';
 import { generateRandomSeed } from './imageDraft';
 
@@ -107,6 +108,31 @@ export const submitImageGeneration = async ({
     }
 
     const appendedParamNames = new Set<string>();
+    const loraSlotNames = new Set<string>();
+
+    currentModel.parameters
+      .filter((param) => param.type === 'lora-selector')
+      .forEach((param) => loraSlotNames.add(param.name));
+
+    if (currentModel.id === 'z-image') {
+      Object.keys(parameterValues)
+        .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
+        .forEach((key) => loraSlotNames.add(key));
+    }
+
+    for (const loraSlotName of loraSlotNames) {
+      const loraPath = String(parameterValues[loraSlotName] ?? '').trim();
+      if (!loraPath) continue;
+
+      const suffix = loraSlotName === 'lora' ? '' : loraSlotName.replace(/^lora/, '');
+      const weightName = suffix ? `loraWeight${suffix}` : 'loraWeight';
+      const fallbackWeight = currentModel.parameters.find((param) => param.name === weightName)?.default ?? 1;
+      const weightError = getLoraWeightInputError(parameterValues[weightName] ?? fallbackWeight);
+
+      if (weightError) {
+        return { success: false, error: weightError, nextSeed: null };
+      }
+    }
 
     currentModel.parameters.forEach(param => {
       const value = parameterValues[param.name] ?? param.default;
