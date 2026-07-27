@@ -510,8 +510,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
           <GalleryVideoCarousel
             workspaceId={workspaceId}
             onClose={() => setCarouselOpen(false)}
-            playbackMode="galleryOrder"
-            initialAnchorAssetId={selectedAssetId}
+            currentGalleryAssetId={selectedAssetId}
             galleryOrderFilter={carouselGalleryOrderFilter}
           />
         </div>

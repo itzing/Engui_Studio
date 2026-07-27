@@ -26,6 +26,7 @@ describe('GalleryVideoCarousel', () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: false,
       imagesEnabled: true,
+      galleryViewEnabled: true,
       onlyFavorites: true,
       includeLandscape: false,
       includePortrait: true,
@@ -47,7 +48,7 @@ describe('GalleryVideoCarousel', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const search = new URLSearchParams(url.split('?')[1] || '');
-      expect(search.get('type')).toBe('image');
+      expect(search.get('type')).toBe('all');
       expect(search.get('favoritesOnly')).toBe('true');
       return {
         ok: true,
@@ -66,6 +67,7 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.getByText('5 images')).toBeTruthy());
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Gallery View') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(true);
@@ -153,8 +155,8 @@ describe('GalleryVideoCarousel', () => {
     try {
       render(React.createElement(GalleryVideoCarousel, {
         workspaceId: 'ws-1',
-        playbackMode: 'galleryOrder',
-        initialAnchorAssetId: 'video-2',
+        initialGalleryViewEnabled: true,
+        currentGalleryAssetId: 'video-2',
         initialIncludeLandscape: true,
         initialIncludePortrait: false,
         initialSpeed: 0,
@@ -171,6 +173,63 @@ describe('GalleryVideoCarousel', () => {
       fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: -1400 });
 
       await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('uses one image per slot in gallery view instead of grouped image slots', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(search.get('type')).toBe('all');
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          assets: [1, 2, 3].map((index) => ({
+            id: `image-${index}`,
+            workspaceId: 'ws-1',
+            type: 'image',
+            originalUrl: `/image-${index}.png`,
+            previewUrl: `/image-${index}.png`,
+            thumbnailUrl: null,
+            mediaWidth: 1280,
+            mediaHeight: 720,
+            addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+          })),
+          pagination: { page: 1, limit: 100, totalCount: 3, hasNextPage: false },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialVideosEnabled: false,
+        initialImagesEnabled: true,
+        initialGalleryViewEnabled: true,
+        currentGalleryAssetId: 'image-2',
+        initialSpeed: 0,
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('img[src="/image-2.png"]')).toBeTruthy());
+      expect(stage.querySelector('img[src="/image-1.png"]')).toBeNull();
+      expect(stage.querySelector('img[src="/image-3.png"]')).toBeTruthy();
     } finally {
       rectSpy.mockRestore();
     }

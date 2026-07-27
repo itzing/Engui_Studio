@@ -16,49 +16,6 @@ import {
   type GalleryCarouselSettings,
 } from '@/lib/galleryCarouselSettings';
 
-type GalleryOrderLaunch = {
-  playbackMode: 'shuffle' | 'galleryOrder';
-  anchorAssetId: string | null;
-  galleryOrderFilter?: {
-    bucket?: 'all' | 'common' | 'draft' | 'upscale';
-    query?: string;
-    includeTrashed?: boolean;
-    onlyTrashed?: boolean;
-    favoritesOnly?: boolean;
-  };
-  shouldStart: boolean;
-};
-
-function readGalleryOrderLaunch(): GalleryOrderLaunch {
-  if (typeof window === 'undefined') {
-    return { playbackMode: 'shuffle', anchorAssetId: null, shouldStart: false };
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const anchorAssetId = params.get('anchorAssetId')?.trim() || null;
-  if (params.get('mode') !== 'galleryOrder' || !anchorAssetId) {
-    return { playbackMode: 'shuffle', anchorAssetId: null, shouldStart: false };
-  }
-
-  const bucket = params.get('bucket');
-  const safeBucket = bucket === 'all' || bucket === 'common' || bucket === 'draft' || bucket === 'upscale'
-    ? bucket
-    : undefined;
-
-  return {
-    playbackMode: 'galleryOrder',
-    anchorAssetId,
-    shouldStart: true,
-    galleryOrderFilter: {
-      bucket: safeBucket,
-      query: params.get('q') || undefined,
-      includeTrashed: params.get('includeTrashed') === 'true',
-      onlyTrashed: params.get('onlyTrashed') === 'true',
-      favoritesOnly: params.get('favoritesOnly') === 'true',
-    },
-  };
-}
-
 function readLandscape() {
   if (typeof window === 'undefined') return false;
   return window.innerWidth > window.innerHeight;
@@ -89,15 +46,16 @@ const VERTICAL_SWIPE_DOMINANCE = 1.25;
 export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
-  const galleryOrderLaunch = useMemo(() => readGalleryOrderLaunch(), []);
   const [videosEnabled, setVideosEnabled] = useState(true);
   const [imagesEnabled, setImagesEnabled] = useState(false);
+  const [galleryViewEnabled, setGalleryViewEnabled] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [includeLandscape, setIncludeLandscape] = useState(true);
   const [includePortrait, setIncludePortrait] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(4);
-  const [started, setStarted] = useState(galleryOrderLaunch.shouldStart);
+  const [started, setStarted] = useState(false);
+  const [currentGalleryAssetId, setCurrentGalleryAssetId] = useState<string | null>(null);
   const swipeCloseRef = useRef<{ pointerId: number | null; startX: number; startY: number }>({
     pointerId: null,
     startX: 0,
@@ -115,6 +73,7 @@ export default function MobileGalleryCarouselScreen() {
     writeStoredGalleryCarouselSettings(workspaceId, {
       videosEnabled,
       imagesEnabled,
+      galleryViewEnabled,
       onlyFavorites,
       includeLandscape,
       includePortrait,
@@ -122,18 +81,27 @@ export default function MobileGalleryCarouselScreen() {
       scrubSpeedMultiplier,
       ...overrides,
     });
-  }, [imagesEnabled, includeLandscape, includePortrait, onlyFavorites, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
+  }, [galleryViewEnabled, imagesEnabled, includeLandscape, includePortrait, onlyFavorites, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
 
   useEffect(() => {
     const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings());
     setVideosEnabled(storedSettings.videosEnabled);
     setImagesEnabled(storedSettings.imagesEnabled);
+    setGalleryViewEnabled(storedSettings.galleryViewEnabled);
     setOnlyFavorites(storedSettings.onlyFavorites);
     setIncludeLandscape(storedSettings.includeLandscape);
     setIncludePortrait(storedSettings.includePortrait);
     setSpeed(storedSettings.speed);
     setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === 'undefined') {
+      setCurrentGalleryAssetId(null);
+      return;
+    }
+    setCurrentGalleryAssetId(window.localStorage.getItem(`engui.gallery.lastViewed.${workspaceId}`));
+  }, [workspaceId, started]);
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabled) return;
@@ -145,6 +113,10 @@ export default function MobileGalleryCarouselScreen() {
     setImagesEnabled(nextEnabled);
     persistSettings({ imagesEnabled: nextEnabled });
   }, [persistSettings, videosEnabled]);
+  const handleGalleryViewToggle = useCallback((nextEnabled: boolean) => {
+    setGalleryViewEnabled(nextEnabled);
+    persistSettings({ galleryViewEnabled: nextEnabled });
+  }, [persistSettings]);
   const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
     setOnlyFavorites(nextEnabled);
     persistSettings({ onlyFavorites: nextEnabled });
@@ -240,6 +212,17 @@ export default function MobileGalleryCarouselScreen() {
               />
             </label>
           </div>
+
+          <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${galleryViewEnabled ? 'border-violet-500/40 bg-violet-500/10 text-violet-100' : 'border-border bg-background/60 text-foreground'}`}>
+            <span>Gallery View</span>
+            <input
+              type="checkbox"
+              checked={galleryViewEnabled}
+              onChange={(event) => handleGalleryViewToggle(event.currentTarget.checked)}
+              className="h-4 w-4 accent-violet-400"
+              aria-label="Gallery View"
+            />
+          </label>
 
           <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${onlyFavorites ? 'border-rose-500/40 bg-rose-500/10 text-rose-100' : 'border-border bg-background/60 text-foreground'}`}>
             <span className="inline-flex items-center gap-2">
@@ -343,12 +326,11 @@ export default function MobileGalleryCarouselScreen() {
                 initialIncludePortrait={includePortrait}
                 initialSpeed={speed}
                 initialScrubSpeedMultiplier={scrubSpeedMultiplier}
+                initialGalleryViewEnabled={galleryViewEnabled}
+                currentGalleryAssetId={currentGalleryAssetId}
                 showControls={false}
                 enableKeyboardControls={false}
                 movementAxis={shouldShowPortraitLandscapePlayer ? 'vertical' : 'horizontal'}
-                playbackMode={galleryOrderLaunch.playbackMode}
-                initialAnchorAssetId={galleryOrderLaunch.anchorAssetId}
-                galleryOrderFilter={galleryOrderLaunch.galleryOrderFilter}
               />
             </div>
           ) : (

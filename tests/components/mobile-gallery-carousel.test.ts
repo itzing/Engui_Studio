@@ -50,7 +50,6 @@ describe('mobile Gallery carousel', () => {
       activeWorkspaceId: 'ws-1',
       workspaces: [{ id: 'ws-1' }],
     };
-    window.history.pushState({}, '', '/m/carousel');
     setViewport(390, 844);
   });
 
@@ -58,6 +57,7 @@ describe('mobile Gallery carousel', () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: false,
       imagesEnabled: true,
+      galleryViewEnabled: true,
       onlyFavorites: true,
       includeLandscape: true,
       includePortrait: false,
@@ -71,6 +71,7 @@ describe('mobile Gallery carousel', () => {
     await waitFor(() => expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false));
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Gallery View') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
@@ -82,6 +83,7 @@ describe('mobile Gallery carousel', () => {
     expect(mockCarousel.props).toMatchObject({
       initialVideosEnabled: false,
       initialImagesEnabled: true,
+      initialGalleryViewEnabled: true,
       initialOnlyFavorites: true,
       initialIncludeLandscape: true,
       initialIncludePortrait: false,
@@ -113,6 +115,7 @@ describe('mobile Gallery carousel', () => {
 
   it('renders the fullscreen player in landscape with selected settings', async () => {
     setViewport(844, 390);
+    window.localStorage.setItem('engui.gallery.lastViewed.ws-1', 'asset-7');
     render(React.createElement(MobileGalleryCarouselScreen));
 
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(true);
@@ -122,6 +125,11 @@ describe('mobile Gallery carousel', () => {
     expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
       videosEnabled: true,
       imagesEnabled: true,
+    });
+    fireEvent.click(screen.getByLabelText('Gallery View'));
+    expect((screen.getByLabelText('Gallery View') as HTMLInputElement).checked).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      galleryViewEnabled: true,
     });
     fireEvent.click(screen.getByLabelText('Only favorites'));
     expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
@@ -146,45 +154,16 @@ describe('mobile Gallery carousel', () => {
       workspaceId: 'ws-1',
       initialVideosEnabled: false,
       initialImagesEnabled: true,
+      initialGalleryViewEnabled: true,
       initialOnlyFavorites: true,
       initialIncludeLandscape: true,
       initialIncludePortrait: false,
       initialSpeed: 1,
       initialScrubSpeedMultiplier: 4,
+      currentGalleryAssetId: 'asset-7',
       showControls: false,
       enableKeyboardControls: false,
       movementAxis: 'horizontal',
-    });
-  });
-
-  it('starts in gallery order when opened from the mobile gallery', async () => {
-    window.history.pushState({}, '', '/m/carousel?mode=galleryOrder&anchorAssetId=asset-2&bucket=draft&q=face&favoritesOnly=true');
-    setViewport(844, 390);
-
-    render(React.createElement(MobileGalleryCarouselScreen));
-
-    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
-    expect(mockCarousel.props).toMatchObject({
-      playbackMode: 'galleryOrder',
-      initialAnchorAssetId: 'asset-2',
-      galleryOrderFilter: {
-        bucket: 'draft',
-        query: 'face',
-        favoritesOnly: true,
-      },
-    });
-  });
-
-  it('keeps direct mobile carousel entry on the shuffle feed', async () => {
-    setViewport(844, 390);
-
-    render(React.createElement(MobileGalleryCarouselScreen));
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-
-    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
-    expect(mockCarousel.props).toMatchObject({
-      playbackMode: 'shuffle',
-      initialAnchorAssetId: null,
     });
   });
 

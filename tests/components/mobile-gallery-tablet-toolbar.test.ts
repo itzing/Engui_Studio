@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TABLET_GALLERY_COLUMN_STORAGE_KEY } from '@/lib/mobile/galleryGrid';
 
@@ -16,16 +16,6 @@ const mockToggleGalleryTrash = vi.hoisted(() => vi.fn());
 const mockEnsureRangeLoaded = vi.hoisted(() => vi.fn(async () => undefined));
 const mockFormFactor = vi.hoisted(() => ({ current: 'phone-portrait' }));
 const mockGalleryFullscreenViewer = vi.hoisted(() => vi.fn(() => null));
-const mockGalleryState = vi.hoisted(() => ({
-  current: {
-    query: '',
-    selectedAssetId: null as string | null,
-    selectedAsset: null as null | { id: string; type: 'image' | 'video' | 'audio' },
-    semanticFilter: 'common' as 'all' | 'common' | 'draft' | 'upscale',
-    showTrashed: false,
-    favoritesOnly: false,
-  },
-}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -55,21 +45,20 @@ vi.mock('@/hooks/gallery/useMobileGalleryScreen', () => ({
     isLoading: false,
     isLoadingMore: false,
     error: null,
-    query: mockGalleryState.current.query,
+    query: '',
     setQuery: mockSetQuery,
     selectedFilters: ['image', 'video', 'audio'],
-    semanticFilter: mockGalleryState.current.semanticFilter,
+    semanticFilter: 'common',
     setSemanticFilter: mockSetSemanticFilter,
-    showTrashed: mockGalleryState.current.showTrashed,
-    favoritesOnly: mockGalleryState.current.favoritesOnly,
+    showTrashed: false,
+    favoritesOnly: false,
     toggleMediaFilter: mockToggleMediaFilter,
     toggleGalleryFavorites: mockToggleGalleryFavorites,
     toggleGalleryTrash: mockToggleGalleryTrash,
     refresh: mockRefresh,
     ensureRangeLoaded: mockEnsureRangeLoaded,
-    selectedAssetId: mockGalleryState.current.selectedAssetId,
+    selectedAssetId: null,
     selectedAbsoluteIndex: null,
-    selectedAsset: mockGalleryState.current.selectedAsset,
     handleTilePress: vi.fn(),
     viewerOpen: false,
     viewerIndex: 0,
@@ -90,14 +79,6 @@ describe('MobileGalleryScreen tablet toolbar', () => {
     vi.clearAllMocks();
     window.localStorage.clear();
     mockFormFactor.current = 'phone-portrait';
-    mockGalleryState.current = {
-      query: '',
-      selectedAssetId: null,
-      selectedAsset: null,
-      semanticFilter: 'common',
-      showTrashed: false,
-      favoritesOnly: false,
-    };
     window.ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -129,22 +110,5 @@ describe('MobileGalleryScreen tablet toolbar', () => {
     expect(toolbar.querySelector('[aria-label="Gallery columns"]')).toBeTruthy();
     const viewerProps = mockGalleryFullscreenViewer.mock.calls[mockGalleryFullscreenViewer.mock.calls.length - 1]?.[0] as { enableTouchSwipeNavigation?: boolean };
     expect(viewerProps.enableTouchSwipeNavigation).toBe(true);
-  });
-
-  it('opens tablet carousel from the selected Gallery asset with gallery filters', () => {
-    mockFormFactor.current = 'tablet-landscape';
-    mockGalleryState.current = {
-      query: 'face',
-      selectedAssetId: 'asset-2',
-      selectedAsset: { id: 'asset-2', type: 'video' },
-      semanticFilter: 'draft',
-      showTrashed: true,
-      favoritesOnly: true,
-    };
-
-    render(React.createElement(MobileGalleryScreen));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open carousel' }));
-    expect(mockPush).toHaveBeenCalledWith('/m/carousel?mode=galleryOrder&anchorAssetId=asset-2&bucket=draft&q=face&favoritesOnly=true&includeTrashed=true&onlyTrashed=true');
   });
 });

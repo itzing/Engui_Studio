@@ -69,7 +69,6 @@ type DragState = {
 };
 
 type CarouselMovementAxis = 'horizontal' | 'vertical';
-type CarouselPlaybackMode = 'shuffle' | 'galleryOrder';
 type GalleryOrderFilter = {
   bucket?: 'all' | 'common' | 'draft' | 'upscale';
   query?: string;
@@ -193,8 +192,8 @@ type GalleryVideoCarouselProps = {
   showControls?: boolean;
   enableKeyboardControls?: boolean;
   movementAxis?: CarouselMovementAxis;
-  playbackMode?: CarouselPlaybackMode;
-  initialAnchorAssetId?: string | null;
+  initialGalleryViewEnabled?: boolean;
+  currentGalleryAssetId?: string | null;
   galleryOrderFilter?: GalleryOrderFilter;
 };
 
@@ -211,8 +210,8 @@ export function GalleryVideoCarousel({
   showControls = true,
   enableKeyboardControls = true,
   movementAxis = 'horizontal',
-  playbackMode = 'shuffle',
-  initialAnchorAssetId = null,
+  initialGalleryViewEnabled = false,
+  currentGalleryAssetId = null,
   galleryOrderFilter,
 }: GalleryVideoCarouselProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -235,6 +234,7 @@ export function GalleryVideoCarousel({
   const scrubSpeedMultiplierRef = useRef(initialScrubSpeedMultiplier);
   const videosEnabledRef = useRef(true);
   const imagesEnabledRef = useRef(false);
+  const galleryViewEnabledRef = useRef(initialGalleryViewEnabled);
   const onlyFavoritesRef = useRef(initialOnlyFavorites);
   const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
     includeLandscape: initialIncludeLandscape,
@@ -254,6 +254,7 @@ export function GalleryVideoCarousel({
   const [paused, setPaused] = useState(false);
   const [videosEnabled, setVideosEnabled] = useState(initialVideosEnabled);
   const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
+  const [galleryViewEnabled, setGalleryViewEnabled] = useState(initialGalleryViewEnabled);
   const [onlyFavorites, setOnlyFavorites] = useState(initialOnlyFavorites);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
@@ -311,15 +312,15 @@ export function GalleryVideoCarousel({
         aspectRatio: readGalleryCarouselAssetRatio(asset, DEFAULT_IMAGE_RATIO),
       };
     });
-    const startIndex = initialAnchorAssetId ? feed.findIndex((entry) => entry.id === initialAnchorAssetId) : -1;
+    const startIndex = currentGalleryAssetId ? feed.findIndex((entry) => entry.id === currentGalleryAssetId) : -1;
     return { feed, startIndex: startIndex >= 0 ? startIndex : 0 };
-  }, [initialAnchorAssetId]);
+  }, [currentGalleryAssetId]);
 
   const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {
     resetFeed(buildShuffleFeed(videos, images, includeVideos, includeImages), 0);
   }, [buildShuffleFeed, resetFeed]);
 
-  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter, onlyFavoritedAssets: boolean) => {
+  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter, onlyFavoritedAssets: boolean, useGalleryView: boolean) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
@@ -339,7 +340,7 @@ export function GalleryVideoCarousel({
     setNextIndex(0);
     setFeedEnded(false);
     try {
-      if (playbackMode === 'galleryOrder') {
+      if (useGalleryView) {
         const orderedAssets = await fetchAllGalleryAssets(workspaceId, 'all', onlyFavoritedAssets, galleryOrderFilter);
         const filteredVideos = includeVideos
           ? orderedAssets.filter((asset) => asset.type === 'video' && matchesGalleryCarouselRatioFilter(asset, ratioFilter, DEFAULT_VIDEO_RATIO))
@@ -380,12 +381,13 @@ export function GalleryVideoCarousel({
     } finally {
       setIsLoading(false);
     }
-  }, [buildGalleryOrderFeed, galleryOrderFilter, playbackMode, resetFeed, resetPlayback, workspaceId]);
+  }, [buildGalleryOrderFeed, galleryOrderFilter, resetFeed, resetPlayback, workspaceId]);
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
       videosEnabled: videosEnabledRef.current,
       imagesEnabled: imagesEnabledRef.current,
+      galleryViewEnabled: galleryViewEnabledRef.current,
       onlyFavorites: onlyFavoritesRef.current,
       includeLandscape: ratioFilterRef.current.includeLandscape,
       includePortrait: ratioFilterRef.current.includePortrait,
@@ -399,6 +401,7 @@ export function GalleryVideoCarousel({
     const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings({
       videosEnabled: initialVideosEnabled,
       imagesEnabled: initialImagesEnabled,
+      galleryViewEnabled: initialGalleryViewEnabled,
       includeLandscape: initialIncludeLandscape,
       includePortrait: initialIncludePortrait,
       onlyFavorites: initialOnlyFavorites,
@@ -413,6 +416,8 @@ export function GalleryVideoCarousel({
     setVideosEnabled(storedSettings.videosEnabled);
     imagesEnabledRef.current = storedSettings.imagesEnabled;
     setImagesEnabled(storedSettings.imagesEnabled);
+    galleryViewEnabledRef.current = storedSettings.galleryViewEnabled;
+    setGalleryViewEnabled(storedSettings.galleryViewEnabled);
     onlyFavoritesRef.current = storedSettings.onlyFavorites;
     setOnlyFavorites(storedSettings.onlyFavorites);
     ratioFilterRef.current = nextRatioFilter;
@@ -422,8 +427,8 @@ export function GalleryVideoCarousel({
     setSpeed(storedSettings.speed);
     scrubSpeedMultiplierRef.current = storedSettings.scrubSpeedMultiplier;
     setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
-    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter, storedSettings.onlyFavorites);
-  }, [initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
+    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter, storedSettings.onlyFavorites, storedSettings.galleryViewEnabled);
+  }, [initialGalleryViewEnabled, initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -892,7 +897,7 @@ export function GalleryVideoCarousel({
     setVideosEnabled(nextEnabled);
     videosEnabledRef.current = nextEnabled;
     persistSettings({ videosEnabled: nextEnabled });
-    void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current);
+    void loadAssets(nextEnabled, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, galleryViewEnabledRef.current);
   }, [loadAssets, persistSettings]);
 
   const handleImagesToggle = useCallback((nextEnabled: boolean) => {
@@ -900,14 +905,21 @@ export function GalleryVideoCarousel({
     setImagesEnabled(nextEnabled);
     imagesEnabledRef.current = nextEnabled;
     persistSettings({ imagesEnabled: nextEnabled });
-    void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current, onlyFavoritesRef.current);
+    void loadAssets(videosEnabledRef.current, nextEnabled, ratioFilterRef.current, onlyFavoritesRef.current, galleryViewEnabledRef.current);
+  }, [loadAssets, persistSettings]);
+
+  const handleGalleryViewToggle = useCallback((nextEnabled: boolean) => {
+    setGalleryViewEnabled(nextEnabled);
+    galleryViewEnabledRef.current = nextEnabled;
+    persistSettings({ galleryViewEnabled: nextEnabled });
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, nextEnabled);
   }, [loadAssets, persistSettings]);
 
   const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
     setOnlyFavorites(nextEnabled);
     onlyFavoritesRef.current = nextEnabled;
     persistSettings({ onlyFavorites: nextEnabled });
-    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, nextEnabled);
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, nextEnabled, galleryViewEnabledRef.current);
   }, [loadAssets, persistSettings]);
 
   const handleRatioToggle = useCallback((orientation: 'landscape' | 'portrait', nextEnabled: boolean) => {
@@ -919,7 +931,7 @@ export function GalleryVideoCarousel({
     setIncludeLandscape(nextRatioFilter.includeLandscape);
     setIncludePortrait(nextRatioFilter.includePortrait);
     persistSettings(nextRatioFilter);
-    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter, onlyFavoritesRef.current);
+    void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, nextRatioFilter, onlyFavoritesRef.current, galleryViewEnabledRef.current);
   }, [loadAssets, persistSettings]);
 
   const handleSpeedChange = useCallback((value: number[]) => {
@@ -998,6 +1010,20 @@ export function GalleryVideoCarousel({
             Images
           </label>
           <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${galleryViewEnabled ? 'border-violet-400/35 bg-violet-500/10 text-violet-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={galleryViewEnabled}
+              disabled={isLoading}
+              onChange={(event) => handleGalleryViewToggle(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-violet-400"
+              aria-label="Gallery View"
+            />
+            Gallery View
+          </label>
+          <label
             className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${includeLandscape ? 'border-sky-400/35 bg-sky-500/10 text-sky-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
             onClick={(event) => event.stopPropagation()}
           >
@@ -1070,7 +1096,7 @@ export function GalleryVideoCarousel({
             className="h-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              if (playbackMode === 'galleryOrder') {
+              if (galleryViewEnabledRef.current) {
                 const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
                 resetFeed(feed, startIndex);
                 return;
@@ -1079,8 +1105,8 @@ export function GalleryVideoCarousel({
             }}
             disabled={isLoading || feedRef.current.length === 0}
           >
-            {playbackMode === 'galleryOrder' ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
-            {playbackMode === 'galleryOrder' ? 'Restart' : 'Shuffle'}
+            {galleryViewEnabled ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
+            {galleryViewEnabled ? 'Restart' : 'Shuffle'}
           </Button>
           <Button
             variant="ghost"
@@ -1088,7 +1114,7 @@ export function GalleryVideoCarousel({
             className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:bg-white/5 hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
-              void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current);
+              void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, galleryViewEnabledRef.current);
             }}
             disabled={isLoading}
             aria-label="Refresh video feed"
@@ -1219,7 +1245,7 @@ export function GalleryVideoCarousel({
                   className="h-8 rounded-md"
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (playbackMode === 'galleryOrder') {
+                    if (galleryViewEnabledRef.current) {
                       const { feed, startIndex } = buildGalleryOrderFeed(sourceOrderedAssetsRef.current, videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current);
                       resetFeed(feed, startIndex);
                       return;
@@ -1227,8 +1253,8 @@ export function GalleryVideoCarousel({
                     resetPlayback(sourceVideosRef.current, sourceImagesRef.current, videosEnabledRef.current, imagesEnabledRef.current);
                   }}
                 >
-                  {playbackMode === 'galleryOrder' ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
-                  {playbackMode === 'galleryOrder' ? 'Restart' : 'Shuffle again'}
+                  {galleryViewEnabled ? <RefreshCw className="mr-2 h-4 w-4" /> : <Shuffle className="mr-2 h-4 w-4" />}
+                  {galleryViewEnabled ? 'Restart' : 'Shuffle again'}
                 </Button>
               </div>
             </div>
