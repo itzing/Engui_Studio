@@ -339,14 +339,16 @@ export function GalleryVideoCarousel({
   ), []);
 
   const buildGalleryOrderFeed = useCallback((assets: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter) => {
-    const filteredAssets = assets.filter((asset) => {
-      if (asset.type === 'video' && !includeVideos) return false;
-      if (asset.type === 'image' && !includeImages) return false;
-      if (asset.type !== 'video' && asset.type !== 'image') return false;
-      return matchesGalleryCarouselRatioFilter(asset, ratioFilter, asset.type === 'video' ? DEFAULT_VIDEO_RATIO : DEFAULT_IMAGE_RATIO);
-    });
+    const filteredAssets = assets
+      .map((asset, sourceIndex) => ({ asset, sourceIndex }))
+      .filter(({ asset }) => {
+        if (asset.type === 'video' && !includeVideos) return false;
+        if (asset.type === 'image' && !includeImages) return false;
+        if (asset.type !== 'video' && asset.type !== 'image') return false;
+        return matchesGalleryCarouselRatioFilter(asset, ratioFilter, asset.type === 'video' ? DEFAULT_VIDEO_RATIO : DEFAULT_IMAGE_RATIO);
+      });
 
-    const feed = filteredAssets.map((asset): GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> => {
+    const feed = filteredAssets.map(({ asset }): GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> => {
       if (asset.type === 'video') {
         return { kind: 'video', id: asset.id, asset };
       }
@@ -357,8 +359,29 @@ export function GalleryVideoCarousel({
         aspectRatio: readGalleryCarouselAssetRatio(asset, DEFAULT_IMAGE_RATIO),
       };
     });
-    const startIndex = currentGalleryAssetId ? feed.findIndex((entry) => entry.id === currentGalleryAssetId) : -1;
-    return { feed, startIndex: startIndex >= 0 ? startIndex : 0 };
+    const exactStartIndex = currentGalleryAssetId ? feed.findIndex((entry) => entry.id === currentGalleryAssetId) : -1;
+    if (exactStartIndex >= 0 || !currentGalleryAssetId) {
+      return { feed, startIndex: exactStartIndex >= 0 ? exactStartIndex : 0 };
+    }
+
+    const sourceStartIndex = assets.findIndex((asset) => asset.id === currentGalleryAssetId);
+    if (sourceStartIndex < 0) {
+      return { feed, startIndex: 0 };
+    }
+
+    let nearestStartIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    let nearestDirection = Number.POSITIVE_INFINITY;
+    filteredAssets.forEach(({ sourceIndex }, feedIndex) => {
+      const distance = Math.abs(sourceIndex - sourceStartIndex);
+      const direction = sourceIndex >= sourceStartIndex ? 0 : 1;
+      if (distance < nearestDistance || (distance === nearestDistance && direction < nearestDirection)) {
+        nearestStartIndex = feedIndex;
+        nearestDistance = distance;
+        nearestDirection = direction;
+      }
+    });
+    return { feed, startIndex: nearestStartIndex };
   }, [currentGalleryAssetId]);
 
   const resetPlayback = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => {

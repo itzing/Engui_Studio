@@ -178,6 +178,70 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
+  it('starts gallery order playback from the nearest matching asset when the selected asset is filtered out', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const assets = [
+      { id: 'video-1', width: 1280, height: 720 },
+      { id: 'video-2', width: 720, height: 1280 },
+      { id: 'video-3', width: 1280, height: 720 },
+      { id: 'video-4', width: 720, height: 1280 },
+      { id: 'video-5', width: 1280, height: 720 },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(search.get('type')).toBe('all');
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          assets: assets.map((asset, index) => ({
+            id: asset.id,
+            workspaceId: 'ws-1',
+            type: 'video',
+            originalUrl: `/${asset.id}.mp4`,
+            previewUrl: `/${asset.id}.mp4`,
+            thumbnailUrl: `/${asset.id}.png`,
+            mediaWidth: asset.width,
+            mediaHeight: asset.height,
+            addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+          })),
+          pagination: { page: 1, limit: 100, totalCount: assets.length, hasNextPage: false },
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialGalleryViewEnabled: true,
+        currentGalleryAssetId: 'video-4',
+        initialIncludeLandscape: true,
+        initialIncludePortrait: false,
+        initialSpeed: 0,
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy());
+      expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy();
+      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull();
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
   it('uses one image per slot in gallery view instead of grouped image slots', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
