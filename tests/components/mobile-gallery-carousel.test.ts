@@ -186,6 +186,56 @@ describe('mobile Gallery carousel', () => {
     });
   });
 
+  it('keeps the portrait vertical player open for up and down scrub swipes', async () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('Include portrait assets'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await screen.findByTestId('mobile-gallery-carousel-overlay');
+    const swipeSurface = screen.getByTestId('mobile-gallery-carousel-swipe-surface');
+
+    fireEvent.pointerDown(swipeSurface, {
+      pointerId: 8,
+      pointerType: 'touch',
+      clientX: 190,
+      clientY: 700,
+    });
+    fireEvent.pointerMove(swipeSurface, {
+      pointerId: 8,
+      pointerType: 'touch',
+      clientX: 192,
+      clientY: 560,
+    });
+
+    expect(screen.getByTestId('mobile-gallery-carousel-overlay')).toBeTruthy();
+    expect(mockCarousel.props).toMatchObject({ movementAxis: 'vertical' });
+  });
+
+  it('closes the portrait vertical player with a horizontal swipe', async () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('Include portrait assets'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await screen.findByTestId('mobile-gallery-carousel-overlay');
+    const swipeSurface = screen.getByTestId('mobile-gallery-carousel-swipe-surface');
+
+    fireEvent.pointerDown(swipeSurface, {
+      pointerId: 9,
+      pointerType: 'touch',
+      clientX: 320,
+      clientY: 420,
+    });
+    fireEvent.pointerMove(swipeSurface, {
+      pointerId: 9,
+      pointerType: 'touch',
+      clientX: 180,
+      clientY: 424,
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('mobile-gallery-carousel-overlay')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
+  });
+
   it('renders portrait-enabled playback after the phone rotates to landscape', async () => {
     render(React.createElement(MobileGalleryCarouselScreen));
 

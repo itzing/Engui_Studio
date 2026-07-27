@@ -40,8 +40,8 @@ function useLandscapeOrientation(active: boolean) {
   return isLandscape;
 }
 
-const VERTICAL_SWIPE_CLOSE_THRESHOLD_PX = 56;
-const VERTICAL_SWIPE_DOMINANCE = 1.25;
+const SWIPE_CLOSE_THRESHOLD_PX = 56;
+const SWIPE_CLOSE_DOMINANCE = 1.25;
 
 export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
@@ -162,11 +162,14 @@ export default function MobileGalleryCarouselScreen() {
     const deltaY = event.clientY - swipe.startY;
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
+    const shouldClose = shouldShowPortraitLandscapePlayer
+      ? absX >= SWIPE_CLOSE_THRESHOLD_PX && absX > absY * SWIPE_CLOSE_DOMINANCE
+      : absY >= SWIPE_CLOSE_THRESHOLD_PX && absY > absX * SWIPE_CLOSE_DOMINANCE;
 
-    if (absY >= VERTICAL_SWIPE_CLOSE_THRESHOLD_PX && absY > absX * VERTICAL_SWIPE_DOMINANCE) {
+    if (shouldClose) {
       closePlayer();
     }
-  }, [closePlayer]);
+  }, [closePlayer, shouldShowPortraitLandscapePlayer]);
 
   const handleLandscapePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (swipeCloseRef.current.pointerId !== event.pointerId) return;
