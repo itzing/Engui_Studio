@@ -64,7 +64,7 @@ describe('GalleryVideoCarousel', () => {
     render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText('5 images')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Movement paused')).toBeTruthy());
     expect((screen.getByLabelText('Include videos') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Gallery View') as HTMLInputElement).checked).toBe(true);
@@ -115,7 +115,7 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(screen.queryByTestId('gallery-carousel-pause-indicator')).toBeNull());
   });
 
-  it('starts gallery order playback from the selected gallery asset and mounts both adjacent sides', async () => {
+  it('starts gallery order playback paused from the selected gallery asset and mounts both adjacent sides', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -165,6 +165,8 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+      expect(screen.getByText('Movement paused')).toBeTruthy();
+      expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
       expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy();
       expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy();
 
@@ -173,6 +175,61 @@ describe('GalleryVideoCarousel', () => {
       fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: -1400 });
 
       await waitFor(() => expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeTruthy());
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('warm seeds multiple gallery order neighbors on both sides of the selected asset', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        assets: Array.from({ length: 9 }, (_, index) => ({
+          id: `video-${index + 1}`,
+          workspaceId: 'ws-1',
+          type: 'video',
+          originalUrl: `/video-${index + 1}.mp4`,
+          previewUrl: `/video-${index + 1}.mp4`,
+          thumbnailUrl: `/video-${index + 1}.png`,
+          mediaWidth: 1280,
+          mediaHeight: 720,
+          addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+        })),
+        pagination: { page: 1, limit: 100, totalCount: 9, hasNextPage: false },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialGalleryViewEnabled: true,
+        currentGalleryAssetId: 'video-5',
+        initialIncludeLandscape: true,
+        initialIncludePortrait: false,
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy());
+      [2, 3, 4, 5, 6, 7, 8].forEach((index) => {
+        expect(stage.querySelector(`video[src="/video-${index}.mp4"]`)).toBeTruthy();
+      });
+      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-9.mp4"]')).toBeNull();
+      expect(screen.getByText('Movement paused')).toBeTruthy();
     } finally {
       rectSpy.mockRestore();
     }
@@ -235,8 +292,9 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy());
+      expect((stage.querySelector('video[src="/video-5.mp4"]')?.parentElement as HTMLElement).style.transform).toContain('translate3d(0px');
       expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy();
-      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull();
+      expect(screen.getByText('Movement paused')).toBeTruthy();
     } finally {
       rectSpy.mockRestore();
     }

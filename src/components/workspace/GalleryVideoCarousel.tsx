@@ -69,6 +69,10 @@ type DragState = {
 };
 
 type CarouselMovementAxis = 'horizontal' | 'vertical';
+type ResetFeedOptions = {
+  pause?: boolean;
+  seedNeighborCount?: number;
+};
 type GalleryOrderFilter = {
   bucket?: 'all' | 'common' | 'draft' | 'upscale';
   query?: string;
@@ -89,6 +93,8 @@ const EDGE_OVERLAP_PX = 2;
 const HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 1.5;
 const VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 0.2;
 const VERTICAL_SLOT_TRIM_BUFFER_MIN_PX = 120;
+const DEFAULT_INITIAL_NEIGHBOR_COUNT = 1;
+const GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT = 3;
 
 function readVideoAssetRatio(asset: GalleryCarouselAsset, measuredRatios: Record<string, number>) {
   const measured = measuredRatios[asset.id];
@@ -276,53 +282,70 @@ export function GalleryVideoCarousel({
     movementAxisRef.current = movementAxis;
   }, [movementAxis]);
 
-  const resetFeed = useCallback((feed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>, startIndex = 0) => {
+  const resetFeed = useCallback((feed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>, startIndex = 0, options: ResetFeedOptions = {}) => {
     const safeStartIndex = Math.min(Math.max(0, Math.floor(startIndex)), Math.max(0, feed.length - 1));
     const stage = stageSizeRef.current;
     const slotSeed = slotCounterRef.current + 1;
+    const seedNeighborCount = Math.max(DEFAULT_INITIAL_NEIGHBOR_COUNT, Math.floor(options.seedNeighborCount ?? DEFAULT_INITIAL_NEIGHBOR_COUNT));
+    const buildSlot = (
+      entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
+      feedIndex: number,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    ): CarouselSlot => ({
+      kind: entry.kind,
+      feedIndex,
+      instanceId: `${entry.id}-${slotSeed}-${feedIndex}`,
+      entry,
+      x,
+      y,
+      width,
+      height,
+      imageCycleMs: entry.kind === 'images' ? 0 : undefined,
+      activeImageIndex: entry.kind === 'images' ? 0 : undefined,
+    });
     const currentEntry = feed[safeStartIndex];
     const currentSize = currentEntry ? buildSlotSize(currentEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
-    const currentSlot: CarouselSlot | null = currentEntry && currentSize ? {
-      kind: currentEntry.kind,
-      feedIndex: safeStartIndex,
-      instanceId: `${currentEntry.id}-${slotSeed}-${safeStartIndex}`,
-      entry: currentEntry,
-      x: currentSize.x,
-      y: currentSize.y,
-      width: currentSize.width,
-      height: currentSize.height,
-      imageCycleMs: currentEntry.kind === 'images' ? 0 : undefined,
-      activeImageIndex: currentEntry.kind === 'images' ? 0 : undefined,
-    } : null;
-    const previousEntry = currentSlot ? feed[safeStartIndex - 1] : null;
-    const nextEntry = currentSlot ? feed[safeStartIndex + 1] : null;
-    const previousSize = previousEntry ? buildSlotSize(previousEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
-    const nextSize = nextEntry ? buildSlotSize(nextEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
-    const previousSlot: CarouselSlot | null = previousEntry && previousSize && currentSlot ? {
-      kind: previousEntry.kind,
-      feedIndex: safeStartIndex - 1,
-      instanceId: `${previousEntry.id}-${slotSeed}-${safeStartIndex - 1}`,
-      entry: previousEntry,
-      x: movementAxisRef.current === 'vertical' ? previousSize.x : currentSlot.x + currentSlot.width - EDGE_OVERLAP_PX,
-      y: movementAxisRef.current === 'vertical' ? currentSlot.y - previousSize.height + EDGE_OVERLAP_PX : previousSize.y,
-      width: previousSize.width,
-      height: previousSize.height,
-      imageCycleMs: previousEntry.kind === 'images' ? 0 : undefined,
-      activeImageIndex: previousEntry.kind === 'images' ? 0 : undefined,
-    } : null;
-    const nextSlot: CarouselSlot | null = nextEntry && nextSize && currentSlot ? {
-      kind: nextEntry.kind,
-      feedIndex: safeStartIndex + 1,
-      instanceId: `${nextEntry.id}-${slotSeed}-${safeStartIndex + 1}`,
-      entry: nextEntry,
-      x: movementAxisRef.current === 'vertical' ? nextSize.x : currentSlot.x - nextSize.width + EDGE_OVERLAP_PX,
-      y: movementAxisRef.current === 'vertical' ? currentSlot.y + currentSlot.height - EDGE_OVERLAP_PX : nextSize.y,
-      width: nextSize.width,
-      height: nextSize.height,
-      imageCycleMs: nextEntry.kind === 'images' ? 0 : undefined,
-      activeImageIndex: nextEntry.kind === 'images' ? 0 : undefined,
-    } : null;
-    const seededSlots = [previousSlot, currentSlot, nextSlot].filter((slot): slot is CarouselSlot => Boolean(slot));
+    const currentSlot: CarouselSlot | null = currentEntry && currentSize
+      ? buildSlot(currentEntry, safeStartIndex, currentSize.x, currentSize.y, currentSize.width, currentSize.height)
+      : null;
+    const seededSlots: CarouselSlot[] = currentSlot ? [currentSlot] : [];
+    let firstSeededSlot = currentSlot;
+    let lastSeededSlot = currentSlot;
+    for (let offset = 1; offset <= seedNeighborCount; offset += 1) {
+      const previousEntry = firstSeededSlot ? feed[safeStartIndex - offset] : null;
+      const previousSize = previousEntry ? buildSlotSize(previousEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+      if (previousEntry && previousSize && firstSeededSlot) {
+        const previousSlot = buildSlot(
+          previousEntry,
+          safeStartIndex - offset,
+          movementAxisRef.current === 'vertical' ? previousSize.x : firstSeededSlot.x + firstSeededSlot.width - EDGE_OVERLAP_PX,
+          movementAxisRef.current === 'vertical' ? firstSeededSlot.y - previousSize.height + EDGE_OVERLAP_PX : previousSize.y,
+          previousSize.width,
+          previousSize.height,
+        );
+        seededSlots.unshift(previousSlot);
+        firstSeededSlot = previousSlot;
+      }
+
+      const nextEntry = lastSeededSlot ? feed[safeStartIndex + offset] : null;
+      const nextSize = nextEntry ? buildSlotSize(nextEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+      if (nextEntry && nextSize && lastSeededSlot) {
+        const nextSlot = buildSlot(
+          nextEntry,
+          safeStartIndex + offset,
+          movementAxisRef.current === 'vertical' ? nextSize.x : lastSeededSlot.x - nextSize.width + EDGE_OVERLAP_PX,
+          movementAxisRef.current === 'vertical' ? lastSeededSlot.y + lastSeededSlot.height - EDGE_OVERLAP_PX : nextSize.y,
+          nextSize.width,
+          nextSize.height,
+        );
+        seededSlots.push(nextSlot);
+        lastSeededSlot = nextSlot;
+      }
+    }
+    const nextPaused = Boolean(options.pause);
     feedRef.current = feed;
     activeSlotsRef.current = seededSlots;
     nextIndexRef.current = seededSlots.length > 0 ? seededSlots[seededSlots.length - 1].feedIndex + 1 : safeStartIndex;
@@ -330,8 +353,8 @@ export function GalleryVideoCarousel({
     setActiveSlots(seededSlots);
     setNextIndex(nextIndexRef.current);
     setFeedEnded(feed.length === 0);
-    pausedRef.current = false;
-    setPaused(false);
+    pausedRef.current = nextPaused;
+    setPaused(nextPaused);
   }, []);
 
   const buildShuffleFeed = useCallback((videos: GalleryCarouselAsset[], images: GalleryCarouselAsset[], includeVideos: boolean, includeImages: boolean) => (
@@ -422,7 +445,7 @@ export function GalleryVideoCarousel({
         sourceImagesRef.current = filteredImages;
         setSourceVideos(filteredVideos);
         setSourceImages(filteredImages);
-        resetFeed(feed, startIndex);
+        resetFeed(feed, startIndex, { pause: true, seedNeighborCount: GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT });
         return;
       }
 
