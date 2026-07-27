@@ -50,6 +50,7 @@ describe('mobile Gallery carousel', () => {
       activeWorkspaceId: 'ws-1',
       workspaces: [{ id: 'ws-1' }],
     };
+    window.history.pushState({}, '', '/m/carousel');
     setViewport(390, 844);
   });
 
@@ -153,6 +154,37 @@ describe('mobile Gallery carousel', () => {
       showControls: false,
       enableKeyboardControls: false,
       movementAxis: 'horizontal',
+    });
+  });
+
+  it('starts in gallery order when opened from the mobile gallery', async () => {
+    window.history.pushState({}, '', '/m/carousel?mode=galleryOrder&anchorAssetId=asset-2&bucket=draft&q=face&favoritesOnly=true');
+    setViewport(844, 390);
+
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(mockCarousel.props).toMatchObject({
+      playbackMode: 'galleryOrder',
+      initialAnchorAssetId: 'asset-2',
+      galleryOrderFilter: {
+        bucket: 'draft',
+        query: 'face',
+        favoritesOnly: true,
+      },
+    });
+  });
+
+  it('keeps direct mobile carousel entry on the shuffle feed', async () => {
+    setViewport(844, 390);
+
+    render(React.createElement(MobileGalleryCarouselScreen));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(mockCarousel.props).toMatchObject({
+      playbackMode: 'shuffle',
+      initialAnchorAssetId: null,
     });
   });
 

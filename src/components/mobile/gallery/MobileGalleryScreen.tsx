@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
+import { AudioLines, Clapperboard, Film, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -153,6 +153,7 @@ export default function MobileGalleryScreen() {
     ensureRangeLoaded,
     selectedAssetId,
     selectedAbsoluteIndex,
+    selectedAsset,
     handleTilePress,
     viewerOpen,
     viewerIndex,
@@ -246,6 +247,33 @@ export default function MobileGalleryScreen() {
     router.push(`/m/gallery/${asset.id}`);
   };
 
+  const buildCarouselHref = useCallback((assetId: string) => {
+    const params = new URLSearchParams({
+      mode: 'galleryOrder',
+      anchorAssetId: assetId,
+      bucket: semanticFilter,
+    });
+    if (query.trim()) {
+      params.set('q', query.trim());
+    }
+    if (favoritesOnly) {
+      params.set('favoritesOnly', 'true');
+    }
+    if (showTrashed) {
+      params.set('includeTrashed', 'true');
+      params.set('onlyTrashed', 'true');
+    }
+    return `/m/carousel?${params.toString()}`;
+  }, [favoritesOnly, query, semanticFilter, showTrashed]);
+
+  const openCarouselFromGallery = useCallback((assetId?: string | null) => {
+    const resolvedAssetId = assetId || selectedAssetId;
+    if (!resolvedAssetId) return;
+    router.push(buildCarouselHref(resolvedAssetId));
+  }, [buildCarouselHref, router, selectedAssetId]);
+
+  const canOpenSelectedAssetCarousel = selectedAsset?.type === 'image' || selectedAsset?.type === 'video';
+
   const selectedLoadedViewerIndex = useMemo(() => {
     if (!selectedAssetId) return -1;
     return loadedViewerItems.findIndex((entry) => entry.id === selectedAssetId);
@@ -325,6 +353,17 @@ export default function MobileGalleryScreen() {
                 </button>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0 disabled:opacity-35"
+                  aria-label="Open carousel"
+                  title="Open carousel"
+                  disabled={!canOpenSelectedAssetCarousel}
+                  onClick={() => openCarouselFromGallery()}
+                >
+                  <Film className="w-3.5 h-3.5" />
+                </Button>
                 <div data-testid="tablet-gallery-divider" aria-hidden="true" className="shrink-0 px-1 text-sm text-muted-foreground/65">|</div>
                 <div className="flex h-8 w-[196px] shrink-0 items-center gap-2 rounded border border-border/40 bg-transparent px-2 text-muted-foreground">
                   <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
@@ -415,6 +454,17 @@ export default function MobileGalleryScreen() {
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded border border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/20 shrink-0 disabled:opacity-35"
+                  aria-label="Open carousel"
+                  title="Open carousel"
+                  disabled={!canOpenSelectedAssetCarousel}
+                  onClick={() => openCarouselFromGallery()}
+                >
+                  <Film className="w-3.5 h-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -552,44 +602,58 @@ export default function MobileGalleryScreen() {
         onToggleFavorite={toggleFavorite}
         renderFooterActions={(item, meta) => {
           const asset = Object.values(itemsByAbsoluteIndex).find((entry) => entry.id === item.id);
-          if (!asset || asset.type !== 'image') return null;
+          if (!asset || (asset.type !== 'image' && asset.type !== 'video')) return null;
           return (
             <>
-              {asset.bucket !== 'draft' && asset.bucket !== 'upscale' ? (
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                  onClick={() => void updateBucket(asset.id, 'draft' as GalleryViewerBucket)}
-                  aria-label="Mark as draft"
-                  title="Move to drafts"
-                >
-                  <PenSquare className="w-5 h-5" />
-                </Button>
-              ) : null}
               <Button
                 size="icon"
                 variant="secondary"
                 className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                onClick={() => void openAssetInImg2Vid(asset)}
-                disabled={openingImg2VidAssetId === asset.id}
-                aria-label="Open image in img2vid"
-                title="Open in img2vid"
+                onClick={() => openCarouselFromGallery(asset.id)}
+                aria-label="Open carousel"
+                title="Open carousel"
               >
-                {openingImg2VidAssetId === asset.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
+                <Film className="w-5 h-5" />
               </Button>
-              {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                  onClick={() => void updateBucket(asset.id, 'upscale' as GalleryViewerBucket)}
-                  aria-label="Mark as upscale"
-                  title="Move to upscale"
-                >
-                  <Sparkles className="w-5 h-5" />
-                </Button>
-              ) : null}
+              {asset.type !== 'image' ? null : (
+                <>
+                  {asset.bucket !== 'draft' && asset.bucket !== 'upscale' ? (
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                      onClick={() => void updateBucket(asset.id, 'draft' as GalleryViewerBucket)}
+                      aria-label="Mark as draft"
+                      title="Move to drafts"
+                    >
+                      <PenSquare className="w-5 h-5" />
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                    onClick={() => void openAssetInImg2Vid(asset)}
+                    disabled={openingImg2VidAssetId === asset.id}
+                    aria-label="Open image in img2vid"
+                    title="Open in img2vid"
+                  >
+                    {openingImg2VidAssetId === asset.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clapperboard className="w-5 h-5" />}
+                  </Button>
+                  {asset.bucket !== 'upscale' && meta.canMarkUpscale ? (
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                      onClick={() => void updateBucket(asset.id, 'upscale' as GalleryViewerBucket)}
+                      aria-label="Mark as upscale"
+                      title="Move to upscale"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                    </Button>
+                  ) : null}
+                </>
+              )}
             </>
           );
         }}

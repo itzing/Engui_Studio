@@ -16,6 +16,49 @@ import {
   type GalleryCarouselSettings,
 } from '@/lib/galleryCarouselSettings';
 
+type GalleryOrderLaunch = {
+  playbackMode: 'shuffle' | 'galleryOrder';
+  anchorAssetId: string | null;
+  galleryOrderFilter?: {
+    bucket?: 'all' | 'common' | 'draft' | 'upscale';
+    query?: string;
+    includeTrashed?: boolean;
+    onlyTrashed?: boolean;
+    favoritesOnly?: boolean;
+  };
+  shouldStart: boolean;
+};
+
+function readGalleryOrderLaunch(): GalleryOrderLaunch {
+  if (typeof window === 'undefined') {
+    return { playbackMode: 'shuffle', anchorAssetId: null, shouldStart: false };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const anchorAssetId = params.get('anchorAssetId')?.trim() || null;
+  if (params.get('mode') !== 'galleryOrder' || !anchorAssetId) {
+    return { playbackMode: 'shuffle', anchorAssetId: null, shouldStart: false };
+  }
+
+  const bucket = params.get('bucket');
+  const safeBucket = bucket === 'all' || bucket === 'common' || bucket === 'draft' || bucket === 'upscale'
+    ? bucket
+    : undefined;
+
+  return {
+    playbackMode: 'galleryOrder',
+    anchorAssetId,
+    shouldStart: true,
+    galleryOrderFilter: {
+      bucket: safeBucket,
+      query: params.get('q') || undefined,
+      includeTrashed: params.get('includeTrashed') === 'true',
+      onlyTrashed: params.get('onlyTrashed') === 'true',
+      favoritesOnly: params.get('favoritesOnly') === 'true',
+    },
+  };
+}
+
 function readLandscape() {
   if (typeof window === 'undefined') return false;
   return window.innerWidth > window.innerHeight;
@@ -46,6 +89,7 @@ const VERTICAL_SWIPE_DOMINANCE = 1.25;
 export default function MobileGalleryCarouselScreen() {
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
+  const galleryOrderLaunch = useMemo(() => readGalleryOrderLaunch(), []);
   const [videosEnabled, setVideosEnabled] = useState(true);
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -53,7 +97,7 @@ export default function MobileGalleryCarouselScreen() {
   const [includePortrait, setIncludePortrait] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [scrubSpeedMultiplier, setScrubSpeedMultiplier] = useState(4);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(galleryOrderLaunch.shouldStart);
   const swipeCloseRef = useRef<{ pointerId: number | null; startX: number; startY: number }>({
     pointerId: null,
     startX: 0,
@@ -302,6 +346,9 @@ export default function MobileGalleryCarouselScreen() {
                 showControls={false}
                 enableKeyboardControls={false}
                 movementAxis={shouldShowPortraitLandscapePlayer ? 'vertical' : 'horizontal'}
+                playbackMode={galleryOrderLaunch.playbackMode}
+                initialAnchorAssetId={galleryOrderLaunch.anchorAssetId}
+                galleryOrderFilter={galleryOrderLaunch.galleryOrderFilter}
               />
             </div>
           ) : (
