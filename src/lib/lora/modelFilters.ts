@@ -143,7 +143,7 @@ export function filterLorasForTarget<T extends LoraFileLike>(loras: T[], target:
 }
 
 export function filterLorasForModel<T extends LoraFileLike>(loras: T[], modelId: string) {
-  if (modelId === 'wan22') {
+  if (modelId === 'wan22' || modelId === 'wan22-t2v') {
     return filterLorasForTarget(loras, 'video');
   }
 

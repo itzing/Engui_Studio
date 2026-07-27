@@ -42,7 +42,7 @@ describe('LoRA model filters', () => {
     ]);
   });
 
-  it('maps wan22 to video LoRAs and image models to image LoRAs', () => {
+  it('maps WAN22 video models to video LoRAs and image models to image LoRAs', () => {
     const loras = [
       lora('dramatic_high.safetensors', '/runpod-volume/loras/dramatic_high.safetensors'),
       lora('dramatic_low.safetensors', '/runpod-volume/loras/dramatic_low.safetensors'),
@@ -50,6 +50,10 @@ describe('LoRA model filters', () => {
     ];
 
     expect(filterLorasForModel(loras, 'wan22').map((entry) => entry.fileName)).toEqual([
+      'dramatic_high.safetensors',
+      'dramatic_low.safetensors',
+    ]);
+    expect(filterLorasForModel(loras, 'wan22-t2v').map((entry) => entry.fileName)).toEqual([
       'dramatic_high.safetensors',
       'dramatic_low.safetensors',
     ]);

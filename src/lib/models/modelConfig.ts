@@ -168,6 +168,14 @@ export const MODELS: ModelConfig[] = [
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
             { name: 'steps', label: 'Steps', type: 'number', default: 4, min: 4, max: 12, group: 'advanced' },
             { name: 'length', label: 'Length', type: 'number', default: 81, min: 81, max: 161, group: 'advanced' },
+            { name: 'lora_high_1', label: 'High LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First additional T2V LoRA pair - high noise model' },
+            { name: 'lora_low_1', label: 'Low LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First additional T2V LoRA pair - low noise model' },
+            { name: 'lora_high_2', label: 'High LoRA 2', type: 'lora-selector', default: '', group: 'advanced', description: 'Second additional T2V LoRA pair - high noise model' },
+            { name: 'lora_low_2', label: 'Low LoRA 2', type: 'lora-selector', default: '', group: 'advanced', description: 'Second additional T2V LoRA pair - low noise model' },
+            { name: 'lora_high_3', label: 'High LoRA 3', type: 'lora-selector', default: '', group: 'advanced', description: 'Third additional T2V LoRA pair - high noise model' },
+            { name: 'lora_low_3', label: 'Low LoRA 3', type: 'lora-selector', default: '', group: 'advanced', description: 'Third additional T2V LoRA pair - low noise model' },
+            { name: 'lora_high_4', label: 'High LoRA 4', type: 'lora-selector', default: '', group: 'advanced', description: 'Fourth additional T2V LoRA pair - high noise model' },
+            { name: 'lora_low_4', label: 'Low LoRA 4', type: 'lora-selector', default: '', group: 'advanced', description: 'Fourth additional T2V LoRA pair - low noise model' },
         ]
     },
     {

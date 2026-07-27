@@ -40,6 +40,34 @@ class RunPodService {
     }
   }
 
+  private buildWan22LoraPairs(input: RunPodInput): Array<{ high: string; low: string; high_weight: number; low_weight: number }> {
+    const loraPairs: Array<{ high: string; low: string; high_weight: number; low_weight: number }> = [];
+
+    for (let i = 1; i <= 4; i++) {
+      const highKey = `lora_high_${i}`;
+      const lowKey = `lora_low_${i}`;
+      const highWeightKey = `lora_high_${i}_weight`;
+      const lowWeightKey = `lora_low_${i}_weight`;
+
+      const highPath = input[highKey];
+      const lowPath = input[lowKey];
+
+      if (highPath && lowPath) {
+        const highFilename = String(highPath).replace(/^\/runpod-volume\/loras\//, '');
+        const lowFilename = String(lowPath).replace(/^\/runpod-volume\/loras\//, '');
+
+        loraPairs.push({
+          high: highFilename,
+          low: lowFilename,
+          high_weight: input[highWeightKey] ?? 1.0,
+          low_weight: input[lowWeightKey] ?? 1.0
+        });
+      }
+    }
+
+    return loraPairs;
+  }
+
   private getHeaders() {
     return {
       'Authorization': `Bearer ${this.apiKey}`,
@@ -227,32 +255,7 @@ class RunPodService {
           context_overlap: input.context_overlap,
         };
 
-        // Build lora_pairs array from individual LoRA parameters
-        const loraPairs: Array<{high: string, low: string, high_weight: number, low_weight: number}> = [];
-        
-        for (let i = 1; i <= 4; i++) {
-          const highKey = `lora_high_${i}`;
-          const lowKey = `lora_low_${i}`;
-          const highWeightKey = `lora_high_${i}_weight`;
-          const lowWeightKey = `lora_low_${i}_weight`;
-          
-          const highPath = input[highKey];
-          const lowPath = input[lowKey];
-          
-          // Only add pair if both high and low are provided
-          if (highPath && lowPath) {
-            // Extract filename from path (remove /runpod-volume/loras/ prefix)
-            const highFilename = highPath.replace(/^\/runpod-volume\/loras\//, '');
-            const lowFilename = lowPath.replace(/^\/runpod-volume\/loras\//, '');
-            
-            loraPairs.push({
-              high: highFilename,
-              low: lowFilename,
-              high_weight: input[highWeightKey] ?? 1.0,
-              low_weight: input[lowWeightKey] ?? 1.0
-            });
-          }
-        }
+        const loraPairs = this.buildWan22LoraPairs(input);
         
         // Only add lora_pairs if we have at least one pair
         if (loraPairs.length > 0) {
@@ -262,20 +265,27 @@ class RunPodService {
         return { input: wan22Input };
 
       case 'wan22-t2v':
+        const wan22T2vInput: Record<string, any> = {
+          mode: 't2v',
+          ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
+          ...(!input._secure && input.negativePrompt ? { negativePrompt: input.negativePrompt } : {}),
+          ...(input._secure && { _secure: input._secure }),
+          ...(input.transport_request && { transport_request: input.transport_request }),
+          width: input.width,
+          height: input.height,
+          seed: input.seed,
+          cfg: input.cfg,
+          length: input.length,
+          steps: input.steps,
+        };
+
+        const t2vLoraPairs = this.buildWan22LoraPairs(input);
+        if (t2vLoraPairs.length > 0) {
+          wan22T2vInput.lora_pairs = t2vLoraPairs;
+        }
+
         return {
-          input: {
-            mode: 't2v',
-            ...(!input._secure && input.prompt ? { prompt: input.prompt } : {}),
-            ...(!input._secure && input.negativePrompt ? { negativePrompt: input.negativePrompt } : {}),
-            ...(input._secure && { _secure: input._secure }),
-            ...(input.transport_request && { transport_request: input.transport_request }),
-            width: input.width,
-            height: input.height,
-            seed: input.seed,
-            cfg: input.cfg,
-            length: input.length,
-            steps: input.steps,
-          }
+          input: wan22T2vInput
         };
 
       case 'wan-animate':
@@ -465,6 +475,7 @@ class RunPodService {
       hasImageBase64: typeof input.image_base64 === 'string' && input.image_base64.trim() !== '',
       hasVideoBase64: typeof input.video_base64 === 'string' && input.video_base64.trim() !== '',
       loraCount: Array.isArray(input.lora) ? input.lora.length : 0,
+      loraPairCount: Array.isArray(input.lora_pairs) ? input.lora_pairs.length : 0,
     };
 
     console.log(`Payload summary for ${modelId}:`, summary);

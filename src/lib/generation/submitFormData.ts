@@ -356,8 +356,8 @@ export async function submitGenerationFormData(formData: FormData) {
             }
             : {};
 
-        // Collect LoRA weights for WAN 2.2 (4 pairs = 8 weights)
-        if (modelId === 'wan22') {
+        // Collect LoRA weights for WAN 2.2 high/low pairs.
+        if (['wan22', 'wan22-t2v'].includes(modelId)) {
             for (let i = 1; i <= 4; i++) {
                 const highWeightKey = `lora_high_${i}_weight`;
                 const lowWeightKey = `lora_low_${i}_weight`;

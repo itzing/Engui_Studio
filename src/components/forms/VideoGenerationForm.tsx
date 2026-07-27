@@ -106,8 +106,10 @@ export default function VideoGenerationForm() {
         return value === undefined || value === null || value === '' ? fallback : value;
     };
 
+    const supportsWanLoraPairsForModel = (modelId: string) => ['wan22', 'wan22-t2v'].includes(modelId);
+
     const getParameterValuesWithWanLoraWeights = (values: Record<string, any>) => {
-        if (videoSelectedModel !== 'wan22') return values;
+        if (!supportsWanLoraPairsForModel(videoSelectedModel)) return values;
 
         return {
             ...values,
@@ -131,7 +133,7 @@ export default function VideoGenerationForm() {
     };
 
     const getWanLoraWeightSubmitError = () => {
-        if (currentModel.id !== 'wan22') return null;
+        if (!supportsWanLoraPairsForModel(currentModel.id)) return null;
 
         const pairs = [
             { highPath: parameterValues.lora_high_1, lowPath: parameterValues.lora_low_1, highWeight: loraHigh1Weight, lowWeight: loraLow1Weight },
@@ -1082,8 +1084,8 @@ export default function VideoGenerationForm() {
                 }
             });
 
-            // Add LoRA weights for WAN 2.2 (4 pairs = 8 weights)
-            if (currentModel.id === 'wan22') {
+            // Add LoRA weights for WAN 2.2 high/low pairs
+            if (supportsWanLoraPairsForModel(currentModel.id)) {
                 formData.append('lora_high_1_weight', loraHigh1Weight.toString());
                 formData.append('lora_low_1_weight', loraLow1Weight.toString());
                 formData.append('lora_high_2_weight', loraHigh2Weight.toString());
@@ -1660,7 +1662,7 @@ export default function VideoGenerationForm() {
 
                         {/* Advanced Parameters */}
                         {/* Special handling for WAN 2.2 LoRA pairs (4 pairs = 8 LoRAs) */}
-                        {currentModel.id === 'wan22' && (
+                        {supportsWanLoraPairsForModel(currentModel.id) && (
                             <>
                                 <LoRAPairSelector
                                     highValue={parameterValues['lora_high_1'] || ''}
@@ -1716,7 +1718,7 @@ export default function VideoGenerationForm() {
                         {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
                         {currentModel.parameters.filter(p => {
                             // Filter out LoRA parameters for WAN 2.2 (handled by LoRAPairSelector)
-                            if (currentModel.id === 'wan22' && (
+                            if (supportsWanLoraPairsForModel(currentModel.id) && (
                                 p.name === 'lora_high_1' || p.name === 'lora_low_1' ||
                                 p.name === 'lora_high_2' || p.name === 'lora_low_2' ||
                                 p.name === 'lora_high_3' || p.name === 'lora_low_3' ||

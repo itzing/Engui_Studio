@@ -64,6 +64,7 @@ vi.mock('@/components/lora/LoRAManagementDialog', () => ({
 }));
 
 import VideoGenerationForm from '@/components/forms/VideoGenerationForm';
+import { setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById } from '@/lib/models/modelConfig';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -157,6 +158,32 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(model?.parameters.find((param) => param.name === 'length')?.default).toBe(80);
     expect(model?.parameters.find((param) => param.name === 'length')?.min).toBeLessThanOrEqual(80);
     expect(model?.parameters.find((param) => param.name === 'length')?.max).toBe(512);
+  });
+
+  it('exposes additional LoRA pair parameters for WAN22 T2V', () => {
+    const model = getModelById('wan22-t2v');
+    expect(model?.parameters.filter((param) => param.type === 'lora-selector').map((param) => param.name)).toEqual([
+      'lora_high_1',
+      'lora_low_1',
+      'lora_high_2',
+      'lora_low_2',
+      'lora_high_3',
+      'lora_low_3',
+      'lora_high_4',
+      'lora_low_4',
+    ]);
+  });
+
+  it('renders the LoRA pair picker for WAN22 T2V', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+
+    render(React.createElement(VideoGenerationForm));
+
+    const advancedButton = await screen.findByRole('button', { name: 'generationForm.advancedSettings' });
+    fireEvent.click(advancedButton);
+
+    expect(await screen.findAllByLabelText('high-weight')).toHaveLength(4);
+    expect(await screen.findAllByLabelText('low-weight')).toHaveLength(4);
   });
 
   it('does not apply browser step or range validation to Create Video dimensions', async () => {
