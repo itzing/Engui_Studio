@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeftRight, Check, ChevronDown, Images, Loader2, Plus, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Images, Loader2, Minus, Plus, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
@@ -70,6 +70,11 @@ type LoadedGalleryReferencePage = {
     assets: GalleryReferenceAsset[];
 };
 
+type SourceVideoDimensions = {
+    width: number;
+    height: number;
+};
+
 const GALLERY_REFERENCE_PAGE_SIZE = 48;
 
 export default function VideoGenerationForm() {
@@ -85,6 +90,7 @@ export default function VideoGenerationForm() {
     const [audioFile2, setAudioFile2] = useState<File | null>(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>('');
+    const [sourceVideoDimensions, setSourceVideoDimensions] = useState<SourceVideoDimensions | null>(null);
     const [fullscreenReferenceUrl, setFullscreenReferenceUrl] = useState<string | null>(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isDragOverImage, setIsDragOverImage] = useState(false);
@@ -480,6 +486,7 @@ export default function VideoGenerationForm() {
     const currentDurationSeconds = Number.isFinite(currentFrameCount) && Number.isFinite(currentFps) && Number(currentFps) > 0
         ? Number((Number(currentFrameCount) / Number(currentFps)).toFixed(2))
         : undefined;
+    const isWanAnimateModel = currentModel?.id === 'wan-animate';
     const isMobileCreateRoute = pathname?.startsWith('/m/');
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
     const galleryReferenceColumnCount = isPhoneLayout ? 2 : 6;
@@ -984,11 +991,37 @@ export default function VideoGenerationForm() {
         }
     };
 
+    const setSourceVideo = (file: File, previewUrl: string) => {
+        setVideoFile(file);
+        setVideoPreviewUrl(previewUrl);
+        setSourceVideoDimensions(null);
+    };
+
+    const applyWanAnimateSourceVideoDimensions = (width: number, height: number) => {
+        if (!isWanAnimateModel || !widthParameter || !heightParameter || width <= 0 || height <= 0) return;
+
+        const nextDimensions = {
+            width: Math.round(width),
+            height: Math.round(height),
+        };
+        setSourceVideoDimensions(nextDimensions);
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParameter.name]: nextDimensions.width,
+            [heightParameter.name]: nextDimensions.height,
+        }));
+    };
+
+    const handleSourceVideoMetadata = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+        const video = event.currentTarget;
+        applyWanAnimateSourceVideoDimensions(video.videoWidth, video.videoHeight);
+    };
+
     const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setVideoFile(file);
-            setVideoPreviewUrl(URL.createObjectURL(file));
+            setSourceVideo(file, URL.createObjectURL(file));
+            e.target.value = '';
         }
     };
 
@@ -1001,6 +1034,7 @@ export default function VideoGenerationForm() {
     const handleRemoveVideo = () => {
         setVideoFile(null);
         setVideoPreviewUrl('');
+        setSourceVideoDimensions(null);
     };
 
     const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>, isSecondAudio = false) => {
@@ -1030,6 +1064,54 @@ export default function VideoGenerationForm() {
         }));
     };
 
+    const getSourceVideoAspectRatio = () => {
+        if (!sourceVideoDimensions || sourceVideoDimensions.width <= 0 || sourceVideoDimensions.height <= 0) return null;
+        return sourceVideoDimensions.width / sourceVideoDimensions.height;
+    };
+
+    const handleDimensionParameterChange = (widthParam: any, heightParam: any, changedParamName: string, value: number) => {
+        const aspectRatio = isWanAnimateModel ? getSourceVideoAspectRatio() : null;
+        if (!aspectRatio || !Number.isFinite(value) || value <= 0) {
+            handleParameterChange(changedParamName, value);
+            return;
+        }
+
+        if (changedParamName === widthParam.name) {
+            setParameterValues(prev => ({
+                ...prev,
+                [widthParam.name]: value,
+                [heightParam.name]: Math.max(1, Math.round(value / aspectRatio)),
+            }));
+            return;
+        }
+
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParam.name]: Math.max(1, Math.round(value * aspectRatio)),
+            [heightParam.name]: value,
+        }));
+    };
+
+    const scaleWanAnimateDimensions = (widthParam: any, heightParam: any, factor: number) => {
+        const aspectRatio = getSourceVideoAspectRatio();
+        if (!aspectRatio) return;
+
+        const currentWidth = Number(parameterValues[widthParam.name] ?? widthParam.default);
+        const currentHeight = Number(parameterValues[heightParam.name] ?? heightParam.default);
+        const baseWidth = Number.isFinite(currentWidth) && currentWidth > 0
+            ? currentWidth
+            : Number.isFinite(currentHeight) && currentHeight > 0
+                ? currentHeight * aspectRatio
+                : sourceVideoDimensions?.width ?? widthParam.default;
+        const nextWidth = Math.max(1, Math.round(baseWidth * factor));
+
+        setParameterValues(prev => ({
+            ...prev,
+            [widthParam.name]: nextWidth,
+            [heightParam.name]: Math.max(1, Math.round(nextWidth / aspectRatio)),
+        }));
+    };
+
     const swapDimensionParameters = (widthParam: any, heightParam: any) => {
         const currentWidth = parameterValues[widthParam.name] ?? widthParam.default;
         const currentHeight = parameterValues[heightParam.name] ?? heightParam.default;
@@ -1052,18 +1134,55 @@ export default function VideoGenerationForm() {
         return (
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                    <Label className="text-xs">Width × Height</Label>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => swapDimensionParameters(widthParam, heightParam)}
-                        title="Swap width and height"
-                        aria-label="Swap width and height"
-                    >
-                        <ArrowLeftRight className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="min-w-0">
+                        <Label className="text-xs">Width × Height</Label>
+                        {isWanAnimateModel && sourceVideoDimensions ? (
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                Source {sourceVideoDimensions.width} × {sourceVideoDimensions.height}
+                            </div>
+                        ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                        {isWanAnimateModel && sourceVideoDimensions ? (
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => scaleWanAnimateDimensions(widthParam, heightParam, 0.8)}
+                                    title="Scale dimensions down"
+                                    aria-label="Scale dimensions down"
+                                >
+                                    <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => scaleWanAnimateDimensions(widthParam, heightParam, 1.25)}
+                                    title="Scale dimensions up"
+                                    aria-label="Scale dimensions up"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                            </>
+                        ) : null}
+                        {!(isWanAnimateModel && sourceVideoDimensions) ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => swapDimensionParameters(widthParam, heightParam)}
+                                title="Swap width and height"
+                                aria-label="Swap width and height"
+                            >
+                                <ArrowLeftRight className="h-3.5 w-3.5" />
+                            </Button>
+                        ) : null}
+                    </div>
                 </div>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
                     <div className="space-y-2">
@@ -1074,7 +1193,7 @@ export default function VideoGenerationForm() {
                             value={parameterValues[widthParam.name] ?? widthParam.default}
                             step="any"
                             className="h-8 text-sm"
-                            onChange={(e) => handleParameterChange(widthParam.name, parseFloat(e.target.value))}
+                            onChange={(e) => handleDimensionParameterChange(widthParam, heightParam, widthParam.name, parseFloat(e.target.value))}
                         />
                     </div>
                     <div className="pb-2 text-xs text-muted-foreground">×</div>
@@ -1086,7 +1205,7 @@ export default function VideoGenerationForm() {
                             value={parameterValues[heightParam.name] ?? heightParam.default}
                             step="any"
                             className="h-8 text-sm"
-                            onChange={(e) => handleParameterChange(heightParam.name, parseFloat(e.target.value))}
+                            onChange={(e) => handleDimensionParameterChange(widthParam, heightParam, heightParam.name, parseFloat(e.target.value))}
                         />
                     </div>
                 </div>
@@ -1153,8 +1272,7 @@ export default function VideoGenerationForm() {
                     const blob = await response.blob();
                     const file = new File([blob], `workspace-${mediaData.id}.mp4`, { type: 'video/mp4' });
 
-                    setVideoFile(file);
-                    setVideoPreviewUrl(mediaData.url);
+                    setSourceVideo(file, mediaData.url);
                 }
                 return;
             }
@@ -1162,8 +1280,7 @@ export default function VideoGenerationForm() {
             const files = Array.from(e.dataTransfer.files);
             const videoFile = files.find(f => f.type.startsWith('video/'));
             if (videoFile) {
-                setVideoFile(videoFile);
-                setVideoPreviewUrl(URL.createObjectURL(videoFile));
+                setSourceVideo(videoFile, URL.createObjectURL(videoFile));
             }
         } catch (error) {
             console.error('Failed to handle video drop:', error);
@@ -1584,7 +1701,7 @@ export default function VideoGenerationForm() {
                         <Label className="text-xs text-muted-foreground font-medium">{t('generationForm.videoReference')}</Label>
                         {(videoFile && videoPreviewUrl) ? (
                             <div className="relative group rounded-lg overflow-hidden border border-border bg-black">
-                                <video src={videoPreviewUrl} className="h-40 w-full object-contain" controls />
+                                <video src={videoPreviewUrl} className="h-40 w-full object-contain" controls onLoadedMetadata={handleSourceVideoMetadata} />
                                 <button
                                     type="button"
                                     onClick={handleRemoveVideo}

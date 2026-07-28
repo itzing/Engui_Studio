@@ -268,6 +268,49 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(preview?.className).not.toContain('object-cover');
   });
 
+  it('sets Wan Animate output dimensions from source video metadata and scales them without changing ratio', async () => {
+    setWorkflowActiveModel('video', 'wan-animate');
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:wan-animate-source-video'),
+    });
+
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    const fileInput = container.querySelector('input[type="file"][accept="video/*"]') as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(['video'], 'portrait-720x1280.mp4', { type: 'video/mp4' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    const preview = container.querySelector('video[src="blob:wan-animate-source-video"]') as HTMLVideoElement | null;
+    expect(preview).toBeTruthy();
+    Object.defineProperty(preview!, 'videoWidth', { configurable: true, value: 720 });
+    Object.defineProperty(preview!, 'videoHeight', { configurable: true, value: 1280 });
+    fireEvent.loadedMetadata(preview!);
+
+    const widthInput = container.querySelector('input[name="width"]') as HTMLInputElement | null;
+    const heightInput = container.querySelector('input[name="height"]') as HTMLInputElement | null;
+
+    await waitFor(() => {
+      expect(widthInput?.value).toBe('720');
+      expect(heightInput?.value).toBe('1280');
+    });
+    expect(screen.getByText('Source 720 × 1280')).toBeTruthy();
+
+    fireEvent.change(widthInput!, { target: { value: '360' } });
+    expect(widthInput?.value).toBe('360');
+    expect(heightInput?.value).toBe('640');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scale dimensions up' }));
+    expect(widthInput?.value).toBe('450');
+    expect(heightInput?.value).toBe('800');
+
+    fireEvent.change(heightInput!, { target: { value: '1280' } });
+    expect(widthInput?.value).toBe('720');
+    expect(heightInput?.value).toBe('1280');
+  });
+
   it('selects a Wan Animate reference image from Gallery', async () => {
     setWorkflowActiveModel('video', 'wan-animate');
 
