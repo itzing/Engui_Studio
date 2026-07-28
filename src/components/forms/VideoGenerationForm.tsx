@@ -1583,8 +1583,8 @@ export default function VideoGenerationForm() {
                     <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground font-medium">{t('generationForm.videoReference')}</Label>
                         {(videoFile && videoPreviewUrl) ? (
-                            <div className="relative group rounded-lg overflow-hidden border border-border">
-                                <video src={videoPreviewUrl} className="w-full h-40 object-cover" controls />
+                            <div className="relative group rounded-lg overflow-hidden border border-border bg-black">
+                                <video src={videoPreviewUrl} className="h-40 w-full object-contain" controls />
                                 <button
                                     type="button"
                                     onClick={handleRemoveVideo}

@@ -247,6 +247,27 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
+  it('contains uploaded Wan Animate source video previews instead of cropping them', async () => {
+    setWorkflowActiveModel('video', 'wan-animate');
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:wan-animate-source-video'),
+    });
+
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    const fileInput = container.querySelector('input[type="file"][accept="video/*"]') as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(['video'], 'portrait.mp4', { type: 'video/mp4' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    const preview = container.querySelector('video[src="blob:wan-animate-source-video"]') as HTMLVideoElement | null;
+    expect(preview).toBeTruthy();
+    expect(preview?.className).toContain('object-contain');
+    expect(preview?.className).not.toContain('object-cover');
+  });
+
   it('selects a Wan Animate reference image from Gallery', async () => {
     setWorkflowActiveModel('video', 'wan-animate');
 

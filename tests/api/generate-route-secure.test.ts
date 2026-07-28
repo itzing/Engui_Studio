@@ -311,6 +311,73 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(mockStartRunPodSupervisor).toHaveBeenCalledTimes(1);
   });
 
+  it('submits Wan Animate source video through secure media_inputs without preprocessing it', async () => {
+    mockGetModelById.mockReturnValue({
+      id: 'wan-animate',
+      name: 'Wan Animate',
+      type: 'video',
+      api: {
+        type: 'runpod',
+        endpoint: 'wan-animate',
+      },
+      inputs: ['text', 'image', 'video'],
+      imageInputKey: 'image_path',
+      videoInputKey: 'video_path',
+      parameters: [
+        { name: 'width', type: 'number', default: 512 },
+        { name: 'height', type: 'number', default: 512 },
+        { name: 'fps', type: 'number', default: 30 },
+        { name: 'seed', type: 'number', default: 42 },
+      ],
+    });
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { 'wan-animate': 'endpoint-wan-animate' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+
+    const sourceVideoBytes = Buffer.from('portrait-video-bytes');
+    const formData = new FormData();
+    formData.set('modelId', 'wan-animate');
+    formData.set('prompt', 'animate the reference');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'reference.png', { type: 'image/png' }));
+    formData.set('video', new File([sourceVideoBytes], 'portrait-720x1280.mp4', { type: 'video/mp4' }));
+    formData.set('width', '704');
+    formData.set('height', '1280');
+
+    const response = await POST(buildRequest(formData) as any);
+
+    expect(response.status).toBe(200);
+    expect(mockProcessFileUpload).not.toHaveBeenCalled();
+    expect(mockUploadEncryptedMediaInput).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'job-1',
+      modelId: 'wan-animate',
+      attemptId: 'attempt-1',
+      role: 'source_video',
+      kind: 'video',
+      mime: 'video/mp4',
+      plaintext: sourceVideoBytes,
+      fileName: 'source_video.bin',
+    }));
+
+    const [payload, submittedModelId] = mockSubmitJob.mock.calls[0];
+    expect(submittedModelId).toBe('wan-animate');
+    expect(payload.video_path).toBeUndefined();
+    expect(payload.media_inputs).toHaveLength(2);
+  });
+
   it('passes the WAN22 continuation frame flag only when explicitly requested', async () => {
     mockGetSettings.mockResolvedValue({
       settings: {
