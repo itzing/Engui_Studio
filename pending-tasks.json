@@ -305,6 +305,6 @@
     "chatId": "telegram:450189741",
     "notes": "Direct user command. Scope: Engui Studio Create Video/Wan Animate reference image input on desktop and mobile. Add a Gallery image picker that loads selected gallery image as the existing reference image file/preview path, preserving upload/drop behavior. Rollback: revert new Engui commit, npm run build, restart engui-studio.service.",
     "finishedAt": "2026-07-28T20:07:28.005Z",
-    "result": "Implemented in Engui commit 6242f38. Wan Animate Create now has a Gallery reference image picker for desktop and mobile surfaces; selected Gallery images are fetched as blobs and submitted through the existing image file path. Validation: focused Vitest 14/14, targeted ESLint 0 errors with existing warnings, git diff --check, Prisma validate, and production build passed. Service restart and smoke checks follow after push."
+    "result": "Implemented in Engui commit 6242f38 and task close commit ff78f0d, pushed to origin/main. Wan Animate Create now has a Gallery reference image picker for desktop and mobile surfaces; selected Gallery images are fetched as blobs and submitted through the existing image file path. Validation: focused Vitest 14/14, targeted ESLint 0 errors with existing warnings, git diff --check, Prisma validate, production build passed, engui-studio.service restarted active, and smoke checks /, /m/create, /api/gallery/assets, /api/jobs returned 200."
   }
 ]
