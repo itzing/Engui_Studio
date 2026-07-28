@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
           presignedUrl, // Include presigned URL if generated
           fileSize: lora.fileSize.toString(),
           extension: lora.extension,
+          targetOverride: lora.targetOverride,
           uploadedAt: lora.uploadedAt.toISOString(),
           workspaceId: lora.workspaceId,
         };

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
 import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
+import { buildLoraPairs } from '@/lib/lora/modelFilters';
 import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -30,6 +31,7 @@ interface LoRAFile {
   extension: string;
   uploadedAt: string;
   workspaceId?: string;
+  targetOverride?: 'image' | 'video' | string | null;
 }
 
 interface LoRAPair {
@@ -63,50 +65,23 @@ export function LoRAManagementDialog({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [targetUpdatingId, setTargetUpdatingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Group LoRAs into pairs (high/low)
   const groupLoRAsIntoPairs = useCallback((loraList: LoRAFile[]): LoRAPair[] => {
-    const pairs = new Map<string, LoRAPair>();
+    const componentPairs = buildLoraPairs(loraList);
+    const pairedPaths = new Set(componentPairs.flatMap((pair) => [pair.high?.s3Path, pair.low?.s3Path]).filter(Boolean));
+    const standalonePairs: LoRAPair[] = loraList
+      .filter((lora) => !pairedPaths.has(lora.s3Path))
+      .map((lora) => ({
+        baseName: lora.name,
+        high: lora,
+        low: undefined,
+        isComplete: false,
+      }));
 
-    loraList.forEach((lora) => {
-      // Extract base name by removing _high or _low suffix
-      const fileName = lora.fileName.toLowerCase();
-      let baseName = lora.name;
-      let type: 'high' | 'low' | null = null;
-
-      if (fileName.includes('_high') || fileName.includes('-high')) {
-        baseName = lora.name.replace(/_high|_High|-high|-High/gi, '');
-        type = 'high';
-      } else if (fileName.includes('_low') || fileName.includes('-low')) {
-        baseName = lora.name.replace(/_low|_Low|-low|-Low/gi, '');
-        type = 'low';
-      }
-
-      if (!pairs.has(baseName)) {
-        pairs.set(baseName, {
-          baseName,
-          high: undefined,
-          low: undefined,
-          isComplete: false,
-        });
-      }
-
-      const pair = pairs.get(baseName)!;
-      if (type === 'high') {
-        pair.high = lora;
-      } else if (type === 'low') {
-        pair.low = lora;
-      } else {
-        // If no high/low suffix, treat as standalone
-        pair.high = lora;
-      }
-
-      pair.isComplete = !!(pair.high && pair.low);
-    });
-
-    return Array.from(pairs.values()).sort((a, b) => {
-      // Sort complete pairs first, then by name
+    return [...componentPairs, ...standalonePairs].sort((a, b) => {
       if (a.isComplete && !b.isComplete) return -1;
       if (!a.isComplete && b.isComplete) return 1;
       return a.baseName.localeCompare(b.baseName);
@@ -357,6 +332,58 @@ export function LoRAManagementDialog({
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     return date.toLocaleDateString();
+  };
+
+  const isDefaultVideoLora = (lora: LoRAFile, pair: LoRAPair) => {
+    if (lora.targetOverride === 'video') return true;
+    if (lora.targetOverride === 'image') return false;
+    return pair.isComplete;
+  };
+
+  const handleTargetChange = async (lora: LoRAFile, targetOverride: 'image' | 'video') => {
+    setTargetUpdatingId(lora.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`/api/lora/${lora.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetOverride }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Update failed');
+      }
+
+      setLoras((previous) => previous.map((entry) => (
+        entry.id === lora.id ? { ...entry, targetOverride: data.lora?.targetOverride ?? targetOverride } : entry
+      )));
+      onLoRAUploaded?.();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update LoRA target';
+      setError(`Update failed: ${errorMessage}. Please try again.`);
+    } finally {
+      setTargetUpdatingId(null);
+    }
+  };
+
+  const renderTargetControl = (lora: LoRAFile, pair: LoRAPair) => {
+    const checked = isDefaultVideoLora(lora, pair);
+    return (
+      <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 rounded border-border"
+          checked={checked}
+          disabled={targetUpdatingId === lora.id}
+          onChange={(event) => handleTargetChange(lora, event.target.checked ? 'video' : 'image')}
+          aria-label={`Use ${lora.fileName} for video`}
+        />
+        <span>Use for video</span>
+      </label>
+    );
   };
 
   // Handle S3 sync
@@ -613,6 +640,7 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.high.fileSize)} • {formatDate(pair.high.uploadedAt)}
                                 </p>
+                                {renderTargetControl(pair.high, pair)}
                               </>
                             ) : (
                               <p className="text-xs text-muted-foreground italic">{t('loraManagement.status.notUploaded')}</p>
@@ -646,6 +674,7 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.low.fileSize)} • {formatDate(pair.low.uploadedAt)}
                                 </p>
+                                {renderTargetControl(pair.low, pair)}
                               </>
                             ) : (
                               <p className="text-xs text-muted-foreground italic">{t('loraManagement.status.notUploaded')}</p>

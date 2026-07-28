@@ -40,8 +40,8 @@ class RunPodService {
     }
   }
 
-  private buildWan22LoraPairs(input: RunPodInput): Array<{ high: string; low: string; high_weight: number; low_weight: number }> {
-    const loraPairs: Array<{ high: string; low: string; high_weight: number; low_weight: number }> = [];
+  private buildWan22LoraPairs(input: RunPodInput): Array<{ high?: string; low?: string; high_weight: number; low_weight: number }> {
+    const loraPairs: Array<{ high?: string; low?: string; high_weight: number; low_weight: number }> = [];
 
     for (let i = 1; i <= 4; i++) {
       const highKey = `lora_high_${i}`;
@@ -52,13 +52,13 @@ class RunPodService {
       const highPath = input[highKey];
       const lowPath = input[lowKey];
 
-      if (highPath && lowPath) {
-        const highFilename = String(highPath).replace(/^\/runpod-volume\/loras\//, '');
-        const lowFilename = String(lowPath).replace(/^\/runpod-volume\/loras\//, '');
+      if (highPath || lowPath) {
+        const highFilename = highPath ? String(highPath).replace(/^\/runpod-volume\/loras\//, '') : undefined;
+        const lowFilename = lowPath ? String(lowPath).replace(/^\/runpod-volume\/loras\//, '') : undefined;
 
         loraPairs.push({
-          high: highFilename,
-          low: lowFilename,
+          ...(highFilename ? { high: highFilename } : {}),
+          ...(lowFilename ? { low: lowFilename } : {}),
           high_weight: input[highWeightKey] ?? 1.0,
           low_weight: input[lowWeightKey] ?? 1.0
         });

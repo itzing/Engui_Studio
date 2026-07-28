@@ -6,6 +6,66 @@ import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
 import { logger } from '@/lib/logger';
 
+const validTargetOverrides = new Set(['image', 'video']);
+
+// PATCH /api/lora/[id] - Update LoRA metadata
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'LoRA ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const rawTargetOverride = body?.targetOverride;
+    const targetOverride = rawTargetOverride === null || rawTargetOverride === ''
+      ? null
+      : typeof rawTargetOverride === 'string'
+        ? rawTargetOverride.trim().toLowerCase()
+        : undefined;
+
+    if (targetOverride !== null && (!targetOverride || !validTargetOverrides.has(targetOverride))) {
+      return NextResponse.json(
+        { success: false, error: 'targetOverride must be image, video, or null' },
+        { status: 400 }
+      );
+    }
+
+    const lora = await prisma.loRA.update({
+      where: { id },
+      data: { targetOverride },
+    });
+
+    return NextResponse.json({
+      success: true,
+      lora: {
+        id: lora.id,
+        name: lora.name,
+        fileName: lora.fileName,
+        s3Path: lora.s3Path,
+        s3Url: lora.s3Url,
+        fileSize: lora.fileSize.toString(),
+        extension: lora.extension,
+        targetOverride: lora.targetOverride,
+        uploadedAt: lora.uploadedAt.toISOString(),
+        workspaceId: lora.workspaceId,
+      },
+    });
+  } catch (error) {
+    logger.error('LoRA update error:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Failed to update LoRA' },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE /api/lora/[id] - Delete a LoRA file
 export async function DELETE(
   request: NextRequest,

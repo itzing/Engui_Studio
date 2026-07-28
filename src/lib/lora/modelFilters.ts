@@ -4,6 +4,7 @@ export type LoraFileLike = {
   name?: string;
   fileName: string;
   s3Path: string;
+  targetOverride?: 'image' | 'video' | string | null;
 };
 
 type LoraComponent = 'high' | 'low' | null;
@@ -128,8 +129,15 @@ export function buildLoraPairs<T extends LoraFileLike>(loras: T[]) {
 
 export function getVideoLoraPathSet(loras: LoraFileLike[]) {
   const videoPaths = new Set<string>();
+  for (const lora of loras) {
+    if (lora.targetOverride === 'video') {
+      videoPaths.add(lora.s3Path);
+    }
+  }
+
   for (const pair of buildLoraPairs(loras)) {
     if (!pair.high || !pair.low) continue;
+    if (pair.high.targetOverride === 'image' || pair.low.targetOverride === 'image') continue;
     videoPaths.add(pair.high.s3Path);
     videoPaths.add(pair.low.s3Path);
   }
@@ -139,7 +147,11 @@ export function getVideoLoraPathSet(loras: LoraFileLike[]) {
 
 export function filterLorasForTarget<T extends LoraFileLike>(loras: T[], target: LoraTarget) {
   const videoPaths = getVideoLoraPathSet(loras);
-  return loras.filter((lora) => target === 'video' ? videoPaths.has(lora.s3Path) : !videoPaths.has(lora.s3Path));
+  return loras.filter((lora) => {
+    if (lora.targetOverride === target) return true;
+    if (target === 'video') return videoPaths.has(lora.s3Path);
+    return !videoPaths.has(lora.s3Path);
+  });
 }
 
 export function filterLorasForModel<T extends LoraFileLike>(loras: T[], modelId: string) {

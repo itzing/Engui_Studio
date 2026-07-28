@@ -377,6 +377,7 @@ model LoRA {
   s3Url       String // Full S3 URL
   fileSize    BigInt // File size in bytes
   extension   String // .safetensors or .ckpt
+  targetOverride String? // 'image' | 'video' | null for automatic classification
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploadedAt  DateTime   @default(now())

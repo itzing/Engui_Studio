@@ -22,6 +22,7 @@ export interface LoRAFile {
   uploadedAt: string;
   workspaceId?: string;
   lastUsed?: string;
+  targetOverride?: 'image' | 'video' | string | null;
 }
 
 export interface LoRASelectorProps {

@@ -304,7 +304,7 @@ export function getNextWanLoraSlotIndex(loraConfigJson: string) {
 export function setWanLoraPairInConfig(
   loraConfigJson: string,
   index: number,
-  pair: { highPath: string; lowPath: string; highWeight?: number; lowWeight?: number } | null,
+  pair: { highPath?: string; lowPath?: string; highWeight?: number; lowWeight?: number } | null,
 ) {
   const config = parseJsonObjectText(loraConfigJson);
   const highKey = `lora_high_${index}`;
@@ -320,8 +320,16 @@ export function setWanLoraPairInConfig(
     return JSON.stringify(config, null, 2);
   }
 
-  config[highKey] = pair.highPath;
-  config[lowKey] = pair.lowPath;
+  if (pair.highPath) {
+    config[highKey] = pair.highPath;
+  } else {
+    delete config[highKey];
+  }
+  if (pair.lowPath) {
+    config[lowKey] = pair.lowPath;
+  } else {
+    delete config[lowKey];
+  }
   config[highWeightKey] = pair.highWeight ?? defaultWanLoraWeight;
   config[lowWeightKey] = pair.lowWeight ?? defaultWanLoraWeight;
   return JSON.stringify(config, null, 2);
@@ -770,7 +778,9 @@ export default function VideoSequenceBuilder() {
   ), [segmentDraft.loraConfigJson]);
   const selectedLoraPathSet = useMemo(() => new Set(selectedLoraSlots.flatMap((slot) => [slot.highPath, slot.lowPath]).filter(Boolean)), [selectedLoraSlots]);
   const loraPairs = useMemo(() => (
-    buildLoraPairs(modelLoras).filter((pair) => pair.isComplete && pair.high && pair.low)
+    buildLoraPairs(modelLoras).filter((pair) => (
+      pair.isComplete || pair.high?.targetOverride === 'video' || pair.low?.targetOverride === 'video'
+    ))
   ), [modelLoras]);
   const filteredLoraPairs = useMemo(() => {
     const query = loraSearchQuery.trim().toLowerCase();
@@ -1237,12 +1247,12 @@ export default function VideoSequenceBuilder() {
   }
 
   function addLoraPair(pair: { high?: LoRAFile; low?: LoRAFile }) {
-    if (!nextLoraSlotIndex || !pair.high || !pair.low) return;
+    if (!nextLoraSlotIndex || (!pair.high && !pair.low)) return;
     setSegmentDraft((draft) => ({
       ...draft,
       loraConfigJson: setWanLoraPairInConfig(draft.loraConfigJson, nextLoraSlotIndex, {
-        highPath: pair.high!.s3Path,
-        lowPath: pair.low!.s3Path,
+        highPath: pair.high?.s3Path,
+        lowPath: pair.low?.s3Path,
       }),
     }));
     setLoraPickerOpen(false);
@@ -2536,7 +2546,7 @@ export default function VideoSequenceBuilder() {
                 </div>
               ) : loraPairs.length === 0 ? (
                 <div className="rounded-md border border-dashed border-white/10 px-4 py-8 text-sm text-zinc-500">
-                  No complete High/Low video LoRA pairs found.
+                  No video LoRAs found.
                 </div>
               ) : filteredLoraPairs.length === 0 ? (
                 <div className="rounded-md border border-dashed border-white/10 px-4 py-8 text-sm text-zinc-500">

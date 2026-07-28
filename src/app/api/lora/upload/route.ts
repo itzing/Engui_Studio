@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
             s3Url: lora.s3Url,
             fileSize: lora.fileSize.toString(),
             extension: lora.extension,
+            targetOverride: lora.targetOverride,
             uploadedAt: lora.uploadedAt.toISOString(),
             workspaceId: lora.workspaceId,
           });

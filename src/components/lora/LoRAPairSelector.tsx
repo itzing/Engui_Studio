@@ -23,6 +23,7 @@ export interface LoRAFile {
   uploadedAt: string;
   workspaceId?: string;
   lastUsed?: string;
+  targetOverride?: 'image' | 'video' | string | null;
 }
 
 export interface LoRAPairSelectorProps {
@@ -58,7 +59,9 @@ export function LoRAPairSelector({
 
   // Group LoRAs into pairs
   const loraPairs = useMemo(() => {
-    return buildLoraPairs(availableLoras).filter((pair) => pair.isComplete);
+    return buildLoraPairs(availableLoras).filter((pair) => (
+      pair.isComplete || pair.high?.targetOverride === 'video' || pair.low?.targetOverride === 'video'
+    ));
   }, [availableLoras]);
 
   // Filter pairs based on search query

@@ -42,6 +42,38 @@ describe('LoRA model filters', () => {
     ]);
   });
 
+  it('allows manual video overrides for incomplete high-only LoRAs', () => {
+    const loras = [
+      { ...lora('single_high.safetensors', '/runpod-volume/loras/single_high.safetensors'), targetOverride: 'video' },
+      lora('portrait_style.safetensors', '/runpod-volume/loras/portrait_style.safetensors'),
+    ];
+
+    expect(filterLorasForTarget(loras, 'video').map((entry) => entry.fileName)).toEqual([
+      'single_high.safetensors',
+    ]);
+    expect(filterLorasForTarget(loras, 'image').map((entry) => entry.fileName)).toEqual([
+      'portrait_style.safetensors',
+    ]);
+
+    const pairs = buildLoraPairs(filterLorasForModel(loras, 'wan22'));
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].isComplete).toBe(false);
+    expect(pairs[0].high?.fileName).toBe('single_high.safetensors');
+  });
+
+  it('allows manual image overrides to exclude complete pairs from video models', () => {
+    const loras = [
+      { ...lora('dramatic_high.safetensors', '/runpod-volume/loras/dramatic_high.safetensors'), targetOverride: 'image' },
+      lora('dramatic_low.safetensors', '/runpod-volume/loras/dramatic_low.safetensors'),
+    ];
+
+    expect(filterLorasForModel(loras, 'wan22')).toEqual([]);
+    expect(filterLorasForModel(loras, 'z-image').map((entry) => entry.fileName)).toEqual([
+      'dramatic_high.safetensors',
+      'dramatic_low.safetensors',
+    ]);
+  });
+
   it('maps WAN22 video models to video LoRAs and image models to image LoRAs', () => {
     const loras = [
       lora('dramatic_high.safetensors', '/runpod-volume/loras/dramatic_high.safetensors'),
