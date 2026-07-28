@@ -229,6 +229,64 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
+  it('selects a Wan Animate reference image from Gallery', async () => {
+    setWorkflowActiveModel('video', 'wan-animate');
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url.includes('/api/gallery/assets?')) {
+        expect(url).toContain('type=image');
+        expect(url).toContain('bucket=all');
+        return jsonResponse({
+          success: true,
+          assets: [
+            {
+              id: 'gallery-ref-1',
+              type: 'image',
+              originalUrl: '/generations/gallery/ws-1/ref.png',
+              previewUrl: '/generations/gallery/ws-1/ref-preview.jpg',
+              thumbnailUrl: '/generations/gallery/ws-1/ref-thumb.jpg',
+              prompt: 'gallery reference prompt',
+              modelId: 'z-image',
+              addedToGalleryAt: new Date().toISOString(),
+            },
+          ],
+          pagination: { page: 1, limit: 48, totalCount: 1, hasNextPage: false, hasPrevPage: false },
+        });
+      }
+      if (url === '/generations/gallery/ws-1/ref.png') {
+        return blobResponse(new Blob(['gallery-image'], { type: 'image/png' }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose reference image from Gallery' }));
+    const galleryButton = await screen.findByRole('button', { name: 'Use Gallery image gallery-ref-1' });
+    fireEvent.click(galleryButton);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Choose reference image')).toBeNull();
+    });
+    expect((await screen.findByAltText('Reference') as HTMLImageElement).getAttribute('src')).toBe('/generations/gallery/ws-1/ref.png');
+
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      expect(stored.workflows.video.drafts['wan-animate'].draft.imagePreviewUrl).toBe('/generations/gallery/ws-1/ref.png');
+      expect(stored.workflows.video.drafts['wan-animate'].draft.parameterValues.sourceImageGenerationSnapshot).toMatchObject({
+        galleryAssetId: 'gallery-ref-1',
+        prompt: 'gallery reference prompt',
+        modelId: 'z-image',
+        imageInputPath: '/generations/gallery/ws-1/ref.png',
+      });
+    });
+  });
+
   it('applies WAN22 Prompt Helper plain text responses', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

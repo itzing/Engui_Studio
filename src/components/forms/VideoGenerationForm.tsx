@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeftRight, Check, ChevronDown, Loader2, Plus, Save, Sparkles, Trash2, WandSparkles, X } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Images, Loader2, Plus, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import { loadFileFromPath } from '@/lib/fileUtils';
@@ -38,6 +38,17 @@ import {
     applyVideoPresetParameterValues,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
+
+type GalleryReferenceAsset = {
+    id: string;
+    type: 'image' | 'video' | 'audio';
+    originalUrl: string;
+    previewUrl?: string | null;
+    thumbnailUrl?: string | null;
+    prompt?: string | null;
+    modelId?: string | null;
+    addedToGalleryAt: string;
+};
 
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -72,6 +83,12 @@ export default function VideoGenerationForm() {
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
+    const [isGalleryReferencePickerOpen, setIsGalleryReferencePickerOpen] = useState(false);
+    const [galleryReferenceAssets, setGalleryReferenceAssets] = useState<GalleryReferenceAsset[]>([]);
+    const [galleryReferenceQuery, setGalleryReferenceQuery] = useState('');
+    const [isGalleryReferenceLoading, setIsGalleryReferenceLoading] = useState(false);
+    const [galleryReferenceError, setGalleryReferenceError] = useState<string | null>(null);
+    const [selectingGalleryReferenceId, setSelectingGalleryReferenceId] = useState<string | null>(null);
     const [videoPresets, setVideoPresets] = useState<VideoCreatePreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState('');
     const [isPresetSelectorOpen, setIsPresetSelectorOpen] = useState(false);
@@ -83,6 +100,7 @@ export default function VideoGenerationForm() {
     const [confirmingPresetDeleteId, setConfirmingPresetDeleteId] = useState<string | null>(null);
     const [isConfirmingPresetOverwrite, setIsConfirmingPresetOverwrite] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
 
     // LoRA state
@@ -183,6 +201,14 @@ export default function VideoGenerationForm() {
         const response = await fetch(dataUrl);
         const blob = await response.blob();
         return new File([blob], filename, { type: blob.type || fallbackType });
+    };
+
+    const buildGalleryReferenceFileName = (asset: GalleryReferenceAsset, blob: Blob) => {
+        const urlFileName = asset.originalUrl.split('?')[0]?.split('/').filter(Boolean).pop() || '';
+        const extensionFromUrl = urlFileName.includes('.') ? urlFileName.split('.').pop() : '';
+        const extensionFromMime = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : '';
+        const extension = extensionFromUrl || extensionFromMime || 'png';
+        return `gallery-${asset.id}.${extension}`;
     };
 
     const readFileAsDataUrl = async (file: File) => {
@@ -430,6 +456,57 @@ export default function VideoGenerationForm() {
         : undefined;
     const isMobileCreateRoute = pathname?.startsWith('/m/');
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
+
+    useEffect(() => {
+        if (!isGalleryReferencePickerOpen || currentModel?.id !== 'wan-animate') return;
+
+        let cancelled = false;
+        const timeout = window.setTimeout(async () => {
+            if (!activeWorkspaceId) {
+                setGalleryReferenceAssets([]);
+                setGalleryReferenceError('Select a workspace before choosing from Gallery.');
+                return;
+            }
+
+            setIsGalleryReferenceLoading(true);
+            setGalleryReferenceError(null);
+            try {
+                const search = new URLSearchParams({
+                    workspaceId: activeWorkspaceId,
+                    type: 'image',
+                    bucket: 'all',
+                    sort: 'newest',
+                    limit: '48',
+                    includeTrashed: 'false',
+                });
+                if (galleryReferenceQuery.trim()) {
+                    search.set('q', galleryReferenceQuery.trim());
+                }
+                const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok || !data.success || !Array.isArray(data.assets)) {
+                    throw new Error(data.error || 'Failed to load Gallery images');
+                }
+                if (!cancelled) {
+                    setGalleryReferenceAssets(data.assets.filter((asset: GalleryReferenceAsset) => asset.type === 'image'));
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setGalleryReferenceAssets([]);
+                    setGalleryReferenceError(error instanceof Error ? error.message : 'Failed to load Gallery images');
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsGalleryReferenceLoading(false);
+                }
+            }
+        }, 180);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeout);
+        };
+    }, [activeWorkspaceId, currentModel?.id, galleryReferenceQuery, isGalleryReferencePickerOpen]);
 
     useEffect(() => {
         if (shouldClearMissingVideoCreatePresetSelection({
@@ -761,6 +838,43 @@ export default function VideoGenerationForm() {
         if (file) {
             setImageFile(file);
             setImagePreviewUrl(URL.createObjectURL(file));
+            e.target.value = '';
+        }
+    };
+
+    const openImageUploadPicker = () => {
+        imageInputRef.current?.click();
+    };
+
+    const handleSelectGalleryReference = async (asset: GalleryReferenceAsset) => {
+        if (selectingGalleryReferenceId) return;
+        setSelectingGalleryReferenceId(asset.id);
+        setMessage(null);
+        try {
+            const imageUrl = asset.originalUrl;
+            const response = await fetch(imageUrl, { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error('Failed to load selected Gallery image');
+            }
+            const blob = await response.blob();
+            const file = new File([blob], buildGalleryReferenceFileName(asset, blob), { type: blob.type || 'image/png' });
+            setImageFile(file);
+            setImagePreviewUrl(imageUrl);
+            setParameterValues(prev => ({
+                ...prev,
+                sourceImageGenerationSnapshot: {
+                    ...(prev.sourceImageGenerationSnapshot && typeof prev.sourceImageGenerationSnapshot === 'object' ? prev.sourceImageGenerationSnapshot : {}),
+                    galleryAssetId: asset.id,
+                    prompt: asset.prompt || undefined,
+                    modelId: asset.modelId || undefined,
+                    imageInputPath: imageUrl,
+                },
+            }));
+            setIsGalleryReferencePickerOpen(false);
+        } catch (error) {
+            setGalleryReferenceError(error instanceof Error ? error.message : 'Failed to select Gallery image');
+        } finally {
+            setSelectingGalleryReferenceId(null);
         }
     };
 
@@ -1232,7 +1346,33 @@ export default function VideoGenerationForm() {
                 {/* Image Input (Conditional) */}
                 {isInputVisible(currentModel, 'image', parameterValues) && (
                     <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground font-medium">{t('generationForm.imageReference')}</Label>
+                        <div className="flex items-center justify-between gap-2">
+                            <Label className="text-xs text-muted-foreground font-medium">{t('generationForm.imageReference')}</Label>
+                            {currentModel.id === 'wan-animate' ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-2 px-2 text-xs"
+                                    onClick={() => setIsGalleryReferencePickerOpen(true)}
+                                    disabled={isLoadingMedia || isGenerating || isPromptHelperLoading}
+                                    aria-label="Choose reference image from Gallery"
+                                    title="Choose reference image from Gallery"
+                                >
+                                    <Images className="h-3.5 w-3.5" />
+                                    Gallery
+                                </Button>
+                            ) : null}
+                        </div>
+                        <input
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
+                            disabled={isLoadingMedia}
+                            aria-label="Upload reference image"
+                        />
                         {isLoadingMedia ? (
                             <div className="border border-dashed rounded-lg p-8 text-center">
                                 <div className="w-8 h-8 mx-auto mb-2 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -1252,31 +1392,81 @@ export default function VideoGenerationForm() {
                                     type="button"
                                     onClick={handleRemoveImage}
                                     className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                    aria-label="Remove reference image"
+                                    title="Remove reference image"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                                         <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 001.5.06l.3-7.5z" clipRule="evenodd" />
                                     </svg>
                                 </button>
+                                <div className="absolute bottom-2 left-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 gap-2 border-white/20 bg-black/55 px-2 text-xs text-white hover:bg-black/75 hover:text-white"
+                                        onClick={openImageUploadPicker}
+                                    >
+                                        <Upload className="h-3.5 w-3.5" />
+                                        Upload
+                                    </Button>
+                                    {currentModel.id === 'wan-animate' ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 gap-2 border-white/20 bg-black/55 px-2 text-xs text-white hover:bg-black/75 hover:text-white"
+                                            onClick={() => setIsGalleryReferencePickerOpen(true)}
+                                        >
+                                            <Images className="h-3.5 w-3.5" />
+                                            Gallery
+                                        </Button>
+                                    ) : null}
+                                </div>
                             </div>
                         ) : (
                             <div
                                 className={`border border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer relative ${isDragOverImage ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/20'
                                     }`}
+                                onClick={openImageUploadPicker}
                                 onDrop={handleImageDrop}
                                 onDragOver={handleImageDragOver}
                                 onDragLeave={handleImageDragLeave}
                             >
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                    disabled={isLoadingMedia}
-                                />
                                 <PhotoIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                                <span className="text-xs text-muted-foreground">
+                                <span className="block text-xs text-muted-foreground">
                                     {isDragOverImage ? t('generationForm.dropImageHere') : t('generationForm.clickOrDropImage')}
                                 </span>
+                                {currentModel.id === 'wan-animate' ? (
+                                    <div className="mt-4 flex items-center justify-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 gap-2 px-2 text-xs"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                openImageUploadPicker();
+                                            }}
+                                        >
+                                            <Upload className="h-3.5 w-3.5" />
+                                            Upload
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 gap-2 px-2 text-xs"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                setIsGalleryReferencePickerOpen(true);
+                                            }}
+                                        >
+                                            <Images className="h-3.5 w-3.5" />
+                                            Gallery
+                                        </Button>
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </div>
@@ -1467,7 +1657,7 @@ export default function VideoGenerationForm() {
                                     }}
                                     disabled={!isPromptHelperConfigured || isPromptHelperLoading || isGenerating || isLoadingMedia}
                                     className="h-10 w-10 shrink-0"
-                                    aria-label="Open Prompt Helper"
+                                    aria-label="Prompt Helper"
                                     title="Open Prompt Helper"
                                 >
                                     {isPromptHelperLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -1480,6 +1670,7 @@ export default function VideoGenerationForm() {
                                     <input
                                         id="video-prompt-helper-empty-prompt"
                                         type="checkbox"
+                                        aria-label="Empty prompt"
                                         className="h-4 w-4 rounded border-border"
                                         checked={promptHelperEmptyPrompt}
                                         onChange={(event) => setPromptHelperEmptyPrompt(event.target.checked)}
@@ -1809,6 +2000,75 @@ export default function VideoGenerationForm() {
                     </Button>
                 </div>
             </form>
+
+            <Dialog
+                open={isGalleryReferencePickerOpen}
+                onOpenChange={(open) => {
+                    setIsGalleryReferencePickerOpen(open);
+                    if (!open) {
+                        setGalleryReferenceError(null);
+                        setSelectingGalleryReferenceId(null);
+                    }
+                }}
+            >
+                <DialogContent className="flex max-h-[86dvh] flex-col overflow-hidden p-0 sm:max-w-3xl">
+                    <DialogHeader className="border-b px-4 py-4">
+                        <DialogTitle>Choose reference image</DialogTitle>
+                        <DialogDescription>Select an image from Gallery for Wan Animate.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 px-4 py-4">
+                        <Input
+                            value={galleryReferenceQuery}
+                            onChange={(event) => setGalleryReferenceQuery(event.target.value)}
+                            placeholder="Search Gallery images"
+                            aria-label="Search Gallery images"
+                        />
+                        {galleryReferenceError ? (
+                            <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">{galleryReferenceError}</div>
+                        ) : null}
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+                        {isGalleryReferenceLoading ? (
+                            <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Loading Gallery...
+                            </div>
+                        ) : galleryReferenceAssets.length === 0 ? (
+                            <div className="rounded-md border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
+                                No Gallery images found.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6" data-testid="wan-animate-gallery-reference-grid">
+                                {galleryReferenceAssets.map((asset) => {
+                                    const imageUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
+                                    const isSelecting = selectingGalleryReferenceId === asset.id;
+                                    return (
+                                        <button
+                                            key={asset.id}
+                                            type="button"
+                                            className="group relative aspect-square overflow-hidden rounded-md border border-border bg-black text-left focus:outline-none focus:ring-2 focus:ring-primary/70 disabled:opacity-60"
+                                            onClick={() => void handleSelectGalleryReference(asset)}
+                                            disabled={!!selectingGalleryReferenceId}
+                                            aria-label={`Use Gallery image ${asset.id}`}
+                                            title="Use as reference image"
+                                        >
+                                            <img src={imageUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" />
+                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-2 py-2">
+                                                <div className="truncate text-[11px] font-medium text-white">{asset.prompt || asset.id}</div>
+                                            </div>
+                                            {isSelecting ? (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white">
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                </div>
+                                            ) : null}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={isPresetSelectorOpen}
