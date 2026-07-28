@@ -1040,6 +1040,7 @@ export function buildVideoSegmentGenerationFormData(input: {
   formData.append('prompt', prompt);
   formData.append('negativePrompt', segment.negativePrompt || '');
   formData.append('randomizeSeed', String(segment.randomizeSeed));
+  formData.append('return_continuation_frame', 'true');
   formData.append('image', sourceImage.blob, sourceImage.filename);
 
   if (segment.seed !== null && segment.seed !== undefined && !segment.randomizeSeed) {
@@ -1561,6 +1562,57 @@ export async function extractVideoSequenceSegmentFrames(sequenceId: string, segm
   return serializeVideoSegmentWithOutputMetadata(updated);
 }
 
+async function extractVideoSequenceSegmentFirstFrame(sequenceId: string, segmentId: string) {
+  const segment = await prisma.videoSequenceSegment.findFirst({
+    where: { id: segmentId, sequenceId },
+    include: { sequence: { select: { workspaceId: true } } },
+  });
+  if (!segment) throw new StudioSessionApiError(404, 'Video sequence segment not found');
+
+  const outputVideoUrl = segment.outputVideoUrl;
+  if (!outputVideoUrl) {
+    throw new StudioSessionApiError(400, 'Segment output video is required before extracting frames');
+  }
+
+  const inputPath = resolveLocalPublicPath(outputVideoUrl);
+  if (!inputPath || !fs.existsSync(inputPath)) {
+    throw new StudioSessionApiError(400, 'Segment output video must be a local /generations or /results file before extracting frames');
+  }
+
+  const ffmpegAvailable = await ffmpegService.isFFmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new StudioSessionApiError(500, 'FFmpeg is not available for segment frame extraction');
+  }
+
+  const hash = crypto.createHash('md5').update(`${outputVideoUrl}:first`).digest('hex').slice(0, 8);
+  const firstFileName = `first-${hash}.png`;
+  const firstFrameUrl = sequenceFramePublicUrl(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName);
+
+  await ffmpegService.extractVideoFrame(
+    inputPath,
+    sequenceFrameOutputPath(segment.sequence.workspaceId, sequenceId, segmentId, firstFileName),
+    { position: 'first', format: 'png' },
+  );
+
+  const existingSnapshot = parseJsonObjectField(segment.generationSnapshotJson);
+  const updated = await prisma.videoSequenceSegment.update({
+    where: { id: segmentId },
+    data: {
+      firstFrameUrl,
+      error: null,
+      generationSnapshotJson: JSON.stringify({
+        ...existingSnapshot,
+        firstFrameExtraction: {
+          firstFrameUrl,
+          extractedAt: new Date().toISOString(),
+        },
+      }),
+    },
+  });
+
+  return serializeVideoSegmentWithOutputMetadata(updated);
+}
+
 async function tryExtractVideoSequenceSegmentFrames(sequenceId: string, segmentId: string, fallbackSegment: unknown) {
   try {
     return await extractVideoSequenceSegmentFrames(sequenceId, segmentId);
@@ -1620,6 +1672,46 @@ async function materializeVideoSequenceSegmentOutput(input: {
       copied: true,
       outputVideoUrl,
       sourceOutputVideoUrl: input.sourceUrl,
+      sourceJobId: input.jobId,
+      copiedAt: new Date().toISOString(),
+    },
+  };
+}
+
+async function materializeVideoSequenceContinuationFrame(input: {
+  workspaceId: string;
+  sequenceId: string;
+  segmentId: string;
+  sourceUrl: string;
+  jobId: string;
+}) {
+  const extension = path.extname(input.sourceUrl.split('?')[0].split('#')[0]) || '.png';
+  const hash = crypto.createHash('md5').update(`${input.jobId}:${input.sourceUrl}:continuation`).digest('hex').slice(0, 12);
+  const fileName = `continuation-${safePathSegment(input.jobId)}-${hash}${extension}`;
+  const continuationFrameUrl = sequenceFramePublicUrl(input.workspaceId, input.sequenceId, input.segmentId, fileName);
+  const outputPath = sequenceFrameOutputPath(input.workspaceId, input.sequenceId, input.segmentId, fileName);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+  const localSourcePath = resolveLocalPublicPath(input.sourceUrl);
+  if (localSourcePath && fs.existsSync(localSourcePath)) {
+    if (path.resolve(localSourcePath) !== path.resolve(outputPath)) {
+      fs.copyFileSync(localSourcePath, outputPath);
+    }
+  } else if (/^https?:\/\//i.test(input.sourceUrl)) {
+    const response = await fetch(input.sourceUrl);
+    if (!response.ok) throw new StudioSessionApiError(400, `Failed to copy continuation frame: ${response.status}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(outputPath, bytes);
+  } else {
+    throw new StudioSessionApiError(400, 'Continuation frame must be a local public URL or http(s) URL before sequence materialization');
+  }
+
+  return {
+    continuationFrameUrl,
+    materialization: {
+      copied: true,
+      continuationFrameUrl,
+      sourceContinuationFrameUrl: input.sourceUrl,
       sourceJobId: input.jobId,
       copiedAt: new Date().toISOString(),
     },
@@ -1742,6 +1834,19 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
     })
     : null;
   const outputVideoUrl = materializedOutput?.outputVideoUrl || sourceOutputVideoUrl;
+  const secureArtifacts = parseJsonObjectField(job.options).secureArtifacts;
+  const continuationFrameUrl = secureArtifacts && typeof secureArtifacts === 'object' && !Array.isArray(secureArtifacts)
+    ? (secureArtifacts as Record<string, unknown>).continuationFrameUrl
+    : null;
+  const materializedContinuationFrame = nextStatus === 'completed' && typeof continuationFrameUrl === 'string' && continuationFrameUrl
+    ? await materializeVideoSequenceContinuationFrame({
+      workspaceId: segment.sequence.workspaceId,
+      sequenceId,
+      segmentId,
+      sourceUrl: continuationFrameUrl,
+      jobId: job.id,
+    })
+    : null;
 
   const updated = await prisma.videoSequenceSegment.update({
     where: { id: segmentId },
@@ -1749,6 +1854,7 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
       status: nextStatus,
       error,
       outputVideoUrl,
+      ...(materializedContinuationFrame ? { lastFrameUrl: materializedContinuationFrame.continuationFrameUrl } : {}),
       generationSnapshotJson: JSON.stringify({
         ...existingSnapshot,
         jobStatus: job.status,
@@ -1774,12 +1880,31 @@ export async function syncVideoSequenceSegmentStatus(sequenceId: string, segment
           completedAt: job.completedAt instanceof Date ? job.completedAt.toISOString() : job.completedAt || null,
         },
         outputMaterialization: materializedOutput?.materialization || null,
+        continuationFrameMaterialization: materializedContinuationFrame?.materialization || null,
         syncedAt: new Date().toISOString(),
       }),
     },
   });
 
-  if (nextStatus === 'completed' && outputVideoUrl && (outputVideoUrl !== segment.outputVideoUrl || !updated.firstFrameUrl || !updated.lastFrameUrl)) {
+  if (materializedContinuationFrame && segment.lastFrameUrl !== materializedContinuationFrame.continuationFrameUrl) {
+    await markDownstreamPreviousLastFrameSegmentsStale(sequenceId, segment.orderIndex);
+  }
+
+  if (nextStatus === 'completed' && outputVideoUrl && materializedContinuationFrame && (outputVideoUrl !== segment.outputVideoUrl || !updated.firstFrameUrl)) {
+    try {
+      const frameSegment = await extractVideoSequenceSegmentFirstFrame(sequenceId, segmentId);
+      return { segment: frameSegment, job };
+    } catch (error) {
+      console.warn('Failed to extract first video sequence segment frame during status sync', {
+        sequenceId,
+        segmentId,
+        outputVideoUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  if (nextStatus === 'completed' && outputVideoUrl && !materializedContinuationFrame && (outputVideoUrl !== segment.outputVideoUrl || !updated.firstFrameUrl || !updated.lastFrameUrl)) {
     try {
       const frameSegment = await extractVideoSequenceSegmentFrames(sequenceId, segmentId);
       return { segment: frameSegment, job };

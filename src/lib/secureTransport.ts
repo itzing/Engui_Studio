@@ -3,7 +3,7 @@ import S3Service from './s3Service';
 
 export type SecureDirection = 'engui_to_endpoint' | 'endpoint_to_engui';
 export type SecureMediaKind = 'image' | 'video';
-export type SecureMediaRole = 'source_image' | 'secondary_image' | 'condition_image' | 'end_image' | 'source_video' | 'result';
+export type SecureMediaRole = 'source_image' | 'secondary_image' | 'condition_image' | 'end_image' | 'source_video' | 'result' | 'continuation_frame';
 
 export interface StructuredBinding {
   job_id: string;
@@ -53,6 +53,12 @@ export interface SecureTransportResult {
     storage_path: string;
     envelope: MediaEnvelope;
   };
+  artifacts?: Record<string, {
+    kind: SecureMediaKind;
+    mime: string;
+    storage_path: string;
+    envelope: MediaEnvelope;
+  }>;
   error?: {
     code: string;
     message: string;
@@ -323,6 +329,7 @@ export async function downloadAndDecryptResultMedia(params: {
   modelId: string;
   attemptId: string;
   media: SecureTransportResult['result_media'];
+  role?: SecureMediaRole;
 }): Promise<Buffer> {
   if (!params.media) {
     throw new SecureTransportError('RESULT_MEDIA_MISSING', 'Successful transport result is missing result_media');
@@ -334,7 +341,7 @@ export async function downloadAndDecryptResultMedia(params: {
     model_id: params.modelId,
     attempt_id: params.attemptId,
     direction: 'endpoint_to_engui',
-    role: 'result',
+    role: params.role || 'result',
     kind: params.media.kind,
   };
 

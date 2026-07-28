@@ -372,6 +372,10 @@ export async function submitGenerationFormData(formData: FormData) {
                     parameters[lowWeightKey] = parseFloat(lowWeight as string);
                 }
             }
+
+            if (modelId === 'wan22' && formData.get('return_continuation_frame') === 'true') {
+                inputData.return_continuation_frame = true;
+            }
         }
 
         // Collect LoRA parameters for z-image from any submitted slot keys.

@@ -253,6 +253,7 @@ class RunPodService {
           length: input.length,
           steps: input.steps,
           context_overlap: input.context_overlap,
+          ...(input.return_continuation_frame === true && { return_continuation_frame: true }),
         };
 
         const loraPairs = this.buildWan22LoraPairs(input);

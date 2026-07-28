@@ -229,6 +229,7 @@ async function cleanupSecureTransportArtifacts(params: {
   s3: S3Service;
   secureState: JsonObject | null;
   resultStoragePath?: string | null;
+  resultStoragePaths?: Array<string | null | undefined>;
 }) {
   const cleanupWarnings: string[] = [];
   const attemptedKeys: string[] = [];
@@ -238,6 +239,7 @@ async function cleanupSecureTransportArtifacts(params: {
   const storagePaths = [
     ...mediaInputs.map((media: any) => media?.storagePath).filter(Boolean),
     ...(params.resultStoragePath ? [params.resultStoragePath] : []),
+    ...(params.resultStoragePaths || []).filter(Boolean),
   ];
 
   for (const storagePath of Array.from(new Set(storagePaths))) {
@@ -736,6 +738,7 @@ async function markJobCompleted(params: {
             status: 'completed',
             localResultPath: resultPath,
             localResultUrl: resultUrl,
+            localArtifacts: options.secureArtifacts || null,
             localThumbnailUrl: thumbnailUrl || secureState?.activeAttempt?.finalization?.localThumbnailUrl || null,
             completedAt: new Date().toISOString(),
           },
@@ -774,7 +777,12 @@ async function markJobCompleted(params: {
   }
 }
 
-async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, settings: any, resultStoragePath?: string | null) {
+async function maybeCleanupSecureArtifacts(
+  secureState: JsonObject | null,
+  settings: any,
+  resultStoragePath?: string | null,
+  resultStoragePaths?: Array<string | null | undefined>,
+) {
   if (!secureState) {
     return null;
   }
@@ -789,6 +797,7 @@ async function maybeCleanupSecureArtifacts(secureState: JsonObject | null, setti
       s3,
       secureState,
       resultStoragePath,
+      resultStoragePaths,
     });
   } catch (error: any) {
     return {
@@ -848,6 +857,7 @@ async function downloadAndDecryptResultMediaWithRetry(params: {
   job: any;
   attemptId: string;
   media: any;
+  role?: string;
 }) {
   const { attempts } = getFinalizationDownloadRetryConfig();
   let lastError: any = null;
@@ -861,6 +871,7 @@ async function downloadAndDecryptResultMediaWithRetry(params: {
         modelId: params.job.modelId,
         attemptId: params.attemptId,
         media: params.media,
+        role: params.role as any,
       });
     } catch (error: any) {
       lastError = error;
@@ -912,6 +923,7 @@ async function finalizeSecureTransportResult(params: {
         transportResultStatus: transportResult.status,
         resultMediaStoragePath: transportResult?.result_media?.storage_path || null,
         resultMedia: transportResult?.result_media || null,
+        artifacts: transportResult?.artifacts || null,
       },
     },
   };
@@ -976,10 +988,34 @@ async function finalizeSecureTransportResult(params: {
       candidate: transportResult.result_media.storage_path,
     });
 
+    const continuationFrameArtifact = transportResult.artifacts?.continuation_frame;
+    let secureArtifacts: JsonObject | null = null;
+    if (continuationFrameArtifact) {
+      const continuationFrameBuffer = await downloadAndDecryptResultMediaWithRetry({
+        s3,
+        masterKey,
+        job,
+        attemptId,
+        media: continuationFrameArtifact,
+        role: 'continuation_frame',
+      });
+      const continuationFrameResult = await writeLocalResultBuffer(job, continuationFrameBuffer, {
+        mime: continuationFrameArtifact.mime || 'image/png',
+        kind: continuationFrameArtifact.kind || 'image',
+        candidate: continuationFrameArtifact.storage_path,
+      });
+      secureArtifacts = {
+        continuationFrameUrl: continuationFrameResult.relativePath,
+        continuationFramePath: continuationFrameResult.filePath,
+        continuationFrameStoragePath: continuationFrameArtifact.storage_path,
+      };
+    }
+
     const cleanup = await maybeCleanupSecureArtifacts(
       secureStateWithResponse,
       settings,
       transportResult.result_media.storage_path,
+      continuationFrameArtifact ? [continuationFrameArtifact.storage_path] : [],
     );
 
     await markJobCompleted({
@@ -987,6 +1023,7 @@ async function finalizeSecureTransportResult(params: {
       options: withOpenPoseExtractionMetadata({
         ...options,
         transportResultStatus: transportResult.status,
+        ...(secureArtifacts ? { secureArtifacts } : {}),
       }, output),
       secureState: secureStateWithResponse,
       resultUrl: relativePath,

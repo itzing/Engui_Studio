@@ -216,6 +216,91 @@ describe('runpod supervisor', () => {
     ]);
   });
 
+  it('downloads secure continuation frame artifacts and records local artifact metadata', async () => {
+    const job = {
+      id: 'job-sequence-artifact',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'video',
+      status: 'processing',
+      createdAt: new Date('2026-07-28T19:30:00Z'),
+      runpodJobId: 'rp-sequence-artifact',
+      options: JSON.stringify({ secureMode: true, return_continuation_frame: true }),
+      secureState: JSON.stringify({
+        phase: 'runpod_processing',
+        activeAttempt: {
+          attemptId: 'attempt-sequence-artifact',
+          runpodJobId: 'rp-sequence-artifact',
+          request: {
+            mediaInputs: [
+              { storagePath: '/runpod-volume/secure-jobs/job-sequence-artifact/attempt-sequence-artifact/inputs/source_image.bin' },
+            ],
+          },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockGetJobStatus.mockResolvedValue({
+      status: 'COMPLETED',
+      executionTime: 4567,
+      output: {
+        transport_result: {
+          status: 'completed',
+          result_media: {
+            mime: 'video/mp4',
+            kind: 'video',
+            storage_path: '/runpod-volume/secure-jobs/job-sequence-artifact/attempt-sequence-artifact/outputs/result.bin',
+            envelope: { v: 1 },
+          },
+          artifacts: {
+            continuation_frame: {
+              mime: 'image/png',
+              kind: 'image',
+              storage_path: '/runpod-volume/secure-jobs/job-sequence-artifact/attempt-sequence-artifact/outputs/result__continuation_frame.bin',
+              envelope: { v: 1 },
+            },
+          },
+        },
+      },
+    });
+    mockDownloadAndDecryptResultMedia
+      .mockResolvedValueOnce(Buffer.from('mp4-binary'))
+      .mockResolvedValueOnce(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJob(job);
+
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      media: expect.objectContaining({ kind: 'video' }),
+    }));
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      media: expect.objectContaining({ kind: 'image' }),
+      role: 'continuation_frame',
+    }));
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    const options = JSON.parse(finalUpdate.data.options);
+    expect(options.secureArtifacts).toMatchObject({
+      continuationFrameUrl: '/generations/wan22-job-sequence-artifact.png',
+      continuationFrameStoragePath: '/runpod-volume/secure-jobs/job-sequence-artifact/attempt-sequence-artifact/outputs/result__continuation_frame.bin',
+    });
+    const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(secureState.activeAttempt.finalization.localArtifacts).toMatchObject({
+      continuationFrameUrl: '/generations/wan22-job-sequence-artifact.png',
+    });
+    expect(secureState.cleanup.attemptedKeys).toEqual([
+      'secure-jobs/job-sequence-artifact/attempt-sequence-artifact/inputs/source_image.bin',
+      'secure-jobs/job-sequence-artifact/attempt-sequence-artifact/outputs/result.bin',
+      'secure-jobs/job-sequence-artifact/attempt-sequence-artifact/outputs/result__continuation_frame.bin',
+    ]);
+  });
+
   it('retries transient secure result download failures before failing finalization', async () => {
     const job = {
       id: 'job-download-retry',

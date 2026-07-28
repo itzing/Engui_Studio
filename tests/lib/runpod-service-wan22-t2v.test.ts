@@ -49,4 +49,32 @@ describe('RunPodService WAN22 T2V payload', () => {
       ],
     });
   });
+
+  it('passes WAN22 I2V continuation frame requests through to the endpoint input', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: 'runpod-job-2' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new RunPodService('runpod-key', 'endpoint-id');
+    const jobId = await service.submitJob({
+      _secure: { v: 1 },
+      media_inputs: [{ role: 'source_image', kind: 'image' }],
+      transport_request: { output_dir: '/tmp', output_file_name: 'result.bin' },
+      width: 832,
+      height: 480,
+      seed: 123,
+      cfg: 1,
+      length: 80,
+      steps: 4,
+      return_continuation_frame: true,
+    }, 'wan22');
+
+    expect(jobId).toBe('runpod-job-2');
+    const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(request.input).toMatchObject({
+      _secure: { v: 1 },
+      media_inputs: [{ role: 'source_image', kind: 'image' }],
+      transport_request: { output_dir: '/tmp', output_file_name: 'result.bin' },
+      return_continuation_frame: true,
+    });
+  });
 });
