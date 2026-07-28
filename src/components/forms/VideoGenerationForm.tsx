@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/modelConfig';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,27 @@ type GalleryReferenceAsset = {
     addedToGalleryAt: string;
 };
 
+type GalleryReferencePageResponse = {
+    success: boolean;
+    assets?: GalleryReferenceAsset[];
+    pagination?: {
+        page: number;
+        limit: number;
+        totalCount: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+    };
+    error?: string;
+};
+
+type LoadedGalleryReferencePage = {
+    page: number;
+    startIndex: number;
+    assets: GalleryReferenceAsset[];
+};
+
+const GALLERY_REFERENCE_PAGE_SIZE = 48;
+
 export default function VideoGenerationForm() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const pathname = usePathname();
@@ -84,7 +106,8 @@ export default function VideoGenerationForm() {
     const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const [isGalleryReferencePickerOpen, setIsGalleryReferencePickerOpen] = useState(false);
-    const [galleryReferenceAssets, setGalleryReferenceAssets] = useState<GalleryReferenceAsset[]>([]);
+    const [galleryReferencePages, setGalleryReferencePages] = useState<Record<number, LoadedGalleryReferencePage>>({});
+    const [galleryReferenceTotalCount, setGalleryReferenceTotalCount] = useState(0);
     const [galleryReferenceQuery, setGalleryReferenceQuery] = useState('');
     const [isGalleryReferenceLoading, setIsGalleryReferenceLoading] = useState(false);
     const [galleryReferenceError, setGalleryReferenceError] = useState<string | null>(null);
@@ -102,6 +125,9 @@ export default function VideoGenerationForm() {
     const formRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const sourceImagePromptCacheRef = useRef<{ key: string; prompt: string } | null>(null);
+    const galleryReferenceScrollRef = useRef<HTMLDivElement>(null);
+    const galleryReferenceLoadingPagesRef = useRef<Set<number>>(new Set());
+    const galleryReferenceGenerationRef = useRef(0);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -456,57 +482,137 @@ export default function VideoGenerationForm() {
         : undefined;
     const isMobileCreateRoute = pathname?.startsWith('/m/');
     const isDesktopCreateSurface = !isPhoneLayout && !isMobileCreateRoute;
+    const galleryReferenceColumnCount = isPhoneLayout ? 2 : 6;
+    const galleryReferenceRowSize = isPhoneLayout ? 132 : 116;
+    const galleryReferenceRowCount = Math.ceil(galleryReferenceTotalCount / galleryReferenceColumnCount);
+    const galleryReferenceItemsByAbsoluteIndex = useMemo(() => {
+        const next: Record<number, GalleryReferenceAsset> = {};
+        Object.values(galleryReferencePages).forEach((page) => {
+            page.assets.forEach((asset, index) => {
+                next[page.startIndex + index] = asset;
+            });
+        });
+        return next;
+    }, [galleryReferencePages]);
+    const galleryReferenceRowVirtualizer = useVirtualizer({
+        count: galleryReferenceRowCount,
+        getScrollElement: () => galleryReferenceScrollRef.current,
+        estimateSize: () => galleryReferenceRowSize,
+        overscan: 6,
+    });
+    const galleryReferenceVirtualRows = galleryReferenceRowVirtualizer.getVirtualItems();
+
+    const mergeGalleryReferencePage = useCallback((data: GalleryReferencePageResponse) => {
+        if (!data.pagination) return;
+        const pageNumber = data.pagination.page;
+        const startIndex = (pageNumber - 1) * data.pagination.limit;
+        setGalleryReferencePages((prev) => ({
+            ...prev,
+            [pageNumber]: {
+                page: pageNumber,
+                startIndex,
+                assets: (data.assets || []).filter((asset) => asset.type === 'image'),
+            },
+        }));
+        setGalleryReferenceTotalCount(data.pagination.totalCount);
+    }, []);
+
+    const loadGalleryReferencePage = useCallback(async (
+        pageNumber: number,
+        options?: { generation?: number; initial?: boolean },
+    ) => {
+        if (!activeWorkspaceId || pageNumber < 1 || galleryReferenceLoadingPagesRef.current.has(pageNumber)) return;
+
+        galleryReferenceLoadingPagesRef.current.add(pageNumber);
+        if (options?.initial) {
+            setIsGalleryReferenceLoading(true);
+        }
+        setGalleryReferenceError(null);
+
+        try {
+            const search = new URLSearchParams({
+                workspaceId: activeWorkspaceId,
+                type: 'image',
+                bucket: 'all',
+                sort: 'newest',
+                page: String(pageNumber),
+                limit: String(GALLERY_REFERENCE_PAGE_SIZE),
+                includeTrashed: 'false',
+            });
+            if (galleryReferenceQuery.trim()) {
+                search.set('q', galleryReferenceQuery.trim());
+            }
+            const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
+            const data = await response.json() as GalleryReferencePageResponse;
+            if (!response.ok || !data.success || !Array.isArray(data.assets) || !data.pagination) {
+                throw new Error(data.error || 'Failed to load Gallery images');
+            }
+            if (typeof options?.generation !== 'number' || options.generation === galleryReferenceGenerationRef.current) {
+                mergeGalleryReferencePage(data);
+            }
+        } catch (error) {
+            if (typeof options?.generation !== 'number' || options.generation === galleryReferenceGenerationRef.current) {
+                setGalleryReferenceError(error instanceof Error ? error.message : 'Failed to load Gallery images');
+            }
+        } finally {
+            galleryReferenceLoadingPagesRef.current.delete(pageNumber);
+            if (options?.initial && (typeof options.generation !== 'number' || options.generation === galleryReferenceGenerationRef.current)) {
+                setIsGalleryReferenceLoading(false);
+            }
+        }
+    }, [activeWorkspaceId, galleryReferenceQuery, mergeGalleryReferencePage]);
 
     useEffect(() => {
         if (!isGalleryReferencePickerOpen || currentModel?.id !== 'wan-animate') return;
 
-        let cancelled = false;
+        const generation = galleryReferenceGenerationRef.current + 1;
+        galleryReferenceGenerationRef.current = generation;
+        galleryReferenceLoadingPagesRef.current.clear();
         const timeout = window.setTimeout(async () => {
             if (!activeWorkspaceId) {
-                setGalleryReferenceAssets([]);
+                setGalleryReferencePages({});
+                setGalleryReferenceTotalCount(0);
                 setGalleryReferenceError('Select a workspace before choosing from Gallery.');
                 return;
             }
 
-            setIsGalleryReferenceLoading(true);
+            setGalleryReferencePages({});
+            setGalleryReferenceTotalCount(0);
             setGalleryReferenceError(null);
-            try {
-                const search = new URLSearchParams({
-                    workspaceId: activeWorkspaceId,
-                    type: 'image',
-                    bucket: 'all',
-                    sort: 'newest',
-                    limit: '48',
-                    includeTrashed: 'false',
-                });
-                if (galleryReferenceQuery.trim()) {
-                    search.set('q', galleryReferenceQuery.trim());
-                }
-                const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
-                const data = await response.json();
-                if (!response.ok || !data.success || !Array.isArray(data.assets)) {
-                    throw new Error(data.error || 'Failed to load Gallery images');
-                }
-                if (!cancelled) {
-                    setGalleryReferenceAssets(data.assets.filter((asset: GalleryReferenceAsset) => asset.type === 'image'));
-                }
-            } catch (error) {
-                if (!cancelled) {
-                    setGalleryReferenceAssets([]);
-                    setGalleryReferenceError(error instanceof Error ? error.message : 'Failed to load Gallery images');
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsGalleryReferenceLoading(false);
-                }
-            }
+            void loadGalleryReferencePage(1, { generation, initial: true });
         }, 180);
 
         return () => {
-            cancelled = true;
             window.clearTimeout(timeout);
         };
-    }, [activeWorkspaceId, currentModel?.id, galleryReferenceQuery, isGalleryReferencePickerOpen]);
+    }, [activeWorkspaceId, currentModel?.id, galleryReferenceQuery, isGalleryReferencePickerOpen, loadGalleryReferencePage]);
+
+    useEffect(() => {
+        if (!isGalleryReferencePickerOpen || galleryReferenceVirtualRows.length === 0 || galleryReferenceTotalCount === 0) return;
+
+        const firstRow = galleryReferenceVirtualRows[0]?.index ?? 0;
+        const lastRow = galleryReferenceVirtualRows[galleryReferenceVirtualRows.length - 1]?.index ?? firstRow;
+        const startIndex = Math.max(0, firstRow * galleryReferenceColumnCount - galleryReferenceColumnCount * 6);
+        const endIndex = Math.min(
+            galleryReferenceTotalCount - 1,
+            ((lastRow + 1) * galleryReferenceColumnCount) + galleryReferenceColumnCount * 6,
+        );
+        const firstPage = Math.floor(startIndex / GALLERY_REFERENCE_PAGE_SIZE) + 1;
+        const lastPage = Math.floor(endIndex / GALLERY_REFERENCE_PAGE_SIZE) + 1;
+
+        for (let page = firstPage; page <= lastPage; page += 1) {
+            if (!galleryReferencePages[page]) {
+                void loadGalleryReferencePage(page, { generation: galleryReferenceGenerationRef.current });
+            }
+        }
+    }, [
+        galleryReferenceColumnCount,
+        galleryReferencePages,
+        galleryReferenceTotalCount,
+        galleryReferenceVirtualRows,
+        isGalleryReferencePickerOpen,
+        loadGalleryReferencePage,
+    ]);
 
     useEffect(() => {
         if (shouldClearMissingVideoCreatePresetSelection({
@@ -2008,6 +2114,10 @@ export default function VideoGenerationForm() {
                     if (!open) {
                         setGalleryReferenceError(null);
                         setSelectingGalleryReferenceId(null);
+                        setGalleryReferencePages({});
+                        setGalleryReferenceTotalCount(0);
+                        galleryReferenceLoadingPagesRef.current.clear();
+                        galleryReferenceGenerationRef.current += 1;
                     }
                 }}
             >
@@ -2027,41 +2137,75 @@ export default function VideoGenerationForm() {
                             <div className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">{galleryReferenceError}</div>
                         ) : null}
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+                    <div ref={galleryReferenceScrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                         {isGalleryReferenceLoading ? (
                             <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Loading Gallery...
                             </div>
-                        ) : galleryReferenceAssets.length === 0 ? (
+                        ) : galleryReferenceTotalCount === 0 ? (
                             <div className="rounded-md border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
                                 No Gallery images found.
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6" data-testid="wan-animate-gallery-reference-grid">
-                                {galleryReferenceAssets.map((asset) => {
-                                    const imageUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
-                                    const isSelecting = selectingGalleryReferenceId === asset.id;
+                            <div
+                                className="relative w-full"
+                                style={{ height: `${galleryReferenceRowVirtualizer.getTotalSize()}px` }}
+                                data-testid="wan-animate-gallery-reference-grid"
+                            >
+                                {galleryReferenceVirtualRows.map((virtualRow) => {
+                                    const rowStart = virtualRow.index * galleryReferenceColumnCount;
                                     return (
-                                        <button
-                                            key={asset.id}
-                                            type="button"
-                                            className="group relative aspect-square overflow-hidden rounded-md border border-border bg-black text-left focus:outline-none focus:ring-2 focus:ring-primary/70 disabled:opacity-60"
-                                            onClick={() => void handleSelectGalleryReference(asset)}
-                                            disabled={!!selectingGalleryReferenceId}
-                                            aria-label={`Use Gallery image ${asset.id}`}
-                                            title="Use as reference image"
+                                        <div
+                                            key={virtualRow.key}
+                                            className="absolute left-0 top-0 grid w-full gap-2"
+                                            style={{
+                                                transform: `translateY(${virtualRow.start}px)`,
+                                                gridTemplateColumns: `repeat(${galleryReferenceColumnCount}, minmax(0, 1fr))`,
+                                                height: `${galleryReferenceRowSize}px`,
+                                            }}
                                         >
-                                            <img src={imageUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" />
-                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-2 py-2">
-                                                <div className="truncate text-[11px] font-medium text-white">{asset.prompt || asset.id}</div>
-                                            </div>
-                                            {isSelecting ? (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white">
-                                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                                </div>
-                                            ) : null}
-                                        </button>
+                                            {Array.from({ length: galleryReferenceColumnCount }).map((_, columnIndex) => {
+                                                const absoluteIndex = rowStart + columnIndex;
+                                                if (absoluteIndex >= galleryReferenceTotalCount) {
+                                                    return <div key={`empty-${absoluteIndex}`} className="h-full" />;
+                                                }
+
+                                                const asset = galleryReferenceItemsByAbsoluteIndex[absoluteIndex];
+                                                if (!asset) {
+                                                    return (
+                                                        <div
+                                                            key={`placeholder-${absoluteIndex}`}
+                                                            className="h-full rounded-md border border-border bg-muted/30"
+                                                        />
+                                                    );
+                                                }
+
+                                                const imageUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
+                                                const isSelecting = selectingGalleryReferenceId === asset.id;
+                                                return (
+                                                    <button
+                                                        key={asset.id}
+                                                        type="button"
+                                                        className="group relative h-full overflow-hidden rounded-md border border-border bg-black text-left focus:outline-none focus:ring-2 focus:ring-primary/70 disabled:opacity-60"
+                                                        onClick={() => void handleSelectGalleryReference(asset)}
+                                                        disabled={!!selectingGalleryReferenceId}
+                                                        aria-label={`Use Gallery image ${asset.id}`}
+                                                        title="Use as reference image"
+                                                    >
+                                                        <img src={imageUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" />
+                                                        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-2 py-2">
+                                                            <div className="truncate text-[11px] font-medium text-white">{asset.prompt || asset.id}</div>
+                                                        </div>
+                                                        {isSelecting ? (
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white">
+                                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                                            </div>
+                                                        ) : null}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     );
                                 })}
                             </div>

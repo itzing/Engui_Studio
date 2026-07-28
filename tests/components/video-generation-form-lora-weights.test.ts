@@ -6,9 +6,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREATE_DRAFT_STATE_STORAGE_KEY } from '@/lib/create/createDraftSchema';
 
-const { mockAddJob, mockSetSelectedModel } = vi.hoisted(() => ({
+const { mockAddJob, mockSetSelectedModel, mockVirtualRows } = vi.hoisted(() => ({
   mockAddJob: vi.fn(),
   mockSetSelectedModel: vi.fn(),
+  mockVirtualRows: vi.fn(),
 }));
 
 vi.mock('@/lib/context/StudioContext', () => ({
@@ -63,6 +64,15 @@ vi.mock('@/components/lora/LoRAManagementDialog', () => ({
   LoRAManagementDialog: () => null,
 }));
 
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: (options: { count: number; estimateSize: () => number }) => ({
+    getVirtualItems: () => mockVirtualRows(),
+    getTotalSize: () => options.count * options.estimateSize(),
+    scrollToIndex: vi.fn(),
+    measure: vi.fn(),
+  }),
+}));
+
 import VideoGenerationForm from '@/components/forms/VideoGenerationForm';
 import { setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById } from '@/lib/models/modelConfig';
@@ -94,6 +104,7 @@ function blobResponse(body: Blob, ok = true, status = 200) {
 
 describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     window.localStorage.clear();
     Object.defineProperty(window, 'matchMedia', {
@@ -115,8 +126,15 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
         return jsonResponse({ success: true, presets: [] });
       }
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
+    mockVirtualRows.mockReturnValue([{ index: 0, key: 'row-0', start: 0, size: 116 }]);
   });
 
   it('saves edited WAN22 LoRA weights into the video draft and restores them after remount', async () => {
@@ -237,6 +255,12 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
         return jsonResponse({ success: true, presets: [] });
       }
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
       if (url.includes('/api/gallery/assets?')) {
         expect(url).toContain('type=image');
         expect(url).toContain('bucket=all');
@@ -285,6 +309,55 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         imageInputPath: '/generations/gallery/ws-1/ref.png',
       });
     });
+  });
+
+  it('loads later Gallery reference picker pages for virtualized rows', async () => {
+    setWorkflowActiveModel('video', 'wan-animate');
+    mockVirtualRows.mockReturnValue([{ index: 30, key: 'row-30', start: 3960, size: 132 }]);
+
+    const requestedPages: string[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/gallery/assets?')) {
+        const page = new URL(url, 'http://localhost').searchParams.get('page') || '1';
+        requestedPages.push(page);
+        const pageNumber = Number(page);
+        return jsonResponse({
+          success: true,
+          assets: Array.from({ length: 48 }, (_, index) => ({
+            id: `gallery-ref-${pageNumber}-${index}`,
+            type: 'image',
+            originalUrl: `/generations/gallery/ws-1/ref-${pageNumber}-${index}.png`,
+            previewUrl: null,
+            thumbnailUrl: null,
+            prompt: `gallery reference ${pageNumber}-${index}`,
+            modelId: 'z-image',
+            addedToGalleryAt: new Date().toISOString(),
+          })),
+          pagination: { page: pageNumber, limit: 48, totalCount: 96, hasNextPage: pageNumber < 2, hasPrevPage: pageNumber > 1 },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose reference image from Gallery' }));
+
+    await waitFor(() => {
+      expect(requestedPages).toContain('1');
+      expect(requestedPages).toContain('2');
+    }, { timeout: 2000 });
   });
 
   it('applies WAN22 Prompt Helper plain text responses', async () => {
