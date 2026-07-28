@@ -11,6 +11,7 @@ import {
   resolveGalleryCarouselDimensions,
   shouldSpawnAdjacentGalleryCarouselSlot,
   shuffleGalleryVideoFeed,
+  spreadShuffleGalleryVideoFeed,
 } from '@/lib/galleryVideoCarousel';
 
 describe('gallery video carousel helpers', () => {
@@ -55,6 +56,22 @@ describe('gallery video carousel helpers', () => {
     expect(shuffled).not.toBe(assets);
     expect(new Set(shuffled.map((asset) => asset.id))).toEqual(new Set(['a', 'b', 'c', 'd']));
     expect(shuffled).toHaveLength(assets.length);
+  });
+
+  it('spreads shuffled assets across gallery source order', () => {
+    const assets = Array.from({ length: 24 }, (_, index) => ({
+      id: `asset-${index + 1}`,
+      galleryOrderIndex: index,
+    }));
+
+    const shuffled = spreadShuffleGalleryVideoFeed(assets, () => 0.99);
+
+    expect(shuffled).not.toBe(assets);
+    expect(new Set(shuffled.map((asset) => asset.id))).toEqual(new Set(assets.map((asset) => asset.id)));
+    expect(shuffled.map((asset) => asset.id)).not.toEqual(assets.map((asset) => asset.id));
+    for (let index = 1; index < shuffled.length; index += 1) {
+      expect(Math.abs(shuffled[index - 1].galleryOrderIndex - shuffled[index].galleryOrderIndex)).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it('builds a mixed feed with one image slot after every two videos', () => {
@@ -117,6 +134,26 @@ describe('gallery video carousel helpers', () => {
       'portrait-3',
     ]);
     expect(slots[0].aspectRatio).toBeLessThan(1);
+  });
+
+  it('keeps spread image slots away from nearby gallery neighbors when possible', () => {
+    const images = Array.from({ length: 20 }, (_, index) => ({
+      id: `image-${index + 1}`,
+      galleryOrderIndex: index,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+    }));
+
+    const slots = buildGalleryCarouselImageSlots(images, 1, () => 0.99, 5, 'spread');
+    const pickedIndexes = slots[0].images.map((image) => image.galleryOrderIndex);
+
+    expect(slots).toHaveLength(1);
+    expect(new Set(slots[0].images.map((image) => image.id)).size).toBe(5);
+    for (let left = 0; left < pickedIndexes.length; left += 1) {
+      for (let right = left + 1; right < pickedIndexes.length; right += 1) {
+        expect(Math.abs(pickedIndexes[left] - pickedIndexes[right])).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 
   it('places consecutive carousel slots edge-to-edge without a fixed black gap', () => {

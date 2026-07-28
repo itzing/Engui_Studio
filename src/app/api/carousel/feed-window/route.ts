@@ -48,6 +48,7 @@ type CarouselFeedAsset = {
   aspectRatio: string | null;
   addedToGalleryAt: Date;
   updatedAt: Date;
+  galleryOrderIndex?: number | null;
 };
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
@@ -359,13 +360,15 @@ export async function GET(request: NextRequest) {
     }, { videos: 0, images: 0, total: 0 });
 
     if (source === 'shuffle') {
-      const videos = includeVideos ? filteredAssets.map(({ asset }) => asset).filter(asset => asset.type === 'video') : [];
-      const images = includeImages ? filteredAssets.map(({ asset }) => asset).filter(asset => asset.type === 'image') : [];
+      const shuffleAssets = filteredAssets.map(({ asset, sourceIndex }) => ({ ...asset, galleryOrderIndex: sourceIndex }));
+      const videos = includeVideos ? shuffleAssets.filter(asset => asset.type === 'video') : [];
+      const images = includeImages ? shuffleAssets.filter(asset => asset.type === 'image') : [];
       const feed = buildGalleryCarouselFeed(videos, {
         images,
         includeVideos,
         includeImages,
         random: createSeededRandom(seed),
+        shuffleMode: 'spread',
       }).map(toDisplayFeedItem);
 
       if (feed.length === 0) {

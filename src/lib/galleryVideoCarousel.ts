@@ -9,6 +9,7 @@ export type GalleryCarouselMediaLike = {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   aspectRatio?: string | null;
+  galleryOrderIndex?: number | null;
 };
 
 export type GalleryCarouselVideoFeedItem<TVideo> = {
@@ -37,6 +38,9 @@ export const GALLERY_CAROUSEL_IMAGES_PER_SLOT = 5;
 export const GALLERY_CAROUSEL_VIDEOS_PER_IMAGE_SLOT = 2;
 
 const DEFAULT_EDGE_OVERLAP_PX = 2;
+const MIN_SPREAD_BUCKETS = 4;
+const MAX_SPREAD_BUCKETS = 24;
+const MAX_REPAIR_PASSES = 2;
 
 function readPositiveInteger(value: unknown): number | null {
   const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
@@ -105,6 +109,107 @@ export function shuffleGalleryVideoFeed<T extends { id: string }>(assets: T[], r
   return next;
 }
 
+function readGalleryOrderIndex(asset: { galleryOrderIndex?: number | null }, fallback: number) {
+  return Number.isFinite(asset.galleryOrderIndex) ? Number(asset.galleryOrderIndex) : fallback;
+}
+
+function galleryOrderDistance(a: { galleryOrderIndex?: number | null }, b: { galleryOrderIndex?: number | null }) {
+  const left = readGalleryOrderIndex(a, 0);
+  const right = readGalleryOrderIndex(b, 0);
+  return Math.abs(left - right);
+}
+
+function getSpreadBucketCount(totalCount: number) {
+  if (totalCount <= 1) return totalCount;
+  return Math.min(totalCount, Math.max(MIN_SPREAD_BUCKETS, Math.min(MAX_SPREAD_BUCKETS, Math.ceil(Math.sqrt(totalCount)))));
+}
+
+function getMinimumGalleryOrderDistance(totalCount: number) {
+  if (totalCount < 8) return 1;
+  return Math.min(48, Math.max(3, Math.floor(totalCount / 18)));
+}
+
+function improvesLocalSpread<T extends { galleryOrderIndex?: number | null }>(items: T[], leftIndex: number, rightIndex: number) {
+  const before = Math.min(
+    leftIndex > 0 ? galleryOrderDistance(items[leftIndex - 1], items[leftIndex]) : Number.POSITIVE_INFINITY,
+    rightIndex < items.length - 1 ? galleryOrderDistance(items[rightIndex], items[rightIndex + 1]) : Number.POSITIVE_INFINITY,
+  );
+  const after = Math.min(
+    leftIndex > 0 ? galleryOrderDistance(items[leftIndex - 1], items[rightIndex]) : Number.POSITIVE_INFINITY,
+    rightIndex < items.length - 1 ? galleryOrderDistance(items[leftIndex], items[rightIndex + 1]) : Number.POSITIVE_INFINITY,
+  );
+  return after > before;
+}
+
+function repairGalleryOrderNeighbors<T extends { galleryOrderIndex?: number | null }>(
+  items: T[],
+  minimumDistance: number,
+  random: () => number,
+) {
+  if (items.length < 3 || minimumDistance <= 1) return items;
+  const repaired = items.slice();
+
+  for (let pass = 0; pass < MAX_REPAIR_PASSES; pass += 1) {
+    let changed = false;
+    for (let index = 1; index < repaired.length; index += 1) {
+      if (galleryOrderDistance(repaired[index - 1], repaired[index]) >= minimumDistance) continue;
+
+      const candidates = shuffleGalleryVideoFeed(
+        Array.from({ length: repaired.length - index - 1 }, (_, offset) => index + 1 + offset),
+        random,
+      );
+      const swapIndex = candidates.find(candidateIndex => (
+        galleryOrderDistance(repaired[index - 1], repaired[candidateIndex]) >= minimumDistance
+        && improvesLocalSpread(repaired, index, candidateIndex)
+      ));
+
+      if (swapIndex !== undefined) {
+        [repaired[index], repaired[swapIndex]] = [repaired[swapIndex], repaired[index]];
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  return repaired;
+}
+
+export function spreadShuffleGalleryVideoFeed<T extends { id: string; galleryOrderIndex?: number | null }>(
+  assets: T[],
+  random: () => number = Math.random,
+) {
+  if (assets.length <= 2) return shuffleGalleryVideoFeed(assets, random);
+
+  const sorted = assets
+    .map((asset, index) => ({ asset, orderIndex: readGalleryOrderIndex(asset, index) }))
+    .sort((a, b) => a.orderIndex - b.orderIndex);
+  const bucketCount = getSpreadBucketCount(sorted.length);
+  const buckets: T[][] = Array.from({ length: bucketCount }, () => []);
+
+  sorted.forEach(({ asset }, index) => {
+    const bucketIndex = Math.min(bucketCount - 1, Math.floor((index * bucketCount) / sorted.length));
+    buckets[bucketIndex].push(asset);
+  });
+
+  const shuffledBuckets = buckets.map(bucket => shuffleGalleryVideoFeed(bucket, random));
+  const result: T[] = [];
+
+  while (result.length < sorted.length) {
+    const activeBucketIndexes = shuffledBuckets
+      .map((bucket, index) => ({ bucket, index }))
+      .filter(({ bucket }) => bucket.length > 0)
+      .map(({ index }) => index);
+    const cycle = shuffleGalleryVideoFeed(activeBucketIndexes, random);
+
+    cycle.forEach((bucketIndex) => {
+      const next = shuffledBuckets[bucketIndex].shift();
+      if (next) result.push(next);
+    });
+  }
+
+  return repairGalleryOrderNeighbors(result, getMinimumGalleryOrderDistance(sorted.length), random);
+}
+
 function readKnownGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike): number | null {
   if (asset.mediaWidth && asset.mediaHeight && asset.mediaWidth > 0 && asset.mediaHeight > 0) {
     return asset.mediaWidth / asset.mediaHeight;
@@ -147,11 +252,25 @@ function shapeDistance(anchor: GalleryCarouselMediaLike, candidate: GalleryCarou
   return ratioDistance + areaDistance;
 }
 
-function pickClosestImage<TImage extends GalleryCarouselMediaLike>(anchor: TImage, candidates: TImage[]) {
+function pickClosestImage<TImage extends GalleryCarouselMediaLike>(
+  anchor: TImage,
+  candidates: TImage[],
+  pickedImages: TImage[] = [anchor],
+  minimumGalleryOrderDistance = 0,
+) {
   if (candidates.length === 0) return null;
   let bestIndex = 0;
   let bestScore = Number.POSITIVE_INFINITY;
-  candidates.forEach((candidate, index) => {
+  const eligibleCandidates = minimumGalleryOrderDistance > 0
+    ? candidates
+      .map((candidate, index) => ({ candidate, index }))
+      .filter(({ candidate }) => pickedImages.every(picked => galleryOrderDistance(picked, candidate) >= minimumGalleryOrderDistance))
+    : candidates.map((candidate, index) => ({ candidate, index }));
+  const candidatePool = eligibleCandidates.length > 0
+    ? eligibleCandidates
+    : candidates.map((candidate, index) => ({ candidate, index }));
+
+  candidatePool.forEach(({ candidate, index }) => {
     const score = shapeDistance(anchor, candidate);
     if (score < bestScore) {
       bestScore = score;
@@ -178,14 +297,18 @@ export function buildGalleryCarouselImageSlots<TImage extends GalleryCarouselMed
   slotCount: number,
   random: () => number = Math.random,
   imagesPerSlot = GALLERY_CAROUSEL_IMAGES_PER_SLOT,
+  shuffleMode: 'random' | 'spread' = 'random',
 ): Array<GalleryCarouselImageFeedItem<TImage>> {
   const safeSlotCount = Math.max(0, Math.floor(slotCount));
   const safeImagesPerSlot = Math.max(1, Math.floor(imagesPerSlot));
   if (safeSlotCount === 0 || images.length === 0) return [];
 
-  const shuffledImages = shuffleGalleryVideoFeed(images, random);
+  const shuffledImages = shuffleMode === 'spread'
+    ? spreadShuffleGalleryVideoFeed(images, random)
+    : shuffleGalleryVideoFeed(images, random);
   const availableImages = shuffledImages.slice();
   const slots: Array<GalleryCarouselImageFeedItem<TImage>> = [];
+  const minimumGalleryOrderDistance = shuffleMode === 'spread' ? getMinimumGalleryOrderDistance(images.length) : 0;
 
   for (let slotIndex = 0; slotIndex < safeSlotCount; slotIndex += 1) {
     const anchor = availableImages.shift() || shuffledImages[slotIndex % shuffledImages.length];
@@ -195,7 +318,7 @@ export function buildGalleryCarouselImageSlots<TImage extends GalleryCarouselMed
       const candidates = availableImages.length > 0
         ? availableImages
         : images.filter((image) => !pickedImages.some((picked) => picked.id === image.id));
-      const picked = pickClosestImage(anchor, candidates);
+      const picked = pickClosestImage(anchor, candidates, pickedImages, minimumGalleryOrderDistance);
       if (!picked) break;
       pickedImages.push(picked);
     }
@@ -220,6 +343,7 @@ export function buildGalleryCarouselFeed<TVideo extends { id: string }, TImage e
     random?: () => number;
     videosPerImageSlot?: number;
     imagesPerSlot?: number;
+    shuffleMode?: 'random' | 'spread';
   } = {},
 ): Array<GalleryCarouselFeedItem<TVideo, TImage>> {
   const {
@@ -229,17 +353,22 @@ export function buildGalleryCarouselFeed<TVideo extends { id: string }, TImage e
     random = Math.random,
     videosPerImageSlot = GALLERY_CAROUSEL_VIDEOS_PER_IMAGE_SLOT,
     imagesPerSlot = GALLERY_CAROUSEL_IMAGES_PER_SLOT,
+    shuffleMode = 'random',
   } = options;
   const safeVideosPerImageSlot = Math.max(1, Math.floor(videosPerImageSlot));
-  const shuffledVideos = includeVideos ? shuffleGalleryVideoFeed(videos, random) : [];
+  const shuffledVideos = includeVideos
+    ? shuffleMode === 'spread'
+      ? spreadShuffleGalleryVideoFeed(videos, random)
+      : shuffleGalleryVideoFeed(videos, random)
+    : [];
   if (!includeVideos && includeImages) {
     const imageOnlySlotCount = Math.ceil(images.length / imagesPerSlot);
-    return buildGalleryCarouselImageSlots(images, imageOnlySlotCount, random, imagesPerSlot);
+    return buildGalleryCarouselImageSlots(images, imageOnlySlotCount, random, imagesPerSlot, shuffleMode);
   }
   const imageSlotCount = includeImages && images.length > 0
     ? Math.floor(shuffledVideos.length / safeVideosPerImageSlot)
     : 0;
-  const imageSlots = buildGalleryCarouselImageSlots(images, imageSlotCount, random, imagesPerSlot);
+  const imageSlots = buildGalleryCarouselImageSlots(images, imageSlotCount, random, imagesPerSlot, shuffleMode);
   let nextImageSlotIndex = 0;
 
   return shuffledVideos.flatMap((asset, index) => {

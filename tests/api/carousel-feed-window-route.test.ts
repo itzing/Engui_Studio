@@ -145,4 +145,24 @@ describe('GET /api/carousel/feed-window', () => {
       ...firstJson.next.map((entry: any) => entry.id),
     ]).not.toContain(afterJson.current.id);
   });
+
+  it('uses spread shuffle order for source-neighbor-heavy feeds', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue(
+      Array.from({ length: 30 }, (_, index) => makeAsset(`video-${index + 1}`, index + 1)),
+    );
+
+    const response = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=shuffle&seed=spread-seed&includeVideos=true&includeImages=false&includeLandscape=true&includePortrait=true&before=0&after=12') as any);
+    const json = await response.json();
+    const ids = [
+      json.current.id,
+      ...json.next.map((entry: any) => entry.id),
+    ];
+    const sourceIndexes = ids.map((id: string) => Number(id.replace('video-', '')) - 1);
+
+    expect(response.status).toBe(200);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (let index = 1; index < sourceIndexes.length; index += 1) {
+      expect(Math.abs(sourceIndexes[index - 1] - sourceIndexes[index])).toBeGreaterThanOrEqual(3);
+    }
+  });
 });
