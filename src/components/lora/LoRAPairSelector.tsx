@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { useI18n } from '@/lib/i18n/context';
 import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { buildLoraPairs, getLoraSearchText } from '@/lib/lora/modelFilters';
+import { LoRAHelperPopover } from '@/components/lora/LoRAHelperPopover';
+import { getPairHelperProfile, getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 export interface LoRAFile {
   id: string;
@@ -24,6 +26,8 @@ export interface LoRAFile {
   workspaceId?: string;
   lastUsed?: string;
   targetOverride?: 'image' | 'video' | string | null;
+  helperProfile?: LoRAHelperProfile | null;
+  pairHelperProfile?: LoRAHelperProfile | null;
 }
 
 export interface LoRAPairSelectorProps {
@@ -90,6 +94,9 @@ export function LoRAPairSelector({
         pair.high?.s3Path === highValue || pair.low?.s3Path === lowValue
     );
   }, [loraPairs, highValue, lowValue]);
+  const selectedHelperProfile = selectedPair?.isComplete
+    ? getPairHelperProfile(selectedPair)
+    : getSingleHelperProfile(selectedPair?.high ?? selectedPair?.low);
 
   // Format file size
   const formatFileSize = (sizeStr: string): string => {
@@ -153,12 +160,21 @@ export function LoRAPairSelector({
       {selectedPair ? (
         // Selected pair card
         <div className="rounded-lg border bg-card p-4 hover:border-primary/50 hover:shadow-sm transition-all duration-200">
-          <div className="flex items-center gap-2 mb-3">
-            <Package className="h-5 w-5 text-primary" />
-            <h4 className="font-medium text-sm">{selectedPair.baseName}</h4>
-            {selectedPair.isComplete && (
-              <span className="text-xs bg-green-500/10 text-green-500 px-2 py-0.5 rounded">{t('loraManagement.status.complete')}</span>
-            )}
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Package className="h-5 w-5 shrink-0 text-primary" />
+              <h4 className="truncate text-sm font-medium">{selectedPair.baseName}</h4>
+              {selectedPair.isComplete && (
+                <span className="shrink-0 text-xs bg-green-500/10 text-green-500 px-2 py-0.5 rounded">{t('loraManagement.status.complete')}</span>
+              )}
+            </div>
+            <LoRAHelperPopover
+              profile={selectedHelperProfile}
+              onApplyWeights={selectedPair.isComplete ? ({ high, low }) => {
+                if (high) onHighWeightChange(high);
+                if (low) onLowWeightChange(low);
+              } : undefined}
+            />
           </div>
 
           {/* High/Low with weights */}

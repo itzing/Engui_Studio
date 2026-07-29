@@ -12,11 +12,13 @@ import {
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
 import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
 import { buildLoraPairs } from '@/lib/lora/modelFilters';
-import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw } from 'lucide-react';
+import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
+import { getPairHelperProfile, getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 // TypeScript interfaces
 interface LoRAFile {
@@ -31,9 +33,12 @@ interface LoRAFile {
   uploadedAt: string;
   workspaceId?: string;
   targetOverride?: 'image' | 'video' | string | null;
+  helperProfile?: LoRAHelperProfile | null;
+  pairHelperProfile?: LoRAHelperProfile | null;
 }
 
 interface LoRAPair {
+  key?: string;
   baseName: string;
   high?: LoRAFile;
   low?: LoRAFile;
@@ -65,6 +70,11 @@ export function LoRAManagementDialog({
   const [isDragging, setIsDragging] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [targetUpdatingId, setTargetUpdatingId] = useState<string | null>(null);
+  const [helperEditingKey, setHelperEditingKey] = useState<string | null>(null);
+  const [helperSavingKey, setHelperSavingKey] = useState<string | null>(null);
+  const [helperNotesDraft, setHelperNotesDraft] = useState('');
+  const [helperHighWeightDraft, setHelperHighWeightDraft] = useState('');
+  const [helperLowWeightDraft, setHelperLowWeightDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Group LoRAs into pairs (high/low)
@@ -368,6 +378,91 @@ export function LoRAManagementDialog({
     }
   };
 
+  const getHelperEditorKey = (pair: LoRAPair) => {
+    if (pair.high && pair.low) return `pair:${pair.high.id}:${pair.low.id}`;
+    const single = pair.high ?? pair.low;
+    return single ? `single:${single.id}` : pair.baseName;
+  };
+
+  const getHelperProfileForPair = (pair: LoRAPair) => (
+    pair.high && pair.low
+      ? getPairHelperProfile(pair)
+      : getSingleHelperProfile(pair.high ?? pair.low)
+  );
+
+  const openHelperEditor = (pair: LoRAPair) => {
+    const profile = getHelperProfileForPair(pair);
+    setHelperEditingKey(getHelperEditorKey(pair));
+    setHelperNotesDraft(profile?.notes ?? '');
+    setHelperHighWeightDraft(typeof profile?.recommendedHighWeight === 'number' ? String(profile.recommendedHighWeight) : '');
+    setHelperLowWeightDraft(typeof profile?.recommendedLowWeight === 'number' ? String(profile.recommendedLowWeight) : '');
+  };
+
+  const updateSavedHelperProfile = (profile: LoRAHelperProfile) => {
+    setLoras((previous) => previous.map((entry) => {
+      if (profile.scope === 'single' && entry.id === profile.loraId) {
+        return { ...entry, helperProfile: profile };
+      }
+      if (profile.scope === 'pair' && (entry.id === profile.highLoraId || entry.id === profile.lowLoraId)) {
+        return { ...entry, pairHelperProfile: profile };
+      }
+      return entry;
+    }));
+  };
+
+  const saveHelperProfile = async (pair: LoRAPair) => {
+    const key = getHelperEditorKey(pair);
+    const notes = helperNotesDraft.trim();
+    if (notes.length > 1000) {
+      setError('Helper notes must be 1000 characters or less.');
+      return;
+    }
+
+    const isPair = !!(pair.high && pair.low);
+    const single = pair.high ?? pair.low;
+    if (!isPair && !single) return;
+
+    setHelperSavingKey(key);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch('/api/lora/helper-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isPair ? {
+          workspaceId,
+          scope: 'pair',
+          highLoraId: pair.high!.id,
+          lowLoraId: pair.low!.id,
+          notes,
+          recommendedHighWeight: helperHighWeightDraft,
+          recommendedLowWeight: helperLowWeightDraft,
+        } : {
+          workspaceId,
+          scope: 'single',
+          loraId: single!.id,
+          notes,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to save helper profile');
+      }
+
+      updateSavedHelperProfile(data.profile);
+      setHelperEditingKey(null);
+      setSuccessMessage('✓ LoRA helper saved.');
+      onLoRAUploaded?.();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save helper profile';
+      setError(`Save failed: ${errorMessage}. Please try again.`);
+    } finally {
+      setHelperSavingKey(null);
+    }
+  };
+
   const renderTargetControl = (lora: LoRAFile, pair: LoRAPair) => {
     const checked = isDefaultVideoLora(lora, pair);
     return (
@@ -606,15 +701,25 @@ export function LoRAManagementDialog({
                       <div className="space-y-3">
                         {/* Pair Header */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
                             <Package className={`h-5 w-5 ${pair.isComplete ? 'text-green-500' : 'text-yellow-500'}`} />
-                            <h4 className="font-medium text-sm">{pair.baseName}</h4>
+                            <h4 className="truncate text-sm font-medium">{pair.baseName}</h4>
                             {pair.isComplete ? (
                               <span className="text-xs bg-green-500/10 text-green-500 px-2 py-0.5 rounded">{t('loraManagement.status.complete')}</span>
                             ) : (
                               <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded">{t('loraManagement.status.incomplete')}</span>
                             )}
                           </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 gap-1.5"
+                            onClick={() => openHelperEditor(pair)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Helper
+                          </Button>
                         </div>
 
                         {/* High/Low Files */}
@@ -687,6 +792,79 @@ export function LoRAManagementDialog({
                             )}
                           </div>
                         </div>
+
+                        {helperEditingKey === getHelperEditorKey(pair) ? (
+                          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-medium">Trigger notes</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Blank lines split clickable copy groups in pickers.
+                                </div>
+                              </div>
+                              <div className={`text-xs ${helperNotesDraft.length > 1000 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                {helperNotesDraft.length}/1000
+                              </div>
+                            </div>
+                            <textarea
+                              value={helperNotesDraft}
+                              onChange={(event) => setHelperNotesDraft(event.target.value)}
+                              maxLength={1000}
+                              rows={5}
+                              className="min-h-28 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                              placeholder="Trigger words, sample prompt snippets, usage notes..."
+                            />
+
+                            {pair.high && pair.low ? (
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label className="space-y-1 text-xs">
+                                  <span className="font-medium">Recommended HIGH weight</span>
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={helperHighWeightDraft}
+                                    onChange={(event) => setHelperHighWeightDraft(event.target.value)}
+                                    className="h-8 text-sm"
+                                    placeholder="Optional"
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="font-medium">Recommended LOW weight</span>
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={helperLowWeightDraft}
+                                    onChange={(event) => setHelperLowWeightDraft(event.target.value)}
+                                    className="h-8 text-sm"
+                                    placeholder="Optional"
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
+
+                            <div className="mt-3 flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setHelperEditingKey(null)}
+                                disabled={helperSavingKey === getHelperEditorKey(pair)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => saveHelperProfile(pair)}
+                                disabled={helperSavingKey === getHelperEditorKey(pair) || helperNotesDraft.length > 1000}
+                              >
+                                <Save className="h-3.5 w-3.5" />
+                                Save helper
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </CardContent>
                   </Card>

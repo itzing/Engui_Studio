@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n/context';
+import { LoRAHelperPopover } from '@/components/lora/LoRAHelperPopover';
+import { getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 export interface LoRAFile {
   id: string;
@@ -23,6 +25,8 @@ export interface LoRAFile {
   workspaceId?: string;
   lastUsed?: string;
   targetOverride?: 'image' | 'video' | string | null;
+  helperProfile?: LoRAHelperProfile | null;
+  pairHelperProfile?: LoRAHelperProfile | null;
 }
 
 export interface LoRASelectorProps {
@@ -53,6 +57,7 @@ export function LoRASelector({
     () => availableLoras.find((lora) => lora.s3Path === value),
     [availableLoras, value]
   );
+  const selectedHelperProfile = getSingleHelperProfile(selectedLoRA);
 
   // Filter LoRAs based on search query
   const filteredLoras = useMemo(() => {
@@ -181,6 +186,7 @@ export function LoRASelector({
                 {formatDate(selectedLoRA.uploadedAt)}
               </p>
             </div>
+            <LoRAHelperPopover profile={selectedHelperProfile} />
           </div>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             <Button

@@ -144,10 +144,21 @@ export async function POST(request: NextRequest) {
     const staleLoras = existingWorkspaceLoras.filter((lora) => !currentS3Paths.has(lora.s3Path));
 
     if (staleLoras.length > 0) {
+      const staleLoraIds = staleLoras.map((lora) => lora.id);
+      await prisma.loRAHelperProfile.deleteMany({
+        where: {
+          OR: [
+            { loraId: { in: staleLoraIds } },
+            { highLoraId: { in: staleLoraIds } },
+            { lowLoraId: { in: staleLoraIds } },
+          ],
+        },
+      });
+
       await prisma.loRA.deleteMany({
         where: {
           id: {
-            in: staleLoras.map((lora) => lora.id),
+            in: staleLoraIds,
           },
         },
       });

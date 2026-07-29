@@ -20,6 +20,24 @@ export async function GET(request: NextRequest) {
       orderBy: { uploadedAt: 'desc' },
     });
 
+    const helperProfiles = await prisma.loRAHelperProfile.findMany({
+      where,
+    });
+
+    const singleProfileByLoraId = new Map(
+      helperProfiles
+        .filter((profile) => profile.scope === 'single' && profile.loraId)
+        .map((profile) => [profile.loraId!, profile])
+    );
+    const pairProfileByLoraId = new Map(
+      helperProfiles
+        .filter((profile) => profile.scope === 'pair' && profile.highLoraId && profile.lowLoraId)
+        .flatMap((profile) => [
+          [profile.highLoraId!, profile] as const,
+          [profile.lowLoraId!, profile] as const,
+        ])
+    );
+
     // Initialize S3 service if presigned URLs are requested
     let s3Service: S3Service | null = null;
     if (generatePresignedUrls) {
@@ -59,6 +77,8 @@ export async function GET(request: NextRequest) {
           fileSize: lora.fileSize.toString(),
           extension: lora.extension,
           targetOverride: lora.targetOverride,
+          helperProfile: singleProfileByLoraId.get(lora.id) ?? null,
+          pairHelperProfile: pairProfileByLoraId.get(lora.id) ?? null,
           uploadedAt: lora.uploadedAt.toISOString(),
           workspaceId: lora.workspaceId,
         };
@@ -70,6 +90,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       loras: serializedLoras,
+      helperProfiles,
     });
   } catch (error) {
     logger.error('Failed to fetch LoRAs:', error);

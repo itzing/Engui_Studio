@@ -146,6 +146,15 @@ export async function DELETE(
 
     // Delete from database only if S3 deletion succeeded
     try {
+      await prisma.loRAHelperProfile.deleteMany({
+        where: {
+          OR: [
+            { loraId: id },
+            { highLoraId: id },
+            { lowLoraId: id },
+          ],
+        },
+      });
       await prisma.loRA.delete({
         where: { id },
       });

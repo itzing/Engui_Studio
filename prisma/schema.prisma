@@ -388,6 +388,25 @@ model LoRA {
   @@map("loras")
 }
 
+model LoRAHelperProfile {
+  id                    String   @id @default(uuid())
+  workspaceId           String?
+  scope                 String // 'single' | 'pair'
+  loraId                String?
+  highLoraId            String?
+  lowLoraId             String?
+  notes                 String   @default("")
+  recommendedHighWeight Float?
+  recommendedLowWeight  Float?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([scope, loraId])
+  @@index([scope, highLoraId, lowLoraId])
+  @@map("lora_helper_profiles")
+}
+
 model Character {
   id                   String    @id @default(uuid())
   name                 String

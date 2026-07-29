@@ -10,6 +10,9 @@ const { getSettings, listFiles, mockPrisma } = vi.hoisted(() => ({
       findMany: vi.fn(),
       deleteMany: vi.fn(),
     },
+    loRAHelperProfile: {
+      deleteMany: vi.fn(),
+    },
   },
 }));
 
@@ -103,6 +106,7 @@ describe('POST /api/lora/sync', () => {
         s3Path: '/runpod-volume/loras/stale.safetensors',
       },
     ]);
+    mockPrisma.loRAHelperProfile.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.loRA.deleteMany.mockResolvedValue({ count: 1 });
 
     const response = await POST(request({ workspaceId: 'ws-1' }));
@@ -130,6 +134,15 @@ describe('POST /api/lora/sync', () => {
         id: {
           in: ['stale-id'],
         },
+      },
+    });
+    expect(mockPrisma.loRAHelperProfile.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { loraId: { in: ['stale-id'] } },
+          { highLoraId: { in: ['stale-id'] } },
+          { lowLoraId: { in: ['stale-id'] } },
+        ],
       },
     });
     expect(json).toMatchObject({

@@ -33,9 +33,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
+import { LoRAHelperPopover } from '@/components/lora/LoRAHelperPopover';
 import type { LoRAFile } from '@/components/lora/LoRASelector';
 import { getLoraWeightInputError, getLoraWeightNumber } from '@/lib/lora/loraWeightInput';
 import { buildLoraPairs, filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
+import { getPairHelperProfile, getSingleHelperProfile } from '@/lib/lora/helperProfiles';
 import { cn } from '@/lib/utils';
 
 type VideoSequenceSegment = {
@@ -1277,6 +1279,22 @@ export default function VideoSequenceBuilder() {
     }));
   }
 
+  function applyLoraSlotWeights(index: number, weights: { high: string; low: string }) {
+    setSegmentDraft((draft) => {
+      let nextConfigJson = draft.loraConfigJson;
+      if (weights.high) {
+        nextConfigJson = setWanLoraWeightInConfig(nextConfigJson, index, 'high', weights.high);
+      }
+      if (weights.low) {
+        nextConfigJson = setWanLoraWeightInConfig(nextConfigJson, index, 'low', weights.low);
+      }
+      return {
+        ...draft,
+        loraConfigJson: nextConfigJson,
+      };
+    });
+  }
+
   async function persistSelectedSegmentDraft(draftSnapshot = segmentDraft) {
     if (!activeSequence || !selectedSegment) return null;
     const draftKey = getSegmentDraftPersistenceKey(draftSnapshot);
@@ -2215,7 +2233,14 @@ export default function VideoSequenceBuilder() {
 
                   {selectedLoraSlots.length > 0 ? (
                     <div className="space-y-3">
-                      {selectedLoraSlots.map((slot) => (
+                      {selectedLoraSlots.map((slot) => {
+                        const helperProfile = slot.highLoRA && slot.lowLoRA
+                          ? getPairHelperProfile({
+                              high: slot.highLoRA,
+                              low: slot.lowLoRA,
+                            })
+                          : getSingleHelperProfile(slot.highLoRA ?? slot.lowLoRA);
+                        return (
                         <div key={slot.index} className="rounded-md border border-white/10 bg-zinc-950/70 p-3">
                           <div className="mb-3 flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -2226,16 +2251,23 @@ export default function VideoSequenceBuilder() {
                                 Slot {slot.index} - High {slot.highWeight.toFixed(2)} / Low {slot.lowWeight.toFixed(2)}
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 shrink-0 text-zinc-400 hover:bg-white/10 hover:text-white"
-                              onClick={() => clearLoraSlot(slot.index)}
-                              aria-label={`Clear LoRA slot ${slot.index}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <LoRAHelperPopover
+                                profile={helperProfile}
+                                dark
+                                onApplyWeights={slot.highLoRA && slot.lowLoRA ? (weights) => applyLoraSlotWeights(slot.index, weights) : undefined}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-white"
+                                onClick={() => clearLoraSlot(slot.index)}
+                                aria-label={`Clear LoRA slot ${slot.index}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="min-w-0 space-y-2">
@@ -2270,7 +2302,8 @@ export default function VideoSequenceBuilder() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-md border border-dashed border-white/10 px-4 py-6 text-sm text-zinc-500">
