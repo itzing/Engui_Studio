@@ -71,8 +71,10 @@ export async function POST(request: NextRequest) {
 
     logger.info(`Found ${loraFiles.length} LoRA files to sync`);
 
+    const currentS3Paths = new Set(loraFiles.map((file) => `/runpod-volume/${file.key}`));
     const syncedLoras = [];
     const skippedLoras = [];
+    const deletedLoras = [];
 
     for (const file of loraFiles) {
       try {
@@ -129,8 +131,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const workspaceFilter = workspaceId ? { workspaceId } : { workspaceId: null };
+    const existingWorkspaceLoras = await prisma.loRA.findMany({
+      where: workspaceFilter,
+      select: {
+        id: true,
+        fileName: true,
+        s3Path: true,
+      },
+    });
+
+    const staleLoras = existingWorkspaceLoras.filter((lora) => !currentS3Paths.has(lora.s3Path));
+
+    if (staleLoras.length > 0) {
+      await prisma.loRA.deleteMany({
+        where: {
+          id: {
+            in: staleLoras.map((lora) => lora.id),
+          },
+        },
+      });
+
+      deletedLoras.push(...staleLoras.map((lora) => ({
+        id: lora.id,
+        fileName: lora.fileName,
+        s3Path: lora.s3Path,
+      })));
+    }
+
     logger.info(
-      `LoRA sync completed: ${syncedLoras.length} synced, ${skippedLoras.length} skipped`
+      `LoRA sync completed: ${syncedLoras.length} synced, ${skippedLoras.length} skipped, ${deletedLoras.length} deleted`
     );
 
     return NextResponse.json({
@@ -138,6 +168,7 @@ export async function POST(request: NextRequest) {
       message: `Synced ${syncedLoras.length} LoRAs from S3`,
       synced: syncedLoras,
       skipped: skippedLoras,
+      deleted: deletedLoras,
       total: loraFiles.length,
     });
   } catch (error) {

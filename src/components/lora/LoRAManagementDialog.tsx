@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -408,8 +407,13 @@ export function LoRAManagementDialog({
       const data = await response.json();
 
       if (data.success) {
-        if (data.synced.length > 0) {
-          setSuccessMessage(`✓ ${t('loraManagement.messages.syncSuccess', { count: data.synced.length })}`);
+        const syncedCount = Array.isArray(data.synced) ? data.synced.length : 0;
+        const deletedCount = Array.isArray(data.deleted) ? data.deleted.length : 0;
+
+        if (syncedCount > 0) {
+          setSuccessMessage(`✓ ${t('loraManagement.messages.syncSuccess', { count: syncedCount })}`);
+        } else if (deletedCount > 0) {
+          setSuccessMessage(`✓ ${t('loraManagement.messages.syncDeleted', { count: deletedCount })}`);
         } else {
           setSuccessMessage(`✓ ${t('loraManagement.messages.allSynced')}`);
         }
@@ -501,7 +505,9 @@ export function LoRAManagementDialog({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                !isUploading && fileInputRef.current?.click();
+                if (!isUploading) {
+                  fileInputRef.current?.click();
+                }
               }
             }}
           >

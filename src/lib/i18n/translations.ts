@@ -243,6 +243,7 @@ export const translations = {
         uploadSuccess: '성공적으로 업로드되었습니다!',
         deleteSuccess: 'LoRA가 성공적으로 삭제되었습니다!',
         syncSuccess: 'S3에서 {count}개의 LoRA를 동기화했습니다!',
+        syncDeleted: 'S3에 없는 LoRA 기록 {count}개를 제거했습니다',
         allSynced: '모든 LoRA가 이미 동기화되어 있습니다'
       },
       deleteDialog: {
@@ -1312,6 +1313,7 @@ export const translations = {
         uploadSuccess: 'uploaded successfully!',
         deleteSuccess: 'LoRA deleted successfully!',
         syncSuccess: 'Synced {count} LoRA(s) from S3!',
+        syncDeleted: 'Removed {count} LoRA record(s) missing from S3',
         allSynced: 'All LoRAs are already synced'
       },
       deleteDialog: {
