@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -632,7 +632,7 @@ export function getHeaderActionTooltip(action: 'save' | 'deleteSequence' | 'gene
 }
 
 export function getSegmentInspectorActionTooltip(
-  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'clearStale' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker',
+  action: 'saveSegment' | 'generate' | 'generateFrom' | 'status' | 'clearStale' | 'saveTemplate' | 'delete' | 'galleryImage' | 'galleryVideo' | 'manualFramePicker' | 'sourceFramePreview',
   context?: { hasJob?: boolean; hasOutput?: boolean; isFirstSegment?: boolean; hasPreviousOutput?: boolean },
 ) {
   switch (action) {
@@ -663,6 +663,8 @@ export function getSegmentInspectorActionTooltip(
       return context?.hasPreviousOutput
         ? 'Open the previous segment video and pick a custom source frame for this segment'
         : 'Manual frame picker becomes available after the previous segment has an output video';
+    case 'sourceFramePreview':
+      return 'Open the selected segment source frame at a larger size';
   }
 }
 
@@ -697,6 +699,7 @@ export default function VideoSequenceBuilder() {
   const [loraLoading, setLoraLoading] = useState(false);
   const [loraPickerOpen, setLoraPickerOpen] = useState(false);
   const [loraSearchQuery, setLoraSearchQuery] = useState('');
+  const [fullscreenSourceFrameUrl, setFullscreenSourceFrameUrl] = useState<string | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewTime, setPreviewTime] = useState(0);
   const [previewHasEnded, setPreviewHasEnded] = useState(false);
@@ -942,6 +945,7 @@ export default function VideoSequenceBuilder() {
     setFramePickerDuration(0);
     setLoraPickerOpen(false);
     setLoraSearchQuery('');
+    setFullscreenSourceFrameUrl(null);
   }, [selectedSegment]);
 
   useEffect(() => {
@@ -2057,9 +2061,23 @@ export default function VideoSequenceBuilder() {
             <div className="space-y-4">
               <InspectorSection icon={<Images className="h-4 w-4" />} title="Source">
                 <div className="grid grid-cols-[96px_1fr] gap-3">
-                  <div className="aspect-[3/4] overflow-hidden rounded border border-white/10 bg-zinc-900">
-                    {selectedSourcePreviewUrl ? <img src={selectedSourcePreviewUrl} alt="" className="h-full w-full object-cover" /> : null}
-                  </div>
+                  {selectedSourcePreviewUrl ? (
+                    <ActionTooltip tooltip={getSegmentInspectorActionTooltip('sourceFramePreview')}>
+                      <button
+                        type="button"
+                        className="group relative aspect-[3/4] overflow-hidden rounded border border-white/10 bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-cyan-300/70"
+                        onClick={() => setFullscreenSourceFrameUrl(selectedSourcePreviewUrl)}
+                        aria-label="Open source frame fullscreen"
+                      >
+                        <img src={selectedSourcePreviewUrl} alt="" className="h-full w-full object-cover transition duration-150 group-hover:scale-[1.03]" />
+                        <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                          <ImageIcon className="h-3.5 w-3.5" />
+                        </span>
+                      </button>
+                    </ActionTooltip>
+                  ) : (
+                    <div className="aspect-[3/4] overflow-hidden rounded border border-white/10 bg-zinc-900" aria-label="No source frame preview" />
+                  )}
                   <div className="space-y-2">
                     <select
                       value={segmentDraft.sourceMode}
@@ -2328,6 +2346,34 @@ export default function VideoSequenceBuilder() {
           )}
         </div>
       </aside>
+      {fullscreenSourceFrameUrl ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Source frame fullscreen"
+          onClick={() => setFullscreenSourceFrameUrl(null)}
+          data-testid="sequence-source-frame-fullscreen"
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/70"
+            onClick={(event) => {
+              event.stopPropagation();
+              setFullscreenSourceFrameUrl(null);
+            }}
+            aria-label="Close source frame fullscreen"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={fullscreenSourceFrameUrl}
+            alt="Selected segment source frame"
+            className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
       {framePickerOpen && previousSegmentOutputVideoUrl ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
           <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-md border border-white/10 bg-zinc-950 shadow-2xl">

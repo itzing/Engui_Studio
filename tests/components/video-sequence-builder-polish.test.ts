@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+/**
+ * @vitest-environment jsdom
+ */
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  default as VideoSequenceBuilder,
   getHeaderActionTooltip,
   getRenderBlocker,
   getSegmentSourcePreviewUrl,
@@ -22,6 +28,14 @@ import {
   getGenerateFromPlan,
   getGenerateFromContinuationSummary,
 } from '@/components/video-sequences/VideoSequenceBuilder';
+
+function jsonResponse(body: unknown, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    json: async () => body,
+  } as Response);
+}
 
 function segment(overrides: Record<string, any> = {}) {
   return {
@@ -73,6 +87,12 @@ function sequence(overrides: Record<string, any> = {}) {
 }
 
 describe('VideoSequenceBuilder polish helpers', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
+
   it('uses the previous segment last frame as the effective source preview', () => {
     const segments = [
       segment({ id: 'seg-1', orderIndex: 0, lastFrameUrl: '/generations/last.jpg' }),
@@ -193,6 +213,50 @@ describe('VideoSequenceBuilder polish helpers', () => {
     expect(getSegmentInspectorActionTooltip('clearStale', { hasOutput: true })).toContain('mark this stale segment completed');
     expect(getSegmentInspectorActionTooltip('galleryVideo', { isFirstSegment: false })).toContain('only seed segment 1');
     expect(getSegmentInspectorActionTooltip('manualFramePicker', { hasPreviousOutput: true })).toContain('pick a custom source frame');
+    expect(getSegmentInspectorActionTooltip('sourceFramePreview')).toContain('larger size');
+  });
+
+  it('opens the selected segment source frame fullscreen from the inspector thumbnail', async () => {
+    const loadedSequence = sequence({
+      segments: [
+        segment({ id: 'seg-1', title: 'Opening', sourceImageUrl: '/frames/source.png', outputVideoUrl: null }),
+      ],
+    });
+
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces')) {
+        return jsonResponse({ workspaces: [{ id: 'ws-1', isDefault: true }] });
+      }
+      if (url.includes('/api/video-segment-templates')) {
+        return jsonResponse({ success: true, templates: [] });
+      }
+      if (url === '/api/video-sequences/seq-1') {
+        return jsonResponse({ success: true, sequence: loadedSequence });
+      }
+      if (url.includes('/api/video-sequences?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, sequences: [{ ...loadedSequence, segments: [], segmentCount: 1 }] });
+      }
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    render(React.createElement(VideoSequenceBuilder));
+
+    const sourceButton = await screen.findByRole('button', { name: 'Open source frame fullscreen' });
+    fireEvent.click(sourceButton);
+
+    const fullscreen = await screen.findByTestId('sequence-source-frame-fullscreen');
+    expect(fullscreen).toBeTruthy();
+    expect(screen.getByAltText('Selected segment source frame').getAttribute('src')).toBe('/frames/source.png');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close source frame fullscreen' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('sequence-source-frame-fullscreen')).toBeNull();
+    });
   });
 
   it('auto-syncs only active generated segments', () => {
