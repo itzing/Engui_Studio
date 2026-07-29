@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { Check, Copy, Info, SlidersHorizontal } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, Info, Plus, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   hasLoRAHelperContent,
@@ -22,12 +22,44 @@ export function LoRAHelperPopover({
   className,
   dark = false,
 }: LoRAHelperPopoverProps) {
+  const rootRef = useRef<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const noteGroups = useMemo(() => splitLoRAHelperNotes(profile?.notes), [profile?.notes]);
+  const [currentNotes, setCurrentNotes] = useState(profile?.notes ?? '');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const effectiveProfile = profile ? { ...profile, notes: currentNotes } : null;
+  const noteGroups = useMemo(() => splitLoRAHelperNotes(currentNotes), [currentNotes]);
   const hasWeights = typeof profile?.recommendedHighWeight === 'number' || typeof profile?.recommendedLowWeight === 'number';
+  const trimmedNewPrompt = newPrompt.trim();
+  const appendedNotes = [currentNotes.trim(), trimmedNewPrompt].filter(Boolean).join('\n\n');
+  const charsAfterAppend = appendedNotes.length;
+  const canAppendPrompt = Boolean(trimmedNewPrompt) && charsAfterAppend <= 1000 && !isSaving;
 
-  if (!hasLoRAHelperContent(profile)) {
+  useEffect(() => {
+    setCurrentNotes(profile?.notes ?? '');
+    setNewPrompt('');
+    setSaveError(null);
+  }, [profile?.id, profile?.notes]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('touchstart', closeOnOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('touchstart', closeOnOutsideClick);
+    };
+  }, [open]);
+
+  if (!hasLoRAHelperContent(effectiveProfile)) {
     return null;
   }
 
@@ -35,9 +67,51 @@ export function LoRAHelperPopover({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedIndex(index);
+      setOpen(false);
       window.setTimeout(() => setCopiedIndex(null), 1200);
     } catch {
       setCopiedIndex(null);
+    }
+  };
+
+  const savePrompt = async () => {
+    if (!profile || !canAppendPrompt) return;
+
+    const body = profile.scope === 'pair'
+      ? {
+          scope: 'pair',
+          workspaceId: profile.workspaceId ?? null,
+          highLoraId: profile.highLoraId,
+          lowLoraId: profile.lowLoraId,
+          notes: appendedNotes,
+          recommendedHighWeight: profile.recommendedHighWeight ?? null,
+          recommendedLowWeight: profile.recommendedLowWeight ?? null,
+        }
+      : {
+          scope: 'single',
+          workspaceId: profile.workspaceId ?? null,
+          loraId: profile.loraId,
+          notes: appendedNotes,
+        };
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const response = await fetch('/api/lora/helper-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || 'Failed to save prompt');
+      }
+      setCurrentNotes(data?.profile?.notes ?? appendedNotes);
+      setNewPrompt('');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save prompt');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -50,7 +124,7 @@ export function LoRAHelperPopover({
   const mutedText = dark ? 'text-zinc-500' : 'text-slate-400';
 
   return (
-    <span className={`relative inline-flex ${className ?? ''}`}>
+    <span ref={rootRef} className={`relative inline-flex ${className ?? ''}`}>
       <Button
         type="button"
         variant="outline"
@@ -114,6 +188,40 @@ export function LoRAHelperPopover({
           ) : (
             <span className={`block text-xs ${mutedText}`}>No notes yet.</span>
           )}
+
+          <span className="mt-3 block border-t border-white/10 pt-3">
+            <label className={`mb-1 block text-xs font-medium ${mutedText}`} htmlFor={`lora-helper-new-prompt-${profile?.id}`}>
+              Add prompt
+            </label>
+            <textarea
+              id={`lora-helper-new-prompt-${profile?.id}`}
+              value={newPrompt}
+              maxLength={1000}
+              onChange={(event) => {
+                setNewPrompt(event.target.value);
+                setSaveError(null);
+              }}
+              className="block h-20 w-full resize-none rounded-md border border-white/10 bg-black/30 px-3 py-2 text-xs leading-relaxed text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+              placeholder="Paste trigger words or a sample prompt"
+            />
+            <span className="mt-2 flex items-center justify-between gap-2">
+              <span className={`text-[11px] ${charsAfterAppend > 1000 ? 'text-red-400' : mutedText}`}>
+                {charsAfterAppend}/1000
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 border-white/10 bg-white/[0.06] px-3 text-xs text-slate-100 hover:bg-cyan-500/10"
+                disabled={!canAppendPrompt}
+                onClick={savePrompt}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                {isSaving ? 'Saving...' : 'Add'}
+              </Button>
+            </span>
+            {saveError ? <span className="mt-2 block text-xs text-red-400">{saveError}</span> : null}
+          </span>
         </span>
       ) : null}
     </span>
