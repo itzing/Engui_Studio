@@ -13,6 +13,7 @@ export interface ModelParameter {
     min?: number;
     max?: number;
     step?: number;
+    control?: 'slider';
     description?: string;
     group?: 'basic' | 'advanced' | 'hidden'; // Default is 'advanced' if not specified
     // Conditional visibility - parameter shown only when dependent parameter has specified value
@@ -138,6 +139,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'seed', label: 'Seed', type: 'number', default: 42, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
             { name: 'steps', label: 'Steps', type: 'number', default: 4, min: 4, max: 50, group: 'hidden' },
+            { name: 'sigma_shift', label: 'Sigma shift', type: 'number', default: 5, min: 3, max: 8, step: 1, group: 'advanced', control: 'slider' },
             { name: 'length', label: 'Length', type: 'number', default: 80, min: 1, max: 512, group: 'advanced' },
             { name: 'lora_high_1', label: 'High LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First LoRA pair - high-level features' },
             { name: 'lora_low_1', label: 'Low LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'First LoRA pair - low-level features' },

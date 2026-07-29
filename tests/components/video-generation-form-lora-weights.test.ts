@@ -178,6 +178,20 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(model?.parameters.find((param) => param.name === 'length')?.max).toBe(512);
   });
 
+  it('exposes WAN22 sigma shift as an advanced slider from 3 to 8', () => {
+    const sigmaShift = getModelById('wan22')?.parameters.find((param) => param.name === 'sigma_shift');
+    expect(sigmaShift).toMatchObject({
+      label: 'Sigma shift',
+      type: 'number',
+      default: 5,
+      min: 3,
+      max: 8,
+      step: 1,
+      group: 'advanced',
+      control: 'slider',
+    });
+  });
+
   it('exposes additional LoRA pair parameters for WAN22 T2V', () => {
     const model = getModelById('wan22-t2v');
     expect(model?.parameters.filter((param) => param.type === 'lora-selector').map((param) => param.name)).toEqual([

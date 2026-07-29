@@ -252,6 +252,7 @@ class RunPodService {
           cfg: input.cfg,
           length: input.length,
           steps: input.steps,
+          sigma_shift: input.sigma_shift,
           context_overlap: input.context_overlap,
           ...(input.return_continuation_frame === true && { return_continuation_frame: true }),
         };

@@ -2189,6 +2189,25 @@ export default function VideoGenerationForm() {
                                                 className="h-8 text-sm"
                                                 onChange={(e) => handleParameterChange(param.name, e.target.value)}
                                             />
+                                        ) : param.control === 'slider' ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="range"
+                                                        name={param.name}
+                                                        value={parameterValues[param.name] ?? param.default}
+                                                        min={param.min}
+                                                        max={param.max}
+                                                        step={param.step}
+                                                        aria-label={param.label}
+                                                        className="h-2 w-full accent-primary"
+                                                        onChange={(event) => handleParameterChange(param.name, Number(event.target.value))}
+                                                    />
+                                                    <div className="w-8 rounded border border-border bg-muted/40 px-2 py-1 text-center text-xs tabular-nums text-foreground">
+                                                        {parameterValues[param.name] ?? param.default}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         ) : (
                                             <Input
                                                 type="number"

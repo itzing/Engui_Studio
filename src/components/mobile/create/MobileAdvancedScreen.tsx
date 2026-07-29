@@ -464,15 +464,33 @@ export default function MobileAdvancedScreen() {
                       ))}
                     </select>
                   ) : param.type === 'number' ? (
-                    <Input
-                      type="number"
-                      value={value ?? ''}
-                      min={param.min}
-                      max={param.max}
-                      step={param.step}
-                      className="text-base sm:text-sm"
-                      onChange={(event) => handleNumericParameterInput(param.name, event.target.value)}
-                    />
+                    param.control === 'slider' ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-4">
+                          <Slider
+                            value={[Number(value ?? param.default ?? 0)]}
+                            min={param.min}
+                            max={param.max}
+                            step={param.step}
+                            aria-label={param.label}
+                            onValueChange={(nextValue) => handleParameterChange(param.name, nextValue[0] ?? param.default ?? 0)}
+                          />
+                          <div className="w-10 rounded border border-border bg-muted/40 px-2 py-1 text-center text-sm tabular-nums text-foreground">
+                            {value ?? param.default}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Input
+                        type="number"
+                        value={value ?? ''}
+                        min={param.min}
+                        max={param.max}
+                        step={param.step}
+                        className="text-base sm:text-sm"
+                        onChange={(event) => handleNumericParameterInput(param.name, event.target.value)}
+                      />
+                    )
                   ) : (
                     <Input
                       type="text"
