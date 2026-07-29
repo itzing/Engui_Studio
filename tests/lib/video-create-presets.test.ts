@@ -48,6 +48,7 @@ describe('video create presets', () => {
       snapshot: {
         prompt: 'move forward',
         showAdvanced: false,
+        randomizeSeed: true,
         parameterValues: { length: 121, seed: 42 },
       },
     });
@@ -58,6 +59,7 @@ describe('video create presets', () => {
       name: 'Cinematic move',
       prompt: 'move forward',
       showAdvanced: false,
+      randomizeSeed: true,
       parameterValues: { length: 121, seed: 42 },
     });
   });
@@ -150,6 +152,7 @@ describe('video create presets', () => {
       snapshot: {
         prompt: 'new camera move',
         showAdvanced: false,
+        randomizeSeed: true,
         parameterValues: { length: 121, seed: 7 },
       },
       now: 300,
@@ -160,6 +163,7 @@ describe('video create presets', () => {
       name: 'saved',
       prompt: 'new camera move',
       showAdvanced: false,
+      randomizeSeed: true,
       parameterValues: { length: 121, seed: 7 },
       createdAt: 100,
       updatedAt: 300,

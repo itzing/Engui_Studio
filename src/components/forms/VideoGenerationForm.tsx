@@ -84,6 +84,7 @@ export default function VideoGenerationForm() {
     const { setSelectedModel, settings, addJob, activeWorkspaceId } = useStudio();
     const [videoSelectedModel, setVideoSelectedModel] = useState<string>('wan22');
     const [prompt, setPrompt] = useState('');
+    const [randomizeSeed, setRandomizeSeed] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -289,6 +290,7 @@ export default function VideoGenerationForm() {
                 const draft = getWorkflowDraft<{
                     prompt?: string;
                     showAdvanced?: boolean;
+                    randomizeSeed?: boolean;
                     parameterValues?: Record<string, any>;
                     imagePreviewUrl?: string;
                     videoPreviewUrl?: string;
@@ -296,6 +298,7 @@ export default function VideoGenerationForm() {
                 }>('video', videoSelectedModel);
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
+                setRandomizeSeed(draft?.randomizeSeed === true);
                 setSelectedPresetId(typeof draft?.selectedPresetId === 'string' ? draft.selectedPresetId : '');
                 const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
                 setParameterValues(restoredParameterValues);
@@ -344,6 +347,7 @@ export default function VideoGenerationForm() {
         saveWorkflowDraft('video', videoSelectedModel || DEFAULT_VIDEO_MODEL, {
             prompt,
             showAdvanced,
+            randomizeSeed,
             parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
             imagePreviewUrl,
             videoPreviewUrl,
@@ -363,6 +367,7 @@ export default function VideoGenerationForm() {
         loraLow4Weight,
         parameterValues,
         prompt,
+        randomizeSeed,
         selectedPresetId,
         showAdvanced,
         videoPreviewUrl,
@@ -777,6 +782,7 @@ export default function VideoGenerationForm() {
             snapshot: {
                 prompt,
                 showAdvanced,
+                randomizeSeed,
                 parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
             },
         });
@@ -812,6 +818,7 @@ export default function VideoGenerationForm() {
             snapshot: {
                 prompt,
                 showAdvanced,
+                randomizeSeed,
                 parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
             },
         });
@@ -835,6 +842,7 @@ export default function VideoGenerationForm() {
     const applyVideoPreset = (preset: VideoCreatePreset) => {
         setPrompt(preset.prompt || '');
         setShowAdvanced(preset.showAdvanced === true);
+        setRandomizeSeed(preset.randomizeSeed === true);
         const nextParameterValues = applyVideoPresetParameterValues({
             presetParameterValues: preset.parameterValues,
             currentParameterValues: parameterValues,
@@ -1389,6 +1397,9 @@ export default function VideoGenerationForm() {
             formData.append('userId', 'user-with-settings'); // TODO: Get actual user ID
             formData.append('modelId', currentModel.id);
             if (prompt) formData.append('prompt', prompt);
+            if (currentModel.id === 'wan22') {
+                formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
+            }
 
             // Add workspace ID from context
             if (activeWorkspaceId) {
@@ -1916,55 +1927,78 @@ export default function VideoGenerationForm() {
                             </div>
                         )}
                         {currentModel.id === 'wan22' ? (
-                            <div className="space-y-1.5">
-                                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
-                                <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        variant={isConfirmingPresetOverwrite ? 'default' : 'outline'}
-                                        size="icon"
-                                        onClick={() => void overwriteSelectedPresetWithInlineConfirm()}
-                                        disabled={!selectedPreset || isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
-                                        className={`h-10 w-10 shrink-0 ${isConfirmingPresetOverwrite ? 'bg-primary text-primary-foreground' : ''}`}
-                                        aria-label={isConfirmingPresetOverwrite ? `Confirm save ${selectedPreset?.name || 'selected preset'}` : 'Save current settings to selected img2vid preset'}
-                                        title={selectedPreset ? (isConfirmingPresetOverwrite ? 'Confirm save to selected preset' : 'Save to selected preset') : 'Select a preset to overwrite'}
-                                    >
-                                        {isConfirmingPresetOverwrite ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={openPresetNameDialog}
-                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
-                                        className="h-10 w-10 shrink-0"
-                                        aria-label="Save current img2vid preset"
-                                        title="Save current img2vid preset"
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                    <div
-                                        className="flex h-10 min-w-0 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground"
-                                        data-testid="video-create-selected-preset"
-                                    >
-                                        <span className="truncate">{selectedPreset?.name || '-'}</span>
+                            <div className="space-y-3">
+                                <label
+                                    htmlFor="wan22-random-seed"
+                                    className={`flex h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-sm text-foreground ${isGenerating || isLoadingMedia || isPromptHelperLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
+                                    title="Use a new seed for each Wan 2.2 I2V generation"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-xs font-medium">Random seed</span>
+                                        <span className="block truncate text-[11px] text-muted-foreground">
+                                            Varies prompt variants per run
+                                        </span>
+                                    </span>
+                                    <input
+                                        id="wan22-random-seed"
+                                        type="checkbox"
+                                        aria-label="Random seed"
+                                        className="h-4 w-4 shrink-0 rounded border-border"
+                                        checked={randomizeSeed}
+                                        onChange={(event) => setRandomizeSeed(event.target.checked)}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                    />
+                                </label>
+                                <div className="space-y-1.5">
+                                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
+                                    <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant={isConfirmingPresetOverwrite ? 'default' : 'outline'}
+                                            size="icon"
+                                            onClick={() => void overwriteSelectedPresetWithInlineConfirm()}
+                                            disabled={!selectedPreset || isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
+                                            className={`h-10 w-10 shrink-0 ${isConfirmingPresetOverwrite ? 'bg-primary text-primary-foreground' : ''}`}
+                                            aria-label={isConfirmingPresetOverwrite ? `Confirm save ${selectedPreset?.name || 'selected preset'}` : 'Save current settings to selected img2vid preset'}
+                                            title={selectedPreset ? (isConfirmingPresetOverwrite ? 'Confirm save to selected preset' : 'Save to selected preset') : 'Select a preset to overwrite'}
+                                        >
+                                            {isConfirmingPresetOverwrite ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={openPresetNameDialog}
+                                            disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
+                                            className="h-10 w-10 shrink-0"
+                                            aria-label="Save current img2vid preset"
+                                            title="Save current img2vid preset"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                        <div
+                                            className="flex h-10 min-w-0 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                                            data-testid="video-create-selected-preset"
+                                        >
+                                            <span className="truncate">{selectedPreset?.name || '-'}</span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => {
+                                                setConfirmingPresetDeleteId(null);
+                                                setIsConfirmingPresetOverwrite(false);
+                                                setIsPresetSelectorOpen(true);
+                                            }}
+                                            disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
+                                            className="h-10 w-10 shrink-0"
+                                            aria-label="Select img2vid preset"
+                                            title="Select img2vid preset"
+                                        >
+                                            <ChevronDown className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => {
-                                            setConfirmingPresetDeleteId(null);
-                                            setIsConfirmingPresetOverwrite(false);
-                                            setIsPresetSelectorOpen(true);
-                                        }}
-                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading || isSyncingVideoPresets}
-                                        className="h-10 w-10 shrink-0"
-                                        aria-label="Select img2vid preset"
-                                        title="Select img2vid preset"
-                                    >
-                                        <ChevronDown className="h-4 w-4" />
-                                    </Button>
                                 </div>
                             </div>
                         ) : null}

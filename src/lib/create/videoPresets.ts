@@ -3,6 +3,7 @@
 export type VideoCreatePresetSnapshot = {
   prompt: string;
   showAdvanced: boolean;
+  randomizeSeed?: boolean;
   parameterValues: Record<string, unknown>;
 };
 
@@ -57,6 +58,7 @@ function normalizePreset(value: unknown): VideoCreatePreset | null {
     name,
     prompt: typeof value.prompt === 'string' ? value.prompt : '',
     showAdvanced: value.showAdvanced === true,
+    randomizeSeed: value.randomizeSeed === true,
     parameterValues: sanitizeVideoPresetParameterValues(value.parameterValues),
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
@@ -110,6 +112,7 @@ export function createVideoCreatePreset(input: {
     name: input.name.trim(),
     prompt: input.snapshot.prompt,
     showAdvanced: input.snapshot.showAdvanced,
+    randomizeSeed: input.snapshot.randomizeSeed === true,
     parameterValues: sanitizeVideoPresetParameterValues(input.snapshot.parameterValues),
     createdAt: now,
     updatedAt: now,
@@ -125,6 +128,7 @@ export function updateVideoCreatePresetSnapshot(input: {
     ...input.preset,
     prompt: input.snapshot.prompt,
     showAdvanced: input.snapshot.showAdvanced,
+    randomizeSeed: input.snapshot.randomizeSeed === true,
     parameterValues: sanitizeVideoPresetParameterValues(input.snapshot.parameterValues),
     updatedAt: input.now ?? Date.now(),
   };

@@ -170,6 +170,114 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
+  it('saves the WAN22 random seed setting into the video draft and restores it after remount', async () => {
+    const firstRender = render(React.createElement(VideoGenerationForm));
+
+    const randomSeedCheckbox = await screen.findByLabelText('Random seed') as HTMLInputElement;
+    expect(randomSeedCheckbox.checked).toBe(false);
+
+    fireEvent.click(randomSeedCheckbox);
+    expect(randomSeedCheckbox.checked).toBe(true);
+
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      expect(stored.workflows.video.drafts.wan22.draft.randomizeSeed).toBe(true);
+    });
+
+    firstRender.unmount();
+    render(React.createElement(VideoGenerationForm));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Random seed') as HTMLInputElement).checked).toBe(true);
+    });
+  });
+
+  it('submits randomizeSeed for WAN22 I2V generations when enabled', async () => {
+    let generateFormData: FormData | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url === '/api/generate') {
+        generateFormData = init?.body as FormData;
+        return jsonResponse({
+          success: true,
+          jobId: 'job-1',
+          prompt: 'animate {a|b}',
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'animate {a|b}' } });
+    fireEvent.click(screen.getByLabelText('Random seed'));
+
+    const imageInput = screen.getByLabelText('Upload reference image') as HTMLInputElement;
+    const image = new File(['image'], 'source.png', { type: 'image/png' });
+    fireEvent.change(imageInput, { target: { files: [image] } });
+
+    fireEvent.submit(screen.getByRole('form'));
+
+    await waitFor(() => {
+      expect(generateFormData?.get('modelId')).toBe('wan22');
+      expect(generateFormData?.get('randomizeSeed')).toBe('true');
+      expect(generateFormData?.get('prompt')).toBe('animate {a|b}');
+    });
+  });
+
+  it('restores the WAN22 random seed setting from a video preset', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({
+          success: true,
+          presets: [{
+            id: 'preset-random',
+            modelId: 'wan22',
+            name: 'Random variants',
+            prompt: 'camera {push|pull}',
+            showAdvanced: false,
+            randomizeSeed: true,
+            parameterValues: { length: 81 },
+            createdAt: 100,
+            updatedAt: 200,
+          }],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const randomSeedCheckbox = await screen.findByLabelText('Random seed') as HTMLInputElement;
+    expect(randomSeedCheckbox.checked).toBe(false);
+
+    fireEvent.click(screen.getByLabelText('Select img2vid preset'));
+    fireEvent.click(await screen.findByText('Random variants'));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Random seed') as HTMLInputElement).checked).toBe(true);
+    });
+  });
+
   it('keeps WAN22 Create Video defaults at 4 steps and 80 frames', () => {
     const model = getModelById('wan22');
     expect(model?.parameters.find((param) => param.name === 'steps')?.default).toBe(4);
