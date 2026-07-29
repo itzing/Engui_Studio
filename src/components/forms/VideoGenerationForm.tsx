@@ -144,6 +144,8 @@ export default function VideoGenerationForm() {
     const hasRestoredDraftRef = useRef(false);
     const isApplyingDraftModelRef = useRef(false);
     const hydratedModelRef = useRef<string | null>(null);
+    const draftRestoreGenerationRef = useRef(0);
+    const hasUserEditedDuringDraftRestoreRef = useRef(false);
     const [loraLow1Weight, setLoraLow1Weight] = useState<number | string>(0.8);
     const [loraHigh2Weight, setLoraHigh2Weight] = useState<number | string>(0.8);
     const [loraLow2Weight, setLoraLow2Weight] = useState<number | string>(0.8);
@@ -203,6 +205,12 @@ export default function VideoGenerationForm() {
 
         return null;
     };
+
+    const markVideoDraftUserEdit = useCallback(() => {
+        if (!isVideoDraftHydrated) {
+            hasUserEditedDuringDraftRestoreRef.current = true;
+        }
+    }, [isVideoDraftHydrated]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -284,6 +292,9 @@ export default function VideoGenerationForm() {
     useEffect(() => {
         const restoreDraft = async () => {
             if (!hasRestoredDraftRef.current || !videoSelectedModel || hydratedModelRef.current === videoSelectedModel) return;
+            const restoreGeneration = draftRestoreGenerationRef.current + 1;
+            draftRestoreGenerationRef.current = restoreGeneration;
+            hasUserEditedDuringDraftRestoreRef.current = false;
             hydratedModelRef.current = videoSelectedModel;
             setIsVideoDraftHydrated(false);
             try {
@@ -296,11 +307,33 @@ export default function VideoGenerationForm() {
                     videoPreviewUrl?: string;
                     selectedPresetId?: string;
                 }>('video', videoSelectedModel);
+                const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
+                const restoredImagePreviewUrl = typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '';
+                const restoredVideoPreviewUrl = typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '';
+                let restoredImageFile: File | null = null;
+                let restoredVideoFile: File | null = null;
+                if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl.startsWith('data:')) {
+                    restoredImageFile = await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input');
+                } else if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl) {
+                    restoredImageFile = await loadFileFromPath(draft.imagePreviewUrl);
+                }
+                if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl.startsWith('data:')) {
+                    restoredVideoFile = await dataUrlToFile(draft.videoPreviewUrl, 'video-input');
+                } else if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl) {
+                    restoredVideoFile = await loadFileFromPath(draft.videoPreviewUrl);
+                }
+
+                if (
+                    draftRestoreGenerationRef.current !== restoreGeneration
+                    || hasUserEditedDuringDraftRestoreRef.current
+                ) {
+                    return;
+                }
+
                 setPrompt(typeof draft?.prompt === 'string' ? draft.prompt : '');
                 setShowAdvanced(typeof draft?.showAdvanced === 'boolean' ? draft.showAdvanced : false);
                 setRandomizeSeed(draft?.randomizeSeed === true);
                 setSelectedPresetId(typeof draft?.selectedPresetId === 'string' ? draft.selectedPresetId : '');
-                const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
                 setParameterValues(restoredParameterValues);
                 setLoraHigh1Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_1_weight'));
                 setLoraLow1Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_1_weight'));
@@ -310,28 +343,10 @@ export default function VideoGenerationForm() {
                 setLoraLow3Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_3_weight'));
                 setLoraHigh4Weight(getWanLoraWeight(restoredParameterValues, 'lora_high_4_weight'));
                 setLoraLow4Weight(getWanLoraWeight(restoredParameterValues, 'lora_low_4_weight'));
-                setImageFile(null);
-                setVideoFile(null);
-                setImagePreviewUrl(typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '');
-                setVideoPreviewUrl(typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '');
-                if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl.startsWith('data:')) {
-                    const restoredImageFile = await dataUrlToFile(draft.imagePreviewUrl, 'video-image-input');
-                    setImageFile(restoredImageFile);
-                } else if (typeof draft?.imagePreviewUrl === 'string' && draft.imagePreviewUrl) {
-                    const restoredImageFile = await loadFileFromPath(draft.imagePreviewUrl);
-                    if (restoredImageFile) {
-                        setImageFile(restoredImageFile);
-                    }
-                }
-                if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl.startsWith('data:')) {
-                    const restoredVideoFile = await dataUrlToFile(draft.videoPreviewUrl, 'video-input');
-                    setVideoFile(restoredVideoFile);
-                } else if (typeof draft?.videoPreviewUrl === 'string' && draft.videoPreviewUrl) {
-                    const restoredVideoFile = await loadFileFromPath(draft.videoPreviewUrl);
-                    if (restoredVideoFile) {
-                        setVideoFile(restoredVideoFile);
-                    }
-                }
+                setImageFile(restoredImageFile);
+                setVideoFile(restoredVideoFile);
+                setImagePreviewUrl(restoredImagePreviewUrl);
+                setVideoPreviewUrl(restoredVideoPreviewUrl);
             } catch (error) {
                 console.warn('Failed to restore video draft', error);
             } finally {
@@ -957,6 +972,7 @@ export default function VideoGenerationForm() {
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            markVideoDraftUserEdit();
             setImageFile(file);
             setImagePreviewUrl(URL.createObjectURL(file));
             e.target.value = '';
@@ -979,6 +995,7 @@ export default function VideoGenerationForm() {
             }
             const blob = await response.blob();
             const file = new File([blob], buildGalleryReferenceFileName(asset, blob), { type: blob.type || 'image/png' });
+            markVideoDraftUserEdit();
             setImageFile(file);
             setImagePreviewUrl(imageUrl);
             setParameterValues(prev => ({
@@ -1250,6 +1267,7 @@ export default function VideoGenerationForm() {
                     const blob = await response.blob();
                     const file = new File([blob], `workspace-${mediaData.id}.png`, { type: 'image/png' });
 
+                    markVideoDraftUserEdit();
                     setImageFile(file);
                     setImagePreviewUrl(mediaData.url);
                 }
@@ -1259,6 +1277,7 @@ export default function VideoGenerationForm() {
             const files = Array.from(e.dataTransfer.files);
             const imageFile = files.find(f => f.type.startsWith('image/'));
             if (imageFile) {
+                markVideoDraftUserEdit();
                 setImageFile(imageFile);
                 setImagePreviewUrl(URL.createObjectURL(imageFile));
             }
@@ -1480,6 +1499,17 @@ export default function VideoGenerationForm() {
             const data = await response.json();
 
             if (response && response.ok && data.success) {
+                const nextSeed = typeof data.seed === 'number' && Number.isFinite(data.seed) ? data.seed : null;
+                const storedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
+                const resolvedPrompt = typeof data.resolvedPrompt === 'string' ? data.resolvedPrompt : storedPrompt;
+
+                if (nextSeed !== null) {
+                    setParameterValues(prev => ({
+                        ...prev,
+                        seed: nextSeed,
+                    }));
+                }
+
                 // Success - job added to queue
 
                 // Add job to context
@@ -1488,9 +1518,15 @@ export default function VideoGenerationForm() {
                     modelId: currentModel.id,
                     type: 'video',
                     status: 'queued',
-                    prompt: typeof data.prompt === 'string' ? data.prompt : prompt,
+                    prompt: storedPrompt,
                     createdAt: Date.now(),
-                    endpointId: headers['X-RunPod-Endpoint-Id']
+                    endpointId: headers['X-RunPod-Endpoint-Id'],
+                    options: {
+                        ...parameterValues,
+                        ...(nextSeed !== null ? { seed: nextSeed } : {}),
+                        randomizeSeed,
+                        ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
+                    },
                 });
             } else {
                 console.error('Generation failed', data);
@@ -1945,7 +1981,10 @@ export default function VideoGenerationForm() {
                                         aria-label="Random seed"
                                         className="h-4 w-4 shrink-0 rounded border-border"
                                         checked={randomizeSeed}
-                                        onChange={(event) => setRandomizeSeed(event.target.checked)}
+                                        onChange={(event) => {
+                                            markVideoDraftUserEdit();
+                                            setRandomizeSeed(event.target.checked);
+                                        }}
                                         disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
                                     />
                                 </label>

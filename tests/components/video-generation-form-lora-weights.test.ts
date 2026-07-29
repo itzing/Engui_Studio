@@ -12,6 +12,10 @@ const { mockAddJob, mockSetSelectedModel, mockVirtualRows } = vi.hoisted(() => (
   mockVirtualRows: vi.fn(),
 }));
 
+const { mockLoadFileFromPath } = vi.hoisted(() => ({
+  mockLoadFileFromPath: vi.fn(),
+}));
+
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => ({
     settings: {
@@ -64,6 +68,10 @@ vi.mock('@/components/lora/LoRAManagementDialog', () => ({
   LoRAManagementDialog: () => null,
 }));
 
+vi.mock('@/lib/fileUtils', () => ({
+  loadFileFromPath: mockLoadFileFromPath,
+}));
+
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: { count: number; estimateSize: () => number }) => ({
     getVirtualItems: () => mockVirtualRows(),
@@ -74,7 +82,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 import VideoGenerationForm from '@/components/forms/VideoGenerationForm';
-import { setWorkflowActiveModel } from '@/lib/createDrafts';
+import { saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById } from '@/lib/models/modelConfig';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -106,6 +114,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    mockLoadFileFromPath.mockResolvedValue(null);
     window.localStorage.clear();
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -192,7 +201,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
-  it('submits randomizeSeed for WAN22 I2V generations when enabled', async () => {
+  it('submits randomizeSeed and reflects the returned WAN22 I2V seed when enabled', async () => {
     let generateFormData: FormData | null = null;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -211,13 +220,15 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
           success: true,
           jobId: 'job-1',
           prompt: 'animate {a|b}',
+          resolvedPrompt: 'animate b',
+          seed: 98765,
         });
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(React.createElement(VideoGenerationForm));
+    const { container } = render(React.createElement(VideoGenerationForm));
 
     const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
     fireEvent.change(promptTextarea, { target: { value: 'animate {a|b}' } });
@@ -226,6 +237,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     const imageInput = screen.getByLabelText('Upload reference image') as HTMLInputElement;
     const image = new File(['image'], 'source.png', { type: 'image/png' });
     fireEvent.change(imageInput, { target: { files: [image] } });
+    expect((screen.getByLabelText('Random seed') as HTMLInputElement).checked).toBe(true);
 
     fireEvent.submit(screen.getByRole('form'));
 
@@ -233,6 +245,50 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       expect(generateFormData?.get('modelId')).toBe('wan22');
       expect(generateFormData?.get('randomizeSeed')).toBe('true');
       expect(generateFormData?.get('prompt')).toBe('animate {a|b}');
+    });
+
+    await waitFor(() => {
+      const seedInput = container.querySelector('input[name="seed"]') as HTMLInputElement | null;
+      expect(seedInput?.value).toBe('98765');
+    });
+    expect(mockAddJob).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'job-1',
+      options: expect.objectContaining({
+        seed: 98765,
+        randomizeSeed: true,
+        promptTemplate: 'animate {a|b}',
+        resolvedPrompt: 'animate b',
+        resolvedPromptSeed: 98765,
+      }),
+    }));
+  });
+
+  it('keeps WAN22 random seed checked when a reference image is uploaded during draft restore', async () => {
+    let resolveRestore: ((file: File | null) => void) | null = null;
+    mockLoadFileFromPath.mockImplementation(() => new Promise<File | null>((resolve) => {
+      resolveRestore = resolve;
+    }));
+    saveWorkflowDraft('video', 'wan22', {
+      prompt: 'old prompt',
+      randomizeSeed: false,
+      parameterValues: { seed: 42 },
+      imagePreviewUrl: '/old-reference.png',
+    });
+
+    render(React.createElement(VideoGenerationForm));
+
+    const randomSeedCheckbox = await screen.findByLabelText('Random seed') as HTMLInputElement;
+    fireEvent.click(randomSeedCheckbox);
+    expect(randomSeedCheckbox.checked).toBe(true);
+
+    const imageInput = screen.getByLabelText('Upload reference image') as HTMLInputElement;
+    const image = new File(['image'], 'source.png', { type: 'image/png' });
+    fireEvent.change(imageInput, { target: { files: [image] } });
+
+    resolveRestore?.(new File(['old'], 'old-reference.png', { type: 'image/png' }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Random seed') as HTMLInputElement).checked).toBe(true);
     });
   });
 
