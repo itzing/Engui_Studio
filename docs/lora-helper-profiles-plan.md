@@ -8,7 +8,7 @@ Let users attach practical prompt helper text and recommended WAN high/low weigh
 
 - Single LoRAs can have notes.
 - Complete high/low pairs can have one shared notes field and optional recommended high/low weights.
-- Notes are plain text with a 1000 character limit.
+- Notes are plain text with an 8000 character limit.
 - In picker popovers, notes are split into clickable groups by blank lines.
 - Clicking a group copies only that group to the clipboard.
 - Pair recommended weights are shown as an explicit apply action.

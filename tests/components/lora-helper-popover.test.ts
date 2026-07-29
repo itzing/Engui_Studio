@@ -103,6 +103,7 @@ describe('LoRAHelperPopover', () => {
     expect(panel?.className).toContain('md:fixed');
     expect(panel?.className).toContain('md:left-1/2');
     expect(panel?.className).toContain('md:top-1/2');
+    expect(panel?.className).toContain('md:w-[min(42rem,calc(100vw-2rem))]');
   });
 
   it('appends a new prompt group through the helper profile API', async () => {

@@ -18,7 +18,7 @@ import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitiz
 import { buildLoraPairs } from '@/lib/lora/modelFilters';
 import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
-import { getPairHelperProfile, getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
+import { getPairHelperProfile, getSingleHelperProfile, LORA_HELPER_NOTES_MAX_LENGTH, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 // TypeScript interfaces
 interface LoRAFile {
@@ -413,8 +413,8 @@ export function LoRAManagementDialog({
   const saveHelperProfile = async (pair: LoRAPair) => {
     const key = getHelperEditorKey(pair);
     const notes = helperNotesDraft.trim();
-    if (notes.length > 1000) {
-      setError('Helper notes must be 1000 characters or less.');
+    if (notes.length > LORA_HELPER_NOTES_MAX_LENGTH) {
+      setError(`Helper notes must be ${LORA_HELPER_NOTES_MAX_LENGTH} characters or less.`);
       return;
     }
 
@@ -802,14 +802,14 @@ export function LoRAManagementDialog({
                                   Blank lines split clickable copy groups in pickers.
                                 </div>
                               </div>
-                              <div className={`text-xs ${helperNotesDraft.length > 1000 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                {helperNotesDraft.length}/1000
+                              <div className={`text-xs ${helperNotesDraft.length > LORA_HELPER_NOTES_MAX_LENGTH ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                {helperNotesDraft.length}/{LORA_HELPER_NOTES_MAX_LENGTH}
                               </div>
                             </div>
                             <textarea
                               value={helperNotesDraft}
                               onChange={(event) => setHelperNotesDraft(event.target.value)}
-                              maxLength={1000}
+                              maxLength={LORA_HELPER_NOTES_MAX_LENGTH}
                               rows={5}
                               className="min-h-28 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                               placeholder="Trigger words, sample prompt snippets, usage notes..."
@@ -857,7 +857,7 @@ export function LoRAManagementDialog({
                                 size="sm"
                                 className="gap-1.5"
                                 onClick={() => saveHelperProfile(pair)}
-                                disabled={helperSavingKey === getHelperEditorKey(pair) || helperNotesDraft.length > 1000}
+                                disabled={helperSavingKey === getHelperEditorKey(pair) || helperNotesDraft.length > LORA_HELPER_NOTES_MAX_LENGTH}
                               >
                                 <Save className="h-3.5 w-3.5" />
                                 Save helper

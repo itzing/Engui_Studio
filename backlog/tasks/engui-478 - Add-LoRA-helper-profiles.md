@@ -12,7 +12,7 @@ LoRAs often require trigger words, sample prompt snippets, and recommended WAN p
 
 - Surface: shared LoRA Manager, Create Image/Create Video desktop and mobile LoRA selectors, and desktop Video Sequences selected LoRA slots.
 - Add persisted helper profiles for single LoRAs and complete high/low LoRA pairs.
-- Store notes up to 1000 characters.
+- Store notes up to 8000 characters.
 - Split notes by blank lines in helper popovers; clicking a note group copies it to the clipboard.
 - For complete pairs, store recommended high and low weights.
 - Show pair recommended weights and apply them to the current picker only after an explicit click.

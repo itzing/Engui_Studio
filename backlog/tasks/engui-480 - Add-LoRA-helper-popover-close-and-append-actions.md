@@ -14,7 +14,7 @@ LoRA helper popovers can be opened from pickers, but they currently stay open af
 - Close the popover when the user clicks outside it.
 - Add a compact prompt snippet textarea/action inside the popover.
 - Save appended snippets through the existing LoRA helper profile endpoint.
-- Preserve the 1000 character notes limit and existing pair recommended weights.
+- Preserve the notes length limit and existing pair recommended weights.
 - Keep user-facing UI text in English.
 
 ## Rollback

@@ -1,5 +1,7 @@
 import type { LoraFileLike, LoraPair } from '@/lib/lora/modelFilters';
 
+export const LORA_HELPER_NOTES_MAX_LENGTH = 8000;
+
 export type LoRAHelperProfile = {
   id: string;
   workspaceId?: string | null;

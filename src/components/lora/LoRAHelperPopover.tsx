@@ -5,6 +5,7 @@ import { Check, Copy, Info, Plus, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   hasLoRAHelperContent,
+  LORA_HELPER_NOTES_MAX_LENGTH,
   splitLoRAHelperNotes,
   type LoRAHelperProfile,
 } from '@/lib/lora/helperProfiles';
@@ -35,7 +36,7 @@ export function LoRAHelperPopover({
   const trimmedNewPrompt = newPrompt.trim();
   const appendedNotes = [currentNotes.trim(), trimmedNewPrompt].filter(Boolean).join('\n\n');
   const charsAfterAppend = appendedNotes.length;
-  const canAppendPrompt = Boolean(trimmedNewPrompt) && charsAfterAppend <= 1000 && !isSaving;
+  const canAppendPrompt = Boolean(trimmedNewPrompt) && charsAfterAppend <= LORA_HELPER_NOTES_MAX_LENGTH && !isSaving;
 
   useEffect(() => {
     setCurrentNotes(profile?.notes ?? '');
@@ -141,7 +142,7 @@ export function LoRAHelperPopover({
 
       {open ? (
         <span
-          className={`absolute right-0 top-10 z-[80] block max-h-[min(28rem,calc(100vh-2rem))] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border p-3 text-left md:fixed md:left-1/2 md:right-auto md:top-1/2 md:w-[min(26rem,calc(100vw-2rem))] md:-translate-x-1/2 md:-translate-y-1/2 ${panelClasses}`}
+          className={`absolute right-0 top-10 z-[80] block max-h-[min(28rem,calc(100vh-2rem))] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border p-3 text-left md:fixed md:left-1/2 md:right-auto md:top-1/2 md:w-[min(42rem,calc(100vw-2rem))] md:-translate-x-1/2 md:-translate-y-1/2 ${panelClasses}`}
           onClick={(event) => event.stopPropagation()}
         >
           <span className="mb-2 block text-xs font-semibold uppercase tracking-wide">LoRA helper</span>
@@ -196,7 +197,7 @@ export function LoRAHelperPopover({
             <textarea
               id={`lora-helper-new-prompt-${profile?.id}`}
               value={newPrompt}
-              maxLength={1000}
+              maxLength={LORA_HELPER_NOTES_MAX_LENGTH}
               onChange={(event) => {
                 setNewPrompt(event.target.value);
                 setSaveError(null);
@@ -205,8 +206,8 @@ export function LoRAHelperPopover({
               placeholder="Paste trigger words or a sample prompt"
             />
             <span className="mt-2 flex items-center justify-between gap-2">
-              <span className={`text-[11px] ${charsAfterAppend > 1000 ? 'text-red-400' : mutedText}`}>
-                {charsAfterAppend}/1000
+              <span className={`text-[11px] ${charsAfterAppend > LORA_HELPER_NOTES_MAX_LENGTH ? 'text-red-400' : mutedText}`}>
+                {charsAfterAppend}/{LORA_HELPER_NOTES_MAX_LENGTH}
               </span>
               <Button
                 type="button"

@@ -74,11 +74,11 @@ describe('POST /api/lora/helper-profile', () => {
     });
   });
 
-  it('rejects notes longer than 1000 characters', async () => {
+  it('rejects notes longer than 8000 characters', async () => {
     const response = await POST(request({
       scope: 'single',
       loraId: 'lora-id',
-      notes: 'x'.repeat(1001),
+      notes: 'x'.repeat(8001),
     }));
     const json = await response.json();
 

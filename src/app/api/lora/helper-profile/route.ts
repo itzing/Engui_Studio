@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { LORA_HELPER_NOTES_MAX_LENGTH } from '@/lib/lora/helperProfiles';
 
-const maxNotesLength = 1000;
 const validScopes = new Set(['single', 'pair']);
 
 function parseNullableWeight(value: unknown) {
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (notes.length > maxNotesLength) {
+    if (notes.length > LORA_HELPER_NOTES_MAX_LENGTH) {
       return NextResponse.json(
-        { success: false, error: `Notes must be ${maxNotesLength} characters or less` },
+        { success: false, error: `Notes must be ${LORA_HELPER_NOTES_MAX_LENGTH} characters or less` },
         { status: 400 }
       );
     }
