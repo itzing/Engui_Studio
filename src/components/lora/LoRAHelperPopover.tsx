@@ -43,11 +43,11 @@ export function LoRAHelperPopover({
 
   const panelClasses = dark
     ? 'border-white/10 bg-zinc-950 text-zinc-100 shadow-2xl'
-    : 'border-border bg-popover text-popover-foreground shadow-lg';
+    : 'border-slate-700/70 bg-slate-950 text-slate-100 shadow-2xl';
   const groupClasses = dark
     ? 'border-white/10 bg-white/[0.04] text-zinc-200 hover:border-cyan-400/40 hover:bg-cyan-500/10'
-    : 'border-border bg-muted/30 text-foreground hover:border-primary/40 hover:bg-primary/10';
-  const mutedText = dark ? 'text-zinc-500' : 'text-muted-foreground';
+    : 'border-white/10 bg-white/[0.06] text-slate-100 hover:border-cyan-400/40 hover:bg-cyan-500/10';
+  const mutedText = dark ? 'text-zinc-500' : 'text-slate-400';
 
   return (
     <span className={`relative inline-flex ${className ?? ''}`}>
@@ -67,7 +67,7 @@ export function LoRAHelperPopover({
 
       {open ? (
         <span
-          className={`absolute right-0 top-10 z-[80] block w-[min(22rem,calc(100vw-2rem))] rounded-md border p-3 text-left ${panelClasses}`}
+          className={`absolute right-0 top-10 z-[80] block max-h-[min(28rem,calc(100vh-2rem))] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border p-3 text-left md:fixed md:left-1/2 md:right-auto md:top-1/2 md:w-[min(26rem,calc(100vw-2rem))] md:-translate-x-1/2 md:-translate-y-1/2 ${panelClasses}`}
           onClick={(event) => event.stopPropagation()}
         >
           <span className="mb-2 block text-xs font-semibold uppercase tracking-wide">LoRA helper</span>

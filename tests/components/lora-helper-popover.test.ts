@@ -60,4 +60,25 @@ describe('LoRAHelperPopover', () => {
 
     expect(onApplyWeights).toHaveBeenCalledWith({ high: '0.6', low: '0.9' });
   });
+
+  it('uses a solid panel background and desktop-centered positioning', () => {
+    render(
+      React.createElement(LoRAHelperPopover, {
+        profile: {
+          id: 'profile-id',
+          scope: 'single',
+          loraId: 'lora-id',
+          notes: 'trigger words',
+        },
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open LoRA helper' }));
+
+    const panel = screen.getByText('LoRA helper').parentElement;
+    expect(panel?.className).toContain('bg-slate-950');
+    expect(panel?.className).toContain('md:fixed');
+    expect(panel?.className).toContain('md:left-1/2');
+    expect(panel?.className).toContain('md:top-1/2');
+  });
 });
