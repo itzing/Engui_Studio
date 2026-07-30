@@ -356,6 +356,18 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     });
   });
 
+  it('exposes WAN22 FPS as a 16/32 segmented control', () => {
+    const fps = getModelById('wan22')?.parameters.find((param) => param.name === 'fps');
+    expect(fps).toMatchObject({
+      label: 'FPS',
+      type: 'select',
+      options: ['16', '32'],
+      default: '16',
+      group: 'advanced',
+      control: 'segmented',
+    });
+  });
+
   it('exposes additional LoRA pair parameters for WAN22 T2V', () => {
     const model = getModelById('wan22-t2v');
     expect(model?.parameters.filter((param) => param.type === 'lora-selector').map((param) => param.name)).toEqual([

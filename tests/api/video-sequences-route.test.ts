@@ -791,6 +791,38 @@ describe('video sequence APIs', () => {
     expect(formData.get('length')).toBe('80');
   });
 
+  it('uses sequence-level 32fps for WAN22 output assembly without changing frame-count pacing', () => {
+    const { formData } = buildVideoSegmentGenerationFormData({
+      sequence: {
+        id: 'seq-1',
+        workspaceId: 'ws-1',
+        defaultModelId: 'wan22',
+        width: 1280,
+        height: 720,
+        targetFps: 16,
+        defaultGenerationOptionsJson: '{"fps":32,"steps":4}',
+      },
+      segment: {
+        id: 'seg-1',
+        modelId: 'wan22',
+        prompt: 'fast output',
+        negativePrompt: '',
+        motionPrompt: '',
+        continuityPrompt: '',
+        generationOptionsJson: '{"fps":16}',
+        loraConfigJson: '{}',
+        seed: 40,
+        randomizeSeed: false,
+        durationSeconds: 5,
+      },
+      sourceFrameUrl: '/generations/source.png',
+      sourceImage: { blob: new Blob(['image'], { type: 'image/png' }), filename: 'source.png' },
+    });
+
+    expect(formData.get('length')).toBe('80');
+    expect(formData.get('fps')).toBe('32');
+  });
+
   it('ignores source frame dimensions and keeps the sequence resolution', () => {
     const { formData, snapshot } = buildVideoSegmentGenerationFormData({
       sequence: {

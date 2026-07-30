@@ -349,8 +349,15 @@ export function buildSegmentGenerationOptionsJson(generationOptionsJson: string,
   delete generationOptions.width;
   delete generationOptions.height;
   delete generationOptions.aspectRatio;
+  delete generationOptions.fps;
+  delete generationOptions.output_fps;
   generationOptions.steps = Number.isFinite(steps) && steps > 0 ? steps : defaultWanSteps;
   return JSON.stringify(generationOptions, null, 2);
+}
+
+function getSequenceOutputFps(sequence: Pick<VideoSequence, 'defaultGenerationOptions'> | null) {
+  const value = Number(sequence?.defaultGenerationOptions?.fps ?? sequence?.defaultGenerationOptions?.output_fps);
+  return value === 32 ? '32' : '16';
 }
 
 function aspectRatioFromDimensions(width: number, height: number) {
@@ -681,6 +688,7 @@ export default function VideoSequenceBuilder() {
   const [sequenceDescription, setSequenceDescription] = useState('');
   const [sequenceWidth, setSequenceWidth] = useState('1280');
   const [sequenceHeight, setSequenceHeight] = useState('720');
+  const [sequenceOutputFps, setSequenceOutputFps] = useState('16');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -819,6 +827,7 @@ export default function VideoSequenceBuilder() {
     setSequenceDescription(data.sequence.description ?? '');
     setSequenceWidth(String(data.sequence.width || 1280));
     setSequenceHeight(String(data.sequence.height || 720));
+    setSequenceOutputFps(getSequenceOutputFps(data.sequence));
     const nextSelected = preferredSegmentId && data.sequence.segments.some((segment) => segment.id === preferredSegmentId)
       ? preferredSegmentId
       : data.sequence.segments[0]?.id ?? null;
@@ -1373,6 +1382,11 @@ export default function VideoSequenceBuilder() {
       await saveSelectedSegmentDraftIfChanged({ silent: true, propagateError: true });
       const width = parseSequenceDimension(sequenceWidth, activeSequence.width || 1280);
       const height = parseSequenceDimension(sequenceHeight, activeSequence.height || 720);
+      const defaultGenerationOptions = {
+        ...activeSequence.defaultGenerationOptions,
+        fps: sequenceOutputFps === '32' ? 32 : 16,
+      };
+      delete defaultGenerationOptions.output_fps;
       const data = await fetchJson<{ success: true; sequence: VideoSequence }>(`/api/video-sequences/${activeSequence.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -1380,12 +1394,14 @@ export default function VideoSequenceBuilder() {
           description: sequenceDescription,
           width,
           height,
+          defaultGenerationOptions,
           aspectRatio: aspectRatioFromDimensions(width, height),
         }),
       });
       setActiveSequence(data.sequence);
       setSequenceWidth(String(data.sequence.width || width));
       setSequenceHeight(String(data.sequence.height || height));
+      setSequenceOutputFps(getSequenceOutputFps(data.sequence));
       setSequences((current) => current.map((sequence) => (
         sequence.id === data.sequence.id
           ? {
@@ -1395,6 +1411,8 @@ export default function VideoSequenceBuilder() {
               aspectRatio: data.sequence.aspectRatio,
               width: data.sequence.width,
               height: data.sequence.height,
+              targetFps: data.sequence.targetFps,
+              defaultGenerationOptions: data.sequence.defaultGenerationOptions,
             }
           : sequence
       )));
@@ -1704,7 +1722,7 @@ export default function VideoSequenceBuilder() {
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{sequence.title}</span>
                   <span className="block truncate text-xs text-zinc-500">
-                    {sequence.segmentCount ?? sequence.segments?.length ?? 0} segments - {sequence.width}x{sequence.height}
+                    {sequence.segmentCount ?? sequence.segments?.length ?? 0} segments - {sequence.width}x{sequence.height} - {getSequenceOutputFps(sequence)}fps
                   </span>
                 </span>
                 <span className={cn('rounded border px-2 py-0.5 text-[10px]', statusStyles[sequence.status] ?? statusStyles.draft)}>
@@ -1756,7 +1774,7 @@ export default function VideoSequenceBuilder() {
             <div className="flex h-9 w-9 items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
               <Waypoints className="h-4 w-4" />
             </div>
-            <div className="grid min-w-0 flex-1 grid-cols-[minmax(160px,300px)_minmax(140px,1fr)_88px_88px] gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(160px,300px)_minmax(140px,1fr)_88px_88px_104px] gap-2">
               <Input
                 value={sequenceTitle}
                 onChange={(event) => setSequenceTitle(event.target.value)}
@@ -1791,6 +1809,22 @@ export default function VideoSequenceBuilder() {
                 disabled={!activeSequence}
                 aria-label="Sequence height"
               />
+              <div className="grid h-9 grid-cols-2 overflow-hidden rounded-md border border-white/10 bg-zinc-900" aria-label="Sequence output FPS">
+                {['16', '32'].map((fps) => (
+                  <button
+                    key={fps}
+                    type="button"
+                    onClick={() => setSequenceOutputFps(fps)}
+                    disabled={!activeSequence}
+                    className={cn(
+                      'text-xs font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                      sequenceOutputFps === fps ? 'bg-cyan-500/20 text-cyan-200' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                    )}
+                  >
+                    {fps}fps
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">

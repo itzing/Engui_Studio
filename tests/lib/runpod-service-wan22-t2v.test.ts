@@ -93,6 +93,7 @@ describe('RunPodService WAN22 T2V payload', () => {
       cfg: 1,
       length: 80,
       steps: 4,
+      fps: 32,
       sigma_shift: 7,
       return_continuation_frame: true,
     }, 'wan22');
@@ -103,6 +104,7 @@ describe('RunPodService WAN22 T2V payload', () => {
       _secure: { v: 1 },
       media_inputs: [{ role: 'source_image', kind: 'image' }],
       transport_request: { output_dir: '/tmp', output_file_name: 'result.bin' },
+      fps: 32,
       sigma_shift: 7,
       return_continuation_frame: true,
     });

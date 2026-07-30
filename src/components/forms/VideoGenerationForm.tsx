@@ -2061,6 +2061,19 @@ export default function VideoGenerationForm() {
                                 />
                                 <label htmlFor={param.name} className="text-xs text-muted-foreground">{t('generationForm.enable')}</label>
                             </div>
+                        ) : param.type === 'select' && param.control === 'segmented' ? (
+                            <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-muted/20">
+                                {param.options?.map(opt => (
+                                    <button
+                                        key={opt}
+                                        type="button"
+                                        className={`h-8 text-xs font-medium tabular-nums transition-colors ${String(parameterValues[param.name] ?? param.default) === opt ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+                                        onClick={() => handleParameterChange(param.name, opt)}
+                                    >
+                                        {opt}
+                                    </button>
+                                ))}
+                            </div>
                         ) : param.type === 'select' ? (
                             <select
                                 name={param.name}
@@ -2242,6 +2255,19 @@ export default function VideoGenerationForm() {
                                                     onChange={(e) => handleParameterChange(param.name, e.target.checked)}
                                                 />
                                                 <label htmlFor={param.name} className="text-xs text-muted-foreground">{t('generationForm.enable')}</label>
+                                            </div>
+                                        ) : param.type === 'select' && param.control === 'segmented' ? (
+                                            <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-muted/20">
+                                                {param.options?.map(opt => (
+                                                    <button
+                                                        key={opt}
+                                                        type="button"
+                                                        className={`h-8 text-xs font-medium tabular-nums transition-colors ${String(parameterValues[param.name] ?? param.default) === opt ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+                                                        onClick={() => handleParameterChange(param.name, opt)}
+                                                    >
+                                                        {opt}
+                                                    </button>
+                                                ))}
                                             </div>
                                         ) : param.type === 'select' ? (
                                             <select

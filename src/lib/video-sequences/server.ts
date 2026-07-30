@@ -271,6 +271,18 @@ function stripResolutionOptions(options: Record<string, unknown>) {
   return next;
 }
 
+function stripSequenceOutputOptions(options: Record<string, unknown>) {
+  const next = stripResolutionOptions(options);
+  delete next.fps;
+  delete next.output_fps;
+  return next;
+}
+
+function sequenceOutputFps(value: unknown) {
+  const next = Number(value);
+  return next === 32 ? 32 : 16;
+}
+
 function parseJsonObjectField(value: string | null | undefined): Record<string, unknown> {
   const parsed = parseJsonField(value, {});
   return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
@@ -1018,13 +1030,14 @@ export function buildVideoSegmentGenerationFormData(input: {
   const { sequence, segment, sourceFrameUrl, sourceImage, generationOptionsOverride = {}, userId = 'user-with-settings' } = input;
   const formData = new FormData();
   const sequenceGenerationOptions = stripResolutionOptions(parseJsonObjectField(sequence.defaultGenerationOptionsJson));
-  const segmentGenerationOptions = stripResolutionOptions(parseJsonObjectField(segment.generationOptionsJson));
-  const requestGenerationOptions = stripResolutionOptions(generationOptionsOverride);
+  const segmentGenerationOptions = stripSequenceOutputOptions(parseJsonObjectField(segment.generationOptionsJson));
+  const requestGenerationOptions = stripSequenceOutputOptions(generationOptionsOverride);
   const generationOptions = {
     ...sequenceGenerationOptions,
     ...segmentGenerationOptions,
     ...requestGenerationOptions,
   };
+  generationOptions.fps = sequenceOutputFps(sequenceGenerationOptions.fps ?? sequenceGenerationOptions.output_fps);
   generationOptions.width = positiveInteger(sequence.width) ?? 1280;
   generationOptions.height = positiveInteger(sequence.height) ?? 720;
   const loraConfig = parseJsonObjectField(segment.loraConfigJson);
@@ -1048,9 +1061,8 @@ export function buildVideoSegmentGenerationFormData(input: {
   }
 
   if (generationOptions.length === undefined && sequence.targetFps && segment.durationSeconds) {
-    formData.append('length', String(Math.max(1, Math.min(161, Math.round(sequence.targetFps * segment.durationSeconds)))));
+    formData.append('length', String(Math.max(1, Math.min(512, Math.round(sequence.targetFps * segment.durationSeconds)))));
   }
-
   for (const [key, value] of Object.entries(generationOptions)) {
     appendScalarFormValue(formData, key, value);
   }
