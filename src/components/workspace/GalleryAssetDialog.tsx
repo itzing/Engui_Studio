@@ -8,7 +8,7 @@ import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDelete
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
-type GalleryPromptMode = PromptVersionMode | 'sourceImage';
+type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
 import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
@@ -29,6 +29,7 @@ export type GalleryAssetDialogAsset = {
   promptTemplate?: string | null;
   resolvedPrompt?: string | null;
   sourceImagePrompt?: string | null;
+  sourceImageResolvedPrompt?: string | null;
   modelId?: string | null;
   addedToGalleryAt: string;
 };
@@ -62,11 +63,14 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const hasSourceImagePrompt = asset?.type === 'video' && !!asset.sourceImagePrompt;
   const promptModeOptions = [
     { mode: 'original' as const, label: hasSourceImagePrompt ? 'Video' : 'Original' },
-    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: 'Resolved' }] : []),
+    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: hasSourceImagePrompt ? 'Resolved video' : 'Resolved' }] : []),
     ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
+    ...(hasSourceImagePrompt && asset?.sourceImageResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
   ];
   const selectedPrompt = promptMode === 'sourceImage'
     ? asset?.sourceImagePrompt || ''
+    : promptMode === 'sourceImageResolved'
+      ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
     : getPromptForMode(promptVersions, promptMode);
 
   useEffect(() => {

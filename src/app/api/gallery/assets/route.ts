@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
+import { getPromptVersions, getSourceImagePromptVersions } from '@/lib/promptVersions';
 import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
     let normalizedAssets = assets.map(asset => {
       const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
       const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
+      const sourcePromptVersions = getSourceImagePromptVersions(snapshot);
       const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
       return {
         id: asset.id,
@@ -75,7 +76,8 @@ export async function GET(request: NextRequest) {
         prompt: promptVersions.originalPrompt || null,
         promptTemplate: promptVersions.originalPrompt || null,
         resolvedPrompt: promptVersions.resolvedPrompt,
-        sourceImagePrompt: asset.type === 'video' ? getSourceImagePrompt(snapshot) || null : null,
+        sourceImagePrompt: asset.type === 'video' ? sourcePromptVersions.originalPrompt || null : null,
+        sourceImageResolvedPrompt: asset.type === 'video' ? sourcePromptVersions.resolvedPrompt : null,
         modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
         ...mediaDimensions,
         addedToGalleryAt: asset.addedToGalleryAt,

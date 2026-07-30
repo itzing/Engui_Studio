@@ -574,7 +574,9 @@ describe('POST /api/generate secure RunPod flow', () => {
     });
 
     const sourceImageGenerationSnapshot = {
-      prompt: 'original image prompt',
+      promptTemplate: 'original {red|blue} image prompt',
+      prompt: 'original red image prompt',
+      resolvedPrompt: 'original blue image prompt',
       modelId: 'z-image',
       width: 1024,
       seed: 77,
@@ -595,8 +597,18 @@ describe('POST /api/generate secure RunPod flow', () => {
     }));
     const createdOptions = JSON.parse(mockPrisma.job.create.mock.calls[0][0].data.options);
     expect(createdOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
+    expect(createdOptions).toMatchObject({
+      videoPrompt: 'animate this frame',
+      sourceImagePrompt: 'original {red|blue} image prompt',
+      resolvedSourceImagePrompt: 'original blue image prompt',
+    });
     const updatedOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
     expect(updatedOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
+    expect(updatedOptions).toMatchObject({
+      videoPrompt: 'animate this frame',
+      sourceImagePrompt: 'original {red|blue} image prompt',
+      resolvedSourceImagePrompt: 'original blue image prompt',
+    });
   });
 
   it('submits Z-Image I2I init image only through secure media_inputs', async () => {

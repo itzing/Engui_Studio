@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPromptForMode, getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
+import { getPromptForMode, getPromptVersions, getSourceImagePrompt, getSourceImagePromptVersions } from '@/lib/promptVersions';
 
 describe('prompt version helpers', () => {
   it('extracts original and resolved prompts from options', () => {
@@ -41,5 +41,22 @@ describe('prompt version helpers', () => {
         prompt: 'source image prompt',
       },
     })).toBe('source image prompt');
+  });
+
+  it('extracts original and resolved source image prompt versions', () => {
+    const versions = getSourceImagePromptVersions({
+      prompt: 'video prompt',
+      sourceImageGenerationSnapshot: {
+        promptTemplate: 'source {red|blue} dress',
+        prompt: 'source red dress',
+        resolvedPrompt: 'source blue dress',
+      },
+    });
+
+    expect(versions).toEqual({
+      originalPrompt: 'source {red|blue} dress',
+      resolvedPrompt: 'source blue dress',
+      hasResolvedPrompt: true,
+    });
   });
 });

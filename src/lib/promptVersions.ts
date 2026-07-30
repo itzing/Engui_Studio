@@ -58,10 +58,21 @@ export function getPromptForMode(versions: PromptVersions, mode: PromptVersionMo
 }
 
 export function getSourceImagePrompt(options?: unknown): string {
+  return getSourceImagePromptVersions(options).originalPrompt;
+}
+
+export function getSourceImagePromptVersions(options?: unknown): PromptVersions {
   const parsedOptions = parseRecord(options);
   const sourceImageSnapshot = parseRecord(parsedOptions.sourceImageGenerationSnapshot);
-  return firstPromptText(
+  const originalPrompt = firstPromptText(
     sourceImageSnapshot.promptTemplate,
     sourceImageSnapshot.prompt,
   );
+  const resolvedPrompt = firstPromptText(sourceImageSnapshot.resolvedPrompt);
+
+  return {
+    originalPrompt,
+    resolvedPrompt: resolvedPrompt && resolvedPrompt !== originalPrompt ? resolvedPrompt : null,
+    hasResolvedPrompt: Boolean(resolvedPrompt && resolvedPrompt !== originalPrompt),
+  };
 }

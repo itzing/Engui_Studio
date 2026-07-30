@@ -14,7 +14,7 @@ import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
-type GalleryPromptMode = PromptVersionMode | 'sourceImage';
+type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
@@ -37,11 +37,14 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const hasSourceImagePrompt = asset?.type === 'video' && !!asset.sourceImagePrompt;
   const promptModeOptions = useMemo(() => [
     { mode: 'original' as const, label: hasSourceImagePrompt ? 'Video' : 'Original' },
-    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: 'Resolved' }] : []),
+    ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: hasSourceImagePrompt ? 'Resolved video' : 'Resolved' }] : []),
     ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
-  ], [hasSourceImagePrompt, promptVersions.hasResolvedPrompt]);
+    ...(hasSourceImagePrompt && asset?.sourceImageResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
+  ], [asset?.sourceImageResolvedPrompt, hasSourceImagePrompt, promptVersions.hasResolvedPrompt]);
   const selectedPrompt = promptMode === 'sourceImage'
     ? asset?.sourceImagePrompt || ''
+    : promptMode === 'sourceImageResolved'
+      ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
     : getPromptForMode(promptVersions, promptMode);
 
   const downloadAsset = async () => {

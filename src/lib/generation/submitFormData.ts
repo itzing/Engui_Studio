@@ -18,6 +18,7 @@ import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
 import { hasResolvedPromptVariants, resolvePromptVariants } from '@/lib/generation/promptVariants';
 import { expandPromptWildcards } from '@/lib/prompt-wildcards/server';
+import { getSourceImagePromptVersions } from '@/lib/promptVersions';
 
 const prisma = new PrismaClient();
 const settingsService = new SettingsService();
@@ -355,6 +356,17 @@ export async function submitGenerationFormData(formData: FormData) {
                 promptWildcardReplacements: wildcardExpansion.replacements,
             }
             : {};
+        const sourceImagePromptVersions = getSourceImagePromptVersions({
+            sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+        });
+        const videoPromptMetadata = model.type === 'video'
+            ? {
+                videoPrompt: promptTemplate || undefined,
+                resolvedVideoPrompt: prompt !== promptTemplate ? prompt : undefined,
+                sourceImagePrompt: sourceImagePromptVersions.originalPrompt || undefined,
+                resolvedSourceImagePrompt: sourceImagePromptVersions.resolvedPrompt || undefined,
+            }
+            : {};
 
         // Collect LoRA weights for WAN 2.2 high/low pairs.
         if (['wan22', 'wan22-t2v'].includes(modelId)) {
@@ -499,6 +511,7 @@ export async function submitGenerationFormData(formData: FormData) {
             randomizeSeed,
             studioSessionContext,
             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+            ...videoPromptMetadata,
             ...promptVariantMetadata,
         }));
         const job = await prisma.job.create({
@@ -745,6 +758,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
                             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+                            ...videoPromptMetadata,
                             ...promptVariantMetadata,
                         })),
                         secureState: secureState ? JSON.stringify({
@@ -784,6 +798,7 @@ export async function submitGenerationFormData(formData: FormData) {
                             secureMode: requiresSecureKey || undefined,
                             studioSessionContext,
                             sourceImageGenerationSnapshot: sourceImageGenerationSnapshot || undefined,
+                            ...videoPromptMetadata,
                             ...promptVariantMetadata,
                         }))
                     },

@@ -74,7 +74,7 @@ describe('GET /api/gallery/assets', () => {
     });
   });
 
-  it('includes source image prompt for video assets', async () => {
+  it('includes source image prompt versions for video assets', async () => {
     mockPrisma.galleryAsset.findMany.mockResolvedValue([
       {
         id: 'asset-1', workspaceId: 'ws-1', type: 'video', originalUrl: '/a.mp4', previewUrl: '/a.mp4', thumbnailUrl: '/a.jpg',
@@ -82,8 +82,14 @@ describe('GET /api/gallery/assets', () => {
         sourceJobId: 'job-1', sourceOutputId: 'output-1', derivativeStatus: 'pending', enrichmentStatus: 'completed',
         generationSnapshot: JSON.stringify({
           prompt: 'video motion prompt',
+          promptTemplate: 'video {motion|pose} prompt',
+          resolvedPrompt: 'video motion prompt',
           modelId: 'wan22',
-          sourceImageGenerationSnapshot: { prompt: 'source image prompt' },
+          sourceImageGenerationSnapshot: {
+            promptTemplate: 'source {red|blue} dress',
+            prompt: 'source red dress',
+            resolvedPrompt: 'source blue dress',
+          },
         }),
         addedToGalleryAt: new Date('2026-04-08T10:00:00Z'), updatedAt: new Date('2026-04-08T10:00:00Z'),
       },
@@ -96,8 +102,10 @@ describe('GET /api/gallery/assets', () => {
     expect(response.status).toBe(200);
     expect(json.assets[0]).toMatchObject({
       type: 'video',
-      prompt: 'video motion prompt',
-      sourceImagePrompt: 'source image prompt',
+      prompt: 'video {motion|pose} prompt',
+      resolvedPrompt: 'video motion prompt',
+      sourceImagePrompt: 'source {red|blue} dress',
+      sourceImageResolvedPrompt: 'source blue dress',
     });
   });
 });

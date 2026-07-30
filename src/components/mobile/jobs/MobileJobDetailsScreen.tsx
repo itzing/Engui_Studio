@@ -14,9 +14,10 @@ import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDelete
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
-import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 
 type MediaResolution = { width: number; height: number };
+type JobPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
 
 function parseJobOptions(rawOptions: unknown): Record<string, any> {
   if (!rawOptions) return {};
@@ -66,7 +67,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
-  const [promptMode, setPromptMode] = useState<PromptVersionMode>('original');
+  const [promptMode, setPromptMode] = useState<JobPromptMode>('original');
   const selectedOutput = job?.outputs?.[0] || null;
   const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
   const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
@@ -77,7 +78,21 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     prompt: job?.prompt,
     options: (job as any)?.options,
   }), [job]);
-  const selectedPrompt = getPromptForMode(promptVersions, promptMode);
+  const sourcePromptVersions = useMemo(() => getSourceImagePromptVersions((job as any)?.options), [job]);
+  const promptModeOptions = useMemo(() => {
+    const hasSourcePrompt = job?.type === 'video' && !!sourcePromptVersions.originalPrompt;
+    return [
+      { mode: 'original' as const, label: hasSourcePrompt ? 'Video' : 'Original' },
+      ...(promptVersions.hasResolvedPrompt ? [{ mode: 'resolved' as const, label: hasSourcePrompt ? 'Resolved video' : 'Resolved' }] : []),
+      ...(hasSourcePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
+      ...(hasSourcePrompt && sourcePromptVersions.hasResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
+    ];
+  }, [job?.type, promptVersions.hasResolvedPrompt, sourcePromptVersions.hasResolvedPrompt, sourcePromptVersions.originalPrompt]);
+  const selectedPrompt = promptMode === 'sourceImage'
+    ? sourcePromptVersions.originalPrompt
+    : promptMode === 'sourceImageResolved'
+      ? sourcePromptVersions.resolvedPrompt || sourcePromptVersions.originalPrompt
+      : getPromptForMode(promptVersions, promptMode);
   const loraSummary = useMemo(() => {
     if (!job) return '';
     const options = parseJobOptions((job as any).options);
@@ -340,16 +355,16 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-muted-foreground">Prompt</div>
-                      {promptVersions.hasResolvedPrompt ? (
+                      {promptModeOptions.length > 1 ? (
                         <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
-                          {(['original', 'resolved'] as const).map((mode) => (
+                          {promptModeOptions.map(({ mode, label }) => (
                             <button
                               key={mode}
                               type="button"
                               onClick={() => setPromptMode(mode)}
                               className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
                             >
-                              {mode === 'original' ? 'Original' : 'Resolved'}
+                              {label}
                             </button>
                           ))}
                         </div>

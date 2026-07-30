@@ -27,7 +27,9 @@ function renderDialog(asset: Partial<GalleryAssetDialogAsset> = {}) {
       sourceJobId: 'job-1',
       sourceOutputId: 'output-1',
       prompt: 'video motion prompt',
+      resolvedPrompt: 'video resolved motion prompt',
       sourceImagePrompt: 'source image prompt',
+      sourceImageResolvedPrompt: 'source resolved image prompt',
       modelId: 'wan22',
       addedToGalleryAt: '2026-07-24T07:30:17Z',
       ...asset,
@@ -53,6 +55,10 @@ describe('GalleryAssetDialog source prompt toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Source image' }));
 
     expect(screen.getByText('source image prompt')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved source' }));
+
+    expect(screen.getByText('source resolved image prompt')).toBeTruthy();
   });
 
   it('keeps image prompt controls unchanged when no source prompt exists', () => {

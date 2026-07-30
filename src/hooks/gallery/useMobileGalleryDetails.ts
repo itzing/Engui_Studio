@@ -21,6 +21,7 @@ export type MobileGalleryDetail = {
   promptTemplate?: string | null;
   resolvedPrompt?: string | null;
   sourceImagePrompt?: string | null;
+  sourceImageResolvedPrompt?: string | null;
   modelId?: string | null;
   addedToGalleryAt: string;
   updatedAt?: string;
