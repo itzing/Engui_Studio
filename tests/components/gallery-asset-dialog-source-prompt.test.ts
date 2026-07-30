@@ -54,6 +54,11 @@ describe('GalleryAssetDialog source prompt toggle', () => {
     expect(screen.getByText('Seed')).toBeTruthy();
     expect(screen.getByText('777123')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Video' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Resolved video' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved video' }));
+
+    expect(screen.getByText('video resolved motion prompt')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Source image' }));
 

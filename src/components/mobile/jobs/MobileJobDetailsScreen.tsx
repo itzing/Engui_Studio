@@ -358,16 +358,16 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div><div className="text-muted-foreground">Result resolution</div><div>{formatResolution(selectedActualResolution || requestedResolution)}</div></div>
                   </div>
                   <div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="text-muted-foreground">Prompt</div>
                       {promptModeOptions.length > 1 ? (
-                        <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                        <div className="flex max-w-[75%] flex-wrap justify-end gap-1 rounded-md border border-border bg-muted/20 p-0.5">
                           {promptModeOptions.map(({ mode, label }) => (
                             <button
                               key={mode}
                               type="button"
                               onClick={() => setPromptMode(mode)}
-                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                              className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
                             >
                               {label}
                             </button>

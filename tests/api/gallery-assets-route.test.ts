@@ -82,8 +82,8 @@ describe('GET /api/gallery/assets', () => {
         sourceJobId: 'job-1', sourceOutputId: 'output-1', derivativeStatus: 'pending', enrichmentStatus: 'completed',
         generationSnapshot: JSON.stringify({
           prompt: 'video motion prompt',
-          promptTemplate: 'video {motion|pose} prompt',
-          resolvedPrompt: 'video motion prompt',
+          videoPrompt: 'video {motion|pose} prompt',
+          resolvedVideoPrompt: 'video motion prompt',
           seed: 938271,
           modelId: 'wan22',
           sourceImageGenerationSnapshot: {

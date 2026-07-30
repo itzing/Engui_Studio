@@ -581,13 +581,13 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <h3 className="text-sm font-medium text-foreground">{t('jobDetails.prompt')}</h3>
                                     <div className="flex items-center gap-1">
                                         {promptModeOptions.length > 1 ? (
-                                            <div className="inline-flex overflow-hidden rounded-md border border-border bg-muted/20 p-0.5">
+                                            <div className="flex max-w-full flex-wrap justify-end gap-1 rounded-md border border-border bg-muted/20 p-0.5">
                                                 {promptModeOptions.map(({ mode, label }) => (
                                                     <button
                                                         key={mode}
                                                         type="button"
                                                         onClick={() => setPromptMode(mode)}
-                                                        className={`rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                        className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                                                     >
                                                         {label}
                                                     </button>

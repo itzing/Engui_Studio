@@ -20,6 +20,23 @@ describe('prompt version helpers', () => {
     expect(getPromptForMode(versions, 'resolved')).toBe('portrait, blonde hair');
   });
 
+  it('extracts explicit video prompt versions from options', () => {
+    const versions = getPromptVersions({
+      prompt: 'fallback video prompt',
+      options: {
+        videoPrompt: 'video {walk|run}',
+        resolvedVideoPrompt: 'video walk',
+      },
+    });
+
+    expect(versions).toEqual({
+      originalPrompt: 'video {walk|run}',
+      resolvedPrompt: 'video walk',
+      hasResolvedPrompt: true,
+    });
+    expect(getPromptForMode(versions, 'resolved')).toBe('video walk');
+  });
+
   it('suppresses resolved prompt when it matches the original prompt', () => {
     const versions = getPromptVersions({
       prompt: 'portrait',

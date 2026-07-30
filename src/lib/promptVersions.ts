@@ -40,11 +40,12 @@ export function getPromptVersions(input: {
   const options = parseRecord(input.options);
   const originalPrompt = firstPromptText(
     input.promptTemplate,
+    options.videoPrompt,
     options.promptTemplate,
     options.prompt,
     input.prompt,
   );
-  const resolvedPrompt = firstPromptText(input.resolvedPrompt, options.resolvedPrompt);
+  const resolvedPrompt = firstPromptText(input.resolvedPrompt, options.resolvedVideoPrompt, options.resolvedPrompt);
 
   return {
     originalPrompt,
