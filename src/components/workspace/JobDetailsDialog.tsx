@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, Download, Copy, Sparkles, Type, X } from 'lu
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { getGenerationSeedFromOptions, shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 
 interface JobDetailsDialogProps {
@@ -216,6 +217,9 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const selectedOutput = outputs[selectedOutputIndex] || outputs[0] || null;
     const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
     const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
+    const generationSeed = useMemo(() => (
+        shouldShowGenerationSeed(job?.type) ? getGenerationSeedFromOptions((job as any)?.options) : null
+    ), [job]);
     const loraUsageSummary = useMemo(() => getLoraUsageSummary(job), [job]);
     const promptVersions = useMemo(() => getPromptVersions({
         prompt: job?.prompt,
@@ -662,6 +666,12 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     <span className="text-xs text-muted-foreground">Execution</span>
                                     <div className="text-sm font-medium">{getExecutionLabel() || '—'}</div>
                                 </div>
+                                {generationSeed !== null ? (
+                                    <div className="space-y-1">
+                                        <span className="text-xs text-muted-foreground">Seed</span>
+                                        <div className="text-sm font-medium font-mono">{generationSeed}</div>
+                                    </div>
+                                ) : null}
                                 <div className="space-y-1">
                                     <span className="text-xs text-muted-foreground">Result resolution</span>
                                     <div className="text-sm font-medium">{formatResolution(selectedActualResolution || requestedResolution)}</div>

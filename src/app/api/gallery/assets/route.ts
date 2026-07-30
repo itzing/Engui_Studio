@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPromptVersions, getSourceImagePromptVersions } from '@/lib/promptVersions';
 import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
+import { readGenerationSeed, shouldShowGenerationSeed } from '@/lib/generationSeed';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
       const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
       const sourcePromptVersions = getSourceImagePromptVersions(snapshot);
       const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
+      const seed = shouldShowGenerationSeed(asset.type) ? readGenerationSeed(snapshot.seed) : null;
       return {
         id: asset.id,
         workspaceId: asset.workspaceId,
@@ -78,6 +80,7 @@ export async function GET(request: NextRequest) {
         resolvedPrompt: promptVersions.resolvedPrompt,
         sourceImagePrompt: asset.type === 'video' ? sourcePromptVersions.originalPrompt || null : null,
         sourceImageResolvedPrompt: asset.type === 'video' ? sourcePromptVersions.resolvedPrompt : null,
+        seed,
         modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
         ...mediaDimensions,
         addedToGalleryAt: asset.addedToGalleryAt,

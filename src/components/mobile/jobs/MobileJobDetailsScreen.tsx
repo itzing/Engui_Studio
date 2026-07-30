@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { getGenerationSeedFromOptions, shouldShowGenerationSeed } from '@/lib/generationSeed';
 
 type MediaResolution = { width: number; height: number };
 type JobPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
@@ -71,6 +72,9 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const selectedOutput = job?.outputs?.[0] || null;
   const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
   const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
+  const generationSeed = useMemo(() => (
+    shouldShowGenerationSeed(job?.type) ? getGenerationSeedFromOptions(job?.options) : null
+  ), [job]);
   const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
   const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
   const hasSceneSnapshot = !!(job as any)?.sceneSnapshotJson;
@@ -350,6 +354,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                     <div><div className="text-muted-foreground">Type</div><div>{job.type}</div></div>
                     <div><div className="text-muted-foreground">Created</div><div>{new Date(job.createdAt || Date.now()).toLocaleString()}</div></div>
                     <div><div className="text-muted-foreground">Execution</div><div>{typeof job.executionMs === 'number' ? `${(job.executionMs / 1000).toFixed(2)}s` : '—'}</div></div>
+                    {generationSeed !== null ? <div><div className="text-muted-foreground">Seed</div><div className="font-mono">{generationSeed}</div></div> : null}
                     <div><div className="text-muted-foreground">Result resolution</div><div>{formatResolution(selectedActualResolution || requestedResolution)}</div></div>
                   </div>
                   <div>

@@ -30,6 +30,7 @@ function renderDialog(asset: Partial<GalleryAssetDialogAsset> = {}) {
       resolvedPrompt: 'video resolved motion prompt',
       sourceImagePrompt: 'source image prompt',
       sourceImageResolvedPrompt: 'source resolved image prompt',
+      seed: 777123,
       modelId: 'wan22',
       addedToGalleryAt: '2026-07-24T07:30:17Z',
       ...asset,
@@ -50,6 +51,8 @@ describe('GalleryAssetDialog source prompt toggle', () => {
     renderDialog();
 
     expect(screen.getByText('video motion prompt')).toBeTruthy();
+    expect(screen.getByText('Seed')).toBeTruthy();
+    expect(screen.getByText('777123')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Video' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Source image' }));
@@ -72,5 +75,19 @@ describe('GalleryAssetDialog source prompt toggle', () => {
 
     expect(screen.queryByRole('button', { name: 'Source image' })).toBeNull();
     expect(screen.getByText('image prompt')).toBeTruthy();
+  });
+
+  it('does not show seed for audio assets', () => {
+    renderDialog({
+      type: 'audio',
+      originalUrl: '/audio.mp3',
+      previewUrl: '/audio.mp3',
+      prompt: 'audio prompt',
+      sourceImagePrompt: null,
+      seed: 555,
+    });
+
+    expect(screen.queryByText('Seed')).toBeNull();
+    expect(screen.queryByText('555')).toBeNull();
   });
 });

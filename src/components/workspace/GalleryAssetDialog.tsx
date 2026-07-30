@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
@@ -30,6 +31,7 @@ export type GalleryAssetDialogAsset = {
   resolvedPrompt?: string | null;
   sourceImagePrompt?: string | null;
   sourceImageResolvedPrompt?: string | null;
+  seed?: number | null;
   modelId?: string | null;
   addedToGalleryAt: string;
 };
@@ -72,6 +74,9 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
     : promptMode === 'sourceImageResolved'
       ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
     : getPromptForMode(promptVersions, promptMode);
+  const generationSeed = asset && shouldShowGenerationSeed(asset.type) && typeof asset.seed === 'number' && Number.isFinite(asset.seed)
+    ? Math.trunc(asset.seed)
+    : null;
 
   useEffect(() => {
     setTagsInput((asset?.userTags || []).join(', '));
@@ -245,6 +250,12 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                   <span className="text-xs text-muted-foreground">Source Output</span>
                   <div className="text-sm font-medium">{asset.sourceOutputId || '—'}</div>
                 </div>
+                {generationSeed !== null ? (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Seed</span>
+                    <div className="text-sm font-medium font-mono">{generationSeed}</div>
+                  </div>
+                ) : null}
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground">Added to Gallery</span>
                   <div className="text-sm font-medium">{new Date(asset.addedToGalleryAt).toLocaleString()}</div>

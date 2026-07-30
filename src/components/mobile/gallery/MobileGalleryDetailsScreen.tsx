@@ -13,6 +13,7 @@ import { useMobileGalleryDetails } from '@/hooks/gallery/useMobileGalleryDetails
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
+import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 
 type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
 
@@ -46,6 +47,9 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     : promptMode === 'sourceImageResolved'
       ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
     : getPromptForMode(promptVersions, promptMode);
+  const generationSeed = asset && shouldShowGenerationSeed(asset.type) && typeof asset.seed === 'number' && Number.isFinite(asset.seed)
+    ? Math.trunc(asset.seed)
+    : null;
 
   const downloadAsset = async () => {
     if (!asset) return;
@@ -199,6 +203,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                     <div><div className="text-muted-foreground">Status</div><div>{asset.trashed ? 'Trashed' : asset.favorited ? 'Favorited' : 'Active'}</div></div>
                     <div><div className="text-muted-foreground">Added</div><div>{new Date(asset.addedToGalleryAt).toLocaleString()}</div></div>
                     <div><div className="text-muted-foreground">Source job</div><div>{asset.sourceJobId || '—'}</div></div>
+                    {generationSeed !== null ? <div><div className="text-muted-foreground">Seed</div><div className="font-mono">{generationSeed}</div></div> : null}
                   </div>
                   <div>
                     <div className="flex items-center justify-between gap-2">

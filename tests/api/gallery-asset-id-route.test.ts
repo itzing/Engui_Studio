@@ -35,7 +35,7 @@ describe('GET /api/gallery/assets/[id]', () => {
       sourceOutputId: 'output-1',
       derivativeStatus: 'completed',
       enrichmentStatus: 'completed',
-      generationSnapshot: JSON.stringify({ prompt: 'cinematic portrait', modelId: 'flux-krea' }),
+      generationSnapshot: JSON.stringify({ prompt: 'cinematic portrait', seed: '48392', modelId: 'flux-krea' }),
       addedToGalleryAt: new Date('2026-04-20T10:00:00Z'),
       updatedAt: new Date('2026-04-20T10:05:00Z'),
     });
@@ -51,6 +51,7 @@ describe('GET /api/gallery/assets/[id]', () => {
       id: 'asset-1',
       prompt: 'cinematic portrait',
       modelId: 'flux-krea',
+      seed: 48392,
       userTags: ['portrait'],
       autoTags: ['studio'],
       sourceJobId: 'job-1',
@@ -116,6 +117,7 @@ describe('GET /api/gallery/assets/[id]', () => {
         prompt: 'video motion prompt',
         promptTemplate: 'video {motion|pose} prompt',
         resolvedPrompt: 'video motion prompt',
+        seed: 998877,
         modelId: 'wan22',
         sourceImageGenerationSnapshot: {
           promptTemplate: 'source {red|blue} dress',
@@ -140,6 +142,7 @@ describe('GET /api/gallery/assets/[id]', () => {
       resolvedPrompt: 'video motion prompt',
       sourceImagePrompt: 'source {red|blue} dress',
       sourceImageResolvedPrompt: 'source blue dress',
+      seed: 998877,
     });
   });
 });

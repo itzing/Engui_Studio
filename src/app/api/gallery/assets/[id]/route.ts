@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
 import { getPromptVersions, getSourceImagePromptVersions } from '@/lib/promptVersions';
 import { resolveGalleryCarouselDimensions } from '@/lib/galleryVideoCarousel';
+import { readGenerationSeed, shouldShowGenerationSeed } from '@/lib/generationSeed';
 
 function parseGenerationSnapshot(raw: string | null): Record<string, any> {
   if (!raw) return {};
@@ -18,6 +19,7 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
   const promptVersions = getPromptVersions({ prompt: snapshot.prompt, options: snapshot });
   const sourcePromptVersions = getSourceImagePromptVersions(snapshot);
   const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
+  const seed = shouldShowGenerationSeed(asset.type) ? readGenerationSeed(snapshot.seed) : null;
   return {
     id: asset.id,
     workspaceId: asset.workspaceId,
@@ -39,6 +41,7 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
     resolvedPrompt: promptVersions.resolvedPrompt,
     sourceImagePrompt: asset.type === 'video' ? sourcePromptVersions.originalPrompt || null : null,
     sourceImageResolvedPrompt: asset.type === 'video' ? sourcePromptVersions.resolvedPrompt : null,
+    seed,
     modelId: typeof snapshot.modelId === 'string' ? snapshot.modelId : null,
     ...mediaDimensions,
     hasSceneSnapshot: !!(snapshot.sceneSnapshot && typeof snapshot.sceneSnapshot === 'object' && snapshot.sceneSnapshot.templateId === 'scene_template_v2'),

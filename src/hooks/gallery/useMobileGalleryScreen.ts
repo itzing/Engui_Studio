@@ -22,6 +22,7 @@ export type MobileGalleryAsset = {
   prompt?: string | null;
   promptTemplate?: string | null;
   resolvedPrompt?: string | null;
+  seed?: number | null;
   addedToGalleryAt: string;
 };
 

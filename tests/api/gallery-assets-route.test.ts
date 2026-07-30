@@ -84,6 +84,7 @@ describe('GET /api/gallery/assets', () => {
           prompt: 'video motion prompt',
           promptTemplate: 'video {motion|pose} prompt',
           resolvedPrompt: 'video motion prompt',
+          seed: 938271,
           modelId: 'wan22',
           sourceImageGenerationSnapshot: {
             promptTemplate: 'source {red|blue} dress',
@@ -106,6 +107,29 @@ describe('GET /api/gallery/assets', () => {
       resolvedPrompt: 'video motion prompt',
       sourceImagePrompt: 'source {red|blue} dress',
       sourceImageResolvedPrompt: 'source blue dress',
+      seed: 938271,
+    });
+  });
+
+  it('does not include seed for audio assets', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([
+      {
+        id: 'asset-audio', workspaceId: 'ws-1', type: 'audio', originalUrl: '/a.mp3', previewUrl: '/a.mp3', thumbnailUrl: null,
+        favorited: false, trashed: false, userTags: JSON.stringify([]), autoTags: JSON.stringify([]),
+        sourceJobId: 'job-audio', sourceOutputId: 'output-1', derivativeStatus: 'pending', enrichmentStatus: 'completed',
+        generationSnapshot: JSON.stringify({ prompt: 'ambient', seed: 1234, modelId: 'musicgen' }),
+        addedToGalleryAt: new Date('2026-04-08T10:00:00Z'), updatedAt: new Date('2026-04-08T10:00:00Z'),
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/gallery/assets?workspaceId=ws-1&type=audio') as any;
+    const response = await GET(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.assets[0]).toMatchObject({
+      type: 'audio',
+      seed: null,
     });
   });
 });
