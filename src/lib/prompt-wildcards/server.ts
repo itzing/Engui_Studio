@@ -7,6 +7,11 @@ import {
   validatePromptWildcardKey,
 } from './utils';
 import { getPromptWildcardVariants, normalizePromptWildcardVariant } from './variants';
+import {
+  normalizePromptWildcardSelections,
+  parsePromptWildcardIndexList,
+  type PromptWildcardSelectionMap,
+} from './selections';
 
 const defaultPromptWildcards = [
   {
@@ -96,16 +101,37 @@ export async function trashPromptWildcard(id: string) {
   return toPromptWildcardSummary(wildcard);
 }
 
-export async function expandPromptWildcards(input: string, workspaceId: string | null | undefined) {
+type ExpandPromptWildcardsOptions = {
+  selections?: unknown;
+};
+
+function pickIndexedVariants(variants: string[], indices: number[]) {
+  return indices
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < variants.length)
+    .map((index) => ({ index, value: variants[index] }))
+    .filter((entry): entry is { index: number; value: string } => typeof entry.value === 'string' && entry.value.trim().length > 0);
+}
+
+export async function expandPromptWildcards(
+  input: string,
+  workspaceId: string | null | undefined,
+  options: ExpandPromptWildcardsOptions = {},
+) {
   if (!input || !workspaceId || !input.includes('{')) {
-    return { prompt: input, replacements: [] as PromptWildcardReplacement[] };
+    return {
+      prompt: input,
+      replacements: [] as PromptWildcardReplacement[],
+      selections: normalizePromptWildcardSelections(options.selections),
+    };
   }
 
   const wildcards = await prisma.promptWildcard.findMany({
     where: { workspaceId, status: 'active' },
     select: { key: true, name: true, value: true },
   });
-  if (wildcards.length === 0) return { prompt: input, replacements: [] as PromptWildcardReplacement[] };
+  const selections = normalizePromptWildcardSelections(options.selections);
+  const nextSelections: PromptWildcardSelectionMap = { ...selections };
+  if (wildcards.length === 0) return { prompt: input, replacements: [] as PromptWildcardReplacement[], selections: nextSelections };
 
   const byKey = new Map(wildcards.map((wildcard) => [wildcard.key, wildcard]));
   const replacements = new Map<string, PromptWildcardReplacement>();
@@ -115,8 +141,49 @@ export async function expandPromptWildcards(input: string, workspaceId: string |
     const wildcard = byKey.get(key);
     if (!wildcard) return match;
 
+    const variants = getPromptWildcardVariants(wildcard.value);
+    const requestedIndices = parsePromptWildcardIndexList(rawVariant);
+    if (requestedIndices) {
+      const selectedVariants = pickIndexedVariants(variants, requestedIndices);
+      if (selectedVariants.length === 0) return match;
+
+      const selection = nextSelections[key];
+      if (selection?.mode === 'sequential') {
+        const cursor = Math.max(0, Math.min(selection.cursor, selectedVariants.length - 1));
+        const selected = selectedVariants[cursor] || selectedVariants[0];
+        nextSelections[key] = {
+          indices: selectedVariants.map((variant) => variant.index),
+          mode: 'sequential',
+          startIndex: Math.max(0, Math.min(selection.startIndex, selectedVariants.length - 1)),
+          cursor: (cursor + 1) % selectedVariants.length,
+        };
+        replacements.set(`${key}:${match}`, {
+          key,
+          name: wildcard.name,
+          placeholder: match,
+          variant: selected.value,
+          variantIndex: selected.index,
+          variantIndices: selectedVariants.map((variant) => variant.index),
+          mode: 'sequential',
+          selectedPosition: cursor,
+        });
+        return selected.value;
+      }
+
+      replacements.set(`${key}:${match}`, {
+        key,
+        name: wildcard.name,
+        placeholder: match,
+        variantIndices: selectedVariants.map((variant) => variant.index),
+        mode: 'random',
+      });
+
+      if (selectedVariants.length === 1) return selectedVariants[0].value;
+      return `{${selectedVariants.map((variant) => variant.value).join('|')}}`;
+    }
+
     const requestedVariant = normalizePromptWildcardVariant(rawVariant);
-    const selectedVariant = getPromptWildcardVariants(wildcard.value)
+    const selectedVariant = variants
       .find((variant) => normalizePromptWildcardVariant(variant) === requestedVariant);
     if (!selectedVariant) return match;
 
@@ -141,5 +208,5 @@ export async function expandPromptWildcards(input: string, workspaceId: string |
     if (!changed) break;
   }
 
-  return { prompt, replacements: Array.from(replacements.values()) };
+  return { prompt, replacements: Array.from(replacements.values()), selections: nextSelections };
 }

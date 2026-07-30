@@ -18,6 +18,7 @@ import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 import { ensureStudioSessionMaterializationTaskForJob } from '@/lib/studio-sessions/server';
 import { hasResolvedPromptVariants, resolvePromptVariants } from '@/lib/generation/promptVariants';
 import { expandPromptWildcards } from '@/lib/prompt-wildcards/server';
+import { normalizePromptWildcardSelections } from '@/lib/prompt-wildcards/selections';
 import { getSourceImagePromptVersions } from '@/lib/promptVersions';
 
 const prisma = new PrismaClient();
@@ -47,6 +48,15 @@ function parseSourceImageGenerationSnapshot(value: FormDataEntryValue | null): R
     } catch (error) {
         console.warn('Failed to parse source image generation snapshot from generation request:', error);
         return null;
+    }
+}
+
+function parsePromptWildcardSelections(value: FormDataEntryValue | null) {
+    if (typeof value !== 'string' || !value.trim()) return {};
+    try {
+        return normalizePromptWildcardSelections(JSON.parse(value));
+    } catch {
+        return {};
     }
 }
 
@@ -343,7 +353,10 @@ export async function submitGenerationFormData(formData: FormData) {
         }
 
         const promptTemplate = rawPrompt || '';
-        const wildcardExpansion = await expandPromptWildcards(promptTemplate, resolvedWorkspaceId);
+        const submittedPromptWildcardSelections = parsePromptWildcardSelections(formData.get('promptWildcardSelections'));
+        const wildcardExpansion = await expandPromptWildcards(promptTemplate, resolvedWorkspaceId, {
+            selections: submittedPromptWildcardSelections,
+        });
         const expandedPromptTemplate = wildcardExpansion.prompt;
         const prompt = resolvePromptVariants(expandedPromptTemplate, parameters.seed);
         const hasWildcardExpansion = expandedPromptTemplate !== promptTemplate;
@@ -354,6 +367,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 resolvedPrompt: prompt,
                 resolvedPromptSeed: parameters.seed,
                 promptWildcardReplacements: wildcardExpansion.replacements,
+                promptWildcardSelections: wildcardExpansion.selections,
             }
             : {};
         const sourceImagePromptVersions = getSourceImagePromptVersions({
@@ -782,6 +796,7 @@ export async function submitGenerationFormData(formData: FormData) {
                     prompt: promptTemplate,
                     resolvedPrompt: prompt,
                     seed: parameters.seed,
+                    promptWildcardSelections: wildcardExpansion.selections,
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
                 });
             } catch (error: any) {

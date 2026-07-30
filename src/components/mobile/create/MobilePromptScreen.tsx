@@ -22,6 +22,8 @@ export default function MobilePromptScreen() {
     currentModel,
     prompt,
     setPrompt,
+    promptWildcardSelections,
+    setPromptWildcardSelections,
     promptHelperInstruction,
     setPromptHelperInstruction,
     isPromptHelperConfigured,
@@ -125,6 +127,8 @@ export default function MobilePromptScreen() {
                 value={prompt}
                 onChange={setPrompt}
                 workspaceId={activeWorkspaceId}
+                promptWildcardSelections={promptWildcardSelections}
+                onPromptWildcardSelectionsChange={setPromptWildcardSelections}
                 placeholder="Describe the image you want to generate..."
                 className="min-h-[42vh] w-full rounded-lg border border-input bg-background px-3 py-3 text-base text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"
               />

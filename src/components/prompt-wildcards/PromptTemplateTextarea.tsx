@@ -4,6 +4,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { PromptWildcardSummary } from '@/lib/prompt-wildcards/types';
+import {
+  clampSelectionPosition,
+  normalizePromptWildcardSelections,
+  parsePromptWildcardIndexList,
+  serializePromptWildcardIndexList,
+  type PromptWildcardSelectionMap,
+  type PromptWildcardSelectionMode,
+} from '@/lib/prompt-wildcards/selections';
 
 type PromptTemplateTextareaProps = {
   value: string;
@@ -15,6 +23,8 @@ type PromptTemplateTextareaProps = {
   autoFocus?: boolean;
   testId?: string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  promptWildcardSelections?: PromptWildcardSelectionMap;
+  onPromptWildcardSelectionsChange?: (selections: PromptWildcardSelectionMap) => void;
 };
 
 type ActiveQuery = {
@@ -26,6 +36,7 @@ type ActiveQuery = {
 type PromptToken = {
   key: string;
   variant: string;
+  variantIndices: number[] | null;
   start: number;
   end: number;
 };
@@ -66,6 +77,7 @@ function findPromptTokens(value: string, wildcards: PromptWildcardSummary[]): Pr
     tokens.push({
       key,
       variant: (match[2] || '').trim(),
+      variantIndices: parsePromptWildcardIndexList(match[2] || ''),
       start: match.index,
       end: match.index + match[0].length,
     });
@@ -84,6 +96,8 @@ export default function PromptTemplateTextarea({
   autoFocus,
   testId,
   onKeyDown,
+  promptWildcardSelections,
+  onPromptWildcardSelectionsChange,
 }: PromptTemplateTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [wildcards, setWildcards] = useState<PromptWildcardSummary[]>([]);
@@ -144,6 +158,10 @@ export default function PromptTemplateTextarea({
     () => wildcards.find((wildcard) => wildcard.key === activeToken?.key) || null,
     [activeToken, wildcards],
   );
+  const normalizedSelections = useMemo(
+    () => normalizePromptWildcardSelections(promptWildcardSelections),
+    [promptWildcardSelections],
+  );
 
   useEffect(() => {
     setHighlightedIndex(0);
@@ -177,11 +195,60 @@ export default function PromptTemplateTextarea({
     replaceRange(activeQuery.start, end, `{${wildcard.key}}`);
   };
 
-  const setTokenVariant = (variant: string) => {
+  const updateTokenSelection = (
+    token: PromptToken,
+    indices: number[],
+    mode: PromptWildcardSelectionMode = normalizedSelections[token.key]?.mode || 'random',
+    startIndex = normalizedSelections[token.key]?.startIndex || 0,
+  ) => {
+    const wildcard = wildcards.find((entry) => entry.key === token.key);
+    if (!wildcard || wildcard.variants.length === 0) return;
+
+    const allIndices = wildcard.variants.map((_variant, index) => index);
+    const sanitizedIndices = Array.from(new Set(indices))
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < wildcard.variants.length)
+      .sort((a, b) => a - b);
+    const nextIndices = sanitizedIndices.length > 0 ? sanitizedIndices : allIndices;
+    const isAllSelected = nextIndices.length === allIndices.length;
+    const nextMode = isAllSelected && mode !== 'sequential' ? 'random' : mode;
+    const maxPosition = nextIndices.length - 1;
+    const nextStartIndex = clampSelectionPosition(startIndex, maxPosition);
+    const replacement = isAllSelected && nextMode === 'random'
+      ? `{${token.key}}`
+      : `{${token.key}:${serializePromptWildcardIndexList(nextIndices)}}`;
+
+    onPromptWildcardSelectionsChange?.({
+      ...normalizedSelections,
+      [token.key]: {
+        indices: nextIndices,
+        mode: nextMode,
+        startIndex: nextStartIndex,
+        cursor: nextStartIndex,
+      },
+    });
+    replaceRange(token.start, token.end, replacement);
+    setActiveToken({
+      ...token,
+      variant: replacement.slice(token.key.length + 2, -1),
+      variantIndices: isAllSelected && nextMode === 'random' ? null : nextIndices,
+      end: token.start + replacement.length,
+    });
+  };
+
+  const setTokenMode = (mode: PromptWildcardSelectionMode) => {
     if (!activeToken) return;
-    const replacement = variant ? `{${activeToken.key}:${variant}}` : `{${activeToken.key}}`;
-    replaceRange(activeToken.start, activeToken.end, replacement);
-    setActiveToken(null);
+    const wildcard = activeTokenWildcard;
+    if (!wildcard) return;
+    const selectedIndices = activeToken.variantIndices || wildcard.variants.map((_variant, index) => index);
+    updateTokenSelection(activeToken, selectedIndices, mode, normalizedSelections[activeToken.key]?.startIndex || 0);
+  };
+
+  const setTokenStartIndex = (value: string) => {
+    if (!activeToken) return;
+    const wildcard = activeTokenWildcard;
+    if (!wildcard) return;
+    const selectedIndices = activeToken.variantIndices || wildcard.variants.map((_variant, index) => index);
+    updateTokenSelection(activeToken, selectedIndices, 'sequential', Number.parseInt(value, 10));
   };
 
   const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -275,7 +342,7 @@ export default function PromptTemplateTextarea({
                 disabled={!hasVariants || disabled}
                 title={hasVariants ? 'Choose variant' : 'No variants'}
               >
-                <span className="truncate">{token.variant ? `{${token.key}: ${token.variant}}` : `{${token.key}}`}</span>
+                <span className="truncate">{token.variantIndices ? `{${token.key}: ${token.variantIndices.join(',')}}` : token.variant ? `{${token.key}: ${token.variant}}` : `{${token.key}}`}</span>
                 {hasVariants ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}
               </button>
             );
@@ -287,27 +354,88 @@ export default function PromptTemplateTextarea({
         <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-5 py-4 text-left">
             <DialogTitle className="text-base">{activeTokenWildcard?.name || 'Template variants'}</DialogTitle>
-            <DialogDescription className="sr-only">Choose a fixed variant or keep seeded random selection.</DialogDescription>
+            <DialogDescription className="sr-only">Choose variants and wildcard resolution order.</DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto p-3">
-            <button
-              type="button"
-              className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-sm ${!activeToken?.variant ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent/60'}`}
-              onClick={() => setTokenVariant('')}
-            >
-              Random variant
-            </button>
+            {activeToken && activeTokenWildcard ? (() => {
+              const allIndices = activeTokenWildcard.variants.map((_variant, index) => index);
+              const selectedIndices = activeToken.variantIndices || allIndices;
+              const selection = normalizedSelections[activeToken.key];
+              const mode = selection?.mode || 'random';
+              const startIndex = clampSelectionPosition(selection?.startIndex, selectedIndices.length - 1);
+              const allSelected = selectedIndices.length === allIndices.length;
+              return (
+                <div className="mb-3 space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-md border px-3 py-2 text-sm font-medium ${mode === 'random' ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent/60'}`}
+                      onClick={() => setTokenMode('random')}
+                    >
+                      Random
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md border px-3 py-2 text-sm font-medium ${mode === 'sequential' ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent/60'}`}
+                      onClick={() => setTokenMode('sequential')}
+                    >
+                      Sequential
+                    </button>
+                  </div>
+                  <label className="block space-y-1 text-xs font-medium text-muted-foreground">
+                    <span>Start index</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.max(0, selectedIndices.length - 1)}
+                      value={startIndex}
+                      disabled={mode !== 'sequential'}
+                      onChange={(event) => setTokenStartIndex(event.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground disabled:opacity-50"
+                    />
+                  </label>
+                  {!allSelected ? (
+                    <button
+                      type="button"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:bg-accent/60"
+                      onClick={() => updateTokenSelection(activeToken, allIndices, mode, startIndex)}
+                    >
+                      Select all
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })() : null}
             <div className="space-y-1">
-              {(activeTokenWildcard?.variants || []).map((variant) => (
+              {(activeTokenWildcard?.variants || []).map((variant, index) => {
+                const selectedIndices = activeToken?.variantIndices || activeTokenWildcard?.variants.map((_value, nextIndex) => nextIndex) || [];
+                const selectedSet = new Set(selectedIndices);
+                const isSelected = selectedSet.has(index);
+                return (
                 <button
-                  key={variant}
+                  key={`${index}-${variant}`}
                   type="button"
-                  className={`w-full rounded-md border px-3 py-2 text-left text-sm ${variant === activeToken?.variant ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent/60'}`}
-                  onClick={() => setTokenVariant(variant)}
+                  className={`flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-sm ${isSelected ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent/60'}`}
+                  onClick={() => {
+                    if (!activeToken || !activeTokenWildcard) return;
+                    const allIndices = activeTokenWildcard.variants.map((_value, nextIndex) => nextIndex);
+                    const allSelected = selectedIndices.length === allIndices.length;
+                    const nextIndices = isSelected
+                      ? (allSelected ? [index] : selectedIndices.filter((selectedIndex) => selectedIndex !== index))
+                      : [...selectedIndices, index];
+                    updateTokenSelection(activeToken, nextIndices, normalizedSelections[activeToken.key]?.mode || 'random', normalizedSelections[activeToken.key]?.startIndex || 0);
+                  }}
                 >
-                  {variant}
+                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background'}`}>
+                    {isSelected ? '✓' : ''}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[11px] text-muted-foreground">#{index}</span>
+                    <span className="block break-words">{variant}</span>
+                  </span>
                 </button>
-              ))}
+              );
+              })}
             </div>
           </div>
         </DialogContent>

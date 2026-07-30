@@ -3,6 +3,7 @@ import { loadFileFromPath } from '@/lib/fileUtils';
 import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';
 import { isInputVisible, type ModelConfig } from '@/lib/models/modelConfig';
 import { generateRandomSeed } from './imageDraft';
+import type { PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
 
 export type SubmitImageGenerationParams = {
   currentModel: ModelConfig;
@@ -19,6 +20,7 @@ export type SubmitImageGenerationParams = {
   sceneSnapshot?: Record<string, any> | null;
   sourcePromptDocumentId?: string | null;
   sourcePromptDocumentTitle?: string | null;
+  promptWildcardSelections?: PromptWildcardSelectionMap;
 };
 
 export type SubmitImageGenerationResult =
@@ -35,6 +37,7 @@ export type SubmitImageGenerationResult =
         options: Record<string, any>;
       };
       nextSeed: number | null;
+      promptWildcardSelections?: PromptWildcardSelectionMap;
     }
   | {
       success: false;
@@ -57,6 +60,7 @@ export const submitImageGeneration = async ({
   sceneSnapshot,
   sourcePromptDocumentId,
   sourcePromptDocumentTitle,
+  promptWildcardSelections,
 }: SubmitImageGenerationParams): Promise<SubmitImageGenerationResult> => {
   if (currentModel.inputs.includes('text') && !prompt) {
     return { success: false, error: 'Prompt is required', nextSeed: null };
@@ -94,6 +98,9 @@ export const submitImageGeneration = async ({
     formData.append('userId', 'user-with-settings');
     formData.append('modelId', currentModel.id);
     formData.append('prompt', prompt);
+    if (promptWildcardSelections && Object.keys(promptWildcardSelections).length > 0) {
+      formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));
+    }
 
     if (activeWorkspaceId) {
       formData.append('workspaceId', activeWorkspaceId);
@@ -200,6 +207,9 @@ export const submitImageGeneration = async ({
     const nextSeed = typeof data.seed === 'number' && Number.isFinite(data.seed) ? data.seed : fallbackNextSeed;
     const storedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
     const resolvedPrompt = typeof data.resolvedPrompt === 'string' ? data.resolvedPrompt : storedPrompt;
+    const nextPromptWildcardSelections = data.promptWildcardSelections && typeof data.promptWildcardSelections === 'object'
+      ? data.promptWildcardSelections as PromptWildcardSelectionMap
+      : promptWildcardSelections;
 
     return {
       success: true,
@@ -214,10 +224,12 @@ export const submitImageGeneration = async ({
         options: {
           ...parameterValues,
           randomizeSeed,
+          ...(nextPromptWildcardSelections ? { promptWildcardSelections: nextPromptWildcardSelections } : {}),
           ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
         },
       },
       nextSeed,
+      promptWildcardSelections: nextPromptWildcardSelections,
     };
   } catch {
     return {

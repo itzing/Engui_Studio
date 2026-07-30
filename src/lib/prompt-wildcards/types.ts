@@ -17,4 +17,8 @@ export interface PromptWildcardReplacement {
   name: string;
   placeholder: string;
   variant?: string;
+  variantIndex?: number;
+  variantIndices?: number[];
+  mode?: 'random' | 'sequential';
+  selectedPosition?: number;
 }

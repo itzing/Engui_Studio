@@ -46,6 +46,56 @@ describe('expandPromptWildcards', () => {
     ]);
   });
 
+  it('expands indexed wildcard subsets before seeded prompt variants', async () => {
+    const result = await expandPromptWildcards('portrait with {hairColor:0,2}', 'ws-1');
+
+    expect(result.prompt).toBe('portrait with {black hair|blonde hair}');
+    expect(result.replacements).toEqual([
+      {
+        key: 'hairColor',
+        name: 'Hair color',
+        placeholder: '{hairColor:0,2}',
+        variantIndices: [0, 2],
+        mode: 'random',
+      },
+    ]);
+  });
+
+  it('resolves indexed wildcard subsets sequentially and advances cursor', async () => {
+    const result = await expandPromptWildcards('portrait with {hairColor:0,2}', 'ws-1', {
+      selections: {
+        hairColor: {
+          indices: [0, 2],
+          mode: 'sequential',
+          startIndex: 1,
+          cursor: 1,
+        },
+      },
+    });
+
+    expect(result.prompt).toBe('portrait with blonde hair');
+    expect(result.selections).toEqual({
+      hairColor: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 1,
+        cursor: 0,
+      },
+    });
+    expect(result.replacements).toEqual([
+      {
+        key: 'hairColor',
+        name: 'Hair color',
+        placeholder: '{hairColor:0,2}',
+        variant: 'blonde hair',
+        variantIndex: 2,
+        variantIndices: [0, 2],
+        mode: 'sequential',
+        selectedPosition: 1,
+      },
+    ]);
+  });
+
   it('keeps normal wildcard expansion unchanged', async () => {
     const result = await expandPromptWildcards('portrait with {wardrobe}', 'ws-1');
 

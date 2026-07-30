@@ -21,6 +21,7 @@ import type { LoRAFile } from '@/components/lora/LoRASelector';
 import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
 import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
 import type { CharacterSummary } from '@/lib/characters/types';
+import { normalizePromptWildcardSelections, type PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
 
 const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
@@ -109,6 +110,13 @@ export function useImageCreateState() {
   const currentWidth = widthParameter ? Number(parameterValues[widthParameter.name] ?? widthParameter.default) : undefined;
   const currentHeight = heightParameter ? Number(parameterValues[heightParameter.name] ?? heightParameter.default) : undefined;
   const isPromptDraftSelected = selectedPromptDocumentId.trim().length > 0;
+  const promptWildcardSelections = useMemo(
+    () => normalizePromptWildcardSelections(parameterValues.promptWildcardSelections),
+    [parameterValues.promptWildcardSelections],
+  );
+  const setPromptWildcardSelections = useCallback((selections: PromptWildcardSelectionMap) => {
+    setParameterValues((prev) => ({ ...prev, promptWildcardSelections: selections }));
+  }, []);
 
   const basicParameters = useMemo(() => {
     if (!currentModel) return [];
@@ -536,6 +544,7 @@ export function useImageCreateState() {
         sceneSnapshot: sceneSnapshotForSubmit,
         sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
         sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
+        promptWildcardSelections,
       });
 
       if (!result.success) {
@@ -549,6 +558,12 @@ export function useImageCreateState() {
         setParameterValues((prev) => ({
           ...prev,
           seed: result.nextSeed,
+          ...(result.promptWildcardSelections ? { promptWildcardSelections: result.promptWildcardSelections } : {}),
+        }));
+      } else if (result.promptWildcardSelections) {
+        setParameterValues((prev) => ({
+          ...prev,
+          promptWildcardSelections: result.promptWildcardSelections,
         }));
       }
       setBatchProgress({ total: normalizedCount, started });
@@ -578,7 +593,7 @@ export function useImageCreateState() {
     setIsGenerating(false);
     setBatchProgress(null);
     return started === normalizedCount;
-  }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
+  }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, promptWildcardSelections, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
 
   const submit = useCallback(async () => submitBatch(1), [submitBatch]);
 
@@ -654,6 +669,8 @@ export function useImageCreateState() {
     selectedModel: currentModel?.id || DEFAULT_IMAGE_MODEL,
     prompt,
     setPrompt,
+    promptWildcardSelections,
+    setPromptWildcardSelections,
     promptSummary,
     showAdvanced,
     setShowAdvanced,

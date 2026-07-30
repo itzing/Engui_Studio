@@ -39,6 +39,7 @@ import {
     applyVideoPresetParameterValues,
     type VideoCreatePreset,
 } from '@/lib/create/videoPresets';
+import { normalizePromptWildcardSelections, type PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
 
 type GalleryReferenceAsset = {
     id: string;
@@ -105,6 +106,7 @@ export default function VideoGenerationForm() {
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
     const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
     const [promptEditorDraft, setPromptEditorDraft] = useState('');
+    const [promptEditorWildcardSelections, setPromptEditorWildcardSelections] = useState<PromptWildcardSelectionMap>({});
     const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
     const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
     const [promptHelperEmptyPrompt, setPromptHelperEmptyPrompt] = useState(false);
@@ -482,6 +484,14 @@ export default function VideoGenerationForm() {
     }, [setSelectedModel, videoSelectedModel]);
 
     const currentModel = getModelById(videoSelectedModel || '') || videoModels[0];
+    const promptWildcardSelections = useMemo(
+        () => normalizePromptWildcardSelections(parameterValues.promptWildcardSelections),
+        [parameterValues.promptWildcardSelections],
+    );
+    const setPromptWildcardSelections = useCallback((selections: PromptWildcardSelectionMap) => {
+        markVideoDraftUserEdit();
+        setParameterValues((prev) => ({ ...prev, promptWildcardSelections: selections }));
+    }, [markVideoDraftUserEdit]);
     const currentModelPresets = videoPresets.filter((preset) => preset.modelId === currentModel?.id);
     const selectedPreset = currentModelPresets.find((preset) => preset.id === selectedPresetId) || null;
     const promptHelperProvider = settings.promptHelper?.provider || 'disabled';
@@ -660,11 +670,13 @@ export default function VideoGenerationForm() {
             return;
         }
         setPromptEditorDraft(prompt);
+        setPromptEditorWildcardSelections(promptWildcardSelections);
         setIsPromptEditorOpen(true);
     };
 
     const savePromptEditor = () => {
         setPrompt(promptEditorDraft);
+        setPromptWildcardSelections(promptEditorWildcardSelections);
         setIsPromptEditorOpen(false);
     };
 
@@ -1416,6 +1428,9 @@ export default function VideoGenerationForm() {
             formData.append('userId', 'user-with-settings'); // TODO: Get actual user ID
             formData.append('modelId', currentModel.id);
             if (prompt) formData.append('prompt', prompt);
+            if (Object.keys(promptWildcardSelections).length > 0) {
+                formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));
+            }
             if (currentModel.id === 'wan22') {
                 formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
             }
@@ -1502,11 +1517,20 @@ export default function VideoGenerationForm() {
                 const nextSeed = typeof data.seed === 'number' && Number.isFinite(data.seed) ? data.seed : null;
                 const storedPrompt = typeof data.prompt === 'string' ? data.prompt : prompt;
                 const resolvedPrompt = typeof data.resolvedPrompt === 'string' ? data.resolvedPrompt : storedPrompt;
+                const nextPromptWildcardSelections = data.promptWildcardSelections && typeof data.promptWildcardSelections === 'object'
+                    ? data.promptWildcardSelections as PromptWildcardSelectionMap
+                    : promptWildcardSelections;
 
                 if (nextSeed !== null) {
                     setParameterValues(prev => ({
                         ...prev,
                         seed: nextSeed,
+                        promptWildcardSelections: nextPromptWildcardSelections,
+                    }));
+                } else {
+                    setParameterValues(prev => ({
+                        ...prev,
+                        promptWildcardSelections: nextPromptWildcardSelections,
                     }));
                 }
 
@@ -1527,6 +1551,7 @@ export default function VideoGenerationForm() {
                         videoPrompt: storedPrompt,
                         resolvedVideoPrompt: resolvedPrompt,
                         randomizeSeed,
+                        promptWildcardSelections: nextPromptWildcardSelections,
                         ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
                     },
                 });
@@ -2573,6 +2598,8 @@ export default function VideoGenerationForm() {
                             value={promptEditorDraft}
                             onChange={setPromptEditorDraft}
                             workspaceId={activeWorkspaceId}
+                            promptWildcardSelections={promptEditorWildcardSelections}
+                            onPromptWildcardSelectionsChange={setPromptEditorWildcardSelections}
                             autoFocus
                             onKeyDown={(event) => {
                                 if (isSubmitShortcut(event)) {

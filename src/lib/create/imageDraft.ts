@@ -72,6 +72,7 @@ export const normalizeImageDraftForModel = (
     Object.entries((snapshot?.parameterValues && typeof snapshot.parameterValues === 'object') ? snapshot.parameterValues : {})
       .filter(([key]) => {
         if (allowedParameterNames.has(key)) return true;
+        if (key === 'promptWildcardSelections') return true;
         if (modelId === 'z-image' && (/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key))) return true;
         return false;
       }),

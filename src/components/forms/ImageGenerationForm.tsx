@@ -28,6 +28,7 @@ import { useImageCreateDraftPersistence } from '@/hooks/create/useImageCreateDra
 import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constructor/types';
 import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
 import type { CharacterSummary } from '@/lib/characters/types';
+import { normalizePromptWildcardSelections, type PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
 
 export default function ImageGenerationForm() {
     const { t } = useI18n();
@@ -82,6 +83,7 @@ export default function ImageGenerationForm() {
     const [isPromptHelperQuickAnimating, setIsPromptHelperQuickAnimating] = useState(false);
     const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
     const [promptEditorDraft, setPromptEditorDraft] = useState('');
+    const [promptEditorWildcardSelections, setPromptEditorWildcardSelections] = useState<PromptWildcardSelectionMap>({});
     const [isImagePromptOpen, setIsImagePromptOpen] = useState(false);
     const [imagePromptFile, setImagePromptFile] = useState<File | null>(null);
     const [imagePromptPreviewUrl, setImagePromptPreviewUrl] = useState('');
@@ -198,6 +200,13 @@ export default function ImageGenerationForm() {
     }, [hasRestoredDraftRef, imageModels, selectedModel]);
 
     const currentModel = getModelById(selectedModel || '') || imageModels[0];
+    const promptWildcardSelections = useMemo(
+        () => normalizePromptWildcardSelections(parameterValues.promptWildcardSelections),
+        [parameterValues.promptWildcardSelections],
+    );
+    const setPromptWildcardSelections = useCallback((selections: PromptWildcardSelectionMap) => {
+        setParameterValues((prev) => ({ ...prev, promptWildcardSelections: selections }));
+    }, []);
     const isZImageModel = currentModel?.id === 'z-image';
     const zImageMode = isZImageModel && parameterValues.task_type === 'image_to_image'
         ? 'i2i'
@@ -234,11 +243,13 @@ export default function ImageGenerationForm() {
             return;
         }
         setPromptEditorDraft(prompt);
+        setPromptEditorWildcardSelections(promptWildcardSelections);
         setIsPromptEditorOpen(true);
     };
 
     const savePromptEditor = () => {
         setPrompt(promptEditorDraft);
+        setPromptWildcardSelections(promptEditorWildcardSelections);
         setIsPromptEditorOpen(false);
     };
 
@@ -1058,6 +1069,7 @@ export default function ImageGenerationForm() {
             sceneSnapshot: sceneSnapshotForSubmit,
             sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
             sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
+            promptWildcardSelections,
         });
 
         if (result.success) {
@@ -1070,6 +1082,12 @@ export default function ImageGenerationForm() {
             setParameterValues(prev => ({
                 ...prev,
                 seed: result.nextSeed,
+                ...(result.promptWildcardSelections ? { promptWildcardSelections: result.promptWildcardSelections } : {}),
+            }));
+        } else if (result.promptWildcardSelections) {
+            setParameterValues(prev => ({
+                ...prev,
+                promptWildcardSelections: result.promptWildcardSelections,
             }));
         }
 
@@ -1473,6 +1491,8 @@ export default function ImageGenerationForm() {
                                         value={promptEditorDraft}
                                         onChange={setPromptEditorDraft}
                                         workspaceId={activeWorkspaceId}
+                                        promptWildcardSelections={promptEditorWildcardSelections}
+                                        onPromptWildcardSelectionsChange={setPromptEditorWildcardSelections}
                                         autoFocus
                                         onKeyDown={(event) => {
                                             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
