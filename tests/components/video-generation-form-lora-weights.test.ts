@@ -256,6 +256,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       options: expect.objectContaining({
         seed: 98765,
         randomizeSeed: true,
+        videoPrompt: 'animate {a|b}',
+        resolvedVideoPrompt: 'animate b',
         promptTemplate: 'animate {a|b}',
         resolvedPrompt: 'animate b',
         resolvedPromptSeed: 98765,

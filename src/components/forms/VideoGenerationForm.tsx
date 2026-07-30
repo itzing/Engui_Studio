@@ -1524,6 +1524,8 @@ export default function VideoGenerationForm() {
                     options: {
                         ...parameterValues,
                         ...(nextSeed !== null ? { seed: nextSeed } : {}),
+                        videoPrompt: storedPrompt,
+                        resolvedVideoPrompt: resolvedPrompt,
                         randomizeSeed,
                         ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
                     },

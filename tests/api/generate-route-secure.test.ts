@@ -474,6 +474,8 @@ describe('POST /api/generate secure RunPod flow', () => {
     const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
     expect(updateOptions).toMatchObject({
       prompt: template,
+      videoPrompt: template,
+      resolvedVideoPrompt: expectedPrompt,
       promptTemplate: template,
       resolvedPrompt: expectedPrompt,
       resolvedPromptSeed: 123,
@@ -599,6 +601,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(createdOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
     expect(createdOptions).toMatchObject({
       videoPrompt: 'animate this frame',
+      resolvedVideoPrompt: 'animate this frame',
       sourceImagePrompt: 'original {red|blue} image prompt',
       resolvedSourceImagePrompt: 'original blue image prompt',
     });
@@ -606,6 +609,7 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(updatedOptions.sourceImageGenerationSnapshot).toEqual(sourceImageGenerationSnapshot);
     expect(updatedOptions).toMatchObject({
       videoPrompt: 'animate this frame',
+      resolvedVideoPrompt: 'animate this frame',
       sourceImagePrompt: 'original {red|blue} image prompt',
       resolvedSourceImagePrompt: 'original blue image prompt',
     });

@@ -38,19 +38,27 @@ export function getPromptVersions(input: {
   resolvedPrompt?: unknown;
 }): PromptVersions {
   const options = parseRecord(input.options);
+  const explicitVideoPrompt = firstPromptText(options.videoPrompt);
   const originalPrompt = firstPromptText(
     input.promptTemplate,
-    options.videoPrompt,
+    explicitVideoPrompt,
     options.promptTemplate,
     options.prompt,
     input.prompt,
   );
-  const resolvedPrompt = firstPromptText(input.resolvedPrompt, options.resolvedVideoPrompt, options.resolvedPrompt);
+  const explicitResolvedVideoPrompt = firstPromptText(options.resolvedVideoPrompt);
+  const resolvedPrompt = firstPromptText(
+    input.resolvedPrompt,
+    explicitResolvedVideoPrompt,
+    options.resolvedPrompt,
+    explicitVideoPrompt ? originalPrompt : '',
+  );
+  const hasResolvedPrompt = Boolean(resolvedPrompt && (resolvedPrompt !== originalPrompt || explicitResolvedVideoPrompt || explicitVideoPrompt));
 
   return {
     originalPrompt,
-    resolvedPrompt: resolvedPrompt && resolvedPrompt !== originalPrompt ? resolvedPrompt : null,
-    hasResolvedPrompt: Boolean(resolvedPrompt && resolvedPrompt !== originalPrompt),
+    resolvedPrompt: hasResolvedPrompt ? resolvedPrompt : null,
+    hasResolvedPrompt,
   };
 }
 

@@ -362,7 +362,7 @@ export async function submitGenerationFormData(formData: FormData) {
         const videoPromptMetadata = model.type === 'video'
             ? {
                 videoPrompt: promptTemplate || undefined,
-                resolvedVideoPrompt: prompt !== promptTemplate ? prompt : undefined,
+                resolvedVideoPrompt: prompt || undefined,
                 sourceImagePrompt: sourceImagePromptVersions.originalPrompt || undefined,
                 resolvedSourceImagePrompt: sourceImagePromptVersions.resolvedPrompt || undefined,
             }

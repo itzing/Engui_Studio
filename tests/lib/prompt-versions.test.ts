@@ -37,6 +37,37 @@ describe('prompt version helpers', () => {
     expect(getPromptForMode(versions, 'resolved')).toBe('video walk');
   });
 
+  it('keeps explicit resolved video prompts even when they match the original', () => {
+    const versions = getPromptVersions({
+      prompt: 'fallback video prompt',
+      options: {
+        videoPrompt: 'video prompt',
+        resolvedVideoPrompt: 'video prompt',
+      },
+    });
+
+    expect(versions).toEqual({
+      originalPrompt: 'video prompt',
+      resolvedPrompt: 'video prompt',
+      hasResolvedPrompt: true,
+    });
+  });
+
+  it('keeps a resolved video tab fallback for older explicit video prompt metadata', () => {
+    const versions = getPromptVersions({
+      prompt: 'fallback video prompt',
+      options: {
+        videoPrompt: 'video prompt',
+      },
+    });
+
+    expect(versions).toEqual({
+      originalPrompt: 'video prompt',
+      resolvedPrompt: 'video prompt',
+      hasResolvedPrompt: true,
+    });
+  });
+
   it('suppresses resolved prompt when it matches the original prompt', () => {
     const versions = getPromptVersions({
       prompt: 'portrait',
