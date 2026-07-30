@@ -279,6 +279,7 @@ describe('persistCreateReuseDraft', () => {
     getWorkflowDraft.mockReturnValue({
       prompt: 'existing video prompt',
       showAdvanced: true,
+      randomizeSeed: true,
       parameterValues: {
         width: 1280,
         height: 720,
@@ -317,6 +318,7 @@ describe('persistCreateReuseDraft', () => {
     expect(saveWorkflowDraft).toHaveBeenCalledWith('video', 'wan22', {
       prompt: 'existing video prompt',
       showAdvanced: true,
+      randomizeSeed: true,
       parameterValues: {
         width: 1280,
         height: 720,

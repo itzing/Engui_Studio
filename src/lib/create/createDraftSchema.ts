@@ -51,6 +51,7 @@ export type ImageCreateDraftV2 = CommonCreateDraftFields & {
 };
 
 export type VideoCreateDraftV2 = CommonCreateDraftFields & {
+  randomizeSeed?: boolean | string | number;
   selectedPresetId?: string;
   inputs?: {
     image?: CreateMediaRef | null;

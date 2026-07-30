@@ -195,6 +195,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const currentDraft = getWorkflowDraft<{
       prompt?: string;
       showAdvanced?: boolean;
+      randomizeSeed?: boolean | string | number;
       parameterValues?: Record<string, any>;
       imagePreviewUrl?: string;
       videoPreviewUrl?: string;
@@ -214,6 +215,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       const snapshot = {
         prompt: typeof currentDraft?.prompt === 'string' ? currentDraft.prompt : '',
         showAdvanced: typeof currentDraft?.showAdvanced === 'boolean' ? currentDraft.showAdvanced : false,
+        randomizeSeed: currentDraft?.randomizeSeed,
         parameterValues,
         imagePreviewUrl: nextImagePreviewUrl,
         videoPreviewUrl: typeof currentDraft?.videoPreviewUrl === 'string' ? currentDraft.videoPreviewUrl : '',
