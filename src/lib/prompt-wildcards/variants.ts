@@ -31,9 +31,11 @@ export function splitPromptVariantOptions(input: string): string[] {
 
 export function getPromptWildcardVariants(value: string): string[] {
   const trimmed = value.trim();
-  const variantMatch = trimmed.match(/^\{([^{}\n]*\|[^{}\n]*)\}$/);
-  if (!variantMatch) return [];
-  return splitPromptVariantOptions(variantMatch[1]);
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return [];
+
+  const content = trimmed.slice(1, -1);
+  if (!content.includes('|') || content.includes('{') || content.includes('}')) return [];
+  return splitPromptVariantOptions(content);
 }
 
 export function normalizePromptWildcardVariant(input: string): string {

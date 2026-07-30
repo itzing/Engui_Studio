@@ -545,6 +545,8 @@ describe('POST /api/generate secure RunPod flow', () => {
     const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
     expect(updateOptions).toMatchObject({
       prompt: template,
+      videoPrompt: template,
+      resolvedVideoPrompt: expectedPrompt,
       promptTemplate: template,
       expandedPromptTemplate: expandedTemplate,
       resolvedPrompt: expectedPrompt,
@@ -554,6 +556,92 @@ describe('POST /api/generate secure RunPod flow', () => {
         { key: 'eyeColor', name: 'Eye color', placeholder: '{eyeColor}' },
       ],
     });
+  });
+
+  it('persists resolved video prompt after multiline workspace wildcard expansion', async () => {
+    mockGetModelById.mockReturnValue({
+      id: 'wan22',
+      name: 'WAN 2.2',
+      type: 'video',
+      api: {
+        type: 'runpod',
+        endpoint: 'wan22',
+      },
+      inputs: ['text', 'image'],
+      imageInputKey: 'image_path',
+      parameters: [
+        { name: 'seed', type: 'number', default: 77 },
+      ],
+    });
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { wan22: 'endpoint-1' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+    mockPrisma.promptWildcard.findMany.mockResolvedValue([
+      {
+        key: 'videoMove',
+        name: 'Video move',
+        value: `{
+slowly turns left with a soft smile
+|steps back and spins once
+|leans toward the lens, then waves
+}`,
+      },
+    ]);
+
+    const template = 'camera starts close, {videoMove}';
+    const expandedTemplate = `camera starts close, {
+slowly turns left with a soft smile
+|steps back and spins once
+|leans toward the lens, then waves
+}`;
+    const expectedPrompt = resolvePromptVariants(expandedTemplate, 77);
+    const formData = new FormData();
+    formData.set('modelId', 'wan22');
+    formData.set('workspaceId', 'workspace-default');
+    formData.set('prompt', template);
+    formData.set('seed', '77');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.resolvedPrompt).toBe(expectedPrompt);
+    expect(json.resolvedPrompt).not.toContain('{');
+    expect(mockCreateStructuredEnvelope).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.any(Object),
+      expect.objectContaining({
+        prompt: expectedPrompt,
+      }),
+    );
+    const createdOptions = JSON.parse(mockPrisma.job.create.mock.calls[0][0].data.options);
+    expect(createdOptions).toMatchObject({
+      prompt: template,
+      videoPrompt: template,
+      resolvedVideoPrompt: expectedPrompt,
+      expandedPromptTemplate: expandedTemplate,
+      resolvedPrompt: expectedPrompt,
+      promptWildcardReplacements: [
+        { key: 'videoMove', name: 'Video move', placeholder: '{videoMove}' },
+      ],
+    });
+    const updateOptions = JSON.parse(mockPrisma.job.update.mock.calls[0][0].data.options);
+    expect(updateOptions.resolvedVideoPrompt).toBe(expectedPrompt);
   });
 
   it('persists source image generation metadata on WAN22 jobs', async () => {

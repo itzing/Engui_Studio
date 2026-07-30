@@ -19,6 +19,20 @@ describe('resolvePromptVariants', () => {
     expect(resolvePromptVariants('keep {literal braces} intact', 123)).toBe('keep {literal braces} intact');
   });
 
+  it('selects one option from multiline brace groups', () => {
+    const prompt = `camera starts close, {
+slowly turns left with a soft smile
+|steps back and spins once
+|leans toward the lens, then waves
+}`;
+
+    const resolved = resolvePromptVariants(prompt, 77);
+
+    expect(resolved).not.toContain('{');
+    expect(resolved).not.toContain('|');
+    expect(resolved).toMatch(/camera starts close, (slowly turns left|steps back|leans toward)/);
+  });
+
   it('usually produces a different option for a different seed', () => {
     const prompt = '{red|blue|green|yellow} dress';
 
@@ -37,6 +51,14 @@ describe('prompt wildcard variant helpers', () => {
       'green eyes',
       'hazel eyes',
     ]);
+  });
+
+  it('extracts variants from multiline wildcard values', () => {
+    expect(getPromptWildcardVariants(`{
+slow walk
+|gentle turn
+|camera wave
+}`)).toEqual(['slow walk', 'gentle turn', 'camera wave']);
   });
 
   it('keeps escaped separators inside variant options', () => {
