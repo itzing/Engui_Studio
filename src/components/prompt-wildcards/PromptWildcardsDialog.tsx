@@ -143,23 +143,25 @@ export default function PromptWildcardsDialog({ open, workspaceId, onOpenChange 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-[1100px] h-[82vh] p-0 gap-0 overflow-hidden flex flex-col">
-        <DialogHeader className="border-b border-border px-5 py-4 pr-14 space-y-1 text-left">
-          <DialogTitle className="text-base">Wildcards</DialogTitle>
-          <DialogDescription className="text-xs">Manage prompt placeholders.</DialogDescription>
+        <DialogHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-border px-5 py-4 pr-14 text-left">
+          <div className="space-y-1">
+            <DialogTitle className="text-base">Wildcards</DialogTitle>
+            <DialogDescription className="text-xs">Manage prompt placeholders.</DialogDescription>
+          </div>
+          <Button
+            type="button"
+            variant={selectedId === 'new' ? 'secondary' : 'outline'}
+            size="sm"
+            className="shrink-0 gap-2"
+            onClick={() => setSelectedId('new')}
+          >
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 grid-cols-[230px_minmax(0,1fr)]">
-          <aside className="border-r border-border bg-muted/10 p-3">
-            <Button
-              type="button"
-              variant={selectedId === 'new' ? 'secondary' : 'outline'}
-              size="sm"
-              className="mb-3 w-full justify-start gap-2"
-              onClick={() => setSelectedId('new')}
-            >
-              <Plus className="h-4 w-4" />
-              New
-            </Button>
-            <div className="space-y-1 overflow-y-auto">
+        <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-[230px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col border-r border-border bg-muted/10 p-3">
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
               {isLoading ? (
                 <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
