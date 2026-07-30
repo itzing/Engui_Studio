@@ -14,19 +14,19 @@ import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/persistPromptConstructorReuseDraft';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
+import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
 
-type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
+type GalleryPromptMode = DetailsPromptMode;
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
-  const [promptMode, setPromptMode] = useState<GalleryPromptMode>('original');
+  const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
-    setPromptMode('original');
   }, [asset?.id, asset?.userTags]);
 
   const mediaUrl = useMemo(() => asset?.previewUrl || asset?.originalUrl || '', [asset]);
@@ -42,14 +42,26 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
     ...(hasSourceImagePrompt && asset?.sourceImageResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
   ], [asset?.sourceImageResolvedPrompt, hasSourceImagePrompt, promptVersions.hasResolvedPrompt]);
-  const selectedPrompt = promptMode === 'sourceImage'
+  const selectedPromptMode = useMemo(() => getAvailableDetailsPromptMode(promptMode, promptModeOptions), [promptMode, promptModeOptions]);
+  const selectedPrompt = selectedPromptMode === 'sourceImage'
     ? asset?.sourceImagePrompt || ''
-    : promptMode === 'sourceImageResolved'
+    : selectedPromptMode === 'sourceImageResolved'
       ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
-    : getPromptForMode(promptVersions, promptMode);
+    : getPromptForMode(promptVersions, selectedPromptMode as PromptVersionMode);
   const generationSeed = asset && shouldShowGenerationSeed(asset.type) && typeof asset.seed === 'number' && Number.isFinite(asset.seed)
     ? Math.trunc(asset.seed)
     : null;
+
+  useEffect(() => {
+    if (selectedPromptMode !== promptMode) {
+      setPromptMode(selectedPromptMode);
+    }
+  }, [promptMode, selectedPromptMode]);
+
+  const handlePromptModeChange = (mode: GalleryPromptMode) => {
+    setPromptMode(mode);
+    writeDetailsPromptModePreference(mode);
+  };
 
   const downloadAsset = async () => {
     if (!asset) return;
@@ -214,8 +226,8 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                             <button
                               key={mode}
                               type="button"
-                              onClick={() => setPromptMode(mode)}
-                              className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                              onClick={() => handlePromptModeChange(mode)}
+                              className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${selectedPromptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
                             >
                               {label}
                             </button>

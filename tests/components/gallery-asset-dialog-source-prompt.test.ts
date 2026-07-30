@@ -3,9 +3,10 @@
  */
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryAssetDialog, type GalleryAssetDialogAsset } from '@/components/workspace/GalleryAssetDialog';
+import { DETAILS_PROMPT_MODE_STORAGE_KEY } from '@/lib/detailsPromptModePreference';
 
 vi.mock('@/components/ui/toast', () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -47,6 +48,10 @@ function renderDialog(asset: Partial<GalleryAssetDialogAsset> = {}) {
 }
 
 describe('GalleryAssetDialog source prompt toggle', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('switches video details from video prompt to source image prompt', () => {
     renderDialog();
 
@@ -67,6 +72,48 @@ describe('GalleryAssetDialog source prompt toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resolved source' }));
 
     expect(screen.getByText('source resolved image prompt')).toBeTruthy();
+    expect(window.localStorage.getItem(DETAILS_PROMPT_MODE_STORAGE_KEY)).toBe('sourceImageResolved');
+  });
+
+  it('opens the next asset on the previously selected prompt tab when available', () => {
+    const rendered = renderDialog({ id: 'asset-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved video' }));
+    expect(screen.getByText('video resolved motion prompt')).toBeTruthy();
+
+    rendered.rerender(React.createElement(GalleryAssetDialog, {
+      asset: {
+        id: 'asset-2',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/video-2.mp4',
+        previewUrl: '/video-2.mp4',
+        thumbnailUrl: '/thumb-2.jpg',
+        favorited: false,
+        trashed: false,
+        userTags: [],
+        autoTags: [],
+        sourceJobId: 'job-2',
+        sourceOutputId: 'output-1',
+        prompt: 'next video prompt',
+        resolvedPrompt: 'next resolved video prompt',
+        sourceImagePrompt: 'next source prompt',
+        sourceImageResolvedPrompt: 'next resolved source prompt',
+        seed: 12,
+        modelId: 'wan22',
+        addedToGalleryAt: '2026-07-30T10:39:10Z',
+      },
+      open: true,
+      onOpenChange: vi.fn(),
+      onToggleFavorite: vi.fn(),
+      onTrash: vi.fn(),
+      onPermanentDelete: vi.fn(),
+      onSaveTags: vi.fn(),
+      onRemoveAutoTag: vi.fn(),
+      onTagClick: vi.fn(),
+    }));
+
+    expect(screen.getByText('next resolved video prompt')).toBeTruthy();
   });
 
   it('keeps image prompt controls unchanged when no source prompt exists', () => {

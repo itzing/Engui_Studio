@@ -16,9 +16,10 @@ import { useToast } from '@/components/ui/toast';
 import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { getGenerationSeedFromOptions, shouldShowGenerationSeed } from '@/lib/generationSeed';
+import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
 
 type MediaResolution = { width: number; height: number };
-type JobPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
+type JobPromptMode = DetailsPromptMode;
 
 function parseJobOptions(rawOptions: unknown): Record<string, any> {
   if (!rawOptions) return {};
@@ -68,7 +69,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
-  const [promptMode, setPromptMode] = useState<JobPromptMode>('original');
+  const [promptMode, setPromptMode] = useState<JobPromptMode>(() => readDetailsPromptModePreference());
   const selectedOutput = job?.outputs?.[0] || null;
   const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
   const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
@@ -92,11 +93,12 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
       ...(hasSourcePrompt && sourcePromptVersions.hasResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
     ];
   }, [job?.type, promptVersions.hasResolvedPrompt, sourcePromptVersions.hasResolvedPrompt, sourcePromptVersions.originalPrompt]);
-  const selectedPrompt = promptMode === 'sourceImage'
+  const selectedPromptMode = useMemo(() => getAvailableDetailsPromptMode(promptMode, promptModeOptions), [promptMode, promptModeOptions]);
+  const selectedPrompt = selectedPromptMode === 'sourceImage'
     ? sourcePromptVersions.originalPrompt
-    : promptMode === 'sourceImageResolved'
+    : selectedPromptMode === 'sourceImageResolved'
       ? sourcePromptVersions.resolvedPrompt || sourcePromptVersions.originalPrompt
-      : getPromptForMode(promptVersions, promptMode);
+      : getPromptForMode(promptVersions, selectedPromptMode as PromptVersionMode);
   const loraSummary = useMemo(() => {
     if (!job) return '';
     const options = parseJobOptions((job as any).options);
@@ -150,8 +152,15 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   }, [job]);
 
   useEffect(() => {
-    setPromptMode('original');
-  }, [job?.id]);
+    if (selectedPromptMode !== promptMode) {
+      setPromptMode(selectedPromptMode);
+    }
+  }, [promptMode, selectedPromptMode]);
+
+  const handlePromptModeChange = (mode: JobPromptMode) => {
+    setPromptMode(mode);
+    writeDetailsPromptModePreference(mode);
+  };
 
   const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
     if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -366,8 +375,8 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                             <button
                               key={mode}
                               type="button"
-                              onClick={() => setPromptMode(mode)}
-                              className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                              onClick={() => handlePromptModeChange(mode)}
+                              className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${selectedPromptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
                             >
                               {label}
                             </button>

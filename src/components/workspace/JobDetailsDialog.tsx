@@ -11,6 +11,7 @@ import { useI18n } from '@/lib/i18n/context';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { getGenerationSeedFromOptions, shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
+import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
 
 interface JobDetailsDialogProps {
     job: Job | null;
@@ -22,7 +23,7 @@ interface JobDetailsDialogProps {
 }
 
 type GalleryBucket = 'common' | 'draft';
-type JobPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
+type JobPromptMode = DetailsPromptMode;
 
 type MediaResolution = { width: number; height: number };
 
@@ -152,7 +153,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const [savingBucket, setSavingBucket] = useState<GalleryBucket | null>(null);
     const [isUpscaling, setIsUpscaling] = useState(false);
     const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
-    const [promptMode, setPromptMode] = useState<JobPromptMode>('original');
+    const [promptMode, setPromptMode] = useState<JobPromptMode>(() => readDetailsPromptModePreference());
 
     // If no job, we still render the Dialog but with open=false to prevent unmounting issues
     const safeOpen = open && !!job;
@@ -235,11 +236,12 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
             ...(hasSourcePrompt && sourcePromptVersions.hasResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
         ];
     }, [job?.type, promptVersions.hasResolvedPrompt, sourcePromptVersions.hasResolvedPrompt, sourcePromptVersions.originalPrompt]);
-    const selectedPrompt = promptMode === 'sourceImage'
+    const selectedPromptMode = useMemo(() => getAvailableDetailsPromptMode(promptMode, promptModeOptions), [promptMode, promptModeOptions]);
+    const selectedPrompt = selectedPromptMode === 'sourceImage'
         ? sourcePromptVersions.originalPrompt
-        : promptMode === 'sourceImageResolved'
+        : selectedPromptMode === 'sourceImageResolved'
             ? sourcePromptVersions.resolvedPrompt || sourcePromptVersions.originalPrompt
-            : getPromptForMode(promptVersions, promptMode);
+            : getPromptForMode(promptVersions, selectedPromptMode as PromptVersionMode);
     const sourceImagePath = typeof (job as any)?.imageInputPath === 'string' && (job as any).imageInputPath.trim()
         ? (job as any).imageInputPath.trim()
         : '';
@@ -252,8 +254,15 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
     const canNavigateRight = Boolean(onNavigate && totalCount > 1 && currentIndex > 0 && currentIndex < totalCount);
 
     useEffect(() => {
-        setPromptMode('original');
-    }, [job?.id]);
+        if (selectedPromptMode !== promptMode) {
+            setPromptMode(selectedPromptMode);
+        }
+    }, [promptMode, selectedPromptMode]);
+
+    const handlePromptModeChange = (mode: JobPromptMode) => {
+        setPromptMode(mode);
+        writeDetailsPromptModePreference(mode);
+    };
 
     const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
         if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -586,8 +595,8 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                                     <button
                                                         key={mode}
                                                         type="button"
-                                                        onClick={() => setPromptMode(mode)}
-                                                        className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                        onClick={() => handlePromptModeChange(mode)}
+                                                        className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${selectedPromptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                                                     >
                                                         {label}
                                                     </button>

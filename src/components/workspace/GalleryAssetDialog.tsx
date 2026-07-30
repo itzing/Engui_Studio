@@ -7,9 +7,10 @@ import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react'
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
+import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
-type GalleryPromptMode = PromptVersionMode | 'sourceImage' | 'sourceImageResolved';
+type GalleryPromptMode = DetailsPromptMode;
 import { useToast } from '@/components/ui/toast';
 
 export type GalleryAssetDialogAsset = {
@@ -55,7 +56,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [isEnriching, setIsEnriching] = useState(false);
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
-  const [promptMode, setPromptMode] = useState<GalleryPromptMode>('original');
+  const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
   const { showToast } = useToast();
   const promptVersions = getPromptVersions({
     prompt: asset?.prompt,
@@ -69,19 +70,30 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
     ...(hasSourceImagePrompt ? [{ mode: 'sourceImage' as const, label: 'Source image' }] : []),
     ...(hasSourceImagePrompt && asset?.sourceImageResolvedPrompt ? [{ mode: 'sourceImageResolved' as const, label: 'Resolved source' }] : []),
   ];
-  const selectedPrompt = promptMode === 'sourceImage'
+  const selectedPromptMode = getAvailableDetailsPromptMode(promptMode, promptModeOptions);
+  const selectedPrompt = selectedPromptMode === 'sourceImage'
     ? asset?.sourceImagePrompt || ''
-    : promptMode === 'sourceImageResolved'
+    : selectedPromptMode === 'sourceImageResolved'
       ? asset?.sourceImageResolvedPrompt || asset?.sourceImagePrompt || ''
-    : getPromptForMode(promptVersions, promptMode);
+    : getPromptForMode(promptVersions, selectedPromptMode as PromptVersionMode);
   const generationSeed = asset && shouldShowGenerationSeed(asset.type) && typeof asset.seed === 'number' && Number.isFinite(asset.seed)
     ? Math.trunc(asset.seed)
     : null;
 
   useEffect(() => {
     setTagsInput((asset?.userTags || []).join(', '));
-    setPromptMode('original');
   }, [asset?.id, asset?.userTags]);
+
+  useEffect(() => {
+    if (selectedPromptMode !== promptMode) {
+      setPromptMode(selectedPromptMode);
+    }
+  }, [promptMode, selectedPromptMode]);
+
+  const handlePromptModeChange = (mode: GalleryPromptMode) => {
+    setPromptMode(mode);
+    writeDetailsPromptModePreference(mode);
+  };
 
   const handleDownload = async () => {
     if (!asset) return;
@@ -231,8 +243,8 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                           <button
                             key={mode}
                             type="button"
-                            onClick={() => setPromptMode(mode)}
-                            className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${promptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            onClick={() => handlePromptModeChange(mode)}
+                            className={`whitespace-nowrap rounded px-2 py-0.5 text-[11px] transition-colors ${selectedPromptMode === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                           >
                             {label}
                           </button>
