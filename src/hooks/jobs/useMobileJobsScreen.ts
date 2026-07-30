@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
+import { writeMobileDetailsSnapshot } from '@/lib/mobile/detailsNavigation';
 
 export type MobileJobsScreenItem = {
   id: string;
@@ -268,6 +269,16 @@ export function useMobileJobsScreen() {
     if (!storageKey || !selectedJobId || typeof window === 'undefined') return;
     window.localStorage.setItem(storageKey, selectedJobId);
   }, [selectedJobId, storageKey]);
+
+  useEffect(() => {
+    if (!effectiveWorkspaceId || loadedEntries.length === 0 || totalCount <= 0) return;
+    writeMobileDetailsSnapshot('jobs', {
+      workspaceId: effectiveWorkspaceId,
+      entries: loadedEntries.map(({ job, absoluteIndex }) => ({ id: job.id, absoluteIndex })),
+      totalCount,
+      pageSize: PAGE_SIZE,
+    });
+  }, [effectiveWorkspaceId, loadedEntries, totalCount]);
 
   useEffect(() => {
     if (!effectiveWorkspaceId) return;

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Clapperboard, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,24 @@ import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/per
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
+import {
+  buildMobileDetailsNavigationState,
+  findMobileDetailsEntry,
+  getMobileDetailsEntryIdAtIndex,
+  readMobileDetailsSnapshot,
+  type MobileDetailsNavigationState,
+} from '@/lib/mobile/detailsNavigation';
 
 type GalleryPromptMode = DetailsPromptMode;
+
+const EMPTY_NAVIGATION: MobileDetailsNavigationState = {
+  currentIndex: null,
+  totalCount: null,
+  previousId: null,
+  nextId: null,
+  canGoPrevious: false,
+  canGoNext: false,
+};
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
   const router = useRouter();
@@ -24,6 +40,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
+  const [navigation, setNavigation] = useState<MobileDetailsNavigationState>(EMPTY_NAVIGATION);
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
@@ -52,16 +69,59 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     ? Math.trunc(asset.seed)
     : null;
 
-  useEffect(() => {
-    if (selectedPromptMode !== promptMode) {
-      setPromptMode(selectedPromptMode);
-    }
-  }, [promptMode, selectedPromptMode]);
-
   const handlePromptModeChange = (mode: GalleryPromptMode) => {
     setPromptMode(mode);
     writeDetailsPromptModePreference(mode);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNavigation = async () => {
+      const snapshot = readMobileDetailsSnapshot('gallery');
+      const entry = findMobileDetailsEntry(snapshot, assetId);
+      if (!snapshot || !entry) {
+        if (!cancelled) setNavigation(EMPTY_NAVIGATION);
+        return;
+      }
+
+      const resolveNeighborId = async (targetIndex: number) => {
+        const cachedId = getMobileDetailsEntryIdAtIndex(snapshot, targetIndex);
+        if (cachedId) return cachedId;
+
+        const page = Math.floor(targetIndex / snapshot.pageSize) + 1;
+        const search = new URLSearchParams({
+          ...(snapshot.queryParams || {}),
+          limit: String(snapshot.pageSize),
+          page: String(page),
+        });
+
+        try {
+          const response = await fetch(`/api/gallery/assets?${search.toString()}`, { cache: 'no-store' });
+          const data = await response.json();
+          if (!response.ok || !data.success || !Array.isArray(data.assets) || !data.pagination) return null;
+          const indexOnPage = targetIndex - ((data.pagination.page - 1) * data.pagination.limit);
+          return data.assets[indexOnPage]?.id || null;
+        } catch {
+          return null;
+        }
+      };
+
+      const [previousId, nextId] = await Promise.all([
+        entry.absoluteIndex > 0 ? resolveNeighborId(entry.absoluteIndex - 1) : Promise.resolve(null),
+        entry.absoluteIndex < snapshot.totalCount - 1 ? resolveNeighborId(entry.absoluteIndex + 1) : Promise.resolve(null),
+      ]);
+
+      if (!cancelled) {
+        setNavigation(buildMobileDetailsNavigationState(snapshot, assetId, previousId, nextId));
+      }
+    };
+
+    void loadNavigation();
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
 
   const downloadAsset = async () => {
     if (!asset) return;
@@ -184,6 +244,31 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
         <div className="space-y-4">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigation.previousId && router.push(`/m/gallery/${navigation.previousId}`)}
+              disabled={!navigation.canGoPrevious || !navigation.previousId}
+              className="justify-start"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous
+            </Button>
+            <div className="text-xs text-muted-foreground">
+              {navigation.currentIndex !== null && navigation.totalCount !== null ? `${navigation.currentIndex + 1} of ${navigation.totalCount}` : 'List'}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigation.nextId && router.push(`/m/gallery/${navigation.nextId}`)}
+              disabled={!navigation.canGoNext || !navigation.nextId}
+              className="justify-end"
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
           {isLoading ? <div className="flex items-center gap-2 rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading asset...</div> : null}
           {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div> : null}
           {!isLoading && !error && !asset ? <div className="rounded-lg border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">Gallery asset not found.</div> : null}

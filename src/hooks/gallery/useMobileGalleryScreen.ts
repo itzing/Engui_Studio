@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
+import { writeMobileDetailsSnapshot } from '@/lib/mobile/detailsNavigation';
 
 export type GallerySemanticFilter = 'all' | 'common' | 'draft' | 'upscale';
 
@@ -369,6 +370,26 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (!storageKey || !selectedAssetId || typeof window === 'undefined') return;
     window.localStorage.setItem(storageKey, selectedAssetId);
   }, [selectedAssetId, storageKey]);
+
+  useEffect(() => {
+    if (!effectiveWorkspaceId || surface !== 'mobile' || loadedAssets.length === 0 || totalCount <= 0) return;
+    writeMobileDetailsSnapshot('gallery', {
+      workspaceId: effectiveWorkspaceId,
+      entries: loadedAssets.map(({ asset, absoluteIndex }) => ({ id: asset.id, absoluteIndex })),
+      totalCount,
+      pageSize: PAGE_SIZE,
+      queryParams: {
+        workspaceId: effectiveWorkspaceId,
+        sort: 'newest',
+        includeTrashed: showTrashed ? 'true' : 'false',
+        onlyTrashed: showTrashed ? 'true' : 'false',
+        favoritesOnly: favoritesOnly ? 'true' : 'false',
+        bucket: semanticFilter,
+        type: selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','),
+        ...(query.trim() ? { q: query.trim() } : {}),
+      },
+    });
+  }, [effectiveWorkspaceId, favoritesOnly, loadedAssets, query, selectedFilters, semanticFilter, showTrashed, surface, totalCount]);
 
   useEffect(() => {
     const handleGalleryAssetChanged = () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Type, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Copy, Download, FolderPlus, Loader2, RefreshCw, Sparkles, Type, X } from 'lucide-react';
 
 type GalleryBucket = 'common' | 'draft';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
@@ -17,9 +17,25 @@ import { useMobileJobDetails } from '@/hooks/jobs/useMobileJobDetails';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { getGenerationSeedFromOptions, shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
+import {
+  buildMobileDetailsNavigationState,
+  findMobileDetailsEntry,
+  getMobileDetailsEntryIdAtIndex,
+  readMobileDetailsSnapshot,
+  type MobileDetailsNavigationState,
+} from '@/lib/mobile/detailsNavigation';
 
 type MediaResolution = { width: number; height: number };
 type JobPromptMode = DetailsPromptMode;
+
+const EMPTY_NAVIGATION: MobileDetailsNavigationState = {
+  currentIndex: null,
+  totalCount: null,
+  previousId: null,
+  nextId: null,
+  canGoPrevious: false,
+  canGoNext: false,
+};
 
 function parseJobOptions(rawOptions: unknown): Record<string, any> {
   if (!rawOptions) return {};
@@ -70,6 +86,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [actualResolutionByOutput, setActualResolutionByOutput] = useState<Record<string, MediaResolution>>({});
   const [promptMode, setPromptMode] = useState<JobPromptMode>(() => readDetailsPromptModePreference());
+  const [navigation, setNavigation] = useState<MobileDetailsNavigationState>(EMPTY_NAVIGATION);
   const selectedOutput = job?.outputs?.[0] || null;
   const selectedActualResolution = selectedOutput ? actualResolutionByOutput[selectedOutput.outputId] || null : null;
   const requestedResolution = useMemo(() => getRequestedResolution(job), [job]);
@@ -151,16 +168,59 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     return arraySlots.join(' • ');
   }, [job]);
 
-  useEffect(() => {
-    if (selectedPromptMode !== promptMode) {
-      setPromptMode(selectedPromptMode);
-    }
-  }, [promptMode, selectedPromptMode]);
-
   const handlePromptModeChange = (mode: JobPromptMode) => {
     setPromptMode(mode);
     writeDetailsPromptModePreference(mode);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNavigation = async () => {
+      const snapshot = readMobileDetailsSnapshot('jobs');
+      const entry = findMobileDetailsEntry(snapshot, jobId);
+      if (!snapshot || !entry) {
+        if (!cancelled) setNavigation(EMPTY_NAVIGATION);
+        return;
+      }
+
+      const resolveNeighborId = async (targetIndex: number) => {
+        const cachedId = getMobileDetailsEntryIdAtIndex(snapshot, targetIndex);
+        if (cachedId) return cachedId;
+
+        const page = Math.floor(targetIndex / snapshot.pageSize) + 1;
+        const search = new URLSearchParams({
+          limit: String(snapshot.pageSize),
+          page: String(page),
+        });
+        if (snapshot.workspaceId) search.set('workspaceId', snapshot.workspaceId);
+
+        try {
+          const response = await fetch(`/api/jobs?${search.toString()}`, { cache: 'no-store' });
+          const data = await response.json();
+          if (!response.ok || !data.success || !Array.isArray(data.jobs) || !data.pagination) return null;
+          const indexOnPage = targetIndex - ((data.pagination.page - 1) * data.pagination.limit);
+          return data.jobs[indexOnPage]?.id || null;
+        } catch {
+          return null;
+        }
+      };
+
+      const [previousId, nextId] = await Promise.all([
+        entry.absoluteIndex > 0 ? resolveNeighborId(entry.absoluteIndex - 1) : Promise.resolve(null),
+        entry.absoluteIndex < snapshot.totalCount - 1 ? resolveNeighborId(entry.absoluteIndex + 1) : Promise.resolve(null),
+      ]);
+
+      if (!cancelled) {
+        setNavigation(buildMobileDetailsNavigationState(snapshot, jobId, previousId, nextId));
+      }
+    };
+
+    void loadNavigation();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
 
   const rememberOutputResolution = (outputId: string | undefined, width: number, height: number) => {
     if (!outputId || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -328,6 +388,31 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 custom-scrollbar">
         <div className="space-y-4">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigation.previousId && router.push(`/m/jobs/${navigation.previousId}`)}
+              disabled={!navigation.canGoPrevious || !navigation.previousId}
+              className="justify-start"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous
+            </Button>
+            <div className="text-xs text-muted-foreground">
+              {navigation.currentIndex !== null && navigation.totalCount !== null ? `${navigation.currentIndex + 1} of ${navigation.totalCount}` : 'List'}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigation.nextId && router.push(`/m/jobs/${navigation.nextId}`)}
+              disabled={!navigation.canGoNext || !navigation.nextId}
+              className="justify-end"
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
           {isLoading ? <div className="flex items-center gap-2 rounded-lg border border-border px-4 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading job...</div> : null}
           {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div> : null}
           {!isLoading && !error && !job ? <div className="rounded-lg border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">Job not found.</div> : null}
