@@ -5,6 +5,8 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mockShareGalleryAsset = vi.hoisted(() => vi.fn().mockResolvedValue('file'));
+
 type MockLightboxProps = {
   open?: boolean;
   index?: number;
@@ -45,6 +47,14 @@ vi.mock('yet-another-react-lightbox/plugins/zoom', () => ({
   default: vi.fn(),
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}));
+
+vi.mock('@/lib/galleryShare', () => ({
+  shareGalleryAsset: mockShareGalleryAsset,
+}));
+
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 
 const items = [
@@ -56,6 +66,7 @@ const items = [
 describe('GalleryFullscreenViewer touch swipe navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockShareGalleryAsset.mockResolvedValue('file');
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
     window.localStorage.clear();
     Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
@@ -133,5 +144,39 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
     fireEvent.click(video.parentElement as HTMLElement);
 
     await waitFor(() => expect(video.hasAttribute('controls')).toBe(true));
+  });
+
+  it('shows Share for image and video slides and shares the current item URL', async () => {
+    render(React.createElement(GalleryFullscreenViewer, {
+      open: true,
+      items,
+      currentIndex: 1,
+      onIndexChange: vi.fn(),
+      onClose: vi.fn(),
+      onToggleFavorite: vi.fn(),
+    }));
+
+    const shareButton = await screen.findByRole('button', { name: 'Share gallery item' });
+    fireEvent.click(shareButton);
+
+    await waitFor(() => expect(mockShareGalleryAsset).toHaveBeenCalledWith({
+      id: 'asset-2',
+      type: 'image',
+      originalUrl: '/asset-2.jpg',
+      title: 'Gallery Asset',
+    }));
+  });
+
+  it('does not show Share for audio slides', async () => {
+    render(React.createElement(GalleryFullscreenViewer, {
+      open: true,
+      items: [{ id: 'audio-1', url: '/audio.mp3', type: 'audio' as const }],
+      currentIndex: 0,
+      onIndexChange: vi.fn(),
+      onClose: vi.fn(),
+      onToggleFavorite: vi.fn(),
+    }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Share gallery item' })).toBeNull());
   });
 });

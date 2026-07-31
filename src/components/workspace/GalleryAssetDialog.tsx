@@ -3,12 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clapperboard, Download, Share2, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
-import { shareGalleryAsset, type GalleryShareResult } from '@/lib/galleryShare';
 
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
 type GalleryPromptMode = DetailsPromptMode;
@@ -57,7 +56,6 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [isEnriching, setIsEnriching] = useState(false);
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
   const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
   const { showToast } = useToast();
   const promptVersions = getPromptVersions({
@@ -112,32 +110,6 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
       document.body.removeChild(a);
     } catch {
       window.open(asset.originalUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handleShare = async () => {
-    if (!asset || isSharing || (asset.type !== 'image' && asset.type !== 'video')) return;
-    setIsSharing(true);
-    try {
-      const result = await shareGalleryAsset({
-        id: asset.id,
-        type: asset.type,
-        originalUrl: asset.originalUrl,
-        title: 'Gallery Asset',
-      });
-      const messages: Record<GalleryShareResult, string | null> = {
-        file: 'Share sheet opened',
-        url: 'Share sheet opened',
-        copied: 'Link copied',
-        cancelled: null,
-      };
-      const message = messages[result];
-      if (message) showToast(message, 'success');
-    } catch (error) {
-      console.error('Failed to share gallery asset:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to share gallery asset', 'error');
-    } finally {
-      setIsSharing(false);
     }
   };
 
@@ -426,12 +398,6 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                 <Download className="w-4 h-4 mr-2" />
                 Download
               </Button>
-              {(asset.type === 'image' || asset.type === 'video') && (
-                <Button className="flex-1" variant="outline" onClick={() => void handleShare()} disabled={isSharing}>
-                  <Share2 className="w-4 h-4 mr-2" />
-                  {isSharing ? 'Sharing...' : 'Share'}
-                </Button>
-              )}
               <Button className="flex-1" variant="default" onClick={onToggleFavorite}>
                 {asset.favorited ? 'Unfavorite' : 'Favorite'}
               </Button>

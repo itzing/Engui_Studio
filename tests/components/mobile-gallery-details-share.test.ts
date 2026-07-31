@@ -58,10 +58,10 @@ describe('MobileGalleryDetailsScreen share action', () => {
     currentAsset = mockAsset;
   });
 
-  it('shows Share for image assets beside the detail actions', () => {
+  it('does not show Share for image assets because sharing belongs to the viewer', () => {
     render(React.createElement(MobileGalleryDetailsScreen, { assetId: 'asset-1' }));
 
-    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Favorite' })).toBeTruthy();
   });
 

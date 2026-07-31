@@ -127,7 +127,7 @@ describe('GalleryAssetDialog source prompt toggle', () => {
 
     expect(screen.queryByRole('button', { name: 'Source image' })).toBeNull();
     expect(screen.getByText('image prompt')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   });
 
   it('does not show seed for audio assets', () => {

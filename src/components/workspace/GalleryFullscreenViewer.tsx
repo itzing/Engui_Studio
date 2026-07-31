@@ -4,10 +4,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Lightbox from 'yet-another-react-lightbox';
 import type { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Shuffle, Square, X } from 'lucide-react';
+import { ArrowRight, Heart, HeartOff, Info, Loader2, Play, Repeat, Share2, Shuffle, Square, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+import { shareGalleryAsset, type GalleryShareResult } from '@/lib/galleryShare';
 
 export type GalleryViewerBucket = 'common' | 'draft' | 'upscale';
 
@@ -84,6 +86,8 @@ export function GalleryFullscreenViewer({
   const [slideshowCountdownSeconds, setSlideshowCountdownSeconds] = useState<number | null>(null);
   const [currentZoom, setCurrentZoom] = useState(1);
   const [videoControlsItemId, setVideoControlsItemId] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const { showToast } = useToast();
 
   const safeIndex = useMemo(() => clampIndex(currentIndex, items.length), [currentIndex, items.length]);
   const currentItem = useMemo(() => items[safeIndex] || null, [items, safeIndex]);
@@ -341,6 +345,32 @@ export function GalleryFullscreenViewer({
     triggerFavoriteOverlay(nextFavorited ? 'added' : 'removed');
   }, [currentItem, onToggleFavorite, triggerFavoriteOverlay]);
 
+  const handleShare = useCallback(async () => {
+    if (!currentItem || isSharing || (currentItem.type !== 'image' && currentItem.type !== 'video')) return;
+    setIsSharing(true);
+    try {
+      const result = await shareGalleryAsset({
+        id: currentItem.id,
+        type: currentItem.type,
+        originalUrl: currentItem.url,
+        title: 'Gallery Asset',
+      });
+      const messages: Record<GalleryShareResult, string | null> = {
+        file: 'Share sheet opened',
+        url: 'Share sheet opened',
+        copied: 'Link copied',
+        cancelled: null,
+      };
+      const message = messages[result];
+      if (message) showToast(message, 'success');
+    } catch (error) {
+      console.error('Failed to share gallery viewer asset:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to share gallery asset', 'error');
+    } finally {
+      setIsSharing(false);
+    }
+  }, [currentItem, isSharing, showToast]);
+
   const handleViewerClick = useCallback(() => {
     const now = Date.now();
     const isDoubleTap = currentItem?.id && lastTapRef.current.itemId === currentItem.id && (now - lastTapRef.current.time) < 280;
@@ -498,6 +528,7 @@ export function GalleryFullscreenViewer({
   const canMarkUpscale = currentItem?.type === 'image'
     && !!imageNaturalSize
     && Math.max(imageNaturalSize.width, imageNaturalSize.height) > 2000;
+  const canShareCurrentItem = currentItem?.type === 'image' || currentItem?.type === 'video';
   const SlideshowModeIcon = slideshowMode === 'stop' ? ArrowRight : slideshowMode === 'loop' ? Repeat : Shuffle;
 
   if (!open || !currentItem) {
@@ -739,7 +770,7 @@ export function GalleryFullscreenViewer({
 
               {showControls ? (
                 <>
-                  {(onOpenInfo || renderHeaderActions) && currentItem?.id ? (
+                  {(onOpenInfo || renderHeaderActions || canShareCurrentItem) && currentItem?.id ? (
                     <div className="absolute left-3 top-0 z-20 flex items-center gap-2" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
                       {onOpenInfo ? (
                         <Button
@@ -763,6 +794,19 @@ export function GalleryFullscreenViewer({
                           title={currentItem.favorited ? 'Unfavorite' : 'Favorite'}
                         >
                           <Heart className={`w-5 h-5 ${currentItem.favorited ? 'fill-current' : ''}`} />
+                        </Button>
+                      ) : null}
+                      {canShareCurrentItem ? (
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
+                          onClick={() => void handleShare()}
+                          disabled={isSharing}
+                          aria-label="Share gallery item"
+                          title="Share"
+                        >
+                          {isSharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
                         </Button>
                       ) : null}
                       {renderHeaderActions ? renderHeaderActions(currentItem.id) : null}
