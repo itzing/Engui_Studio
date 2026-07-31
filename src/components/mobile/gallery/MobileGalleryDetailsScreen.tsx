@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clapperboard, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Download, Heart, Loader2, RefreshCw, Share2, Sparkles, Trash2, Type } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import { persistPromptConstructorReuseDraft } from '@/lib/prompt-constructor/per
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
+import { useToast } from '@/components/ui/toast';
+import { shareGalleryAsset, type GalleryShareResult } from '@/lib/galleryShare';
 import {
   buildMobileDetailsNavigationState,
   findMobileDetailsEntry,
@@ -39,8 +41,10 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
   const [navigation, setNavigation] = useState<MobileDetailsNavigationState>(EMPTY_NAVIGATION);
+  const { showToast } = useToast();
 
   useEffect(() => {
     setTagsInput(asset?.userTags.join(', ') || '');
@@ -138,6 +142,32 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
       document.body.removeChild(a);
     } catch {
       window.open(asset.originalUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const shareAsset = async () => {
+    if (!asset || isSharing || (asset.type !== 'image' && asset.type !== 'video')) return;
+    setIsSharing(true);
+    try {
+      const result = await shareGalleryAsset({
+        id: asset.id,
+        type: asset.type,
+        originalUrl: asset.originalUrl,
+        title: 'Gallery Asset',
+      });
+      const messages: Record<GalleryShareResult, string | null> = {
+        file: 'Share sheet opened',
+        url: 'Share sheet opened',
+        copied: 'Link copied',
+        cancelled: null,
+      };
+      const message = messages[result];
+      if (message) showToast(message, 'success');
+    } catch (shareError) {
+      console.error('Failed to share mobile gallery asset:', shareError);
+      showToast(shareError instanceof Error ? shareError.message : 'Failed to share gallery asset', 'error');
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -332,6 +362,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Button variant="outline" onClick={() => void downloadAsset()}><Download className="mr-2 h-4 w-4" />Download</Button>
+                {(asset.type === 'image' || asset.type === 'video') ? <Button variant="outline" onClick={() => void shareAsset()} disabled={isSharing}><Share2 className="mr-2 h-4 w-4" />{isSharing ? 'Sharing...' : 'Share'}</Button> : null}
                 <Button variant="outline" onClick={() => void toggleFavorite()}><Heart className="mr-2 h-4 w-4" />{asset.favorited ? 'Unfavorite' : 'Favorite'}</Button>
                 {(asset as any).hasSceneSnapshot ? <Button variant="outline" onClick={() => void reuse('scene-template-v2')}><Sparkles className="mr-2 h-4 w-4" />Reuse scene</Button> : null}
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}

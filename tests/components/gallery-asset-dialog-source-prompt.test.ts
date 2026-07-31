@@ -127,6 +127,7 @@ describe('GalleryAssetDialog source prompt toggle', () => {
 
     expect(screen.queryByRole('button', { name: 'Source image' })).toBeNull();
     expect(screen.getByText('image prompt')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
   });
 
   it('does not show seed for audio assets', () => {
@@ -141,5 +142,6 @@ describe('GalleryAssetDialog source prompt toggle', () => {
 
     expect(screen.queryByText('Seed')).toBeNull();
     expect(screen.queryByText('555')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   });
 });
