@@ -7,9 +7,10 @@ import { VideoEditorView } from '@/components/video-editor/VideoEditorView';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowUpCircle, Braces, FolderPlus, Images, Info, Waypoints, Wrench } from 'lucide-react';
+import { ArrowUpCircle, Braces, FolderPlus, Images, Info, MessageSquareText, Waypoints, Wrench } from 'lucide-react';
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 import PromptWildcardsDialog from '@/components/prompt-wildcards/PromptWildcardsDialog';
+import LocalModelAskDialog from '@/components/local-model/LocalModelAskDialog';
 
 type CenterMode = 'image' | 'video';
 type ImageViewMode = 'native' | 'fit';
@@ -58,6 +59,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
   const [reuseAction, setReuseAction] = useState<ReuseAction | null>(null);
   const [desktopGalleryOpen, setDesktopGalleryOpen] = useState(false);
   const [promptWildcardsOpen, setPromptWildcardsOpen] = useState(false);
+  const [localModelAskOpen, setLocalModelAskOpen] = useState(false);
 
   useEffect(() => {
     if (activeTool === 'speech-sequencer') {
@@ -519,6 +521,10 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onSelect={() => setLocalModelAskOpen(true)}>
+                    <MessageSquareText className="h-4 w-4" />
+                    Ask Local Model
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setPromptWildcardsOpen(true)}>
                     <Braces className="h-4 w-4" />
                     Wildcards
@@ -654,6 +660,12 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
           open={promptWildcardsOpen}
           workspaceId={activeWorkspaceId}
           onOpenChange={setPromptWildcardsOpen}
+        />
+      )}
+      {!mobile && (
+        <LocalModelAskDialog
+          open={localModelAskOpen}
+          onOpenChange={setLocalModelAskOpen}
         />
       )}
     </div>
