@@ -265,6 +265,45 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     }));
   });
 
+  it('submits the WAN22 looped flag when enabled', async () => {
+    let generateFormData: FormData | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url === '/api/generate') {
+        generateFormData = init?.body as FormData;
+        return jsonResponse({ success: true, jobId: 'job-1', seed: 42 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'loop this shot' } });
+    fireEvent.click(await screen.findByLabelText('Looped'));
+
+    const imageInput = screen.getByLabelText('Upload reference image') as HTMLInputElement;
+    const image = new File(['image'], 'source.png', { type: 'image/png' });
+    fireEvent.change(imageInput, { target: { files: [image] } });
+
+    fireEvent.submit(screen.getByRole('form'));
+
+    await waitFor(() => {
+      expect(generateFormData?.get('modelId')).toBe('wan22');
+      expect(generateFormData?.get('looped')).toBe('true');
+    });
+  });
+
   it('keeps WAN22 random seed checked when a reference image is uploaded during draft restore', async () => {
     let resolveRestore: ((file: File | null) => void) | null = null;
     mockLoadFileFromPath.mockImplementation(() => new Promise<File | null>((resolve) => {
@@ -367,6 +406,16 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       default: '16',
       group: 'advanced',
       control: 'segmented',
+    });
+  });
+
+  it('exposes WAN22 looped output as a basic checkbox', () => {
+    const looped = getModelById('wan22')?.parameters.find((param) => param.name === 'looped');
+    expect(looped).toMatchObject({
+      label: 'Looped',
+      type: 'boolean',
+      default: false,
+      group: 'basic',
     });
   });
 

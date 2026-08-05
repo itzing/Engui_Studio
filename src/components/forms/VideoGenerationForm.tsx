@@ -2082,6 +2082,7 @@ export default function VideoGenerationForm() {
                                     type="checkbox"
                                     name={param.name}
                                     id={param.name}
+                                    aria-label={param.label}
                                     className="rounded border-border"
                                     checked={parameterValues[param.name] ?? param.default}
                                     onChange={(e) => handleParameterChange(param.name, e.target.checked)}
@@ -2277,6 +2278,7 @@ export default function VideoGenerationForm() {
                                                     type="checkbox"
                                                     name={param.name}
                                                     id={param.name}
+                                                    aria-label={param.label}
                                                     className="rounded border-border"
                                                     checked={parameterValues[param.name] ?? param.default}
                                                     onChange={(e) => handleParameterChange(param.name, e.target.checked)}

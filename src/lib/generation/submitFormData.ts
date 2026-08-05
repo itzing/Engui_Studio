@@ -402,6 +402,9 @@ export async function submitGenerationFormData(formData: FormData) {
             if (modelId === 'wan22' && formData.get('return_continuation_frame') === 'true') {
                 inputData.return_continuation_frame = true;
             }
+            if (modelId === 'wan22' && formData.get('looped') === 'true') {
+                inputData.looped = true;
+            }
         }
 
         // Collect LoRA parameters for z-image from any submitted slot keys.

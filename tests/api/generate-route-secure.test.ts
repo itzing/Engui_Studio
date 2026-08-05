@@ -282,6 +282,7 @@ describe('POST /api/generate secure RunPod flow', () => {
       output_dir: '/runpod-volume/secure-jobs/job-1/attempt-1/outputs/',
       output_file_name: 'result.bin',
     });
+    expect(payload.looped).toBeUndefined();
     expect(payload.return_continuation_frame).toBeUndefined();
     expect(payload.prompt).toBeUndefined();
     expect(payload.negative_prompt).toBeUndefined();
@@ -408,6 +409,38 @@ describe('POST /api/generate secure RunPod flow', () => {
     expect(response.status).toBe(200);
     const [payload] = mockSubmitJob.mock.calls[0];
     expect(payload.return_continuation_frame).toBe(true);
+  });
+
+  it('preserves WAN22 looped requests in the secure payload', async () => {
+    mockGetSettings.mockResolvedValue({
+      settings: {
+        runpod: {
+          apiKey: 'rp-key',
+          endpoints: { wan22: 'endpoint-1' },
+          fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+          generateTimeout: 3600,
+        },
+        s3: {
+          endpointUrl: 'https://s3.local',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          bucketName: 'bucket',
+          region: 'us-east-1',
+        },
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('modelId', 'wan22');
+    formData.set('prompt', 'loop this frame');
+    formData.set('looped', 'true');
+    formData.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+
+    const response = await POST(buildRequest(formData) as any);
+
+    expect(response.status).toBe(200);
+    const [payload] = mockSubmitJob.mock.calls[0];
+    expect(payload.looped).toBe(true);
   });
 
   it('resolves brace prompt variants by seed before creating the secure payload', async () => {

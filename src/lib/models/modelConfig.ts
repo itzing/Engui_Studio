@@ -139,6 +139,7 @@ export const MODELS: ModelConfig[] = [
             { name: 'seed', label: 'Seed', type: 'number', default: 42, group: 'advanced' },
             { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 1, max: 20, step: 0.1, group: 'hidden' },
             { name: 'steps', label: 'Steps', type: 'number', default: 4, min: 4, max: 50, group: 'hidden' },
+            { name: 'looped', label: 'Looped', type: 'boolean', default: false, group: 'basic', description: 'Use the source image as both the first and last frame for loop-friendly output' },
             { name: 'sigma_shift', label: 'Sigma shift', type: 'number', default: 5, min: 3, max: 8, step: 1, group: 'advanced', control: 'slider' },
             { name: 'fps', label: 'FPS', type: 'select', options: ['16', '32'], default: '16', group: 'advanced', control: 'segmented' },
             { name: 'length', label: 'Length', type: 'number', default: 80, min: 1, max: 512, group: 'advanced' },
