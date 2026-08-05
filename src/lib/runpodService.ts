@@ -255,6 +255,7 @@ class RunPodService {
           fps: input.fps,
           sigma_shift: input.sigma_shift,
           context_overlap: input.context_overlap,
+          ...(input.looped === true && { looped: true }),
           ...(input.return_continuation_frame === true && { return_continuation_frame: true }),
         };
 
