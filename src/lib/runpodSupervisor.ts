@@ -1225,6 +1225,19 @@ export async function processRunPodJob(job: any) {
   const jobAgeMs = Date.now() - new Date(job.createdAt).getTime();
 
   if (status.upstreamNotFound && jobAgeMs > STALE_NOT_FOUND_THRESHOLD_MS) {
+    const recoveredOutput = buildRecoveredSecureTransportOutput(secureState);
+    if (recoveredOutput && secureState?.activeAttempt?.response?.transportResultStatus === 'completed') {
+      await finalizeSecureTransportResult({
+        job,
+        output: recoveredOutput,
+        options,
+        secureState,
+        settings,
+        executionMs: executionMs ?? (typeof job.executionMs === 'number' ? job.executionMs : null),
+      });
+      return;
+    }
+
     const failure = normalizeFailure(
       'runpod.status',
       new Error('RunPod job not found on the original endpoint'),
@@ -1385,8 +1398,15 @@ function shouldRetryFailedSecureFinalization(job: any, secureState: JsonObject |
   if (!secureState) return false;
   if (job.status !== 'failed') return false;
   if (secureState?.activeAttempt?.response?.transportResultStatus !== 'completed') return false;
-  if (secureState?.activeAttempt?.finalization?.status !== 'failed') return false;
-  if (secureState?.failure?.source !== 'engui.finalization') return false;
+  const finalizationStatus = secureState?.activeAttempt?.finalization?.status;
+  const failureSource = secureState?.failure?.source;
+  const failureMessage = String(secureState?.failure?.error?.message || '');
+  const recoverableMissingRunPodStatus =
+    failureSource === 'runpod.status' &&
+    failureMessage.includes('RunPod job not found') &&
+    Boolean(secureState?.activeAttempt?.response?.resultMedia);
+  if (finalizationStatus !== 'failed' && !recoverableMissingRunPodStatus) return false;
+  if (failureSource !== 'engui.finalization' && !recoverableMissingRunPodStatus) return false;
 
   const recovery = secureState.finalizationRecovery || {};
   const attempts = Number(recovery.attempts || 0);

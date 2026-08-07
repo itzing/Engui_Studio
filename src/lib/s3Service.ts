@@ -399,9 +399,12 @@ class S3Service {
         const downloadFile = path.join(os.tmpdir(), `s3-download-${Date.now()}`);
 
         const args = [
-          's3',
-          'cp',
-          `s3://${this.config.bucketName}/${key}`,
+          's3api',
+          'get-object',
+          '--bucket',
+          this.config.bucketName,
+          '--key',
+          key,
           downloadFile,
           '--region',
           this.config.region,
@@ -411,7 +414,7 @@ class S3Service {
 
         logger.emoji.search(`Downloading file: ${key}`);
 
-        const { stdout, stderr } = await this.runAwsCommand(args);
+        const { stderr } = await this.runAwsCommand(args);
 
         if (stderr && stderr.length > 0) {
           logger.emoji.search('AWS CLI stderr:', stderr);

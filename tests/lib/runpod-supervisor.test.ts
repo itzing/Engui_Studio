@@ -358,6 +358,61 @@ describe('runpod supervisor', () => {
     });
   });
 
+  it('recovers secure finalization from stored transport result when RunPod no longer has the job', async () => {
+    const job = {
+      id: 'job-not-found-recovery',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'finalizing',
+      createdAt: new Date('2026-06-12T09:00:00Z'),
+      runpodJobId: 'rp-expired',
+      options: JSON.stringify({ secureMode: true }),
+      secureState: JSON.stringify({
+        phase: 'finalizing',
+        activeAttempt: {
+          attemptId: 'attempt-not-found-recovery',
+          runpodJobId: 'rp-expired',
+          request: { mediaInputs: [] },
+          response: {
+            transportResultStatus: 'completed',
+            resultMediaStoragePath: '/runpod-volume/secure-jobs/job-not-found-recovery__attempt-not-found-recovery__output__result.bin',
+            resultMedia: {
+              mime: 'image/png',
+              kind: 'image',
+              storage_path: '/runpod-volume/secure-jobs/job-not-found-recovery__attempt-not-found-recovery__output__result.bin',
+              envelope: { v: 1 },
+            },
+          },
+          finalization: {
+            status: 'retrying',
+          },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockGetJobStatus.mockResolvedValue({
+      status: 'FAILED',
+      upstreamNotFound: true,
+    });
+    mockDownloadAndDecryptResultMedia.mockResolvedValue(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJob(job);
+
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(1);
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    expect(finalUpdate.data.error).toBeNull();
+    const secureState = JSON.parse(finalUpdate.data.secureState);
+    expect(secureState.activeAttempt.finalization.status).toBe('completed');
+    expect(secureState.failure ?? null).toBeNull();
+  });
+
   it('keeps completed RunPod jobs finalizing when result download fails with transient 502', async () => {
     process.env.RUNPOD_FINALIZATION_DOWNLOAD_RETRY_ATTEMPTS = '1';
     const job = {
@@ -682,6 +737,68 @@ describe('runpod supervisor', () => {
     expect(recoveryUpdate.data.status).toBe('finalizing');
     expect(JSON.parse(recoveryUpdate.data.secureState).finalizationRecovery.attempts).toBe(1);
 
+    const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
+    expect(finalUpdate.data.status).toBe('completed');
+    expect(finalUpdate.data.error).toBeNull();
+  });
+
+  it('recovers failed not-found jobs when completed secure result metadata is stored', async () => {
+    const failedJob = {
+      id: 'job-failed-not-found-recovery',
+      userId: 'user-with-settings',
+      modelId: 'wan22',
+      type: 'image',
+      status: 'failed',
+      createdAt: new Date('2026-06-12T09:00:00Z'),
+      completedAt: new Date('2026-06-12T09:30:00Z'),
+      runpodJobId: 'rp-expired',
+      options: JSON.stringify({ secureMode: true }),
+      error: 'RunPod job not found on the original endpoint',
+      secureState: JSON.stringify({
+        phase: 'failed',
+        failure: {
+          source: 'runpod.status',
+          error: {
+            code: 'Error',
+            message: 'RunPod job not found on the original endpoint',
+          },
+        },
+        activeAttempt: {
+          attemptId: 'attempt-failed-not-found-recovery',
+          runpodJobId: 'rp-expired',
+          request: { mediaInputs: [] },
+          response: {
+            transportResultStatus: 'completed',
+            resultMediaStoragePath: '/runpod-volume/secure-jobs/job-failed-not-found-recovery__attempt-failed-not-found-recovery__output__result.bin',
+            resultMedia: {
+              mime: 'image/png',
+              kind: 'image',
+              storage_path: '/runpod-volume/secure-jobs/job-failed-not-found-recovery__attempt-failed-not-found-recovery__output__result.bin',
+              envelope: { v: 1 },
+            },
+          },
+          finalization: {
+            status: 'retrying',
+          },
+        },
+        cleanup: {
+          transportStatus: 'pending',
+          warning: null,
+        },
+      }),
+    };
+
+    mockPrisma.job.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([failedJob])
+      .mockResolvedValueOnce([]);
+    mockDownloadAndDecryptResultMedia.mockResolvedValue(Buffer.from('png-binary'));
+    mockDeleteFile.mockResolvedValue(undefined);
+
+    await processRunPodJobsOnce();
+
+    expect(mockGetJobStatus).not.toHaveBeenCalled();
+    expect(mockDownloadAndDecryptResultMedia).toHaveBeenCalledTimes(1);
     const finalUpdate = mockPrisma.job.update.mock.calls.at(-1)?.[0];
     expect(finalUpdate.data.status).toBe('completed');
     expect(finalUpdate.data.error).toBeNull();
