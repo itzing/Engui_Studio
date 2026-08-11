@@ -1,5 +1,15 @@
 [
   {
+    "id": "engui-lora-manager-real-upload-progress-20260811T131946Z",
+    "createdAt": "2026-08-11T13:19:46Z",
+    "task": "Implement real byte-based LoRA Manager upload progress using multipart upload",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User confirmed proposed shared desktop/mobile LoRA Manager fix. Scope: backlog ticket, docs plan, multipart LoRA upload/finalize path, real progress UI, focused tests, build, commit, push, production build, restart engui-studio.service. Rollback: revert new commit, npm run build, sudo -n systemctl restart engui-studio.service.",
+    "finishedAt": "2026-08-11T13:36:25.532Z",
+    "result": "Implemented real byte-based LoRA Manager upload progress with LoRA-specific multipart init/finalize routes, shared S3 multipart proxy part upload, XHR upload.onprogress, per-part retry, cancel/abort cleanup, and DB record creation after multipart completion. Validation passed: focused Vitest 4/4, targeted ESLint, git diff --check, Prisma validate, production build, service restart active, HTTP smoke 200 for /, /m/create, /api/lora?workspaceId=default, /api/jobs."
+  },
+  {
     "id": "engui-151-2026-04-20",
     "createdAt": "2026-04-20T18:40:00Z",
     "task": "Implement ENGUI-151 unified create draft store v2 and storage adapters, then continue sequentially through follow-up tickets",
