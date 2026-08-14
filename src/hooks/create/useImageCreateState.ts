@@ -520,14 +520,19 @@ export function useImageCreateState() {
 
     let started = 0;
     let failedError = '';
+    let runPromptWildcardSelections = promptWildcardSelections;
 
     for (let index = 0; index < normalizedCount; index += 1) {
       const runParameterValues = shouldForceUniqueSeeds
         ? {
             ...parameterValues,
+            ...(Object.keys(runPromptWildcardSelections).length > 0 ? { promptWildcardSelections: runPromptWildcardSelections } : {}),
             seed: nextUniqueSeed(),
           }
-        : { ...parameterValues };
+        : {
+            ...parameterValues,
+            ...(Object.keys(runPromptWildcardSelections).length > 0 ? { promptWildcardSelections: runPromptWildcardSelections } : {}),
+          };
 
       const result = await submitImageGeneration({
         currentModel,
@@ -544,7 +549,7 @@ export function useImageCreateState() {
         sceneSnapshot: sceneSnapshotForSubmit,
         sourcePromptDocumentId: sourcePromptDocumentIdForSubmit,
         sourcePromptDocumentTitle: sourcePromptDocumentTitleForSubmit,
-        promptWildcardSelections,
+        promptWildcardSelections: runPromptWildcardSelections,
       });
 
       if (!result.success) {
@@ -553,6 +558,9 @@ export function useImageCreateState() {
       }
 
       addJob(result.job);
+      if (result.promptWildcardSelections) {
+        runPromptWildcardSelections = result.promptWildcardSelections;
+      }
       started += 1;
       if (!shouldForceUniqueSeeds && result.nextSeed !== null) {
         setParameterValues((prev) => ({

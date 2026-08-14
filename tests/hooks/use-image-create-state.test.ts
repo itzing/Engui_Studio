@@ -181,6 +181,17 @@ function Harness() {
     React.createElement('div', { 'data-testid': 'selected-title' }, state.selectedPromptDocumentTitle),
     React.createElement('button', { type: 'button', onClick: () => state.selectPromptDocument('draft-1') }, 'Select draft'),
     React.createElement('button', { type: 'button', onClick: () => state.setPrompt('Batch prompt') }, 'Set prompt'),
+    React.createElement('button', {
+      type: 'button',
+      onClick: () => state.setPromptWildcardSelections({
+        eyesColor: {
+          indices: [0, 1, 2],
+          mode: 'sequential',
+          startIndex: 0,
+          cursor: 0,
+        },
+      }),
+    }, 'Set sequential wildcard'),
     React.createElement('button', { type: 'button', onClick: () => void state.submit() }, 'Submit'),
     React.createElement('button', { type: 'button', onClick: () => void state.submitBatch(3) }, 'Batch 3'),
   );
@@ -277,6 +288,79 @@ describe('useImageCreateState mobile prompt draft flow', () => {
     expect(mockAddJob).toHaveBeenCalledTimes(3);
 
     randomSpy.mockRestore();
+  });
+
+  it('advances sequential wildcard selections between mobile batch submits', async () => {
+    mockSubmitImageGeneration
+      .mockResolvedValueOnce({
+        success: true,
+        job: {
+          id: 'job-1',
+          modelId: 'mock-image',
+          type: 'image',
+          status: 'queued',
+          prompt: 'Batch prompt',
+          createdAt: Date.now(),
+          options: {},
+        },
+        nextSeed: null,
+        promptWildcardSelections: {
+          eyesColor: { indices: [0, 1, 2], mode: 'sequential', startIndex: 0, cursor: 1 },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        job: {
+          id: 'job-2',
+          modelId: 'mock-image',
+          type: 'image',
+          status: 'queued',
+          prompt: 'Batch prompt',
+          createdAt: Date.now(),
+          options: {},
+        },
+        nextSeed: null,
+        promptWildcardSelections: {
+          eyesColor: { indices: [0, 1, 2], mode: 'sequential', startIndex: 0, cursor: 2 },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        job: {
+          id: 'job-3',
+          modelId: 'mock-image',
+          type: 'image',
+          status: 'queued',
+          prompt: 'Batch prompt',
+          createdAt: Date.now(),
+          options: {},
+        },
+        nextSeed: null,
+        promptWildcardSelections: {
+          eyesColor: { indices: [0, 1, 2], mode: 'sequential', startIndex: 0, cursor: 0 },
+        },
+      });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, documents: [] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(Harness));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set sequential wildcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Batch 3' }));
+
+    await waitFor(() => {
+      expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(3);
+    });
+
+    expect(mockSubmitImageGeneration.mock.calls.map((call) => call[0].promptWildcardSelections?.eyesColor.cursor)).toEqual([0, 1, 2]);
+    expect(mockSubmitImageGeneration.mock.calls.map((call) => call[0].parameterValues.promptWildcardSelections?.eyesColor.cursor)).toEqual([0, 1, 2]);
   });
 
   it('preserves the normal single-submit randomize seed behavior for Gen 1', async () => {

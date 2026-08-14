@@ -1,5 +1,15 @@
 [
   {
+    "id": "engui-mobile-batch-sequential-wildcards-20260814T074636Z",
+    "createdAt": "2026-08-14T07:46:36Z",
+    "task": "Fix mobile image batch sequential wildcard cursor advancement",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User confirmed issue is only for sequential wildcards. Scope: ENGUI-500, use local promptWildcardSelections cursor between mobile batch submit calls, focused tests, build, commit, push, restart engui-studio.service. Rollback: revert new commit, npm run build, sudo -n systemctl restart engui-studio.service.",
+    "finishedAt": "2026-08-14T07:53:00Z",
+    "result": "Fixed mobile image batch sequential wildcard cursor advancement. Each submit in a 3x/6x batch now passes the latest promptWildcardSelections returned by the previous /api/generate call, so sequential wildcards advance within the same batch. Validation: focused Vitest 5/5, targeted ESLint 0 errors with existing warnings, git diff --check, Prisma validate, npm run build, service restart active, HTTP smoke 200."
+  },
+  {
     "id": "engui-lora-manager-real-upload-progress-20260811T131946Z",
     "createdAt": "2026-08-11T13:19:46Z",
     "task": "Implement real byte-based LoRA Manager upload progress using multipart upload",
