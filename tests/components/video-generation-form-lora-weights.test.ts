@@ -433,6 +433,26 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     ]);
   });
 
+  it('exposes SmoothMix T2V sigma shift and output FPS controls', () => {
+    const model = getModelById('wan22-t2v');
+    const sigmaShift = model?.parameters.find((param) => param.name === 'sigma_shift');
+    const fps = model?.parameters.find((param) => param.name === 'fps');
+
+    expect(sigmaShift).toMatchObject({
+      label: 'Sigma shift',
+      default: 8,
+      group: 'advanced',
+      control: 'slider',
+    });
+    expect(fps).toMatchObject({
+      label: 'FPS',
+      default: '32',
+      group: 'advanced',
+      control: 'segmented',
+      options: ['16', '32'],
+    });
+  });
+
   it('renders the LoRA pair picker for WAN22 T2V', async () => {
     setWorkflowActiveModel('video', 'wan22-t2v');
 
