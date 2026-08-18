@@ -433,24 +433,23 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     ]);
   });
 
-  it('exposes SmoothMix T2V sigma shift and output FPS controls', () => {
+  it('keeps WAN22 T2V on base LightX2V defaults without sigma shift or FPS controls', () => {
     const model = getModelById('wan22-t2v');
     const sigmaShift = model?.parameters.find((param) => param.name === 'sigma_shift');
     const fps = model?.parameters.find((param) => param.name === 'fps');
+    const steps = model?.parameters.find((param) => param.name === 'steps');
 
-    expect(sigmaShift).toMatchObject({
-      label: 'Sigma shift',
-      default: 8,
-      group: 'advanced',
-      control: 'slider',
-    });
-    expect(fps).toMatchObject({
-      label: 'FPS',
-      default: '32',
-      group: 'advanced',
-      control: 'segmented',
-      options: ['16', '32'],
-    });
+    expect(steps?.default).toBe(4);
+    expect(sigmaShift).toBeUndefined();
+    expect(fps).toBeUndefined();
+  });
+
+  it('renders the random seed toggle for WAN22 T2V', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+
+    render(React.createElement(VideoGenerationForm));
+
+    expect(await screen.findByLabelText('Random seed')).toBeTruthy();
   });
 
   it('renders the LoRA pair picker for WAN22 T2V', async () => {
@@ -482,12 +481,12 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
           height: 480,
           seed: 42,
           cfg: 1,
-          steps: 6,
-          sigma_shift: 8,
-          fps: '32',
+          steps: 4,
           length: 81,
         },
       });
+      expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('sigma_shift');
+      expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('fps');
     });
   });
 
@@ -519,10 +518,10 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       steps: 8,
       height: 480,
       seed: 42,
-      sigma_shift: 8,
-      fps: '32',
       length: 81,
     });
+    expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('sigma_shift');
+    expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('fps');
 
     render(React.createElement(VideoGenerationForm));
 
@@ -555,10 +554,10 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
       width: 1024,
       height: 480,
       seed: 42,
-      sigma_shift: 8,
-      fps: '32',
       length: 81,
     });
+    expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('sigma_shift');
+    expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).not.toHaveProperty('fps');
   });
 
   it('saves WAN22 T2V default parameters into video presets', async () => {
@@ -601,12 +600,12 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
           height: 480,
           seed: 42,
           cfg: 1,
-          steps: 6,
-          sigma_shift: 8,
-          fps: '32',
+          steps: 4,
           length: 81,
         },
       });
+      expect(savedPresetBody?.preset.parameterValues).not.toHaveProperty('sigma_shift');
+      expect(savedPresetBody?.preset.parameterValues).not.toHaveProperty('fps');
     });
   });
 

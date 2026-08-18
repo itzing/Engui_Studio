@@ -2092,32 +2092,30 @@ export default function VideoGenerationForm() {
                         )}
                         {['wan22', 'wan22-t2v'].includes(currentModel.id) ? (
                             <div className="space-y-3">
-                                {currentModel.id === 'wan22' ? (
-                                    <label
-                                        htmlFor="wan22-random-seed"
-                                        className={`flex h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-sm text-foreground ${isGenerating || isLoadingMedia || isPromptHelperLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
-                                        title="Use a new seed for each Wan 2.2 I2V generation"
-                                    >
-                                        <span className="min-w-0">
-                                            <span className="block truncate text-xs font-medium">Random seed</span>
-                                            <span className="block truncate text-[11px] text-muted-foreground">
-                                                Varies prompt variants per run
-                                            </span>
+                                <label
+                                    htmlFor="wan22-random-seed"
+                                    className={`flex h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-sm text-foreground ${isGenerating || isLoadingMedia || isPromptHelperLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
+                                    title="Use a new seed for each Wan 2.2 generation"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-xs font-medium">Random seed</span>
+                                        <span className="block truncate text-[11px] text-muted-foreground">
+                                            Varies prompt variants per run
                                         </span>
-                                        <input
-                                            id="wan22-random-seed"
-                                            type="checkbox"
-                                            aria-label="Random seed"
-                                            className="h-4 w-4 shrink-0 rounded border-border"
-                                            checked={randomizeSeed}
-                                            onChange={(event) => {
-                                                markVideoDraftUserEdit();
-                                                setRandomizeSeed(event.target.checked);
-                                            }}
-                                            disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
-                                        />
-                                    </label>
-                                ) : null}
+                                    </span>
+                                    <input
+                                        id="wan22-random-seed"
+                                        type="checkbox"
+                                        aria-label="Random seed"
+                                        className="h-4 w-4 shrink-0 rounded border-border"
+                                        checked={randomizeSeed}
+                                        onChange={(event) => {
+                                            markVideoDraftUserEdit();
+                                            setRandomizeSeed(event.target.checked);
+                                        }}
+                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                    />
+                                </label>
                                 <div className="space-y-1.5">
                                     <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
                                     <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">

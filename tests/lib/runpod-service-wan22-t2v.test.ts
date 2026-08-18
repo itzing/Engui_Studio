@@ -19,7 +19,7 @@ describe('RunPodService WAN22 T2V payload', () => {
       seed: 123,
       cfg: 1,
       length: 81,
-      steps: 6,
+      steps: 4,
       fps: 32,
       sigma_shift: 8,
       lora_high_1: '/runpod-volume/loras/custom-high.safetensors',
@@ -40,9 +40,7 @@ describe('RunPodService WAN22 T2V payload', () => {
       seed: 123,
       cfg: 1,
       length: 81,
-      steps: 6,
-      fps: 32,
-      sigma_shift: 8,
+      steps: 4,
       lora_pairs: [
         {
           high: 'custom-high.safetensors',
@@ -52,6 +50,8 @@ describe('RunPodService WAN22 T2V payload', () => {
         },
       ],
     });
+    expect(request.input).not.toHaveProperty('fps');
+    expect(request.input).not.toHaveProperty('sigma_shift');
   });
 
   it('sends high-only LoRA entries for wan22-t2v jobs', async () => {
@@ -67,7 +67,7 @@ describe('RunPodService WAN22 T2V payload', () => {
       seed: 123,
       cfg: 1,
       length: 81,
-      steps: 6,
+      steps: 4,
       fps: 32,
       sigma_shift: 8,
       lora_high_1: '/runpod-volume/loras/custom-high-only.safetensors',

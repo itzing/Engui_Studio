@@ -281,8 +281,6 @@ class RunPodService {
           cfg: input.cfg,
           length: input.length,
           steps: input.steps,
-          fps: input.fps,
-          sigma_shift: input.sigma_shift,
         };
 
         const t2vLoraPairs = this.buildWan22LoraPairs(input);
