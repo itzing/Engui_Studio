@@ -137,6 +137,19 @@ export default function VideoGenerationForm() {
     const galleryReferenceScrollRef = useRef<HTMLDivElement>(null);
     const galleryReferenceLoadingPagesRef = useRef<Set<number>>(new Set());
     const galleryReferenceGenerationRef = useRef(0);
+    const lastSavedVideoDraftJsonRef = useRef<string | null>(null);
+    const latestVideoDraftRef = useRef<{
+        modelId: string;
+        draft: {
+            prompt: string;
+            showAdvanced: boolean;
+            randomizeSeed: boolean;
+            parameterValues: Record<string, any>;
+            imagePreviewUrl: string;
+            videoPreviewUrl: string;
+            selectedPresetId: string;
+        };
+    } | null>(null);
 
     // LoRA state
     const [showLoRADialog, setShowLoRADialog] = useState(false);
@@ -383,16 +396,19 @@ export default function VideoGenerationForm() {
 
     useEffect(() => {
         if (!hasRestoredDraftRef.current || !isVideoDraftHydrated) return;
-        setWorkflowActiveModel('video', videoSelectedModel || DEFAULT_VIDEO_MODEL);
-        saveWorkflowDraft('video', videoSelectedModel || DEFAULT_VIDEO_MODEL, {
+        const modelId = videoSelectedModel || DEFAULT_VIDEO_MODEL;
+        const draft = {
             prompt,
             showAdvanced,
             randomizeSeed,
-            parameterValues: getVideoParameterSnapshot(videoSelectedModel || DEFAULT_VIDEO_MODEL, parameterValues),
+            parameterValues: getVideoParameterSnapshot(modelId, parameterValues),
             imagePreviewUrl,
             videoPreviewUrl,
             selectedPresetId,
-        });
+        };
+        setWorkflowActiveModel('video', modelId);
+        saveWorkflowDraft('video', modelId, draft);
+        lastSavedVideoDraftJsonRef.current = JSON.stringify(draft);
     }, [
         DEFAULT_VIDEO_MODEL,
         imagePreviewUrl,
@@ -562,6 +578,22 @@ export default function VideoGenerationForm() {
     });
     const galleryReferenceVirtualRows = galleryReferenceRowVirtualizer.getVirtualItems();
 
+    if (hasRestoredDraftRef.current && isVideoDraftHydrated) {
+        const draftModelId = videoSelectedModel || DEFAULT_VIDEO_MODEL;
+        latestVideoDraftRef.current = {
+            modelId: draftModelId,
+            draft: {
+                prompt,
+                showAdvanced,
+                randomizeSeed,
+                parameterValues: getVideoParameterSnapshot(draftModelId, parameterValues),
+                imagePreviewUrl,
+                videoPreviewUrl,
+                selectedPresetId,
+            },
+        };
+    }
+
     const mergeGalleryReferencePage = useCallback((data: GalleryReferencePageResponse) => {
         if (!data.pagination) return;
         const pageNumber = data.pagination.page;
@@ -683,6 +715,22 @@ export default function VideoGenerationForm() {
             setSelectedPresetId('');
         }
     }, [hasLoadedVideoPresets, selectedPresetId, videoPresets]);
+
+    useEffect(() => {
+        return () => {
+            const latestDraft = latestVideoDraftRef.current;
+            if (!latestDraft) return;
+            const currentStoredDraft = getWorkflowDraft('video', latestDraft.modelId);
+            if (
+                lastSavedVideoDraftJsonRef.current !== null
+                && JSON.stringify(currentStoredDraft || null) !== lastSavedVideoDraftJsonRef.current
+            ) {
+                return;
+            }
+            setWorkflowActiveModel('video', latestDraft.modelId);
+            saveWorkflowDraft('video', latestDraft.modelId, latestDraft.draft);
+        };
+    }, []);
 
     const isSubmitShortcut = (event: KeyboardEvent | React.KeyboardEvent) => {
         return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
@@ -989,6 +1037,9 @@ export default function VideoGenerationForm() {
             }
         });
         setParameterValues(prev => {
+            if (hydratedModelRef.current === currentModel.id) {
+                return prev;
+            }
             if (isApplyingDraftModelRef.current) {
                 isApplyingDraftModelRef.current = false;
                 return { ...initialValues, ...prev };
@@ -1118,6 +1169,7 @@ export default function VideoGenerationForm() {
 
     // Update parameter values for conditional rendering
     const handleParameterChange = (paramName: string, value: any) => {
+        markVideoDraftUserEdit();
         setParameterValues(prev => ({
             ...prev,
             [paramName]: value
