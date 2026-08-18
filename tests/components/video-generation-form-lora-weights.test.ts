@@ -465,6 +465,81 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(await screen.findAllByLabelText('low-weight')).toHaveLength(4);
   });
 
+  it('saves WAN22 T2V default parameters into the video draft', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'wide cinematic establishing shot' } });
+
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      expect(stored.workflows.video.drafts['wan22-t2v'].draft).toMatchObject({
+        prompt: 'wide cinematic establishing shot',
+        parameterValues: {
+          width: 832,
+          height: 480,
+          seed: 42,
+          cfg: 1,
+          steps: 6,
+          sigma_shift: 8,
+          fps: '32',
+          length: 81,
+        },
+      });
+    });
+  });
+
+  it('saves WAN22 T2V default parameters into video presets', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+    let savedPresetBody: any = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url === '/api/create/video-presets') {
+        savedPresetBody = JSON.parse(String(init?.body || '{}'));
+        return jsonResponse({ success: true, presets: [savedPresetBody.preset] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'text only camera move' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save current img2vid preset' }));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'T2V defaults' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(savedPresetBody?.preset).toMatchObject({
+        modelId: 'wan22-t2v',
+        name: 'T2V defaults',
+        prompt: 'text only camera move',
+        parameterValues: {
+          width: 832,
+          height: 480,
+          seed: 42,
+          cfg: 1,
+          steps: 6,
+          sigma_shift: 8,
+          fps: '32',
+          length: 81,
+        },
+      });
+    });
+  });
+
   it('does not apply browser step or range validation to Create Video dimensions', async () => {
     const { container } = render(React.createElement(VideoGenerationForm));
 

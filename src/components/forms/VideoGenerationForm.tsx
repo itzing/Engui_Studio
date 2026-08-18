@@ -163,8 +163,24 @@ export default function VideoGenerationForm() {
 
     const supportsWanLoraPairsForModel = (modelId: string) => ['wan22', 'wan22-t2v'].includes(modelId);
 
-    const getParameterValuesWithWanLoraWeights = (values: Record<string, any>) => {
-        if (!supportsWanLoraPairsForModel(videoSelectedModel)) return values;
+    const buildDefaultVideoParameterValues = (modelId: string) => {
+        const model = getModelById(modelId);
+        const initialValues: Record<string, any> = {};
+        model?.parameters.forEach(param => {
+            if (param.default !== undefined) {
+                initialValues[param.name] = param.default;
+            }
+        });
+        return initialValues;
+    };
+
+    const mergeVideoParameterValues = (modelId: string, values?: Record<string, any> | null) => ({
+        ...buildDefaultVideoParameterValues(modelId),
+        ...((values && typeof values === 'object') ? values : {}),
+    });
+
+    const getParameterValuesWithWanLoraWeights = (values: Record<string, any>, modelId = videoSelectedModel) => {
+        if (!supportsWanLoraPairsForModel(modelId)) return values;
 
         return {
             ...values,
@@ -178,6 +194,10 @@ export default function VideoGenerationForm() {
             lora_low_4_weight: loraLow4Weight,
         };
     };
+
+    const getVideoParameterSnapshot = (modelId: string, values: Record<string, any>) => (
+        getParameterValuesWithWanLoraWeights(mergeVideoParameterValues(modelId, values), modelId)
+    );
 
     const handleWanLoraWeightChange = (paramName: string, weight: string, setter: React.Dispatch<React.SetStateAction<number | string>>) => {
         setter(weight);
@@ -309,7 +329,10 @@ export default function VideoGenerationForm() {
                     videoPreviewUrl?: string;
                     selectedPresetId?: string;
                 }>('video', videoSelectedModel);
-                const restoredParameterValues = draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {};
+                const restoredParameterValues = mergeVideoParameterValues(
+                    videoSelectedModel,
+                    draft?.parameterValues && typeof draft.parameterValues === 'object' ? draft.parameterValues : {},
+                );
                 const restoredImagePreviewUrl = typeof draft?.imagePreviewUrl === 'string' ? draft.imagePreviewUrl : '';
                 const restoredVideoPreviewUrl = typeof draft?.videoPreviewUrl === 'string' ? draft.videoPreviewUrl : '';
                 let restoredImageFile: File | null = null;
@@ -365,7 +388,7 @@ export default function VideoGenerationForm() {
             prompt,
             showAdvanced,
             randomizeSeed,
-            parameterValues: getParameterValuesWithWanLoraWeights(parameterValues),
+            parameterValues: getVideoParameterSnapshot(videoSelectedModel || DEFAULT_VIDEO_MODEL, parameterValues),
             imagePreviewUrl,
             videoPreviewUrl,
             selectedPresetId,
@@ -810,7 +833,7 @@ export default function VideoGenerationForm() {
                 prompt,
                 showAdvanced,
                 randomizeSeed,
-                parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
+                parameterValues: sanitizeVideoPresetParameterValues(getVideoParameterSnapshot(currentModel.id, parameterValues)),
             },
         });
         setIsSyncingVideoPresets(true);
@@ -846,7 +869,7 @@ export default function VideoGenerationForm() {
                 prompt,
                 showAdvanced,
                 randomizeSeed,
-                parameterValues: sanitizeVideoPresetParameterValues(getParameterValuesWithWanLoraWeights(parameterValues)),
+                parameterValues: sanitizeVideoPresetParameterValues(getVideoParameterSnapshot(currentModel.id, parameterValues)),
             },
         });
         setIsSyncingVideoPresets(true);
@@ -1546,7 +1569,7 @@ export default function VideoGenerationForm() {
                     createdAt: Date.now(),
                     endpointId: headers['X-RunPod-Endpoint-Id'],
                     options: {
-                        ...parameterValues,
+                        ...getVideoParameterSnapshot(currentModel.id, parameterValues),
                         ...(nextSeed !== null ? { seed: nextSeed } : {}),
                         videoPrompt: storedPrompt,
                         resolvedVideoPrompt: resolvedPrompt,
@@ -1989,32 +2012,34 @@ export default function VideoGenerationForm() {
                                 </Button>
                             </div>
                         )}
-                        {currentModel.id === 'wan22' ? (
+                        {['wan22', 'wan22-t2v'].includes(currentModel.id) ? (
                             <div className="space-y-3">
-                                <label
-                                    htmlFor="wan22-random-seed"
-                                    className={`flex h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-sm text-foreground ${isGenerating || isLoadingMedia || isPromptHelperLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
-                                    title="Use a new seed for each Wan 2.2 I2V generation"
-                                >
-                                    <span className="min-w-0">
-                                        <span className="block truncate text-xs font-medium">Random seed</span>
-                                        <span className="block truncate text-[11px] text-muted-foreground">
-                                            Varies prompt variants per run
+                                {currentModel.id === 'wan22' ? (
+                                    <label
+                                        htmlFor="wan22-random-seed"
+                                        className={`flex h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-sm text-foreground ${isGenerating || isLoadingMedia || isPromptHelperLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-accent/40'}`}
+                                        title="Use a new seed for each Wan 2.2 I2V generation"
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-xs font-medium">Random seed</span>
+                                            <span className="block truncate text-[11px] text-muted-foreground">
+                                                Varies prompt variants per run
+                                            </span>
                                         </span>
-                                    </span>
-                                    <input
-                                        id="wan22-random-seed"
-                                        type="checkbox"
-                                        aria-label="Random seed"
-                                        className="h-4 w-4 shrink-0 rounded border-border"
-                                        checked={randomizeSeed}
-                                        onChange={(event) => {
-                                            markVideoDraftUserEdit();
-                                            setRandomizeSeed(event.target.checked);
-                                        }}
-                                        disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
-                                    />
-                                </label>
+                                        <input
+                                            id="wan22-random-seed"
+                                            type="checkbox"
+                                            aria-label="Random seed"
+                                            className="h-4 w-4 shrink-0 rounded border-border"
+                                            checked={randomizeSeed}
+                                            onChange={(event) => {
+                                                markVideoDraftUserEdit();
+                                                setRandomizeSeed(event.target.checked);
+                                            }}
+                                            disabled={isGenerating || isLoadingMedia || isPromptHelperLoading}
+                                        />
+                                    </label>
+                                ) : null}
                                 <div className="space-y-1.5">
                                     <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Presets</div>
                                     <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2">
