@@ -197,14 +197,14 @@ export default function VideoGenerationForm() {
 
         return {
             ...values,
-            lora_high_1_weight: loraHigh1Weight,
-            lora_low_1_weight: loraLow1Weight,
-            lora_high_2_weight: loraHigh2Weight,
-            lora_low_2_weight: loraLow2Weight,
-            lora_high_3_weight: loraHigh3Weight,
-            lora_low_3_weight: loraLow3Weight,
-            lora_high_4_weight: loraHigh4Weight,
-            lora_low_4_weight: loraLow4Weight,
+            lora_high_1_weight: values.lora_high_1_weight ?? loraHigh1Weight,
+            lora_low_1_weight: values.lora_low_1_weight ?? loraLow1Weight,
+            lora_high_2_weight: values.lora_high_2_weight ?? loraHigh2Weight,
+            lora_low_2_weight: values.lora_low_2_weight ?? loraLow2Weight,
+            lora_high_3_weight: values.lora_high_3_weight ?? loraHigh3Weight,
+            lora_low_3_weight: values.lora_low_3_weight ?? loraLow3Weight,
+            lora_high_4_weight: values.lora_high_4_weight ?? loraHigh4Weight,
+            lora_low_4_weight: values.lora_low_4_weight ?? loraLow4Weight,
         };
     };
 
@@ -212,9 +212,36 @@ export default function VideoGenerationForm() {
         getParameterValuesWithWanLoraWeights(mergeVideoParameterValues(modelId, values), modelId)
     );
 
+    const saveVideoDraftParameterChange = (nextParameterValues: Record<string, any>) => {
+        if (!hasRestoredDraftRef.current || !isVideoDraftHydrated) return;
+        const modelId = videoSelectedModel || DEFAULT_VIDEO_MODEL;
+        const draft = {
+            prompt,
+            showAdvanced,
+            randomizeSeed,
+            parameterValues: getVideoParameterSnapshot(modelId, nextParameterValues),
+            imagePreviewUrl,
+            videoPreviewUrl,
+            selectedPresetId,
+        };
+        setWorkflowActiveModel('video', modelId);
+        saveWorkflowDraft('video', modelId, draft);
+        latestVideoDraftRef.current = { modelId, draft };
+        lastSavedVideoDraftJsonRef.current = JSON.stringify(draft);
+    };
+
+    const updateVideoParameterValues = (updater: (prev: Record<string, any>) => Record<string, any>) => {
+        markVideoDraftUserEdit();
+        setParameterValues(prev => {
+            const nextParameterValues = updater(prev);
+            saveVideoDraftParameterChange(nextParameterValues);
+            return nextParameterValues;
+        });
+    };
+
     const handleWanLoraWeightChange = (paramName: string, weight: string, setter: React.Dispatch<React.SetStateAction<number | string>>) => {
         setter(weight);
-        setParameterValues(prev => ({
+        updateVideoParameterValues(prev => ({
             ...prev,
             [paramName]: weight,
         }));
@@ -1169,8 +1196,7 @@ export default function VideoGenerationForm() {
 
     // Update parameter values for conditional rendering
     const handleParameterChange = (paramName: string, value: any) => {
-        markVideoDraftUserEdit();
-        setParameterValues(prev => ({
+        updateVideoParameterValues(prev => ({
             ...prev,
             [paramName]: value
         }));
@@ -1189,7 +1215,7 @@ export default function VideoGenerationForm() {
         }
 
         if (changedParamName === widthParam.name) {
-            setParameterValues(prev => ({
+            updateVideoParameterValues(prev => ({
                 ...prev,
                 [widthParam.name]: value,
                 [heightParam.name]: Math.max(1, Math.round(value / aspectRatio)),
@@ -1197,7 +1223,7 @@ export default function VideoGenerationForm() {
             return;
         }
 
-        setParameterValues(prev => ({
+        updateVideoParameterValues(prev => ({
             ...prev,
             [widthParam.name]: Math.max(1, Math.round(value * aspectRatio)),
             [heightParam.name]: value,
@@ -1217,7 +1243,7 @@ export default function VideoGenerationForm() {
                 : sourceVideoDimensions?.width ?? widthParam.default;
         const nextWidth = Math.max(1, Math.round(baseWidth * factor));
 
-        setParameterValues(prev => ({
+        updateVideoParameterValues(prev => ({
             ...prev,
             [widthParam.name]: nextWidth,
             [heightParam.name]: Math.max(1, Math.round(nextWidth / aspectRatio)),
@@ -1228,7 +1254,7 @@ export default function VideoGenerationForm() {
         const currentWidth = parameterValues[widthParam.name] ?? widthParam.default;
         const currentHeight = parameterValues[heightParam.name] ?? heightParam.default;
 
-        setParameterValues(prev => ({
+        updateVideoParameterValues(prev => ({
             ...prev,
             [widthParam.name]: currentHeight,
             [heightParam.name]: currentWidth,

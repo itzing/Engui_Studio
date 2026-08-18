@@ -535,6 +535,32 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(restoredStepsInput?.value).toBe('8');
   });
 
+  it('saves edited WAN22 T2V parameters immediately on change', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+
+    const rendered = render(React.createElement(VideoGenerationForm));
+
+    await screen.findByTestId('video-create-prompt-textarea');
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues.width).toBe(832);
+    });
+
+    const widthInput = rendered.container.querySelector('input[name="width"]') as HTMLInputElement | null;
+    expect(widthInput).toBeTruthy();
+    fireEvent.change(widthInput!, { target: { value: '1024' } });
+
+    const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+    expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).toMatchObject({
+      width: 1024,
+      height: 480,
+      seed: 42,
+      sigma_shift: 8,
+      fps: '32',
+      length: 81,
+    });
+  });
+
   it('saves WAN22 T2V default parameters into video presets', async () => {
     setWorkflowActiveModel('video', 'wan22-t2v');
     let savedPresetBody: any = null;
