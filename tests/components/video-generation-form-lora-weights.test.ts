@@ -452,6 +452,67 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(await screen.findByLabelText('Random seed')).toBeTruthy();
   });
 
+  it('submits randomizeSeed and reflects the returned WAN22 T2V seed when enabled', async () => {
+    setWorkflowActiveModel('video', 'wan22-t2v');
+    let generateFormData: FormData | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/lora?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, loras: [] });
+      }
+      if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, wildcards: [] });
+      }
+      if (url.includes('/api/create/video-presets?workspaceId=ws-1')) {
+        return jsonResponse({ success: true, presets: [] });
+      }
+      if (url === '/api/generate') {
+        generateFormData = init?.body as FormData;
+        return jsonResponse({
+          success: true,
+          jobId: 't2v-job-1',
+          prompt: 'wide dolly shot {left|right}',
+          resolvedPrompt: 'wide dolly shot right',
+          seed: 98765,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(React.createElement(VideoGenerationForm));
+
+    const promptTextarea = await screen.findByTestId('video-create-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'wide dolly shot {left|right}' } });
+    fireEvent.click(screen.getByLabelText('Random seed'));
+
+    fireEvent.submit(screen.getByRole('form'));
+
+    await waitFor(() => {
+      expect(generateFormData?.get('modelId')).toBe('wan22-t2v');
+      expect(generateFormData?.get('randomizeSeed')).toBe('true');
+      expect(generateFormData?.get('prompt')).toBe('wide dolly shot {left|right}');
+    });
+
+    await waitFor(() => {
+      const seedInput = container.querySelector('input[name="seed"]') as HTMLInputElement | null;
+      expect(seedInput?.value).toBe('98765');
+    });
+    expect(mockAddJob).toHaveBeenCalledWith(expect.objectContaining({
+      id: 't2v-job-1',
+      modelId: 'wan22-t2v',
+      options: expect.objectContaining({
+        seed: 98765,
+        randomizeSeed: true,
+        videoPrompt: 'wide dolly shot {left|right}',
+        resolvedVideoPrompt: 'wide dolly shot right',
+        promptTemplate: 'wide dolly shot {left|right}',
+        resolvedPrompt: 'wide dolly shot right',
+        resolvedPromptSeed: 98765,
+      }),
+    }));
+  });
+
   it('renders the LoRA pair picker for WAN22 T2V', async () => {
     setWorkflowActiveModel('video', 'wan22-t2v');
 

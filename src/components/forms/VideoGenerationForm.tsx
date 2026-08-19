@@ -174,7 +174,9 @@ export default function VideoGenerationForm() {
         return value === undefined || value === null || value === '' ? fallback : value;
     };
 
-    const supportsWanLoraPairsForModel = (modelId: string) => ['wan22', 'wan22-t2v'].includes(modelId);
+    const supportsWanVideoModel = (modelId: string) => ['wan22', 'wan22-t2v'].includes(modelId);
+    const supportsWanLoraPairsForModel = supportsWanVideoModel;
+    const supportsWanRandomSeedForModel = supportsWanVideoModel;
 
     const buildDefaultVideoParameterValues = (modelId: string) => {
         const model = getModelById(modelId);
@@ -1532,7 +1534,7 @@ export default function VideoGenerationForm() {
             if (Object.keys(promptWildcardSelections).length > 0) {
                 formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));
             }
-            if (currentModel.id === 'wan22') {
+            if (supportsWanRandomSeedForModel(currentModel.id)) {
                 formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
             }
 
@@ -2090,7 +2092,7 @@ export default function VideoGenerationForm() {
                                 </Button>
                             </div>
                         )}
-                        {['wan22', 'wan22-t2v'].includes(currentModel.id) ? (
+                        {supportsWanRandomSeedForModel(currentModel.id) ? (
                             <div className="space-y-3">
                                 <label
                                     htmlFor="wan22-random-seed"
