@@ -118,6 +118,59 @@ describe('job reuse route', () => {
     expect(json.payload.options.image_path).toBeUndefined();
   });
 
+  it('builds T2V payloads for WAN22 T2V video jobs from saved metadata', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 't2v-job-1',
+      type: 'video',
+      prompt: 'wide dolly shot',
+      resultUrl: '/generations/t2v-output.mp4',
+      modelId: 'wan22-t2v',
+      endpointId: 'wan22-t2v',
+      options: JSON.stringify({
+        prompt: 'old prompt',
+        modelId: 'wan22-t2v',
+        endpointId: 'wan22-t2v',
+        width: 832,
+        height: 480,
+        seed: 98765,
+        randomizeSeed: true,
+        cfg: 1,
+        steps: 4,
+        length: 81,
+        video_path: '/generations/t2v-output.mp4',
+        image_path: '/generations/should-not-carry.png',
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/jobs/t2v-job-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2vid', outputId: 'output-1' }),
+    }) as any, {
+      params: Promise.resolve({ id: 't2v-job-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2vid',
+      type: 'video',
+      modelId: 'wan22-t2v',
+      prompt: 'wide dolly shot',
+      options: {
+        width: 832,
+        height: 480,
+        seed: 98765,
+        randomizeSeed: true,
+        cfg: 1,
+        steps: 4,
+        length: 81,
+      },
+    });
+    expect(json.payload.options.image_path).toBeUndefined();
+    expect(json.payload.options.video_path).toBeUndefined();
+  });
+
   it('ignores prompt overrides for video job txt2img payloads', async () => {
     mockPrisma.job.findUnique.mockResolvedValue({
       id: 'video-job-1',

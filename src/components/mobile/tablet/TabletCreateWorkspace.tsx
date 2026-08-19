@@ -906,7 +906,7 @@ function TabletPreviewActions({
   isSubmitting: boolean;
   onDownload: () => void;
   onSaveToBucket: (bucket: GalleryBucket) => void;
-  onReuse: (action: 'txt2img' | 'img2img' | 'img2vid') => void;
+  onReuse: (action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid') => void;
   onUpscale: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -950,6 +950,11 @@ function TabletPreviewActions({
       {job.type === 'video' ? (
         <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => onReuse('txt2img')} disabled={isSubmitting} aria-label="Open in txt2img" title="To txt2img">
           <Type className="h-4 w-4" />
+        </Button>
+      ) : null}
+      {job.type === 'video' && job.modelId === 'wan22-t2v' ? (
+        <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => onReuse('txt2vid')} disabled={isSubmitting} aria-label="Open in T2V" title="To T2V">
+          <Clapperboard className="h-4 w-4" />
         </Button>
       ) : null}
       {canPreviewMedia ? (
@@ -1013,7 +1018,7 @@ function TabletJobPreviewPanel({
   onViewModeChange: (mode: 'asset' | 'info') => void;
   onDownload: () => void;
   onSaveToBucket: (bucket: GalleryBucket) => void;
-  onReuse: (action: 'txt2img' | 'img2img' | 'img2vid') => void;
+  onReuse: (action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid') => void;
   onUpscale: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -1325,7 +1330,7 @@ export default function TabletCreateWorkspace({
     }, bucket === 'common' ? 'Added to Gallery' : bucket === 'draft' ? 'Draft saved' : 'Saved');
   }, [selectedJob, selectedOutput, withActionState]);
 
-  const reuseSelectedOutput = useCallback((action: 'txt2img' | 'img2img' | 'img2vid') => {
+  const reuseSelectedOutput = useCallback((action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid') => {
     const output = selectedOutput;
     const job = selectedJob;
     if (!job) return;

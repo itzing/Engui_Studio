@@ -207,7 +207,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
     }
   };
 
-  const reuse = async (action: 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2') => {
+  const reuse = async (action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid' | 'scene-template-v2') => {
     if (!asset) return;
     const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
       method: 'POST',
@@ -339,6 +339,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                 {asset.type === 'image' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
                 {asset.type === 'video' && asset.modelId === 'wan22' ? <Button variant="outline" onClick={() => void reuse('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {asset.type === 'video' && asset.modelId === 'wan22' ? <Button variant="outline" onClick={() => void reuse('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
+                {asset.type === 'video' && asset.modelId === 'wan22-t2v' ? <Button variant="outline" onClick={() => void reuse('txt2vid')}><Clapperboard className="mr-2 h-4 w-4" />To T2V</Button> : null}
                 {(asset.type === 'image' || asset.type === 'video') ? <Button variant="outline" onClick={() => void upscale()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 <Button variant="destructive" onClick={() => void toggleTrash()}><Trash2 className="mr-2 h-4 w-4" />{asset.trashed ? 'Restore' : 'Move to trash'}</Button>
                 {asset.sourceJobId ? <Button variant="ghost" asChild><Link href={`/m/jobs/${asset.sourceJobId}`}>Open source job</Link></Button> : null}

@@ -3,7 +3,7 @@
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { announceCreateModeChange } from '@/lib/create/createModeEvents';
 
-type CreateReuseAction = 'txt2img' | 'img2img' | 'img2vid';
+type CreateReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid';
 
 type CreateReuseSource =
   | { kind: 'gallery-asset'; id: string }

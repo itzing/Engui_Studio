@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid' | 'scene-template-v2';
 type GalleryReuseAsset = {
   id?: string;
   type: string;
@@ -35,6 +35,10 @@ function isWan22VideoAsset(asset: { type: string }, snapshot: Record<string, any
   return asset.type === 'video' && snapshot.modelId === 'wan22';
 }
 
+function isWan22T2vVideoAsset(asset: { type: string }, snapshot: Record<string, any>) {
+  return asset.type === 'video' && snapshot.modelId === 'wan22-t2v';
+}
+
 function buildAvailableActions(asset: { type: string; originKind?: string | null }, snapshot: Record<string, any>) {
   const actions: ReuseAction[] = [];
   if (asset.type === 'image') {
@@ -42,6 +46,9 @@ function buildAvailableActions(asset: { type: string; originKind?: string | null
   }
   if (isWan22VideoAsset(asset, snapshot)) {
     actions.push('txt2img', 'img2vid');
+  }
+  if (isWan22T2vVideoAsset(asset, snapshot)) {
+    actions.push('txt2vid');
   }
   if (parseSceneSnapshot(snapshot.sceneSnapshot)) {
     actions.push('scene-template-v2');
@@ -134,6 +141,21 @@ function buildReusePayload(
     };
   }
 
+  if (action === 'txt2vid') {
+    const t2vOptions = { ...baseOptions };
+    delete t2vOptions.image_path;
+    delete t2vOptions.image_path_2;
+    delete t2vOptions.video_path;
+
+    return {
+      action,
+      type: 'video',
+      modelId: 'wan22-t2v',
+      prompt,
+      options: t2vOptions,
+    };
+  }
+
   const imageInputPath = resolveImg2VidImageInput(asset, snapshot, sourceJobImageInputPath);
   const videoOptions = {
     ...baseOptions,
@@ -193,7 +215,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const action = body.action as ReuseAction;
     const promptOverride = action === 'txt2img' && typeof body.promptOverride === 'string' ? body.promptOverride : null;
 
-    if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
+    if (!action || !['txt2img', 'img2img', 'img2vid', 'txt2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
     }
 
@@ -250,7 +272,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       sourceJobImageInputPath = sourceJob?.imageInputPath || null;
     }
 
-    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid', asset, snapshot, sourceJobImageInputPath, promptOverride);
+    const payload = buildReusePayload(action as 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid', asset, snapshot, sourceJobImageInputPath, promptOverride);
     if (!payload) {
       return NextResponse.json({ success: false, error: 'Source image metadata is not available for this video' }, { status: 400 });
     }

@@ -275,9 +275,9 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     }
   };
 
-  const openInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid') => {
+  const openInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid') => {
     if (!job || !selectedOutput) return;
-    if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && action === 'txt2img')) return;
+    if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && (action === 'txt2img' || action === 'txt2vid'))) return;
     const response = await fetch(`/api/jobs/${job.id}/reuse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -523,6 +523,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 {job.type === 'image' ? <Button onClick={() => void openInCreate('img2img')}><Sparkles className="mr-2 h-4 w-4" />To img2img</Button> : null}
                 {job.type === 'image' ? <Button variant="outline" onClick={() => void openInCreate('img2vid')}><Clapperboard className="mr-2 h-4 w-4" />To img2vid</Button> : null}
                 {job.type === 'video' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
+                {job.type === 'video' && job.modelId === 'wan22-t2v' ? <Button variant="outline" onClick={() => void openInCreate('txt2vid')}><Clapperboard className="mr-2 h-4 w-4" />To T2V</Button> : null}
                 {(job.type === 'image' || job.type === 'video') ? <Button variant="outline" onClick={() => void upscaleJob()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
                 {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
                 {isFinished ? (

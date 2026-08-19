@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { SceneSnapshot } from '@/lib/prompt-constructor/types';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid' | 'scene-template-v2';
 
 type NormalizedJobOutput = {
   outputId: string;
@@ -123,6 +123,25 @@ function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, an
   };
 }
 
+function buildTextToVideoPayload(action: 'txt2vid', snapshot: Record<string, any>) {
+  const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
+  const baseOptions = { ...snapshot };
+  delete baseOptions.prompt;
+  delete baseOptions.modelId;
+  delete baseOptions.endpointId;
+  delete baseOptions.image_path;
+  delete baseOptions.image_path_2;
+  delete baseOptions.video_path;
+
+  return {
+    action,
+    type: 'video',
+    modelId: 'wan22-t2v',
+    prompt,
+    options: baseOptions,
+  };
+}
+
 function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, snapshot: Record<string, any>, promptOverride?: string | null) {
   const prompt = typeof snapshot.prompt === 'string' ? snapshot.prompt : '';
   const modelId = typeof snapshot.modelId === 'string' ? snapshot.modelId : undefined;
@@ -156,6 +175,10 @@ function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, sna
     };
   }
 
+  if (action === 'txt2vid') {
+    return buildTextToVideoPayload(action, snapshot);
+  }
+
   const sourceImageGenerationSnapshot = buildSourceImageSnapshot(snapshot);
   return {
     action,
@@ -179,7 +202,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const outputId = typeof body.outputId === 'string' ? body.outputId : 'output-1';
     const promptOverride = action === 'txt2img' && typeof body.promptOverride === 'string' ? body.promptOverride : null;
 
-    if (!action || !['txt2img', 'img2img', 'img2vid', 'scene-template-v2'].includes(action)) {
+    if (!action || !['txt2img', 'img2img', 'img2vid', 'txt2vid', 'scene-template-v2'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Valid action is required' }, { status: 400 });
     }
 
@@ -212,15 +235,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Output not found' }, { status: 404 });
     }
 
-    if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && action === 'txt2img')) {
+    if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && (action === 'txt2img' || action === 'txt2vid'))) {
       return NextResponse.json({ success: false, error: 'Reuse actions are only supported for image outputs' }, { status: 400 });
     }
 
     const snapshot = parseJobOptions(job.options);
+    const modelId = (job as any).modelId || snapshot.modelId;
+    if (action === 'txt2vid' && modelId !== 'wan22-t2v') {
+      return NextResponse.json({ success: false, error: 'To T2V is only supported for WAN22 T2V jobs' }, { status: 400 });
+    }
     const payload = buildReusePayload(action, selectedOutput, {
       ...snapshot,
       prompt: job.prompt || snapshot.prompt || '',
-      modelId: (job as any).modelId || snapshot.modelId,
+      modelId,
       endpointId: (job as any).endpointId || snapshot.endpointId,
     }, promptOverride);
     if (!payload) {

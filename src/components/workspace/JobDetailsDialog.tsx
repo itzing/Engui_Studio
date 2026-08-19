@@ -5,7 +5,7 @@ import { Job, useStudio } from '@/lib/context/StudioContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { ChevronLeft, ChevronRight, Download, Copy, Sparkles, Type, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Copy, Clapperboard, Sparkles, Type, X } from 'lucide-react';
 import { getModelById } from '@/lib/models/modelConfig';
 import { useI18n } from '@/lib/i18n/context';
 import { getPromptForMode, getPromptVersions, getSourceImagePromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
@@ -358,9 +358,9 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         }
     };
 
-    const handleOpenInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid') => {
+    const handleOpenInCreate = async (action: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid') => {
         if (!job || !selectedOutput) return;
-        if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && action === 'txt2img')) return;
+        if (selectedOutput.type !== 'image' && !(selectedOutput.type === 'video' && (action === 'txt2img' || action === 'txt2vid'))) return;
 
         try {
             const response = await fetch(`/api/jobs/${job.id}/reuse`, {
@@ -800,6 +800,16 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                 >
                                     <Type className="w-4 h-4 mr-2" />
                                     To txt2img
+                                </Button>
+                            )}
+                            {job?.modelId === 'wan22-t2v' && job?.type === 'video' && selectedOutput?.type === 'video' && (
+                                <Button
+                                    className="flex-1"
+                                    variant="outline"
+                                    onClick={() => void handleOpenInCreate('txt2vid')}
+                                >
+                                    <Clapperboard className="w-4 h-4 mr-2" />
+                                    To T2V
                                 </Button>
                             )}
                             {isFinished && (

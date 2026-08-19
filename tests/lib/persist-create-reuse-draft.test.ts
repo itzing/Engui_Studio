@@ -275,6 +275,48 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('writes txt2vid payloads into the WAN22 T2V video workflow draft before navigation', async () => {
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    const result = persistCreateReuseDraft({
+      action: 'txt2vid',
+      type: 'video',
+      modelId: 'wan22-t2v',
+      prompt: 'wide dolly shot',
+      options: {
+        width: 832,
+        height: 480,
+        seed: 98765,
+        randomizeSeed: true,
+        cfg: 1,
+        steps: 4,
+        length: 81,
+        image_path: '/generations/should-not-carry.png',
+        video_path: '/generations/should-not-carry.mp4',
+      },
+    });
+
+    expect(result?.workflow).toBe('video');
+    expect(setActiveMode).toHaveBeenCalledWith('video');
+    expect(setWorkflowActiveModel).toHaveBeenCalledWith('video', 'wan22-t2v');
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('video', 'wan22-t2v', {
+      prompt: 'wide dolly shot',
+      showAdvanced: true,
+      randomizeSeed: true,
+      parameterValues: {
+        width: 832,
+        height: 480,
+        seed: 98765,
+        randomizeSeed: true,
+        cfg: 1,
+        steps: 4,
+        length: 81,
+      },
+      imagePreviewUrl: '',
+      videoPreviewUrl: '',
+    });
+  });
+
   it('preserves the existing WAN22 video draft when gallery img2vid only supplies a new image', async () => {
     getWorkflowDraft.mockReturnValue({
       prompt: 'existing video prompt',

@@ -9,7 +9,7 @@ import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/l
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
 import { getAvailableDetailsPromptMode, readDetailsPromptModePreference, writeDetailsPromptModePreference, type DetailsPromptMode } from '@/lib/detailsPromptModePreference';
 
-type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'scene-template-v2';
+type ReuseAction = 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid' | 'scene-template-v2';
 type GalleryPromptMode = DetailsPromptMode;
 import { useToast } from '@/components/ui/toast';
 
@@ -381,6 +381,12 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
                           {isReusing === 'img2vid' ? 'Opening...' : 'Open in img2vid'}
                         </Button>
                       </>
+                    )}
+                    {asset.type === 'video' && asset.modelId === 'wan22-t2v' && (
+                      <Button variant="outline" size="sm" onClick={() => void handleReuse('txt2vid')} disabled={!!isReusing}>
+                        <Clapperboard className="w-4 h-4 mr-2" />
+                        {isReusing === 'txt2vid' ? 'Opening...' : 'Open in T2V'}
+                      </Button>
                     )}
                     {(asset.type === 'image' || asset.type === 'video') && (
                       <Button variant="outline" size="sm" onClick={() => void handleUpscale()} disabled={isUpscaling}>

@@ -5,7 +5,7 @@ import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setActiveM
 import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
 type ReuseDetail = {
-  action?: 'txt2img' | 'img2img' | 'img2vid' | string | null;
+  action?: 'txt2img' | 'img2img' | 'img2vid' | 'txt2vid' | string | null;
   type?: 'image' | 'video' | string | null;
   modelId?: string | null;
   prompt?: string | null;
@@ -204,6 +204,26 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const nextImagePreviewUrl = detail.imageInputPath || parsedOptions.image_path || currentDraft?.imagePreviewUrl || '';
     const sourceImageGenerationSnapshot = normalizeSourceImageGenerationSnapshot(detail.sourceImageGenerationSnapshot)
       || normalizeSourceImageGenerationSnapshot(parsedOptions.sourceImageGenerationSnapshot);
+
+    if (detail.action === 'txt2vid') {
+      const parameterValues = Object.fromEntries(
+        Object.entries(parsedOptions).filter(([key]) => !key.includes('_path') && key !== 'runpodJobId' && key !== 'error' && key !== 'video_path')
+      );
+      const snapshot = {
+        prompt: detail.prompt || '',
+        showAdvanced: true,
+        randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
+        parameterValues,
+        imagePreviewUrl: '',
+        videoPreviewUrl: '',
+      };
+
+      setActiveMode('video');
+      setWorkflowActiveModel('video', modelId);
+      saveWorkflowDraft('video', modelId, snapshot);
+
+      return { workflow: 'video' as const, modelId, snapshot };
+    }
 
     if (detail.preserveVideoDraftFields) {
       const parameterValues = currentDraft?.parameterValues && typeof currentDraft.parameterValues === 'object'
