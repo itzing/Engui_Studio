@@ -83,6 +83,7 @@ type CarouselFeedSource = 'galleryOrder' | 'shuffle';
 type ResetFeedOptions = {
   pause?: boolean;
   seedNeighborCount?: number;
+  showCurrentPosterWhileLoading?: boolean;
 };
 type GalleryOrderFilter = {
   bucket?: 'all' | 'common' | 'draft' | 'upscale';
@@ -105,7 +106,7 @@ const HORIZONTAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 1.5;
 const VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO = 0.2;
 const VERTICAL_SLOT_TRIM_BUFFER_MIN_PX = 120;
 const DEFAULT_INITIAL_NEIGHBOR_COUNT = 1;
-const TIKTOK_NEIGHBOR_COUNT = 3;
+const TIKTOK_NEIGHBOR_COUNT = 5;
 const TIKTOK_SNAP_ANIMATION_MS = 180;
 const GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT = 3;
 const GALLERY_VIEW_WINDOW_SIDE_LIMIT = 12;
@@ -236,6 +237,16 @@ function shouldIgnoreKeyboardShortcutTarget(target: EventTarget | null) {
   return Boolean(target.closest('[role="slider"], [contenteditable="true"]'));
 }
 
+function readVideoLoadProgress(video: HTMLVideoElement) {
+  const duration = video.duration;
+  if (!Number.isFinite(duration) || duration <= 0 || video.buffered.length === 0) return 0;
+  let bufferedEnd = 0;
+  for (let index = 0; index < video.buffered.length; index += 1) {
+    bufferedEnd = Math.max(bufferedEnd, video.buffered.end(index));
+  }
+  return Math.min(1, Math.max(0, bufferedEnd / duration));
+}
+
 type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
@@ -278,6 +289,7 @@ export function GalleryVideoCarousel({
   const preloadRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playInteractionRetryVideoInstanceIdsRef = useRef<Set<string>>(new Set());
+  const tiktokCurrentPosterInstanceIdsRef = useRef<Set<string>>(new Set());
   const userPlaybackInteractionRef = useRef(false);
   const stageSizeRef = useRef({ width: 1280, height: 720 });
   const activeSlotsRef = useRef<CarouselSlot[]>([]);
@@ -330,6 +342,7 @@ export function GalleryVideoCarousel({
   const [isDragging, setIsDragging] = useState(false);
   const [isTiktokSnapAnimating, setIsTiktokSnapAnimating] = useState(false);
   const [videoReadyInstanceIds, setVideoReadyInstanceIds] = useState<Set<string>>(() => new Set());
+  const [videoLoadProgress, setVideoLoadProgress] = useState<Record<string, number>>({});
   const [isUiHidden, setIsUiHidden] = useState(showControls);
 
   const remainingCount = Math.max(0, feedRef.current.length - nextIndex);
@@ -431,6 +444,9 @@ export function GalleryVideoCarousel({
     slotCounterRef.current = slotSeed;
     if (!tiktokModeRef.current) {
       setVideoReadyInstanceIds(new Set());
+      tiktokCurrentPosterInstanceIdsRef.current.clear();
+    } else if (currentSlot && options.showCurrentPosterWhileLoading) {
+      tiktokCurrentPosterInstanceIdsRef.current.add(currentSlot.instanceId);
     }
     setActiveSlots(seededSlots);
     setNextIndex(nextIndexRef.current);
@@ -458,6 +474,7 @@ export function GalleryVideoCarousel({
     setNextIndex(0);
     setFeedEnded(false);
     carouselWindowPaginationRef.current = null;
+    tiktokCurrentPosterInstanceIdsRef.current.clear();
     try {
       const source: CarouselFeedSource = useGalleryView ? 'galleryOrder' : 'shuffle';
       const shuffleSeed = useGalleryView ? null : createCarouselShuffleSeed();
@@ -686,7 +703,7 @@ export function GalleryVideoCarousel({
     if (!tiktokModeRef.current || feed.length === 0) return;
 
     const safeIndex = Math.min(Math.max(0, targetFeedIndex), feed.length - 1);
-    resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: TIKTOK_NEIGHBOR_COUNT });
+    resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: TIKTOK_NEIGHBOR_COUNT, showCurrentPosterWhileLoading: true });
 
     if (safeIndex >= feed.length - 2) {
       void extendCarouselFeedWindow('after');
@@ -719,6 +736,12 @@ export function GalleryVideoCarousel({
   const animateTikTokSnap = useCallback((currentFeedIndex: number, currentOffset: number, nextFeedIndex: number | null) => {
     if (tiktokSnapAnimationTimeoutRef.current !== null) {
       window.clearTimeout(tiktokSnapAnimationTimeoutRef.current);
+    }
+    if (nextFeedIndex !== null) {
+      const targetEntry = feedRef.current[nextFeedIndex];
+      if (targetEntry) {
+        tiktokCurrentPosterInstanceIdsRef.current.add(`tiktok-${targetEntry.id}`);
+      }
     }
     isTiktokSnapAnimatingRef.current = true;
     setIsTiktokSnapAnimating(true);
@@ -980,6 +1003,14 @@ export function GalleryVideoCarousel({
       const next = new Set(current);
       next.add(instanceId);
       return next;
+    });
+  }, []);
+
+  const updateVideoLoadProgress = useCallback((instanceId: string, video: HTMLVideoElement) => {
+    const nextProgress = readVideoLoadProgress(video);
+    setVideoLoadProgress((current) => {
+      if (Math.abs((current[instanceId] || 0) - nextProgress) < 0.01) return current;
+      return { ...current, [instanceId]: nextProgress };
     });
   }, []);
 
@@ -1252,6 +1283,16 @@ export function GalleryVideoCarousel({
       if (!activeInstanceIds.has(instanceId)) {
         preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
       }
+    });
+    Array.from(tiktokCurrentPosterInstanceIdsRef.current).forEach((instanceId) => {
+      if (!activeInstanceIds.has(instanceId)) {
+        tiktokCurrentPosterInstanceIdsRef.current.delete(instanceId);
+      }
+    });
+    setVideoLoadProgress((current) => {
+      const nextEntries = Object.entries(current).filter(([instanceId]) => activeInstanceIds.has(instanceId));
+      if (nextEntries.length === Object.keys(current).length) return current;
+      return Object.fromEntries(nextEntries);
     });
     if (userPlaybackInteractionRef.current) {
       retryMountedVideoPlayback();
@@ -1565,8 +1606,10 @@ export function GalleryVideoCarousel({
             const shouldRenderVideo = !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
             const isVideoReady = videoReadyInstanceIds.has(slot.instanceId);
             const posterUrl = slot.entry.kind === 'video' ? slot.entry.asset.thumbnailUrl : null;
-            const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || !isVideoReady);
+            const canShowCurrentPoster = !isTikTokCurrentSlot || tiktokCurrentPosterInstanceIdsRef.current.has(slot.instanceId);
+            const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || (!isVideoReady && canShowCurrentPoster));
             const shouldShowLoadingSpinner = isTikTokSlot && shouldRenderVideo && !isVideoReady;
+            const loadProgress = Math.max(0.08, Math.min(0.98, videoLoadProgress[slot.instanceId] || 0));
             return (
             <div
               key={slot.instanceId}
@@ -1613,17 +1656,21 @@ export function GalleryVideoCarousel({
                       onLoadedMetadata={(event) => {
                         if (slot.entry.kind !== 'video') return;
                         handleMetadata(slot.entry.asset, event.currentTarget);
+                        updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         if (isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
+                      onProgress={(event) => updateVideoLoadProgress(slot.instanceId, event.currentTarget)}
                       onCanPlay={(event) => {
+                        updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
                         if (isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
                       onLoadedData={(event) => {
+                        updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
                         if (isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
@@ -1645,10 +1692,18 @@ export function GalleryVideoCarousel({
                   ) : null}
                   {shouldShowLoadingSpinner ? (
                     <div
-                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20"
+                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/15"
                       data-testid="gallery-tiktok-video-loading"
                     >
-                      <Loader2 className="h-6 w-6 animate-spin text-white/80" />
+                      <div
+                        className="relative h-12 w-12 rounded-full shadow-[0_0_28px_rgba(0,0,0,0.45)]"
+                        style={{ background: `conic-gradient(rgba(255,255,255,0.92) ${Math.round(loadProgress * 360)}deg, rgba(255,255,255,0.22) 0deg)` }}
+                        data-progress={loadProgress.toFixed(2)}
+                        data-testid="gallery-tiktok-video-progress"
+                      >
+                        <div className="absolute inset-1.5 rounded-full bg-black/70 backdrop-blur-sm" />
+                        <div className="absolute inset-[1.1rem] rounded-full bg-white/90" />
+                      </div>
                     </div>
                   ) : null}
                 </>
