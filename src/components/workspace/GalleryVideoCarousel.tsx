@@ -1017,6 +1017,30 @@ export function GalleryVideoCarousel({
     });
   }, []);
 
+  const clearVideoInstanceState = useCallback((instanceIds: Iterable<string>) => {
+    const ids = Array.from(instanceIds);
+    if (ids.length === 0) return;
+    ids.forEach((instanceId) => {
+      preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
+      playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+      playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+    });
+    setVideoReadyInstanceIds((current) => {
+      if (!ids.some((instanceId) => current.has(instanceId))) return current;
+      const next = new Set(current);
+      ids.forEach((instanceId) => next.delete(instanceId));
+      return next;
+    });
+    setVideoLoadProgress((current) => {
+      if (!ids.some((instanceId) => Object.prototype.hasOwnProperty.call(current, instanceId))) return current;
+      const next = { ...current };
+      ids.forEach((instanceId) => {
+        delete next[instanceId];
+      });
+      return next;
+    });
+  }, []);
+
   const requestTikTokPosterBackfill = useCallback((assetIds: string[]) => {
     if (!workspaceId || assetIds.length === 0) return;
     const requestedIds = assetIds.filter((assetId) => {
@@ -1086,6 +1110,10 @@ export function GalleryVideoCarousel({
         .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) <= TIKTOK_NEIGHBOR_COUNT)
         .map((slot) => slot.instanceId),
     );
+    const posterOnlyInstanceIds = slots
+      .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) > 1)
+      .map((slot) => slot.instanceId);
+    clearVideoInstanceState(posterOnlyInstanceIds);
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
       const slot = slots.find((candidate) => candidate.instanceId === instanceId);
       const distanceFromCurrent = slot ? Math.abs(slot.feedIndex - currentSlot.feedIndex) : Number.POSITIVE_INFINITY;
@@ -1098,6 +1126,7 @@ export function GalleryVideoCarousel({
           // Ignore cleanup failures; removing the ref is enough for React to release the node.
         }
         delete videoRefs.current[instanceId];
+        clearVideoInstanceState([instanceId]);
         return;
       }
 
@@ -1120,7 +1149,7 @@ export function GalleryVideoCarousel({
       .filter(shouldBackfillTikTokVideoPoster)
       .map((asset) => asset.id);
     requestTikTokPosterBackfill(Array.from(new Set(missingPosterAssetIds)));
-  }, [getCurrentTikTokSlot, requestTikTokPosterBackfill]);
+  }, [clearVideoInstanceState, getCurrentTikTokSlot, requestTikTokPosterBackfill]);
 
   const unlockVideoPlayback = useCallback(() => {
     userPlaybackInteractionRef.current = true;
@@ -1358,6 +1387,7 @@ export function GalleryVideoCarousel({
 
   useEffect(() => {
     const activeInstanceIds = new Set(activeSlots.map((slot) => slot.instanceId));
+    const inactiveInstanceIds: string[] = [];
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
       if (!activeInstanceIds.has(instanceId)) {
         video.pause();
@@ -1368,32 +1398,21 @@ export function GalleryVideoCarousel({
           // Ignore cleanup failures; removing the ref is enough for React to release the node.
         }
         delete videoRefs.current[instanceId];
+        inactiveInstanceIds.push(instanceId);
       }
     });
-    Array.from(playRequestedVideoInstanceIdsRef.current).forEach((instanceId) => {
-      if (!activeInstanceIds.has(instanceId)) {
-        playRequestedVideoInstanceIdsRef.current.delete(instanceId);
-      }
-    });
-    Array.from(playInteractionRetryVideoInstanceIdsRef.current).forEach((instanceId) => {
-      if (!activeInstanceIds.has(instanceId)) {
-        playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
-      }
-    });
-    Array.from(preloadRequestedVideoInstanceIdsRef.current).forEach((instanceId) => {
-      if (!activeInstanceIds.has(instanceId)) {
-        preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
-      }
-    });
-    setVideoLoadProgress((current) => {
-      const nextEntries = Object.entries(current).filter(([instanceId]) => activeInstanceIds.has(instanceId));
-      if (nextEntries.length === Object.keys(current).length) return current;
-      return Object.fromEntries(nextEntries);
-    });
+    clearVideoInstanceState([
+      ...inactiveInstanceIds,
+      ...Array.from(playRequestedVideoInstanceIdsRef.current).filter((instanceId) => !activeInstanceIds.has(instanceId)),
+      ...Array.from(playInteractionRetryVideoInstanceIdsRef.current).filter((instanceId) => !activeInstanceIds.has(instanceId)),
+      ...Array.from(preloadRequestedVideoInstanceIdsRef.current).filter((instanceId) => !activeInstanceIds.has(instanceId)),
+      ...Array.from(videoReadyInstanceIds).filter((instanceId) => !activeInstanceIds.has(instanceId)),
+      ...Object.keys(videoLoadProgress).filter((instanceId) => !activeInstanceIds.has(instanceId)),
+    ]);
     if (userPlaybackInteractionRef.current) {
       retryMountedVideoPlayback();
     }
-  }, [activeSlots, retryMountedVideoPlayback]);
+  }, [activeSlots, clearVideoInstanceState, retryMountedVideoPlayback, videoLoadProgress, videoReadyInstanceIds]);
 
   const handleMetadata = useCallback((asset: GalleryCarouselAsset, video: HTMLVideoElement) => {
     if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
