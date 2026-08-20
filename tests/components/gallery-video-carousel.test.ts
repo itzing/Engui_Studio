@@ -138,6 +138,77 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
+  it('renders one stationary fullscreen video and snaps one item per vertical swipe in TikTok mode', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const videoAssets = [1, 2, 3].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(videoAssets, 1),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialTiktokMode: true,
+        initialVideosEnabled: true,
+        initialImagesEnabled: false,
+        initialIncludeLandscape: false,
+        initialIncludePortrait: true,
+        showControls: false,
+        enableKeyboardControls: false,
+        movementAxis: 'vertical',
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      const slot = stage.querySelector('video')?.parentElement as HTMLElement;
+      expect(slot.style.width).toBe('390px');
+      expect(slot.style.height).toBe('844px');
+      expect(slot.style.transform).toBe('translate3d(0px, 0px, 0)');
+
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
+      expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy();
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
+
+      await waitFor(() => expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy());
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      expect((stage.querySelector('video')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 0px, 0)');
+
+      fireEvent.pointerDown(stage, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 300 });
+      fireEvent.pointerMove(stage, { pointerId: 2, pointerType: 'touch', clientX: 202, clientY: 500 });
+      fireEvent.pointerUp(stage, { pointerId: 2, pointerType: 'touch', clientX: 202, clientY: 500 });
+
+      await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
   it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
     const videoAssets = [
       {

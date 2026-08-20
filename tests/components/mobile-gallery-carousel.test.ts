@@ -249,6 +249,8 @@ describe('mobile Gallery carousel', () => {
     await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
     expect(screen.queryByText('Rotate your phone')).toBeNull();
     expect(mockCarousel.props).toMatchObject({
+      initialVideosEnabled: true,
+      initialImagesEnabled: false,
       initialIncludeLandscape: false,
       initialIncludePortrait: true,
       initialTiktokMode: true,

@@ -96,6 +96,7 @@ const DEFAULT_VIDEO_RATIO = 9 / 16;
 const DEFAULT_IMAGE_RATIO = 1;
 const BASE_SPEED_PX_PER_SECOND = 90;
 const DRAG_START_THRESHOLD_PX = 4;
+const TIKTOK_SWIPE_THRESHOLD_PX = 56;
 const DEFAULT_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 4;
 const MIN_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 2;
 const MAX_KEYBOARD_SCRUB_SPEED_MULTIPLIER = 10;
@@ -145,6 +146,15 @@ function buildSlotSize(entry: GalleryCarouselFeedItem<GalleryCarouselAsset, Gall
   return {
     ...getFullHeightGalleryCarouselSlotSize(ratio, stage.height),
     x: 0,
+  };
+}
+
+function buildTikTokSlotSize(stage: { width: number; height: number }) {
+  return {
+    width: Math.max(1, stage.width),
+    height: Math.max(1, stage.height),
+    x: 0,
+    y: 0,
   };
 }
 
@@ -330,7 +340,9 @@ export function GalleryVideoCarousel({
     const safeStartIndex = Math.min(Math.max(0, Math.floor(startIndex)), Math.max(0, feed.length - 1));
     const stage = stageSizeRef.current;
     const slotSeed = slotCounterRef.current + 1;
-    const seedNeighborCount = Math.max(DEFAULT_INITIAL_NEIGHBOR_COUNT, Math.floor(options.seedNeighborCount ?? DEFAULT_INITIAL_NEIGHBOR_COUNT));
+    const seedNeighborCount = tiktokModeRef.current
+      ? 0
+      : Math.max(DEFAULT_INITIAL_NEIGHBOR_COUNT, Math.floor(options.seedNeighborCount ?? DEFAULT_INITIAL_NEIGHBOR_COUNT));
     const buildSlot = (
       entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
       feedIndex: number,
@@ -351,7 +363,11 @@ export function GalleryVideoCarousel({
       activeImageIndex: entry.kind === 'images' ? 0 : undefined,
     });
     const currentEntry = feed[safeStartIndex];
-    const currentSize = currentEntry ? buildSlotSize(currentEntry, stage, measuredRatiosRef.current, movementAxisRef.current) : null;
+    const currentSize = currentEntry
+      ? tiktokModeRef.current
+        ? buildTikTokSlotSize(stage)
+        : buildSlotSize(currentEntry, stage, measuredRatiosRef.current, movementAxisRef.current)
+      : null;
     const currentSlot: CarouselSlot | null = currentEntry && currentSize
       ? buildSlot(currentEntry, safeStartIndex, currentSize.x, currentSize.y, currentSize.width, currentSize.height)
       : null;
@@ -389,7 +405,7 @@ export function GalleryVideoCarousel({
         lastSeededSlot = nextSlot;
       }
     }
-    const nextPaused = Boolean(options.pause);
+    const nextPaused = tiktokModeRef.current || Boolean(options.pause);
     feedRef.current = feed;
     activeSlotsRef.current = seededSlots;
     nextIndexRef.current = seededSlots.length > 0 ? seededSlots[seededSlots.length - 1].feedIndex + 1 : safeStartIndex;
@@ -504,6 +520,8 @@ export function GalleryVideoCarousel({
       ? {
           ...storedSettings,
           tiktokMode: true,
+          videosEnabled: true,
+          imagesEnabled: false,
           includeLandscape: false,
           includePortrait: true,
         }
@@ -640,6 +658,27 @@ export function GalleryVideoCarousel({
       setIsLoadingWindow(isLoadingBeforeWindowRef.current || isLoadingAfterWindowRef.current);
     }
   }, [currentGalleryAssetId, galleryOrderFilter, workspaceId]);
+
+  const showTikTokFeedIndex = useCallback((targetFeedIndex: number) => {
+    const feed = feedRef.current;
+    if (!tiktokModeRef.current || feed.length === 0) return;
+
+    const safeIndex = Math.min(Math.max(0, targetFeedIndex), feed.length - 1);
+    resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: 0 });
+
+    if (safeIndex >= feed.length - 2) {
+      void extendCarouselFeedWindow('after');
+    }
+    if (safeIndex <= 1) {
+      void extendCarouselFeedWindow('before');
+    }
+  }, [extendCarouselFeedWindow, resetFeed]);
+
+  const showAdjacentTikTokItem = useCallback((direction: -1 | 1) => {
+    const currentSlot = activeSlotsRef.current[0];
+    if (!currentSlot) return;
+    showTikTokFeedIndex(currentSlot.feedIndex + direction);
+  }, [showTikTokFeedIndex]);
 
   useEffect(() => {
     const element = stageRef.current;
@@ -913,6 +952,10 @@ export function GalleryVideoCarousel({
     dragState.hasDragged = true;
     dragState.lastMain = pointerMain;
     setIsDragging(true);
+    if (tiktokModeRef.current) {
+      event.preventDefault();
+      return;
+    }
     pauseAndScrubTape(deltaMain);
     event.preventDefault();
   }, [pauseAndScrubTape]);
@@ -923,6 +966,13 @@ export function GalleryVideoCarousel({
 
     if (dragState.hasDragged) {
       suppressClickRef.current = true;
+      if (tiktokModeRef.current) {
+        const pointerMain = movementAxisRef.current === 'vertical' ? event.clientY : event.clientX;
+        const totalDelta = pointerMain - dragState.startMain;
+        if (Math.abs(totalDelta) >= TIKTOK_SWIPE_THRESHOLD_PX) {
+          showAdjacentTikTokItem(totalDelta < 0 ? 1 : -1);
+        }
+      }
       window.setTimeout(() => {
         suppressClickRef.current = false;
       }, 0);
@@ -931,7 +981,7 @@ export function GalleryVideoCarousel({
     dragStateRef.current = { pointerId: null, startMain: 0, lastMain: 0, hasDragged: false };
     setIsDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-  }, []);
+  }, [showAdjacentTikTokItem]);
 
   useEffect(() => {
     const frame = (timestamp: number) => {
@@ -942,6 +992,10 @@ export function GalleryVideoCarousel({
       const isKeyboardScrubbing = keyboardScrubDirection !== 0;
 
       if (feedRef.current.length > 0) {
+        if (tiktokModeRef.current) {
+          rafRef.current = window.requestAnimationFrame(frame);
+          return;
+        }
         if (!pausedRef.current || isKeyboardScrubbing) {
           fillAdjacentSlots(keyboardScrubDirection < 0 ? -1 : 1);
         }
@@ -1038,7 +1092,9 @@ export function GalleryVideoCarousel({
     if (activeSlotsRef.current.length === 0) return;
     const stage = stageSizeRef.current;
     activeSlotsRef.current = activeSlotsRef.current.map((slot) => {
-      const size = buildSlotSize(slot.entry, stage, measuredRatios, movementAxisRef.current);
+      const size = tiktokModeRef.current
+        ? buildTikTokSlotSize(stage)
+        : buildSlotSize(slot.entry, stage, measuredRatios, movementAxisRef.current);
       return { ...slot, width: size.width, height: size.height, x: movementAxisRef.current === 'vertical' ? size.x : slot.x, y: movementAxisRef.current === 'vertical' ? slot.y : size.y };
     });
     setActiveSlots(activeSlotsRef.current);
@@ -1351,6 +1407,7 @@ export function GalleryVideoCarousel({
           }
           if (isLoading || totalMediaCount === 0) return;
           unlockVideoPlayback();
+          if (tiktokModeRef.current) return;
           setPaused((value) => {
             const next = !value;
             pausedRef.current = next;
@@ -1363,7 +1420,7 @@ export function GalleryVideoCarousel({
           {activeSlots.map((slot) => (
             <div
               key={slot.instanceId}
-              className="absolute overflow-hidden rounded-md border border-white/10 bg-black shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+              className={`absolute overflow-hidden bg-black ${tiktokModeRef.current ? '' : 'rounded-md border border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.45)]'}`}
               style={{
                 width: `${slot.width}px`,
                 height: `${slot.height}px`,

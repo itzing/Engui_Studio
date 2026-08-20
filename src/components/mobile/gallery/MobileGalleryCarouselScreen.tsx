@@ -71,6 +71,8 @@ export default function MobileGalleryCarouselScreen() {
   const shouldShowPortraitLandscapePlayer = started && !tiktokMode && !isLandscape && isLandscapeOnlyFilter;
   const shouldShowVerticalPlayer = shouldShowTikTokPlayer || shouldShowPortraitLandscapePlayer;
   const shouldShowCarouselPlayer = tiktokMode ? shouldShowTikTokPlayer : (isLandscape || shouldShowPortraitLandscapePlayer);
+  const playerVideosEnabled = tiktokMode ? true : videosEnabled;
+  const playerImagesEnabled = tiktokMode ? false : imagesEnabled;
   const playerIncludeLandscape = tiktokMode ? false : includeLandscape;
   const playerIncludePortrait = tiktokMode ? true : includePortrait;
 
@@ -347,8 +349,8 @@ export default function MobileGalleryCarouselScreen() {
             >
               <GalleryVideoCarousel
                 workspaceId={workspaceId}
-                initialVideosEnabled={videosEnabled}
-                initialImagesEnabled={imagesEnabled}
+                initialVideosEnabled={playerVideosEnabled}
+                initialImagesEnabled={playerImagesEnabled}
                 initialOnlyFavorites={onlyFavorites}
                 initialIncludeLandscape={playerIncludeLandscape}
                 initialIncludePortrait={playerIncludePortrait}
