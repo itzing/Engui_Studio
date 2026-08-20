@@ -178,6 +178,7 @@ function toDisplayAsset(asset: CarouselFeedAsset) {
     originalUrl: asset.originalUrl,
     previewUrl: asset.previewUrl,
     thumbnailUrl: asset.thumbnailUrl,
+    derivativeStatus: asset.derivativeStatus,
     prompt: asset.prompt,
     mediaWidth: asset.mediaWidth,
     mediaHeight: asset.mediaHeight,

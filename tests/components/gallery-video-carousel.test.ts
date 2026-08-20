@@ -330,6 +330,78 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
+  it('does not show pending gallery thumbnails as TikTok posters and triggers targeted poster backfill', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const videoAssets = Array.from({ length: 7 }, (_, index) => ({
+      id: `video-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index + 1}.mp4`,
+      previewUrl: `/video-${index + 1}.mp4`,
+      thumbnailUrl: `/gallery-thumb-${index + 1}.webp`,
+      derivativeStatus: 'pending',
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/gallery/assets/derivatives/backfill')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            processed: 1,
+            results: [{ id: 'video-6', derivativeStatus: 'completed', previewUrl: '/video-6.mp4', thumbnailUrl: '/poster-video-6.jpg' }],
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => makeCarouselWindowResponse(videoAssets, 3),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialTiktokMode: true,
+        initialVideosEnabled: true,
+        initialImagesEnabled: false,
+        initialIncludeLandscape: false,
+        initialIncludePortrait: true,
+        showControls: false,
+        enableKeyboardControls: false,
+        movementAxis: 'vertical',
+      }));
+
+      const stage = await screen.findByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeTruthy());
+      expect(stage.querySelector('img[src="/gallery-thumb-6.webp"]')).toBeNull();
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+        '/api/gallery/assets/derivatives/backfill',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"assetIds"'),
+        }),
+      ));
+      await waitFor(() => expect(stage.querySelector('img[src="/poster-video-6.jpg"]')).toBeTruthy());
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
   it('plays a preloaded TikTok neighbor only after it becomes current and clears distant slots', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,

@@ -34,7 +34,20 @@ describe('POST /api/gallery/assets/derivatives/backfill', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(backfillGalleryDerivatives).toHaveBeenCalledWith('ws-1', 25);
+    expect(backfillGalleryDerivatives).toHaveBeenCalledWith('ws-1', 25, []);
     expect(json).toMatchObject({ success: true, processed: 3 });
+  });
+
+  it('passes targeted asset ids for nearby poster backfill', async () => {
+    backfillGalleryDerivatives.mockResolvedValue({ processed: 1, results: [{ id: 'video-1', previewUrl: '/video.mp4', thumbnailUrl: '/poster.jpg', derivativeStatus: 'completed' }] });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/derivatives/backfill', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId: 'ws-1', limit: 2, assetIds: ['video-1', 42, 'video-2'] }),
+      headers: { 'Content-Type': 'application/json' },
+    }) as any);
+
+    expect(response.status).toBe(200);
+    expect(backfillGalleryDerivatives).toHaveBeenCalledWith('ws-1', 2, ['video-1', 'video-2']);
   });
 });

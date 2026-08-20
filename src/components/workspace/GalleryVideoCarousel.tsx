@@ -26,6 +26,7 @@ type GalleryCarouselAsset = {
   originalUrl: string;
   previewUrl?: string | null;
   thumbnailUrl?: string | null;
+  derivativeStatus?: string | null;
   prompt?: string | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -247,6 +248,13 @@ function readVideoLoadProgress(video: HTMLVideoElement) {
   return Math.min(1, Math.max(0, bufferedEnd / duration));
 }
 
+function readTikTokVideoPosterUrl(asset: GalleryCarouselAsset) {
+  if (asset.type !== 'video' || (asset.derivativeStatus !== undefined && asset.derivativeStatus !== 'completed')) return null;
+  const thumbnailUrl = asset.thumbnailUrl?.trim();
+  if (!thumbnailUrl || thumbnailUrl === asset.originalUrl || thumbnailUrl === asset.previewUrl) return null;
+  return thumbnailUrl;
+}
+
 type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
@@ -290,6 +298,7 @@ export function GalleryVideoCarousel({
   const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playInteractionRetryVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const tiktokCurrentPosterInstanceIdsRef = useRef<Set<string>>(new Set());
+  const tiktokPosterBackfillRequestedAssetIdsRef = useRef<Set<string>>(new Set());
   const userPlaybackInteractionRef = useRef(false);
   const stageSizeRef = useRef({ width: 1280, height: 720 });
   const activeSlotsRef = useRef<CarouselSlot[]>([]);
@@ -503,6 +512,7 @@ export function GalleryVideoCarousel({
         workspaceId,
         type: 'video' as const,
         originalUrl: '',
+        derivativeStatus: null,
         addedToGalleryAt: '',
       })));
       setSourceImages(Array.from({ length: windowData.counts?.images || 0 }, (_, index) => ({
@@ -1014,6 +1024,53 @@ export function GalleryVideoCarousel({
     });
   }, []);
 
+  const requestTikTokPosterBackfill = useCallback((assetIds: string[]) => {
+    if (!workspaceId || assetIds.length === 0) return;
+    const requestedIds = assetIds.filter((assetId) => {
+      if (tiktokPosterBackfillRequestedAssetIdsRef.current.has(assetId)) return false;
+      tiktokPosterBackfillRequestedAssetIdsRef.current.add(assetId);
+      return true;
+    });
+    if (requestedIds.length === 0) return;
+
+    void fetch('/api/gallery/assets/derivatives/backfill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId, limit: requestedIds.length, assetIds: requestedIds }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ results?: Array<{ id: string; derivativeStatus?: string | null; thumbnailUrl?: string | null; previewUrl?: string | null }> }>;
+      })
+      .then((data) => {
+        const results = data?.results || [];
+        if (results.length === 0) return;
+        const updates = new Map(results.map((result) => [result.id, result]));
+        const mergeAsset = (asset: GalleryCarouselAsset) => {
+          const update = updates.get(asset.id);
+          if (!update) return asset;
+          return {
+            ...asset,
+            thumbnailUrl: update.thumbnailUrl ?? asset.thumbnailUrl,
+            previewUrl: update.previewUrl ?? asset.previewUrl,
+            derivativeStatus: update.derivativeStatus ?? asset.derivativeStatus,
+          };
+        };
+        const mergeEntry = (entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>) => entry.kind === 'video'
+          ? { ...entry, asset: mergeAsset(entry.asset) }
+          : { ...entry, images: entry.images.map(mergeAsset) };
+        feedRef.current = feedRef.current.map(mergeEntry);
+        activeSlotsRef.current = activeSlotsRef.current.map((slot) => ({
+          ...slot,
+          entry: mergeEntry(slot.entry),
+        }));
+        setActiveSlots(activeSlotsRef.current);
+      })
+      .catch(() => {
+        requestedIds.forEach((assetId) => tiktokPosterBackfillRequestedAssetIdsRef.current.delete(assetId));
+      });
+  }, [workspaceId]);
+
   const retryMountedVideoPlayback = useCallback(() => {
     const currentTikTokSlot = tiktokModeRef.current ? getCurrentTikTokSlot() : null;
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
@@ -1043,6 +1100,20 @@ export function GalleryVideoCarousel({
       }
     });
   }, [activeSlots, requestVideoPlayback]);
+
+  useEffect(() => {
+    if (!tiktokModeRef.current) return;
+    const currentSlot = getCurrentTikTokSlot();
+    if (!currentSlot) return;
+    const missingPosterAssetIds = activeSlots
+      .filter((slot) => slot.entry.kind === 'video')
+      .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) <= TIKTOK_NEIGHBOR_COUNT)
+      .map((slot) => slot.entry.kind === 'video' ? slot.entry.asset : null)
+      .filter((asset): asset is GalleryCarouselAsset => Boolean(asset))
+      .filter((asset) => !readTikTokVideoPosterUrl(asset))
+      .map((asset) => asset.id);
+    requestTikTokPosterBackfill(Array.from(new Set(missingPosterAssetIds)));
+  }, [activeSlots, getCurrentTikTokSlot, requestTikTokPosterBackfill]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
@@ -1605,7 +1676,9 @@ export function GalleryVideoCarousel({
             const tiktokDistanceFromCurrent = currentTikTokFeedIndex === null ? 0 : Math.abs(slot.feedIndex - currentTikTokFeedIndex);
             const shouldRenderVideo = !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
             const isVideoReady = videoReadyInstanceIds.has(slot.instanceId);
-            const posterUrl = slot.entry.kind === 'video' ? slot.entry.asset.thumbnailUrl : null;
+            const posterUrl = slot.entry.kind === 'video'
+              ? (isTikTokSlot ? readTikTokVideoPosterUrl(slot.entry.asset) : slot.entry.asset.thumbnailUrl || null)
+              : null;
             const canShowCurrentPoster = !isTikTokCurrentSlot || tiktokCurrentPosterInstanceIdsRef.current.has(slot.instanceId);
             const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || (!isVideoReady && canShowCurrentPoster));
             const shouldShowLoadingSpinner = isTikTokSlot && shouldRenderVideo && !isVideoReady;
@@ -1647,7 +1720,7 @@ export function GalleryVideoCarousel({
                         }
                       }}
                       src={slot.entry.asset.previewUrl || slot.entry.asset.originalUrl}
-                      poster={slot.entry.asset.thumbnailUrl || undefined}
+                      poster={posterUrl || undefined}
                       muted
                       loop
                       autoPlay={isTikTokCurrentSlot || !isTikTokSlot}

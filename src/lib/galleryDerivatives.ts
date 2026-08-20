@@ -156,7 +156,28 @@ export function queueGalleryDerivatives(assetId: string) {
   }, 0);
 }
 
-export async function backfillGalleryDerivatives(workspaceId: string, limit = 50) {
+export async function backfillGalleryDerivatives(workspaceId: string, limit = 50, assetIds: string[] = []) {
+  const uniqueAssetIds = Array.from(new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean)));
+  if (uniqueAssetIds.length > 0) {
+    const assets = await prisma.galleryAsset.findMany({
+      where: {
+        workspaceId,
+        id: { in: uniqueAssetIds },
+        type: { in: ['image', 'video'] },
+      },
+      orderBy: { addedToGalleryAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        originalUrl: true,
+        previewUrl: true,
+        thumbnailUrl: true,
+      },
+    });
+    return runGalleryDerivativeBackfill(assets, limit);
+  }
+
   const assets = await prisma.galleryAsset.findMany({
     where: {
       workspaceId,
@@ -217,9 +238,16 @@ export async function backfillGalleryDerivatives(workspaceId: string, limit = 50
     candidates.set(asset.id, asset);
   }
 
+  return runGalleryDerivativeBackfill(Array.from(candidates.values()), limit);
+}
+
+async function runGalleryDerivativeBackfill(
+  candidates: Array<{ id: string; type: string; originalUrl: string; previewUrl: string | null; thumbnailUrl: string | null }>,
+  limit: number,
+) {
   const results = [] as Array<{ id: string; derivativeStatus: string; thumbnailUrl: string | null; previewUrl: string | null }>;
 
-  for (const asset of Array.from(candidates.values()).slice(0, limit)) {
+  for (const asset of candidates.slice(0, limit)) {
     try {
       const updated = await generateGalleryDerivatives(asset.id);
       results.push({

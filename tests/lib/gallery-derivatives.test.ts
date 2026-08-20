@@ -77,6 +77,7 @@ describe('galleryDerivatives', () => {
           thumbnailUrl: '/generations/gallery/ws-1/original.png',
         },
       ]);
+    mockPrisma.galleryAsset.findMany.mockResolvedValueOnce([]);
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'a1',
       workspaceId: 'ws-1',
@@ -94,5 +95,41 @@ describe('galleryDerivatives', () => {
 
     expect(result.processed).toBe(1);
     expect(sharpChain.toFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('backfills targeted video assets by id', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValueOnce([
+      {
+        id: 'video-1',
+        type: 'video',
+        originalUrl: '/generations/gallery/ws-1/video.mp4',
+        previewUrl: '/generations/gallery/ws-1/video.mp4',
+        thumbnailUrl: '/generations/gallery/ws-1/gallery-thumb.webp',
+      },
+    ]);
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'video-1',
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: '/generations/gallery/ws-1/video.mp4',
+      previewUrl: '/generations/gallery/ws-1/video.mp4',
+      thumbnailUrl: '/generations/gallery/ws-1/gallery-thumb.webp',
+      derivativeStatus: 'pending',
+    });
+    mockPrisma.galleryAsset.update
+      .mockResolvedValueOnce({ id: 'video-1', derivativeStatus: 'processing' })
+      .mockResolvedValueOnce({ id: 'video-1', derivativeStatus: 'completed', previewUrl: '/generations/gallery/ws-1/video.mp4', thumbnailUrl: '/derived/video-1-thumb.jpg' });
+
+    const result = await backfillGalleryDerivatives('ws-1', 5, ['video-1']);
+
+    expect(mockPrisma.galleryAsset.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspaceId: 'ws-1',
+        id: { in: ['video-1'] },
+      }),
+      take: 5,
+    }));
+    expect(ffmpegServiceMock.extractThumbnail).toHaveBeenCalled();
+    expect(result.results[0]).toMatchObject({ id: 'video-1', derivativeStatus: 'completed', thumbnailUrl: '/derived/video-1-thumb.jpg' });
   });
 });
