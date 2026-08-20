@@ -21,6 +21,7 @@ const { mockPrisma, sharpMock, sharpChain, ffmpegServiceMock, existsSyncMock, mk
     ffmpegServiceMock: {
       isFFmpegAvailable: vi.fn(async () => true),
       extractThumbnail: vi.fn(async () => undefined),
+      extractVideoFrame: vi.fn(async () => undefined),
     },
     existsSyncMock: vi.fn(() => true),
     mkdirSyncMock: vi.fn(),
@@ -129,7 +130,17 @@ describe('galleryDerivatives', () => {
       }),
       take: 5,
     }));
-    expect(ffmpegServiceMock.extractThumbnail).toHaveBeenCalled();
+    expect(ffmpegServiceMock.extractVideoFrame).toHaveBeenCalledWith(
+      expect.stringContaining('/public/generations/gallery/ws-1/video.mp4'),
+      expect.stringContaining('video-1-poster-'),
+      expect.objectContaining({ position: 'first', format: 'jpg' }),
+    );
+    expect(mockPrisma.galleryAsset.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        thumbnailUrl: expect.stringContaining('/generations/gallery/ws-1/derived/video-1-poster-'),
+      }),
+    }));
+    expect(ffmpegServiceMock.extractThumbnail).not.toHaveBeenCalled();
     expect(result.results[0]).toMatchObject({ id: 'video-1', derivativeStatus: 'completed', thumbnailUrl: '/derived/video-1-thumb.jpg' });
   });
 });

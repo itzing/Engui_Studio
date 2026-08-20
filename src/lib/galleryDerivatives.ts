@@ -70,12 +70,11 @@ async function buildVideoThumbnail(asset: { id: string; workspaceId: string; ori
   const derivativesDir = path.join(process.cwd(), 'public', 'generations', 'gallery', asset.workspaceId, 'derived');
   ensurePublicDir(derivativesDir);
 
-  const fileName = buildDerivativeFileName(asset.id, asset.originalUrl, 'thumb', 'jpg');
+  const fileName = buildDerivativeFileName(asset.id, asset.originalUrl, 'poster', 'jpg');
   const outputPath = path.join(derivativesDir, fileName);
 
-  await ffmpegService.extractThumbnail(inputPath, outputPath, {
-    width: 480,
-    height: 480,
+  await ffmpegService.extractVideoFrame(inputPath, outputPath, {
+    position: 'first',
     quality: 4,
     format: 'jpg',
   });

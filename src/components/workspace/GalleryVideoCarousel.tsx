@@ -84,7 +84,6 @@ type CarouselFeedSource = 'galleryOrder' | 'shuffle';
 type ResetFeedOptions = {
   pause?: boolean;
   seedNeighborCount?: number;
-  showCurrentPosterWhileLoading?: boolean;
 };
 type GalleryOrderFilter = {
   bucket?: 'all' | 'common' | 'draft' | 'upscale';
@@ -297,7 +296,6 @@ export function GalleryVideoCarousel({
   const preloadRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playInteractionRetryVideoInstanceIdsRef = useRef<Set<string>>(new Set());
-  const tiktokCurrentPosterInstanceIdsRef = useRef<Set<string>>(new Set());
   const tiktokPosterBackfillRequestedAssetIdsRef = useRef<Set<string>>(new Set());
   const userPlaybackInteractionRef = useRef(false);
   const stageSizeRef = useRef({ width: 1280, height: 720 });
@@ -453,9 +451,6 @@ export function GalleryVideoCarousel({
     slotCounterRef.current = slotSeed;
     if (!tiktokModeRef.current) {
       setVideoReadyInstanceIds(new Set());
-      tiktokCurrentPosterInstanceIdsRef.current.clear();
-    } else if (currentSlot && options.showCurrentPosterWhileLoading) {
-      tiktokCurrentPosterInstanceIdsRef.current.add(currentSlot.instanceId);
     }
     setActiveSlots(seededSlots);
     setNextIndex(nextIndexRef.current);
@@ -483,7 +478,6 @@ export function GalleryVideoCarousel({
     setNextIndex(0);
     setFeedEnded(false);
     carouselWindowPaginationRef.current = null;
-    tiktokCurrentPosterInstanceIdsRef.current.clear();
     try {
       const source: CarouselFeedSource = useGalleryView ? 'galleryOrder' : 'shuffle';
       const shuffleSeed = useGalleryView ? null : createCarouselShuffleSeed();
@@ -713,7 +707,7 @@ export function GalleryVideoCarousel({
     if (!tiktokModeRef.current || feed.length === 0) return;
 
     const safeIndex = Math.min(Math.max(0, targetFeedIndex), feed.length - 1);
-    resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: TIKTOK_NEIGHBOR_COUNT, showCurrentPosterWhileLoading: true });
+    resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: TIKTOK_NEIGHBOR_COUNT });
 
     if (safeIndex >= feed.length - 2) {
       void extendCarouselFeedWindow('after');
@@ -746,12 +740,6 @@ export function GalleryVideoCarousel({
   const animateTikTokSnap = useCallback((currentFeedIndex: number, currentOffset: number, nextFeedIndex: number | null) => {
     if (tiktokSnapAnimationTimeoutRef.current !== null) {
       window.clearTimeout(tiktokSnapAnimationTimeoutRef.current);
-    }
-    if (nextFeedIndex !== null) {
-      const targetEntry = feedRef.current[nextFeedIndex];
-      if (targetEntry) {
-        tiktokCurrentPosterInstanceIdsRef.current.add(`tiktok-${targetEntry.id}`);
-      }
     }
     isTiktokSnapAnimatingRef.current = true;
     setIsTiktokSnapAnimating(true);
@@ -1355,11 +1343,6 @@ export function GalleryVideoCarousel({
         preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
       }
     });
-    Array.from(tiktokCurrentPosterInstanceIdsRef.current).forEach((instanceId) => {
-      if (!activeInstanceIds.has(instanceId)) {
-        tiktokCurrentPosterInstanceIdsRef.current.delete(instanceId);
-      }
-    });
     setVideoLoadProgress((current) => {
       const nextEntries = Object.entries(current).filter(([instanceId]) => activeInstanceIds.has(instanceId));
       if (nextEntries.length === Object.keys(current).length) return current;
@@ -1679,8 +1662,7 @@ export function GalleryVideoCarousel({
             const posterUrl = slot.entry.kind === 'video'
               ? (isTikTokSlot ? readTikTokVideoPosterUrl(slot.entry.asset) : slot.entry.asset.thumbnailUrl || null)
               : null;
-            const canShowCurrentPoster = !isTikTokCurrentSlot || tiktokCurrentPosterInstanceIdsRef.current.has(slot.instanceId);
-            const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || (!isVideoReady && canShowCurrentPoster));
+            const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || !isVideoReady);
             const shouldShowLoadingSpinner = isTikTokSlot && shouldRenderVideo && !isVideoReady;
             const loadProgress = Math.max(0.08, Math.min(0.98, videoLoadProgress[slot.instanceId] || 0));
             return (

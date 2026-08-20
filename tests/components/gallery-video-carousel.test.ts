@@ -198,8 +198,8 @@ describe('GalleryVideoCarousel', () => {
       expect(stage.querySelector('video[src="/video-3.mp4"]')?.getAttribute('preload')).toBe('auto');
       expect(screen.getAllByTestId('gallery-tiktok-video-loading')).toHaveLength(3);
       expect(screen.getAllByTestId('gallery-tiktok-video-progress')).toHaveLength(3);
-      expect(screen.getAllByTestId('gallery-tiktok-video-poster')).toHaveLength(2);
-      expect(stage.querySelector('img[src="/video-2.png"]')).toBeNull();
+      expect(screen.getAllByTestId('gallery-tiktok-video-poster')).toHaveLength(3);
+      expect(stage.querySelector('img[src="/video-2.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-3.png"]')).toBeTruthy();
 
       fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
