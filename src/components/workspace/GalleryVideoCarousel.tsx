@@ -958,7 +958,8 @@ export function GalleryVideoCarousel({
     video.playsInline = true;
     const alreadyRequested = playRequestedVideoInstanceIdsRef.current.has(instanceId);
     const alreadyRetriedAfterInteraction = playInteractionRetryVideoInstanceIdsRef.current.has(instanceId);
-    if (alreadyRequested && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
+    if (!tiktokModeRef.current && alreadyRequested && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
+    if (alreadyRequested && !video.paused && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
 
     playRequestedVideoInstanceIdsRef.current.add(instanceId);
     if (forceInteractionRetry) {
@@ -983,12 +984,16 @@ export function GalleryVideoCarousel({
   }, []);
 
   const retryMountedVideoPlayback = useCallback(() => {
+    const currentTikTokSlot = tiktokModeRef.current ? getCurrentTikTokSlot() : null;
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
-      if (video.paused || video.readyState > 0) {
+      const shouldPlay = !tiktokModeRef.current || currentTikTokSlot?.instanceId === instanceId;
+      if (shouldPlay && (video.paused || video.readyState > 0)) {
         requestVideoPlayback(instanceId, video, true);
+      } else if (tiktokModeRef.current) {
+        video.pause();
       }
     });
-  }, [requestVideoPlayback]);
+  }, [getCurrentTikTokSlot, requestVideoPlayback]);
 
   const unlockVideoPlayback = useCallback(() => {
     userPlaybackInteractionRef.current = true;
@@ -1221,8 +1226,15 @@ export function GalleryVideoCarousel({
 
   useEffect(() => {
     const activeInstanceIds = new Set(activeSlots.map((slot) => slot.instanceId));
-    Object.keys(videoRefs.current).forEach((instanceId) => {
+    Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
       if (!activeInstanceIds.has(instanceId)) {
+        video.pause();
+        video.removeAttribute('src');
+        try {
+          video.load();
+        } catch {
+          // Ignore cleanup failures; removing the ref is enough for React to release the node.
+        }
         delete videoRefs.current[instanceId];
       }
     });
@@ -1234,6 +1246,11 @@ export function GalleryVideoCarousel({
     Array.from(playInteractionRetryVideoInstanceIdsRef.current).forEach((instanceId) => {
       if (!activeInstanceIds.has(instanceId)) {
         playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+      }
+    });
+    Array.from(preloadRequestedVideoInstanceIdsRef.current).forEach((instanceId) => {
+      if (!activeInstanceIds.has(instanceId)) {
+        preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
       }
     });
     if (userPlaybackInteractionRef.current) {
@@ -1621,7 +1638,7 @@ export function GalleryVideoCarousel({
                       src={posterUrl}
                       alt=""
                       aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 z-10 h-full w-full object-cover"
+                      className={`pointer-events-none absolute inset-0 z-10 h-full w-full ${shouldRenderVideo ? 'object-cover' : 'object-contain'}`}
                       draggable={false}
                       data-testid="gallery-tiktok-video-poster"
                     />
