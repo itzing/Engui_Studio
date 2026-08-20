@@ -330,7 +330,7 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
-  it('does not show pending gallery thumbnails as TikTok posters and triggers targeted poster backfill', async () => {
+  it('keeps pending thumbnail posters visible while triggering targeted TikTok poster backfill', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -388,7 +388,7 @@ describe('GalleryVideoCarousel', () => {
 
       const stage = await screen.findByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeTruthy());
-      expect(stage.querySelector('img[src="/gallery-thumb-6.webp"]')).toBeNull();
+      expect(stage.querySelector('img[src="/gallery-thumb-6.webp"]')).toBeTruthy();
       await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
         '/api/gallery/assets/derivatives/backfill',
         expect.objectContaining({

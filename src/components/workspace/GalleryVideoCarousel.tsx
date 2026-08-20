@@ -248,10 +248,15 @@ function readVideoLoadProgress(video: HTMLVideoElement) {
 }
 
 function readTikTokVideoPosterUrl(asset: GalleryCarouselAsset) {
-  if (asset.type !== 'video' || (asset.derivativeStatus !== undefined && asset.derivativeStatus !== 'completed')) return null;
+  if (asset.type !== 'video') return null;
   const thumbnailUrl = asset.thumbnailUrl?.trim();
   if (!thumbnailUrl || thumbnailUrl === asset.originalUrl || thumbnailUrl === asset.previewUrl) return null;
   return thumbnailUrl;
+}
+
+function shouldBackfillTikTokVideoPoster(asset: GalleryCarouselAsset) {
+  if (asset.type !== 'video') return false;
+  return !readTikTokVideoPosterUrl(asset) || asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing';
 }
 
 type GalleryVideoCarouselProps = {
@@ -1071,6 +1076,52 @@ export function GalleryVideoCarousel({
     });
   }, [getCurrentTikTokSlot, requestVideoPlayback]);
 
+  const reconcileTikTokWindow = useCallback((slots: CarouselSlot[]) => {
+    if (!tiktokModeRef.current) return;
+    const currentSlot = getCurrentTikTokSlot();
+    if (!currentSlot) return;
+
+    const allowedInstanceIds = new Set(
+      slots
+        .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) <= TIKTOK_NEIGHBOR_COUNT)
+        .map((slot) => slot.instanceId),
+    );
+    Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
+      const slot = slots.find((candidate) => candidate.instanceId === instanceId);
+      const distanceFromCurrent = slot ? Math.abs(slot.feedIndex - currentSlot.feedIndex) : Number.POSITIVE_INFINITY;
+      if (!allowedInstanceIds.has(instanceId) || distanceFromCurrent > 1) {
+        video.pause();
+        video.removeAttribute('src');
+        try {
+          video.load();
+        } catch {
+          // Ignore cleanup failures; removing the ref is enough for React to release the node.
+        }
+        delete videoRefs.current[instanceId];
+        return;
+      }
+
+      video.preload = 'auto';
+      if (video.readyState === 0 && !preloadRequestedVideoInstanceIdsRef.current.has(instanceId)) {
+        preloadRequestedVideoInstanceIdsRef.current.add(instanceId);
+        try {
+          video.load();
+        } catch {
+          // Browsers may refuse explicit preload in constrained environments; the preload hint still applies.
+        }
+      }
+    });
+
+    const missingPosterAssetIds = slots
+      .filter((slot) => slot.entry.kind === 'video')
+      .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) <= TIKTOK_NEIGHBOR_COUNT)
+      .map((slot) => slot.entry.kind === 'video' ? slot.entry.asset : null)
+      .filter((asset): asset is GalleryCarouselAsset => Boolean(asset))
+      .filter(shouldBackfillTikTokVideoPoster)
+      .map((asset) => asset.id);
+    requestTikTokPosterBackfill(Array.from(new Set(missingPosterAssetIds)));
+  }, [getCurrentTikTokSlot, requestTikTokPosterBackfill]);
+
   const unlockVideoPlayback = useCallback(() => {
     userPlaybackInteractionRef.current = true;
     retryMountedVideoPlayback();
@@ -1091,17 +1142,8 @@ export function GalleryVideoCarousel({
 
   useEffect(() => {
     if (!tiktokModeRef.current) return;
-    const currentSlot = getCurrentTikTokSlot();
-    if (!currentSlot) return;
-    const missingPosterAssetIds = activeSlots
-      .filter((slot) => slot.entry.kind === 'video')
-      .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) <= TIKTOK_NEIGHBOR_COUNT)
-      .map((slot) => slot.entry.kind === 'video' ? slot.entry.asset : null)
-      .filter((asset): asset is GalleryCarouselAsset => Boolean(asset))
-      .filter((asset) => !readTikTokVideoPosterUrl(asset))
-      .map((asset) => asset.id);
-    requestTikTokPosterBackfill(Array.from(new Set(missingPosterAssetIds)));
-  }, [activeSlots, getCurrentTikTokSlot, requestTikTokPosterBackfill]);
+    reconcileTikTokWindow(activeSlots);
+  }, [activeSlots, reconcileTikTokWindow]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
