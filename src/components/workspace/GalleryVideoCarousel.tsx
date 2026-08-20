@@ -1629,7 +1629,7 @@ export function GalleryVideoCarousel({
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
-                      className={`h-full w-full object-cover ${isTikTokSlot && !isVideoReady ? 'opacity-0' : ''}`}
+                      className={`h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'} ${isTikTokSlot && !isVideoReady ? 'opacity-0' : ''}`}
                     />
                   ) : null}
                   {shouldShowPosterLayer && posterUrl ? (
@@ -1638,7 +1638,7 @@ export function GalleryVideoCarousel({
                       src={posterUrl}
                       alt=""
                       aria-hidden="true"
-                      className={`pointer-events-none absolute inset-0 z-10 h-full w-full ${shouldRenderVideo ? 'object-cover' : 'object-contain'}`}
+                      className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"
                       draggable={false}
                       data-testid="gallery-tiktok-video-poster"
                     />

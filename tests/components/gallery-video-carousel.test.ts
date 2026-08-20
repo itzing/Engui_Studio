@@ -188,6 +188,8 @@ describe('GalleryVideoCarousel', () => {
       const previousSlot = stage.querySelector('video[src="/video-1.mp4"]')?.parentElement as HTMLElement;
       const currentSlot = stage.querySelector('video[src="/video-2.mp4"]')?.parentElement as HTMLElement;
       const nextSlot = stage.querySelector('video[src="/video-3.mp4"]')?.parentElement as HTMLElement;
+      expect(stage.querySelector('video[src="/video-2.mp4"]')?.className).toContain('object-contain');
+      expect(stage.querySelector('video[src="/video-3.mp4"]')?.className).toContain('object-contain');
       expect(currentSlot.style.width).toBe('390px');
       expect(currentSlot.style.height).toBe('844px');
       expect(previousSlot.style.transform).toBe('translate3d(0px, -844px, 0)');
@@ -275,6 +277,8 @@ describe('GalleryVideoCarousel', () => {
       expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy();
       expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeNull();
       expect(stage.querySelector('video[src="/video-6.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-4.mp4"]')?.className).toContain('object-contain');
+      expect(stage.querySelector('video[src="/video-5.mp4"]')?.className).toContain('object-contain');
       expect(stage.querySelector('img[src="/video-2.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-6.png"]')).toBeTruthy();
       expect(loadSpy).toHaveBeenCalledTimes(3);
@@ -361,6 +365,7 @@ describe('GalleryVideoCarousel', () => {
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeTruthy());
       await waitFor(() => expect(playCalls).toContain('/video-4.mp4'));
+      expect(stage.querySelector('video[src="/video-4.mp4"]')?.className).toContain('object-contain');
       expect(playCalls).not.toContain('/video-3.mp4');
       expect(playCalls).not.toContain('/video-5.mp4');
       expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeNull();
@@ -417,6 +422,7 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByTestId('gallery-carousel-pause-indicator')).toBeTruthy();
     expect(screen.getByText('Movement paused')).toBeTruthy();
     expect(within(screen.getByTestId('gallery-video-carousel')).queryByText('Paused')).toBeNull();
+    expect(screen.getByTestId('gallery-video-carousel').querySelector('video[src="/video-1.mp4"]')?.className).toContain('object-cover');
     expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
 
