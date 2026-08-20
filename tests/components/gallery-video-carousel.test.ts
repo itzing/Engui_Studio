@@ -101,6 +101,43 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByText('8x')).toBeTruthy();
   });
 
+  it('forces portrait-only filtering when launched in TikTok mode', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: true,
+      imagesEnabled: false,
+      galleryViewEnabled: false,
+      onlyFavorites: false,
+      tiktokMode: true,
+      includeLandscape: true,
+      includePortrait: false,
+      speed: 1,
+      scrubSpeedMultiplier: 4,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(search.get('includeLandscape')).toBe('false');
+      expect(search.get('includePortrait')).toBe('true');
+      return {
+        ok: true,
+        json: async () => makeCarouselWindowResponse([], 0),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      initialTiktokMode: true,
+      initialIncludeLandscape: false,
+      initialIncludePortrait: true,
+      showControls: false,
+      enableKeyboardControls: false,
+      movementAxis: 'vertical',
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
   it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
     const videoAssets = [
       {

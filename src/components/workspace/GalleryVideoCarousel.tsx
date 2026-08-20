@@ -238,6 +238,7 @@ type GalleryVideoCarouselProps = {
   enableKeyboardControls?: boolean;
   movementAxis?: CarouselMovementAxis;
   initialGalleryViewEnabled?: boolean;
+  initialTiktokMode?: boolean;
   currentGalleryAssetId?: string | null;
   galleryOrderFilter?: GalleryOrderFilter;
 };
@@ -256,6 +257,7 @@ export function GalleryVideoCarousel({
   enableKeyboardControls = true,
   movementAxis = 'horizontal',
   initialGalleryViewEnabled = false,
+  initialTiktokMode = false,
   currentGalleryAssetId = null,
   galleryOrderFilter,
 }: GalleryVideoCarouselProps) {
@@ -282,6 +284,7 @@ export function GalleryVideoCarousel({
   const imagesEnabledRef = useRef(false);
   const galleryViewEnabledRef = useRef(initialGalleryViewEnabled);
   const onlyFavoritesRef = useRef(initialOnlyFavorites);
+  const tiktokModeRef = useRef(initialTiktokMode);
   const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
     includeLandscape: initialIncludeLandscape,
     includePortrait: initialIncludePortrait,
@@ -476,6 +479,7 @@ export function GalleryVideoCarousel({
       imagesEnabled: imagesEnabledRef.current,
       galleryViewEnabled: galleryViewEnabledRef.current,
       onlyFavorites: onlyFavoritesRef.current,
+      tiktokMode: tiktokModeRef.current,
       includeLandscape: ratioFilterRef.current.includeLandscape,
       includePortrait: ratioFilterRef.current.includePortrait,
       speed: speedRef.current,
@@ -489,33 +493,43 @@ export function GalleryVideoCarousel({
       videosEnabled: initialVideosEnabled,
       imagesEnabled: initialImagesEnabled,
       galleryViewEnabled: initialGalleryViewEnabled,
+      tiktokMode: initialTiktokMode,
       includeLandscape: initialIncludeLandscape,
       includePortrait: initialIncludePortrait,
       onlyFavorites: initialOnlyFavorites,
       speed: initialSpeed,
       scrubSpeedMultiplier: initialScrubSpeedMultiplier,
     }));
+    const effectiveSettings = initialTiktokMode
+      ? {
+          ...storedSettings,
+          tiktokMode: true,
+          includeLandscape: false,
+          includePortrait: true,
+        }
+      : storedSettings;
     const nextRatioFilter = {
-      includeLandscape: storedSettings.includeLandscape,
-      includePortrait: storedSettings.includePortrait,
+      includeLandscape: effectiveSettings.includeLandscape,
+      includePortrait: effectiveSettings.includePortrait,
     };
-    videosEnabledRef.current = storedSettings.videosEnabled;
-    setVideosEnabled(storedSettings.videosEnabled);
-    imagesEnabledRef.current = storedSettings.imagesEnabled;
-    setImagesEnabled(storedSettings.imagesEnabled);
-    galleryViewEnabledRef.current = storedSettings.galleryViewEnabled;
-    setGalleryViewEnabled(storedSettings.galleryViewEnabled);
-    onlyFavoritesRef.current = storedSettings.onlyFavorites;
-    setOnlyFavorites(storedSettings.onlyFavorites);
+    videosEnabledRef.current = effectiveSettings.videosEnabled;
+    setVideosEnabled(effectiveSettings.videosEnabled);
+    imagesEnabledRef.current = effectiveSettings.imagesEnabled;
+    setImagesEnabled(effectiveSettings.imagesEnabled);
+    galleryViewEnabledRef.current = effectiveSettings.galleryViewEnabled;
+    setGalleryViewEnabled(effectiveSettings.galleryViewEnabled);
+    onlyFavoritesRef.current = effectiveSettings.onlyFavorites;
+    setOnlyFavorites(effectiveSettings.onlyFavorites);
+    tiktokModeRef.current = effectiveSettings.tiktokMode;
     ratioFilterRef.current = nextRatioFilter;
-    setIncludeLandscape(storedSettings.includeLandscape);
-    setIncludePortrait(storedSettings.includePortrait);
-    speedRef.current = storedSettings.speed;
-    setSpeed(storedSettings.speed);
-    scrubSpeedMultiplierRef.current = storedSettings.scrubSpeedMultiplier;
-    setScrubSpeedMultiplier(storedSettings.scrubSpeedMultiplier);
-    void loadAssets(storedSettings.videosEnabled, storedSettings.imagesEnabled, nextRatioFilter, storedSettings.onlyFavorites, storedSettings.galleryViewEnabled);
-  }, [initialGalleryViewEnabled, initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialVideosEnabled, loadAssets, workspaceId]);
+    setIncludeLandscape(effectiveSettings.includeLandscape);
+    setIncludePortrait(effectiveSettings.includePortrait);
+    speedRef.current = effectiveSettings.speed;
+    setSpeed(effectiveSettings.speed);
+    scrubSpeedMultiplierRef.current = effectiveSettings.scrubSpeedMultiplier;
+    setScrubSpeedMultiplier(effectiveSettings.scrubSpeedMultiplier);
+    void loadAssets(effectiveSettings.videosEnabled, effectiveSettings.imagesEnabled, nextRatioFilter, effectiveSettings.onlyFavorites, effectiveSettings.galleryViewEnabled);
+  }, [initialGalleryViewEnabled, initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialTiktokMode, initialVideosEnabled, loadAssets, workspaceId]);
 
   useEffect(() => {
     pausedRef.current = paused;

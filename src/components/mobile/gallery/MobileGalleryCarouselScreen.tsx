@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Heart, Image as ImageIcon, Play, RotateCcw, X } from 'lucide-react';
+import { Film, Heart, Image as ImageIcon, Play, RotateCcw, Smartphone, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ export default function MobileGalleryCarouselScreen() {
   const [imagesEnabled, setImagesEnabled] = useState(false);
   const [galleryViewEnabled, setGalleryViewEnabled] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [tiktokMode, setTiktokMode] = useState(false);
   const [includeLandscape, setIncludeLandscape] = useState(true);
   const [includePortrait, setIncludePortrait] = useState(true);
   const [speed, setSpeed] = useState(1);
@@ -66,8 +67,12 @@ export default function MobileGalleryCarouselScreen() {
   const speedLabel = useMemo(() => `${speed.toFixed(1)}x`, [speed]);
   const scrubLabel = useMemo(() => `${scrubSpeedMultiplier.toFixed(0)}x`, [scrubSpeedMultiplier]);
   const isLandscapeOnlyFilter = includeLandscape && !includePortrait;
-  const shouldShowPortraitLandscapePlayer = started && !isLandscape && isLandscapeOnlyFilter;
-  const shouldShowCarouselPlayer = isLandscape || shouldShowPortraitLandscapePlayer;
+  const shouldShowTikTokPlayer = started && tiktokMode && !isLandscape;
+  const shouldShowPortraitLandscapePlayer = started && !tiktokMode && !isLandscape && isLandscapeOnlyFilter;
+  const shouldShowVerticalPlayer = shouldShowTikTokPlayer || shouldShowPortraitLandscapePlayer;
+  const shouldShowCarouselPlayer = tiktokMode ? shouldShowTikTokPlayer : (isLandscape || shouldShowPortraitLandscapePlayer);
+  const playerIncludeLandscape = tiktokMode ? false : includeLandscape;
+  const playerIncludePortrait = tiktokMode ? true : includePortrait;
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
@@ -75,13 +80,14 @@ export default function MobileGalleryCarouselScreen() {
       imagesEnabled,
       galleryViewEnabled,
       onlyFavorites,
+      tiktokMode,
       includeLandscape,
       includePortrait,
       speed,
       scrubSpeedMultiplier,
       ...overrides,
     });
-  }, [galleryViewEnabled, imagesEnabled, includeLandscape, includePortrait, onlyFavorites, scrubSpeedMultiplier, speed, videosEnabled, workspaceId]);
+  }, [galleryViewEnabled, imagesEnabled, includeLandscape, includePortrait, onlyFavorites, scrubSpeedMultiplier, speed, tiktokMode, videosEnabled, workspaceId]);
 
   useEffect(() => {
     const storedSettings = readStoredGalleryCarouselSettings(workspaceId, getDefaultGalleryCarouselSettings());
@@ -89,6 +95,7 @@ export default function MobileGalleryCarouselScreen() {
     setImagesEnabled(storedSettings.imagesEnabled);
     setGalleryViewEnabled(storedSettings.galleryViewEnabled);
     setOnlyFavorites(storedSettings.onlyFavorites);
+    setTiktokMode(storedSettings.tiktokMode);
     setIncludeLandscape(storedSettings.includeLandscape);
     setIncludePortrait(storedSettings.includePortrait);
     setSpeed(storedSettings.speed);
@@ -120,6 +127,10 @@ export default function MobileGalleryCarouselScreen() {
   const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
     setOnlyFavorites(nextEnabled);
     persistSettings({ onlyFavorites: nextEnabled });
+  }, [persistSettings]);
+  const handleTikTokToggle = useCallback((nextEnabled: boolean) => {
+    setTiktokMode(nextEnabled);
+    persistSettings({ tiktokMode: nextEnabled });
   }, [persistSettings]);
   const handleLandscapeToggle = useCallback((nextEnabled: boolean) => {
     setIncludeLandscape(nextEnabled);
@@ -162,14 +173,14 @@ export default function MobileGalleryCarouselScreen() {
     const deltaY = event.clientY - swipe.startY;
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
-    const shouldClose = shouldShowPortraitLandscapePlayer
+    const shouldClose = shouldShowVerticalPlayer
       ? absX >= SWIPE_CLOSE_THRESHOLD_PX && absX > absY * SWIPE_CLOSE_DOMINANCE
       : absY >= SWIPE_CLOSE_THRESHOLD_PX && absY > absX * SWIPE_CLOSE_DOMINANCE;
 
     if (shouldClose) {
       closePlayer();
     }
-  }, [closePlayer, shouldShowPortraitLandscapePlayer]);
+  }, [closePlayer, shouldShowVerticalPlayer]);
 
   const handleLandscapePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (swipeCloseRef.current.pointerId !== event.pointerId) return;
@@ -238,6 +249,20 @@ export default function MobileGalleryCarouselScreen() {
               onChange={(event) => handleOnlyFavoritesToggle(event.currentTarget.checked)}
               className="h-4 w-4 accent-rose-400"
               aria-label="Only favorites"
+            />
+          </label>
+
+          <label className={`flex h-12 items-center justify-between rounded-lg border px-3 text-sm transition-colors ${tiktokMode ? 'border-lime-500/40 bg-lime-500/10 text-lime-100' : 'border-border bg-background/60 text-foreground'}`}>
+            <span className="inline-flex items-center gap-2">
+              <Smartphone className="h-4 w-4" />
+              TikTok mode
+            </span>
+            <input
+              type="checkbox"
+              checked={tiktokMode}
+              onChange={(event) => handleTikTokToggle(event.currentTarget.checked)}
+              className="h-4 w-4 accent-lime-400"
+              aria-label="TikTok mode"
             />
           </label>
 
@@ -325,15 +350,16 @@ export default function MobileGalleryCarouselScreen() {
                 initialVideosEnabled={videosEnabled}
                 initialImagesEnabled={imagesEnabled}
                 initialOnlyFavorites={onlyFavorites}
-                initialIncludeLandscape={includeLandscape}
-                initialIncludePortrait={includePortrait}
+                initialIncludeLandscape={playerIncludeLandscape}
+                initialIncludePortrait={playerIncludePortrait}
                 initialSpeed={speed}
                 initialScrubSpeedMultiplier={scrubSpeedMultiplier}
                 initialGalleryViewEnabled={galleryViewEnabled}
+                initialTiktokMode={tiktokMode}
                 currentGalleryAssetId={currentGalleryAssetId}
                 showControls={false}
                 enableKeyboardControls={false}
-                movementAxis={shouldShowPortraitLandscapePlayer ? 'vertical' : 'horizontal'}
+                movementAxis={shouldShowVerticalPlayer ? 'vertical' : 'horizontal'}
               />
             </div>
           ) : (

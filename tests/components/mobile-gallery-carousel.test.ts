@@ -73,6 +73,7 @@ describe('mobile Gallery carousel', () => {
     expect((screen.getByLabelText('Include image slots') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Gallery View') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Only favorites') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('TikTok mode') as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText('Include landscape assets') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Include portrait assets') as HTMLInputElement).checked).toBe(false);
     expect(screen.getByText('1.6x')).toBeTruthy();
@@ -234,6 +235,54 @@ describe('mobile Gallery carousel', () => {
 
     await waitFor(() => expect(screen.queryByTestId('mobile-gallery-carousel-overlay')).toBeNull());
     expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
+  });
+
+  it('starts TikTok mode as portrait-only vertical playback and closes with a horizontal swipe', async () => {
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('TikTok mode'));
+    expect(JSON.parse(window.localStorage.getItem('engui.gallery.carousel.settings.ws-1') || '{}')).toMatchObject({
+      tiktokMode: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => expect(screen.getByTestId('mock-gallery-video-carousel')).toBeTruthy());
+    expect(screen.queryByText('Rotate your phone')).toBeNull();
+    expect(mockCarousel.props).toMatchObject({
+      initialIncludeLandscape: false,
+      initialIncludePortrait: true,
+      initialTiktokMode: true,
+      showControls: false,
+      enableKeyboardControls: false,
+      movementAxis: 'vertical',
+    });
+
+    const swipeSurface = screen.getByTestId('mobile-gallery-carousel-swipe-surface');
+    fireEvent.pointerDown(swipeSurface, {
+      pointerId: 10,
+      pointerType: 'touch',
+      clientX: 320,
+      clientY: 420,
+    });
+    fireEvent.pointerMove(swipeSurface, {
+      pointerId: 10,
+      pointerType: 'touch',
+      clientX: 180,
+      clientY: 424,
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('mobile-gallery-carousel-overlay')).toBeNull());
+  });
+
+  it('keeps TikTok mode behind the portrait-only rotate gate in landscape orientation', () => {
+    setViewport(844, 390);
+    render(React.createElement(MobileGalleryCarouselScreen));
+
+    fireEvent.click(screen.getByLabelText('TikTok mode'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(screen.getByText('Rotate your phone')).toBeTruthy();
+    expect(screen.queryByTestId('mock-gallery-video-carousel')).toBeNull();
   });
 
   it('renders portrait-enabled playback after the phone rotates to landscape', async () => {

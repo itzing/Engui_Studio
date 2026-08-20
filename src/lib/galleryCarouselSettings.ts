@@ -5,6 +5,7 @@ export type GalleryCarouselSettings = GalleryCarouselRatioFilter & {
   imagesEnabled: boolean;
   galleryViewEnabled: boolean;
   onlyFavorites: boolean;
+  tiktokMode: boolean;
   speed: number;
   scrubSpeedMultiplier: number;
 };
@@ -29,6 +30,7 @@ function normalizeGalleryCarouselSettings(value: unknown, fallback: GalleryCarou
     imagesEnabled,
     galleryViewEnabled: typeof stored.galleryViewEnabled === 'boolean' ? stored.galleryViewEnabled : fallback.galleryViewEnabled,
     onlyFavorites: typeof stored.onlyFavorites === 'boolean' ? stored.onlyFavorites : fallback.onlyFavorites,
+    tiktokMode: typeof stored.tiktokMode === 'boolean' ? stored.tiktokMode : fallback.tiktokMode,
     includeLandscape: typeof stored.includeLandscape === 'boolean' ? stored.includeLandscape : fallback.includeLandscape,
     includePortrait: typeof stored.includePortrait === 'boolean' ? stored.includePortrait : fallback.includePortrait,
     speed: clampNumber(stored.speed, fallback.speed, 0.4, 2.4),
@@ -46,6 +48,7 @@ export function getDefaultGalleryCarouselSettings(overrides: Partial<GalleryCaro
     imagesEnabled: false,
     galleryViewEnabled: false,
     onlyFavorites: false,
+    tiktokMode: false,
     includeLandscape: true,
     includePortrait: true,
     speed: DEFAULT_SPEED,
