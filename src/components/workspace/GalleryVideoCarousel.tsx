@@ -1537,6 +1537,7 @@ export function GalleryVideoCarousel({
             const isTikTokSlot = tiktokModeRef.current;
             const isTikTokCurrentSlot = !isTikTokSlot || Math.abs(slot.y) < 1;
             const isVideoReady = videoReadyInstanceIds.has(slot.instanceId);
+            const posterUrl = slot.entry.kind === 'video' ? slot.entry.asset.thumbnailUrl : null;
             return (
             <div
               key={slot.instanceId}
@@ -1587,11 +1588,22 @@ export function GalleryVideoCarousel({
                         requestVideoPlayback(slot.instanceId, event.currentTarget);
                       }
                     }}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full object-cover ${isTikTokSlot && !isVideoReady ? 'opacity-0' : ''}`}
                   />
+                  {isTikTokSlot && !isVideoReady && posterUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={posterUrl}
+                      alt=""
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-10 h-full w-full object-cover"
+                      draggable={false}
+                      data-testid="gallery-tiktok-video-poster"
+                    />
+                  ) : null}
                   {isTikTokSlot && !isVideoReady ? (
                     <div
-                      className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20"
+                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20"
                       data-testid="gallery-tiktok-video-loading"
                     >
                       <Loader2 className="h-6 w-6 animate-spin text-white/80" />

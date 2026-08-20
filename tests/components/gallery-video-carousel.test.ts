@@ -194,6 +194,8 @@ describe('GalleryVideoCarousel', () => {
       expect(nextSlot.style.transform).toBe('translate3d(0px, 844px, 0)');
       expect(stage.querySelector('video[src="/video-3.mp4"]')?.getAttribute('preload')).toBe('auto');
       expect(screen.getAllByTestId('gallery-tiktok-video-loading')).toHaveLength(3);
+      expect(screen.getAllByTestId('gallery-tiktok-video-poster')).toHaveLength(3);
+      expect(stage.querySelector('img[src="/video-3.png"]')).toBeTruthy();
 
       fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
       fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
@@ -204,6 +206,8 @@ describe('GalleryVideoCarousel', () => {
 
       await waitFor(() => expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy());
       await waitFor(() => expect((stage.querySelector('video[src="/video-3.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 0px, 0)'));
+      fireEvent.loadedData(stage.querySelector('video[src="/video-3.mp4"]') as HTMLVideoElement);
+      await waitFor(() => expect(stage.querySelector('img[src="/video-3.png"]')).toBeNull());
       await act(async () => {
         await new Promise((resolve) => window.setTimeout(resolve, 220));
       });
