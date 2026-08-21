@@ -121,7 +121,7 @@ describe('gallery reuse route', () => {
     expect(json.actions).toEqual(['txt2img', 'img2vid']);
   });
 
-  it('returns txt2vid for WAN22 T2V video assets', async () => {
+  it('returns txt2img and txt2vid for WAN22 T2V video assets', async () => {
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'asset-t2v-1',
       type: 'video',
@@ -137,7 +137,44 @@ describe('gallery reuse route', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.actions).toEqual(['txt2vid']);
+    expect(json.actions).toEqual(['txt2img', 'txt2vid']);
+  });
+
+  it('builds txt2img payload from WAN22 T2V gallery prompt metadata', async () => {
+    mockPrisma.galleryAsset.findUnique.mockResolvedValue({
+      id: 'asset-t2v-1',
+      type: 'video',
+      originKind: 'job_output',
+      originalUrl: '/generations/gallery/ws-1/t2v.mp4',
+      thumbnailUrl: '/generations/gallery/ws-1/derived/t2v-thumb.jpg',
+      generationSnapshot: JSON.stringify({
+        prompt: 'wide dolly shot',
+        modelId: 'wan22-t2v',
+        endpointId: 'wan22-t2v',
+        width: 832,
+        height: 480,
+        seed: 98765,
+        video_path: '/generations/gallery/ws-1/t2v.mp4',
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-t2v-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-t2v-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      prompt: 'wide dolly shot',
+    });
+    expect(json.payload.modelId).toBeUndefined();
+    expect(json.payload.options.image_path).toBeUndefined();
   });
 
   it('builds T2V payload from WAN22 T2V gallery metadata', async () => {

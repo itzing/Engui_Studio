@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Shuffle, X } from 'lucide-react';
+import { Clapperboard, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, Type, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
+import { shareGalleryAsset } from '@/lib/galleryShare';
 import {
   getDefaultGalleryCarouselSettings,
   readStoredGalleryCarouselSettings,
@@ -28,6 +31,7 @@ type GalleryCarouselAsset = {
   thumbnailUrl?: string | null;
   derivativeStatus?: string | null;
   prompt?: string | null;
+  modelId?: string | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   aspectRatio?: string | null;
@@ -296,6 +300,7 @@ export function GalleryVideoCarousel({
   currentGalleryAssetId = null,
   galleryOrderFilter,
 }: GalleryVideoCarouselProps) {
+  const router = useRouter();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
   const preloadRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
@@ -356,6 +361,8 @@ export function GalleryVideoCarousel({
   const [videoReadyInstanceIds, setVideoReadyInstanceIds] = useState<Set<string>>(() => new Set());
   const [videoLoadProgress, setVideoLoadProgress] = useState<Record<string, number>>({});
   const [isUiHidden, setIsUiHidden] = useState(showControls);
+  const [areTikTokActionControlsVisible, setAreTikTokActionControlsVisible] = useState(false);
+  const [activeTikTokActionAssetId, setActiveTikTokActionAssetId] = useState<string | null>(null);
 
   const remainingCount = Math.max(0, feedRef.current.length - nextIndex);
   const visibleCount = activeSlots.length;
@@ -707,11 +714,17 @@ export function GalleryVideoCarousel({
     }
   }, [currentGalleryAssetId, galleryOrderFilter, workspaceId]);
 
+  const hideTikTokActionControls = useCallback(() => {
+    setAreTikTokActionControlsVisible(false);
+    setActiveTikTokActionAssetId(null);
+  }, []);
+
   const showTikTokFeedIndex = useCallback((targetFeedIndex: number) => {
     const feed = feedRef.current;
     if (!tiktokModeRef.current || feed.length === 0) return;
 
     const safeIndex = Math.min(Math.max(0, targetFeedIndex), feed.length - 1);
+    hideTikTokActionControls();
     resetFeed(feed, safeIndex, { pause: true, seedNeighborCount: TIKTOK_NEIGHBOR_COUNT });
 
     if (safeIndex >= feed.length - 2) {
@@ -720,7 +733,7 @@ export function GalleryVideoCarousel({
     if (safeIndex <= 1) {
       void extendCarouselFeedWindow('before');
     }
-  }, [extendCarouselFeedWindow, resetFeed]);
+  }, [extendCarouselFeedWindow, hideTikTokActionControls, resetFeed]);
 
   const getCurrentTikTokSlot = useCallback(() => {
     const slots = activeSlotsRef.current;
@@ -978,6 +991,76 @@ export function GalleryVideoCarousel({
     setIsUiHidden((current) => current ? false : current);
   }, [showControls]);
 
+  const toggleTikTokActionControls = useCallback(() => {
+    const currentSlot = getCurrentTikTokSlot();
+    const currentAsset = currentSlot?.entry.kind === 'video' ? currentSlot.entry.asset : null;
+    if (!currentAsset) {
+      hideTikTokActionControls();
+      return;
+    }
+    setAreTikTokActionControlsVisible((visible) => {
+      const isSameAsset = activeTikTokActionAssetId === currentAsset.id;
+      const nextVisible = !(visible && isSameAsset);
+      setActiveTikTokActionAssetId(nextVisible ? currentAsset.id : null);
+      return nextVisible;
+    });
+  }, [activeTikTokActionAssetId, getCurrentTikTokSlot, hideTikTokActionControls]);
+
+  const updateFeedAsset = useCallback((assetId: string, updater: (asset: GalleryCarouselAsset) => GalleryCarouselAsset) => {
+    const mergeEntry = (entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>) => entry.kind === 'video'
+      ? { ...entry, asset: entry.asset.id === assetId ? updater(entry.asset) : entry.asset }
+      : { ...entry, images: entry.images.map((asset) => asset.id === assetId ? updater(asset) : asset) };
+    feedRef.current = feedRef.current.map(mergeEntry);
+    activeSlotsRef.current = activeSlotsRef.current.map((slot) => ({
+      ...slot,
+      entry: mergeEntry(slot.entry),
+    }));
+    setActiveSlots(activeSlotsRef.current);
+  }, []);
+
+  const handleTikTokFavoriteToggle = useCallback(async (asset: GalleryCarouselAsset) => {
+    const nextFavorited = !asset.favorited;
+    updateFeedAsset(asset.id, (current) => ({ ...current, favorited: nextFavorited }));
+    try {
+      const response = await fetch(`/api/gallery/assets/${asset.id}/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorited: nextFavorited }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Failed to update favorite');
+    } catch {
+      updateFeedAsset(asset.id, (current) => ({ ...current, favorited: asset.favorited }));
+    }
+  }, [updateFeedAsset]);
+
+  const handleTikTokShare = useCallback(async (asset: GalleryCarouselAsset) => {
+    if (asset.type !== 'image' && asset.type !== 'video') return;
+    try {
+      await shareGalleryAsset({
+        id: asset.id,
+        type: asset.type,
+        originalUrl: asset.originalUrl,
+        title: asset.prompt || `Gallery ${asset.type}`,
+      });
+    } catch {
+      // Sharing can be unavailable or cancelled by the browser; keep the TikTok overlay open.
+    }
+  }, []);
+
+  const handleTikTokReuse = useCallback(async (asset: GalleryCarouselAsset, action: 'txt2img' | 'img2vid' | 'txt2vid') => {
+    const response = await fetch(`/api/gallery/assets/${asset.id}/reuse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const data = await response.json();
+    if (response.ok && data.success && data.payload) {
+      persistCreateReuseDraft(data.payload);
+      router.push('/m/create');
+    }
+  }, [router]);
+
   const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement, forceInteractionRetry = false) => {
     video.muted = true;
     video.loop = true;
@@ -1225,13 +1308,14 @@ export function GalleryVideoCarousel({
     dragState.lastMain = pointerMain;
     setIsDragging(true);
     if (tiktokModeRef.current) {
+      hideTikTokActionControls();
       scrubTikTokSlots(deltaMain);
       event.preventDefault();
       return;
     }
     pauseAndScrubTape(deltaMain);
     event.preventDefault();
-  }, [pauseAndScrubTape, scrubTikTokSlots]);
+  }, [hideTikTokActionControls, pauseAndScrubTape, scrubTikTokSlots]);
 
   const finishPointerDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const dragState = dragStateRef.current;
@@ -1433,6 +1517,19 @@ export function GalleryVideoCarousel({
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
   }, [error, feedEnded, imagesEnabled, isLoading, isLoadingWindow, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
+  const activeTikTokActionSlot = useMemo(() => {
+    if (!tiktokModeRef.current || !areTikTokActionControlsVisible || activeSlots.length === 0) return null;
+    const centeredSlot = activeSlots.reduce((closestSlot, slot) => {
+      return Math.abs(slot.y) < Math.abs(closestSlot.y) ? slot : closestSlot;
+    }, activeSlots[0]);
+    if (centeredSlot.entry.kind !== 'video') return null;
+    if (activeTikTokActionAssetId && centeredSlot.entry.asset.id !== activeTikTokActionAssetId) return null;
+    return centeredSlot;
+  }, [activeSlots, activeTikTokActionAssetId, areTikTokActionControlsVisible]);
+  const activeTikTokActionAsset = activeTikTokActionSlot?.entry.kind === 'video' ? activeTikTokActionSlot.entry.asset : null;
+  const canReuseTikTokToImage = activeTikTokActionAsset?.modelId === 'wan22' || activeTikTokActionAsset?.modelId === 'wan22-t2v';
+  const canReuseTikTokToI2V = activeTikTokActionAsset?.modelId === 'wan22';
+  const canReuseTikTokToT2V = activeTikTokActionAsset?.modelId === 'wan22-t2v';
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabledRef.current) return;
@@ -1699,7 +1796,10 @@ export function GalleryVideoCarousel({
           }
           if (isLoading || totalMediaCount === 0) return;
           unlockVideoPlayback();
-          if (tiktokModeRef.current) return;
+          if (tiktokModeRef.current) {
+            toggleTikTokActionControls();
+            return;
+          }
           setPaused((value) => {
             const next = !value;
             pausedRef.current = next;
@@ -1887,6 +1987,66 @@ export function GalleryVideoCarousel({
                 : videosEnabled
                   ? `${totalVideoCount} videos`
                   : `${totalImageCount} images`}
+            </div>
+          ) : null}
+          {activeTikTokActionAsset ? (
+            <div
+              className="absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-3"
+              data-testid="gallery-tiktok-action-controls"
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className={`flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors ${activeTikTokActionAsset.favorited ? 'border-pink-300/55 bg-pink-500/35' : 'border-white/15 bg-black/55 hover:bg-black/75'}`}
+                aria-label={activeTikTokActionAsset.favorited ? 'Remove from favorites' : 'Add to favorites'}
+                title={activeTikTokActionAsset.favorited ? 'Remove from favorites' : 'Add to favorites'}
+                onClick={() => void handleTikTokFavoriteToggle(activeTikTokActionAsset)}
+              >
+                <Heart className={`h-5 w-5 ${activeTikTokActionAsset.favorited ? 'fill-current' : ''}`} />
+              </button>
+              <button
+                type="button"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:bg-black/75"
+                aria-label="Share"
+                title="Share"
+                onClick={() => void handleTikTokShare(activeTikTokActionAsset)}
+              >
+                <Share2 className="h-5 w-5" />
+              </button>
+              {canReuseTikTokToImage ? (
+                <button
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:bg-black/75"
+                  aria-label="To txt2img"
+                  title="To txt2img"
+                  onClick={() => void handleTikTokReuse(activeTikTokActionAsset, 'txt2img')}
+                >
+                  <Type className="h-5 w-5" />
+                </button>
+              ) : null}
+              {canReuseTikTokToI2V ? (
+                <button
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:bg-black/75"
+                  aria-label="To img2vid"
+                  title="To img2vid"
+                  onClick={() => void handleTikTokReuse(activeTikTokActionAsset, 'img2vid')}
+                >
+                  <Clapperboard className="h-5 w-5" />
+                </button>
+              ) : null}
+              {canReuseTikTokToT2V ? (
+                <button
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:bg-black/75"
+                  aria-label="To T2V"
+                  title="To T2V"
+                  onClick={() => void handleTikTokReuse(activeTikTokActionAsset, 'txt2vid')}
+                >
+                  <Film className="h-5 w-5" />
+                </button>
+              ) : null}
             </div>
           ) : null}
       </div>

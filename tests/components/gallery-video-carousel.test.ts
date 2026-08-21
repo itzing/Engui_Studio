@@ -7,6 +7,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryVideoCarousel } from '@/components/workspace/GalleryVideoCarousel';
 
+const pushMock = vi.hoisted(() => vi.fn());
+const persistCreateReuseDraftMock = vi.hoisted(() => vi.fn());
+const shareGalleryAssetMock = vi.hoisted(() => vi.fn(async () => 'url'));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
+}));
+
+vi.mock('@/lib/create/persistCreateReuseDraft', () => ({
+  persistCreateReuseDraft: persistCreateReuseDraftMock,
+}));
+
+vi.mock('@/lib/galleryShare', () => ({
+  shareGalleryAsset: shareGalleryAssetMock,
+}));
+
 function makeCarouselWindowResponse(assets: any[], currentIndex: number) {
   const toFeedItem = (asset: any) => asset.type === 'image'
     ? { kind: 'images', id: asset.id, images: [asset], aspectRatio: asset.mediaWidth / asset.mediaHeight }
@@ -237,6 +253,138 @@ describe('GalleryVideoCarousel', () => {
     } finally {
       rectSpy.mockRestore();
     }
+  });
+
+  it('toggles TikTok action controls on tap and hides them on swipe', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const videoAssets = [1, 2, 3].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      modelId: 'wan22',
+      favorited: false,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/favorite')) {
+        expect(init?.body).toBe(JSON.stringify({ favorited: true }));
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+      if (url.includes('/reuse')) {
+        expect(init?.body).toBe(JSON.stringify({ action: 'img2vid' }));
+        return { ok: true, json: async () => ({ success: true, payload: { action: 'img2vid', type: 'video' } }) };
+      }
+      return {
+        ok: true,
+        json: async () => makeCarouselWindowResponse(videoAssets, 1),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialTiktokMode: true,
+        initialVideosEnabled: true,
+        initialImagesEnabled: false,
+        initialIncludeLandscape: false,
+        initialIncludePortrait: true,
+        showControls: false,
+        enableKeyboardControls: false,
+        movementAxis: 'vertical',
+      }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+
+      fireEvent.click(stage);
+      expect(screen.getByTestId('gallery-tiktok-action-controls')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Add to favorites' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'To txt2img' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'To img2vid' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'To T2V' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/gallery/assets/video-2/favorite', expect.any(Object)));
+      expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+      await waitFor(() => expect(shareGalleryAssetMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'video-2', type: 'video' })));
+
+      fireEvent.click(screen.getByRole('button', { name: 'To img2vid' }));
+      await waitFor(() => expect(persistCreateReuseDraftMock).toHaveBeenCalledWith({ action: 'img2vid', type: 'video' }));
+      expect(pushMock).toHaveBeenCalledWith('/m/create');
+
+      fireEvent.click(stage);
+      expect(screen.queryByTestId('gallery-tiktok-action-controls')).toBeNull();
+
+      fireEvent.click(stage);
+      expect(screen.getByTestId('gallery-tiktok-action-controls')).toBeTruthy();
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
+      expect(screen.queryByTestId('gallery-tiktok-action-controls')).toBeNull();
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('shows T2V-specific TikTok action controls for T2V videos', async () => {
+    const videoAssets = [{
+      id: 'video-t2v',
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: '/video-t2v.mp4',
+      previewUrl: '/video-t2v.mp4',
+      thumbnailUrl: '/video-t2v.png',
+      modelId: 'wan22-t2v',
+      favorited: false,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: '2026-07-21T06:00:00Z',
+    }];
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(videoAssets, 0),
+    })));
+
+    render(React.createElement(GalleryVideoCarousel, {
+      workspaceId: 'ws-1',
+      initialTiktokMode: true,
+      initialVideosEnabled: true,
+      initialImagesEnabled: false,
+      initialIncludeLandscape: false,
+      initialIncludePortrait: true,
+      showControls: false,
+      enableKeyboardControls: false,
+      movementAxis: 'vertical',
+    }));
+
+    const stage = await screen.findByTestId('gallery-video-carousel');
+    await waitFor(() => expect(stage.querySelector('video[src="/video-t2v.mp4"]')).toBeTruthy());
+    fireEvent.click(stage);
+
+    expect(screen.getByRole('button', { name: 'To txt2img' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'To img2vid' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'To T2V' })).toBeTruthy();
   });
 
   it('keeps TikTok neighbor videos mounted and uses poster-only second through fifth neighbors', async () => {

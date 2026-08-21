@@ -48,7 +48,7 @@ function buildAvailableActions(asset: { type: string; originKind?: string | null
     actions.push('txt2img', 'img2vid');
   }
   if (isWan22T2vVideoAsset(asset, snapshot)) {
-    actions.push('txt2vid');
+    actions.push('txt2img', 'txt2vid');
   }
   if (parseSceneSnapshot(snapshot.sceneSnapshot)) {
     actions.push('scene-template-v2');
@@ -93,7 +93,7 @@ function buildReusePayload(
 
   if (action === 'txt2img') {
     const sourceSnapshot = asset.type === 'video'
-      ? normalizeSnapshot(snapshot.sourceImageGenerationSnapshot)
+      ? normalizeSnapshot(snapshot.sourceImageGenerationSnapshot) || (isWan22T2vVideoAsset(asset, snapshot) ? snapshot : null)
       : snapshot;
     if (!sourceSnapshot) {
       return null;
@@ -101,7 +101,9 @@ function buildReusePayload(
     const sourcePrompt = asset.type !== 'video' && typeof promptOverride === 'string'
       ? promptOverride
       : typeof sourceSnapshot.prompt === 'string' ? sourceSnapshot.prompt : '';
-    const sourceModelId = typeof sourceSnapshot.modelId === 'string' ? sourceSnapshot.modelId : undefined;
+    const sourceModelId = asset.type === 'video' && isWan22T2vVideoAsset(asset, snapshot)
+      ? undefined
+      : typeof sourceSnapshot.modelId === 'string' ? sourceSnapshot.modelId : undefined;
     const sourceOptions = { ...sourceSnapshot };
     delete sourceOptions.prompt;
     delete sourceOptions.modelId;
