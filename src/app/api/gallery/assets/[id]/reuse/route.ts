@@ -64,6 +64,27 @@ function normalizeSnapshot(value: unknown): Record<string, any> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : null;
 }
 
+async function mergeSourceGallerySnapshotMetadata(snapshot: Record<string, any>) {
+  const sourceSnapshot = normalizeSnapshot(snapshot.sourceImageGenerationSnapshot);
+  const galleryAssetId = typeof sourceSnapshot?.galleryAssetId === 'string' ? sourceSnapshot.galleryAssetId.trim() : '';
+  if (!galleryAssetId) return snapshot;
+
+  const sourceAsset = await prisma.galleryAsset.findUnique({
+    where: { id: galleryAssetId },
+    select: { generationSnapshot: true },
+  });
+  const gallerySnapshot = parseGenerationSnapshot(sourceAsset?.generationSnapshot as string | null);
+  if (Object.keys(gallerySnapshot).length === 0) return snapshot;
+
+  return {
+    ...snapshot,
+    sourceImageGenerationSnapshot: {
+      ...gallerySnapshot,
+      ...sourceSnapshot,
+    },
+  };
+}
+
 function resolveImg2VidImageInput(asset: GalleryReuseAsset, snapshot: Record<string, any>, sourceJobImageInputPath?: string | null) {
   if (asset.type === 'image') {
     return asset.originalUrl;
@@ -240,7 +261,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Gallery asset not found' }, { status: 404 });
     }
 
-    const snapshot = parseGenerationSnapshot(asset.generationSnapshot);
+    const snapshot = await mergeSourceGallerySnapshotMetadata(parseGenerationSnapshot(asset.generationSnapshot));
     const availableActions = buildAvailableActions(asset, snapshot);
     if (!availableActions.includes(action)) {
       return NextResponse.json({ success: false, error: 'Action is not compatible with this asset' }, { status: 400 });

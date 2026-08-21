@@ -49,6 +49,8 @@ type GalleryReferenceAsset = {
     thumbnailUrl?: string | null;
     prompt?: string | null;
     modelId?: string | null;
+    seed?: number | null;
+    randomizeSeed?: boolean | string | number | null;
     addedToGalleryAt: string;
 };
 
@@ -1120,6 +1122,8 @@ export default function VideoGenerationForm() {
                     galleryAssetId: asset.id,
                     prompt: asset.prompt || undefined,
                     modelId: asset.modelId || undefined,
+                    seed: typeof asset.seed === 'number' && Number.isFinite(asset.seed) ? asset.seed : undefined,
+                    randomizeSeed: asset.randomizeSeed === true || asset.randomizeSeed === 'true' || asset.randomizeSeed === 1 || asset.randomizeSeed === '1',
                     imageInputPath: imageUrl,
                 },
             }));

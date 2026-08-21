@@ -335,6 +335,64 @@ describe('gallery reuse route', () => {
     expect(json.payload.options.image_path).toBeUndefined();
   });
 
+  it('recovers source Gallery randomize seed metadata for WAN22 video txt2img reuse', async () => {
+    mockPrisma.galleryAsset.findUnique
+      .mockResolvedValueOnce({
+        id: 'asset-video-1',
+        type: 'video',
+        originKind: 'job_output',
+        originalUrl: '/generations/gallery/ws-1/video.mp4',
+        thumbnailUrl: '/generations/gallery/ws-1/derived/video-thumb.jpg',
+        sourceJobId: 'job-1',
+        generationSnapshot: JSON.stringify({
+          prompt: 'video prompt',
+          modelId: 'wan22',
+          sourceImageGenerationSnapshot: {
+            galleryAssetId: 'source-image-1',
+            prompt: 'forest temple',
+            modelId: 'z-image',
+            imageInputPath: '/generations/gallery/ws-1/source.png',
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        id: 'source-image-1',
+        generationSnapshot: JSON.stringify({
+          prompt: 'forest temple',
+          modelId: 'z-image',
+          width: 1024,
+          height: 1024,
+          seed: 12,
+          randomizeSeed: true,
+          use_controlnet: false,
+        }),
+      });
+
+    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'asset-video-1' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'forest temple',
+      options: {
+        width: 1024,
+        height: 1024,
+        seed: 12,
+        randomizeSeed: true,
+        use_controlnet: false,
+      },
+    });
+  });
+
   it('ignores prompt overrides for WAN22 video txt2img payloads', async () => {
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'asset-video-1',

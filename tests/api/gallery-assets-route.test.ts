@@ -85,6 +85,7 @@ describe('GET /api/gallery/assets', () => {
           videoPrompt: 'video {motion|pose} prompt',
           resolvedVideoPrompt: 'video motion prompt',
           seed: 938271,
+          randomizeSeed: true,
           modelId: 'wan22',
           sourceImageGenerationSnapshot: {
             promptTemplate: 'source {red|blue} dress',
@@ -108,6 +109,7 @@ describe('GET /api/gallery/assets', () => {
       sourceImagePrompt: 'source {red|blue} dress',
       sourceImageResolvedPrompt: 'source blue dress',
       seed: 938271,
+      randomizeSeed: true,
     });
   });
 

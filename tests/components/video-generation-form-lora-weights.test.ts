@@ -805,6 +805,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
               thumbnailUrl: '/generations/gallery/ws-1/ref-thumb.jpg',
               prompt: 'gallery reference prompt',
               modelId: 'z-image',
+              seed: 12345,
+              randomizeSeed: true,
               addedToGalleryAt: new Date().toISOString(),
             },
           ],
@@ -836,6 +838,8 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
         galleryAssetId: 'gallery-ref-1',
         prompt: 'gallery reference prompt',
         modelId: 'z-image',
+        seed: 12345,
+        randomizeSeed: true,
         imageInputPath: '/generations/gallery/ws-1/ref.png',
       });
     });

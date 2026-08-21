@@ -117,6 +117,45 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('preserves randomize seed when writing txt2img payloads into the image workflow draft', async () => {
+    getModelById.mockReturnValue({
+      id: 'z-image',
+      parameters: [
+        { name: 'width', default: 1024 },
+        { name: 'height', default: 1024 },
+        { name: 'seed', default: 42 },
+        { name: 'use_controlnet', default: false },
+      ],
+    });
+    isInputVisible.mockReturnValue(false);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    const result = persistCreateReuseDraft({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'forest temple',
+      options: {
+        width: 1024,
+        height: 1024,
+        seed: 12345,
+        randomizeSeed: true,
+        use_controlnet: false,
+      },
+    });
+
+    expect(result?.workflow).toBe('image');
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'z-image', expect.objectContaining({
+      prompt: 'forest temple',
+      randomizeSeed: true,
+      parameterValues: expect.objectContaining({
+        seed: 12345,
+        width: 1024,
+        height: 1024,
+      }),
+    }));
+  });
+
   it('clears z-image controlnet mode when reuse payload has no image input', async () => {
     getModelById.mockReturnValue({
       id: 'z-image',

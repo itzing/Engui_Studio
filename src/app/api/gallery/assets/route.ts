@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
       const sourcePromptVersions = getSourceImagePromptVersions(snapshot);
       const mediaDimensions = resolveGalleryCarouselDimensions(snapshot);
       const seed = shouldShowGenerationSeed(asset.type) ? readGenerationSeed(snapshot.seed) : null;
+      const randomizeSeed = snapshot.randomizeSeed === true || snapshot.randomizeSeed === 'true' || snapshot.randomizeSeed === 1 || snapshot.randomizeSeed === '1';
       return {
         id: asset.id,
         workspaceId: asset.workspaceId,
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
         sourceImagePrompt: asset.type === 'video' ? sourcePromptVersions.originalPrompt || null : null,
         sourceImageResolvedPrompt: asset.type === 'video' ? sourcePromptVersions.resolvedPrompt : null,
         seed,
+        randomizeSeed,
         modelId: typeof snapshot.modelId === 'string' && snapshot.modelId.trim().length > 0 ? snapshot.modelId : null,
         ...mediaDimensions,
         addedToGalleryAt: asset.addedToGalleryAt,
