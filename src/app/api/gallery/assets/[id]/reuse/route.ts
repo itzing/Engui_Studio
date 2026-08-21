@@ -45,7 +45,7 @@ function buildAvailableActions(asset: { type: string; originKind?: string | null
     actions.push('txt2img', 'img2img', 'img2vid');
   }
   if (isWan22VideoAsset(asset, snapshot)) {
-    actions.push('txt2img', 'img2vid', 'txt2vid');
+    actions.push('txt2img', 'img2vid');
   }
   if (isWan22T2vVideoAsset(asset, snapshot)) {
     actions.push('txt2img', 'txt2vid');

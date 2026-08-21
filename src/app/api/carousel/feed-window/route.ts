@@ -180,6 +180,7 @@ function toDisplayAsset(asset: CarouselFeedAsset) {
     thumbnailUrl: asset.thumbnailUrl,
     derivativeStatus: asset.derivativeStatus,
     prompt: asset.prompt,
+    modelId: asset.modelId,
     mediaWidth: asset.mediaWidth,
     mediaHeight: asset.mediaHeight,
     aspectRatio: asset.aspectRatio,

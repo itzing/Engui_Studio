@@ -60,6 +60,7 @@ describe('GET /api/carousel/feed-window', () => {
     expect(json.previous.map((entry: any) => entry.id)).toEqual(['video-3']);
     expect(json.current.id).toBe('video-5');
     expect(json.next).toEqual([]);
+    expect(json.previous[0].asset.modelId).toBeNull();
     expect(json.pagination).toMatchObject({
       totalCount: 3,
       anchorIndex: 2,
@@ -69,6 +70,23 @@ describe('GET /api/carousel/feed-window', () => {
       afterCursor: null,
     });
     expect(json.counts).toEqual({ videos: 3, images: 0, total: 3 });
+  });
+
+  it('returns modelId in display assets for TikTok action controls', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([
+      makeAsset('video-i2v', 1, {
+        generationSnapshot: JSON.stringify({ width: 720, height: 1280, modelId: 'wan22' }),
+      }),
+    ]);
+
+    const response = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=galleryOrder&includeVideos=true&includeImages=false&includeLandscape=false&includePortrait=true&before=0&after=0') as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.current.asset).toMatchObject({
+      id: 'video-i2v',
+      modelId: 'wan22',
+    });
   });
 
   it('resolves a non-favorite anchor to the nearest favorite without falling back to the first favorite', async () => {
