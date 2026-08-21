@@ -716,6 +716,82 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
+  it('retries only the stuck current TikTok video', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+      top: 0,
+      right: 390,
+      bottom: 844,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const retryCallbacks: Array<() => void> = [];
+    const realSetTimeout = window.setTimeout.bind(window);
+    const timeoutSpy = vi.spyOn(window, 'setTimeout').mockImplementation(((handler: TimerHandler, timeout?: number) => {
+      if (timeout === 9000 && typeof handler === 'function') {
+        retryCallbacks.push(() => handler());
+        return 10000 + retryCallbacks.length;
+      }
+      return realSetTimeout(handler, timeout);
+    }) as typeof window.setTimeout);
+    const loadCalls: string[] = [];
+    HTMLMediaElement.prototype.load = vi.fn(function (this: HTMLMediaElement) {
+      loadCalls.push(this.getAttribute('src') || '');
+    }) as unknown as typeof HTMLMediaElement.prototype.load;
+    const videoAssets = [1, 2, 3].map((index) => ({
+      id: `video-${index}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/video-${index}.mp4`,
+      previewUrl: `/video-${index}.mp4`,
+      thumbnailUrl: `/video-${index}.png`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(videoAssets, 1),
+    })));
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, {
+        workspaceId: 'ws-1',
+        initialTiktokMode: true,
+        initialVideosEnabled: true,
+        initialImagesEnabled: false,
+        initialIncludeLandscape: false,
+        initialIncludePortrait: true,
+        showControls: false,
+        enableKeyboardControls: false,
+        movementAxis: 'vertical',
+      }));
+
+      const stage = await screen.findByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
+      await waitFor(() => expect(retryCallbacks.length).toBeGreaterThan(0));
+
+      const initialCurrentLoads = loadCalls.filter((src) => src === '/video-2.mp4').length;
+      const initialPreviousLoads = loadCalls.filter((src) => src === '/video-1.mp4').length;
+      const initialNextLoads = loadCalls.filter((src) => src === '/video-3.mp4').length;
+
+      act(() => {
+        retryCallbacks[retryCallbacks.length - 1]?.();
+      });
+
+      await waitFor(() => expect(loadCalls.filter((src) => src === '/video-2.mp4').length).toBeGreaterThan(initialCurrentLoads));
+      expect(loadCalls.filter((src) => src === '/video-1.mp4')).toHaveLength(initialPreviousLoads);
+      expect(loadCalls.filter((src) => src === '/video-3.mp4')).toHaveLength(initialNextLoads);
+      expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy();
+    } finally {
+      timeoutSpy.mockRestore();
+      rectSpy.mockRestore();
+    }
+  });
+
   it('loads all videos and pauses carousel movement without pausing visible videos', async () => {
     const videoAssets = [
       {

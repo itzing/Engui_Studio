@@ -112,6 +112,8 @@ const VERTICAL_SLOT_TRIM_BUFFER_MIN_PX = 120;
 const DEFAULT_INITIAL_NEIGHBOR_COUNT = 1;
 const TIKTOK_NEIGHBOR_COUNT = 5;
 const TIKTOK_SNAP_ANIMATION_MS = 180;
+const TIKTOK_CURRENT_VIDEO_STALL_RETRY_MS = 9000;
+const TIKTOK_CURRENT_VIDEO_MAX_AUTO_RETRIES = 3;
 const GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT = 3;
 const GALLERY_VIEW_WINDOW_SIDE_LIMIT = 12;
 const GALLERY_VIEW_PREFETCH_LIMIT = 24;
@@ -307,6 +309,8 @@ export function GalleryVideoCarousel({
   const playRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const playInteractionRetryVideoInstanceIdsRef = useRef<Set<string>>(new Set());
   const tiktokPosterBackfillRequestedAssetIdsRef = useRef<Set<string>>(new Set());
+  const tiktokCurrentVideoRetryTimeoutRef = useRef<number | null>(null);
+  const tiktokVideoRetryCountsRef = useRef<Record<string, number>>({});
   const userPlaybackInteractionRef = useRef(false);
   const stageSizeRef = useRef({ width: 1280, height: 720 });
   const activeSlotsRef = useRef<CarouselSlot[]>([]);
@@ -360,6 +364,8 @@ export function GalleryVideoCarousel({
   const [isTiktokSnapAnimating, setIsTiktokSnapAnimating] = useState(false);
   const [videoReadyInstanceIds, setVideoReadyInstanceIds] = useState<Set<string>>(() => new Set());
   const [videoLoadProgress, setVideoLoadProgress] = useState<Record<string, number>>({});
+  const [tiktokVideoRetryVersions, setTiktokVideoRetryVersions] = useState<Record<string, number>>({});
+  const [tiktokVideoRetryExhaustedInstanceIds, setTiktokVideoRetryExhaustedInstanceIds] = useState<Set<string>>(() => new Set());
   const [isUiHidden, setIsUiHidden] = useState(showControls);
   const [areTikTokActionControlsVisible, setAreTikTokActionControlsVisible] = useState(false);
   const [activeTikTokActionAssetId, setActiveTikTokActionAssetId] = useState<string | null>(null);
@@ -1107,6 +1113,7 @@ export function GalleryVideoCarousel({
       preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
       playRequestedVideoInstanceIdsRef.current.delete(instanceId);
       playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+      delete tiktokVideoRetryCountsRef.current[instanceId];
     });
     setVideoReadyInstanceIds((current) => {
       if (!ids.some((instanceId) => current.has(instanceId))) return current;
@@ -1122,7 +1129,67 @@ export function GalleryVideoCarousel({
       });
       return next;
     });
+    setTiktokVideoRetryVersions((current) => {
+      if (!ids.some((instanceId) => Object.prototype.hasOwnProperty.call(current, instanceId))) return current;
+      const next = { ...current };
+      ids.forEach((instanceId) => {
+        delete next[instanceId];
+      });
+      return next;
+    });
+    setTiktokVideoRetryExhaustedInstanceIds((current) => {
+      if (!ids.some((instanceId) => current.has(instanceId))) return current;
+      const next = new Set(current);
+      ids.forEach((instanceId) => next.delete(instanceId));
+      return next;
+    });
   }, []);
+
+  const retryCurrentTikTokVideo = useCallback((options: { manual?: boolean } = {}) => {
+    if (!tiktokModeRef.current) return;
+    const currentSlot = getCurrentTikTokSlot();
+    if (!currentSlot || currentSlot.entry.kind !== 'video') return;
+
+    const instanceId = currentSlot.instanceId;
+    const retryCount = tiktokVideoRetryCountsRef.current[instanceId] || 0;
+    if (!options.manual && retryCount >= TIKTOK_CURRENT_VIDEO_MAX_AUTO_RETRIES) {
+      setTiktokVideoRetryExhaustedInstanceIds((current) => {
+        if (current.has(instanceId)) return current;
+        const next = new Set(current);
+        next.add(instanceId);
+        return next;
+      });
+      return;
+    }
+
+    tiktokVideoRetryCountsRef.current[instanceId] = options.manual ? 1 : retryCount + 1;
+    preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
+    playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+    playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+    videoRefs.current[instanceId]?.pause();
+    setVideoReadyInstanceIds((current) => {
+      if (!current.has(instanceId)) return current;
+      const next = new Set(current);
+      next.delete(instanceId);
+      return next;
+    });
+    setVideoLoadProgress((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, instanceId)) return current;
+      const next = { ...current };
+      delete next[instanceId];
+      return next;
+    });
+    setTiktokVideoRetryExhaustedInstanceIds((current) => {
+      if (!current.has(instanceId)) return current;
+      const next = new Set(current);
+      next.delete(instanceId);
+      return next;
+    });
+    setTiktokVideoRetryVersions((current) => ({
+      ...current,
+      [instanceId]: (current[instanceId] || 0) + 1,
+    }));
+  }, [getCurrentTikTokSlot]);
 
   const requestTikTokPosterBackfill = useCallback((assetIds: string[]) => {
     if (!workspaceId || assetIds.length === 0) return;
@@ -1256,6 +1323,41 @@ export function GalleryVideoCarousel({
     if (!tiktokModeRef.current) return;
     reconcileTikTokWindow(activeSlots);
   }, [activeSlots, reconcileTikTokWindow]);
+
+  useEffect(() => {
+    if (tiktokCurrentVideoRetryTimeoutRef.current !== null) {
+      window.clearTimeout(tiktokCurrentVideoRetryTimeoutRef.current);
+      tiktokCurrentVideoRetryTimeoutRef.current = null;
+    }
+    if (!tiktokModeRef.current) return;
+    const currentSlot = getCurrentTikTokSlot();
+    if (!currentSlot || currentSlot.entry.kind !== 'video') return;
+    if (videoReadyInstanceIds.has(currentSlot.instanceId)) {
+      delete tiktokVideoRetryCountsRef.current[currentSlot.instanceId];
+      return;
+    }
+    if (tiktokVideoRetryExhaustedInstanceIds.has(currentSlot.instanceId)) return;
+
+    tiktokCurrentVideoRetryTimeoutRef.current = window.setTimeout(() => {
+      tiktokCurrentVideoRetryTimeoutRef.current = null;
+      retryCurrentTikTokVideo();
+    }, TIKTOK_CURRENT_VIDEO_STALL_RETRY_MS);
+
+    return () => {
+      if (tiktokCurrentVideoRetryTimeoutRef.current !== null) {
+        window.clearTimeout(tiktokCurrentVideoRetryTimeoutRef.current);
+        tiktokCurrentVideoRetryTimeoutRef.current = null;
+      }
+    };
+  }, [activeSlots, getCurrentTikTokSlot, retryCurrentTikTokVideo, tiktokVideoRetryExhaustedInstanceIds, videoLoadProgress, videoReadyInstanceIds]);
+
+  useEffect(() => {
+    return () => {
+      if (tiktokCurrentVideoRetryTimeoutRef.current !== null) {
+        window.clearTimeout(tiktokCurrentVideoRetryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
@@ -1825,6 +1927,7 @@ export function GalleryVideoCarousel({
               : null;
             const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || !isVideoReady);
             const shouldShowLoadingSpinner = isTikTokSlot && shouldRenderVideo && !isVideoReady;
+            const shouldShowManualRetry = isTikTokSlot && isTikTokCurrentSlot && shouldRenderVideo && !isVideoReady && tiktokVideoRetryExhaustedInstanceIds.has(slot.instanceId);
             const loadProgress = Math.max(0.08, Math.min(0.98, videoLoadProgress[slot.instanceId] || 0));
             return (
             <div
@@ -1841,6 +1944,7 @@ export function GalleryVideoCarousel({
                 <>
                   {shouldRenderVideo ? (
                     <video
+                      key={isTikTokSlot ? `${slot.instanceId}:${tiktokVideoRetryVersions[slot.instanceId] || 0}` : slot.instanceId}
                       ref={(node) => {
                         if (node) {
                           videoRefs.current[slot.instanceId] = node;
@@ -1878,6 +1982,11 @@ export function GalleryVideoCarousel({
                         }
                       }}
                       onProgress={(event) => updateVideoLoadProgress(slot.instanceId, event.currentTarget)}
+                      onError={() => {
+                        if (isTikTokCurrentSlot && isTikTokSlot) {
+                          retryCurrentTikTokVideo();
+                        }
+                      }}
                       onCanPlay={(event) => {
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
@@ -1908,18 +2017,31 @@ export function GalleryVideoCarousel({
                   ) : null}
                   {shouldShowLoadingSpinner ? (
                     <div
-                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/15"
+                      className={`absolute inset-0 z-20 flex items-center justify-center bg-black/15 ${shouldShowManualRetry ? 'pointer-events-auto' : 'pointer-events-none'}`}
                       data-testid="gallery-tiktok-video-loading"
                     >
-                      <div
-                        className="relative h-12 w-12 rounded-full shadow-[0_0_28px_rgba(0,0,0,0.45)]"
-                        style={{ background: `conic-gradient(rgba(255,255,255,0.92) ${Math.round(loadProgress * 360)}deg, rgba(255,255,255,0.22) 0deg)` }}
-                        data-progress={loadProgress.toFixed(2)}
-                        data-testid="gallery-tiktok-video-progress"
-                      >
-                        <div className="absolute inset-1.5 rounded-full bg-black/70 backdrop-blur-sm" />
-                        <div className="absolute inset-[1.1rem] rounded-full bg-white/90" />
-                      </div>
+                      {shouldShowManualRetry ? (
+                        <button
+                          type="button"
+                          className="rounded-full border border-white/20 bg-black/70 px-4 py-2 text-sm font-medium text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            retryCurrentTikTokVideo({ manual: true });
+                          }}
+                        >
+                          Retry
+                        </button>
+                      ) : (
+                        <div
+                          className="relative h-12 w-12 rounded-full shadow-[0_0_28px_rgba(0,0,0,0.45)]"
+                          style={{ background: `conic-gradient(rgba(255,255,255,0.92) ${Math.round(loadProgress * 360)}deg, rgba(255,255,255,0.22) 0deg)` }}
+                          data-progress={loadProgress.toFixed(2)}
+                          data-testid="gallery-tiktok-video-progress"
+                        >
+                          <div className="absolute inset-1.5 rounded-full bg-black/70 backdrop-blur-sm" />
+                          <div className="absolute inset-[1.1rem] rounded-full bg-white/90" />
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </>
