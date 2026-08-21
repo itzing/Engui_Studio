@@ -152,4 +152,82 @@ describe('LoRAManagementDialog upload progress', () => {
     expect(fetchCalls).toContain('/api/lora/multipart/finalize');
     expect(fetchCalls).not.toContain('/api/lora/upload');
   });
+
+  it('searches, filters by target, and sorts LoRA manager entries by name', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.startsWith('/api/lora?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            loras: [
+              {
+                id: 'beta-id',
+                name: 'Beta Portrait',
+                fileName: 'beta_portrait.safetensors',
+                s3Path: '/runpod-volume/loras/beta_portrait.safetensors',
+                s3Url: 'https://s3.local/beta_portrait.safetensors',
+                fileSize: '128',
+                extension: '.safetensors',
+                uploadedAt: new Date().toISOString(),
+                targetOverride: 'image',
+              },
+              {
+                id: 'alpha-id',
+                name: 'Alpha Motion',
+                fileName: 'alpha_motion.safetensors',
+                s3Path: '/runpod-volume/loras/alpha_motion.safetensors',
+                s3Url: 'https://s3.local/alpha_motion.safetensors',
+                fileSize: '128',
+                extension: '.safetensors',
+                uploadedAt: new Date().toISOString(),
+                targetOverride: 'video',
+              },
+              {
+                id: 'gamma-id',
+                name: 'Gamma Style',
+                fileName: 'gamma_style.safetensors',
+                s3Path: '/runpod-volume/loras/gamma_style.safetensors',
+                s3Url: 'https://s3.local/gamma_style.safetensors',
+                fileSize: '128',
+                extension: '.safetensors',
+                uploadedAt: new Date().toISOString(),
+                targetOverride: 'image',
+              },
+            ],
+          }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch ${url} ${options?.method || 'GET'}`);
+    }));
+
+    render(
+      React.createElement(LoRAManagementDialog, {
+        open: true,
+        onOpenChange: vi.fn(),
+        workspaceId: 'default',
+      })
+    );
+
+    expect(await screen.findByText('Alpha Motion')).toBeTruthy();
+    const beta = screen.getByText('Beta Portrait');
+    const gamma = screen.getByText('Gamma Style');
+    expect(beta.compareDocumentPosition(gamma) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Sort by name descending/ }));
+    const gammaAfterSort = screen.getByText('Gamma Style');
+    const betaAfterSort = screen.getByText('Beta Portrait');
+    expect(gammaAfterSort.compareDocumentPosition(betaAfterSort) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Search LoRAs'), { target: { value: 'portrait' } });
+    expect(screen.getByText('Beta Portrait')).toBeTruthy();
+    expect(screen.queryByText('Alpha Motion')).toBeNull();
+    expect(screen.queryByText('Gamma Style')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Search LoRAs'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /Video/ }));
+    expect(screen.getByText('Alpha Motion')).toBeTruthy();
+    expect(screen.queryByText('Beta Portrait')).toBeNull();
+  });
 });

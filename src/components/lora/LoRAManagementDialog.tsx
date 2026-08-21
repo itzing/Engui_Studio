@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogHeader,
@@ -15,8 +15,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
 import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
-import { buildLoraPairs } from '@/lib/lora/modelFilters';
-import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save } from 'lucide-react';
+import { buildLoraPairs, filterLorasForTarget, getLoraSearchText } from '@/lib/lora/modelFilters';
+import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save, Search, ImageIcon, Video, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { getPairHelperProfile, getSingleHelperProfile, LORA_HELPER_NOTES_MAX_LENGTH, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
@@ -46,6 +46,8 @@ interface LoRAPair {
 }
 
 type UploadStatus = 'idle' | 'initializing' | 'uploading' | 'completing' | 'failed';
+type LoraTargetFilter = 'all' | 'image' | 'video';
+type LoraNameSort = 'asc' | 'desc';
 
 type MultipartUploadPart = {
   partNumber: number;
@@ -103,6 +105,9 @@ export function LoRAManagementDialog({
   const [helperNotesDraft, setHelperNotesDraft] = useState('');
   const [helperHighWeightDraft, setHelperHighWeightDraft] = useState('');
   const [helperLowWeightDraft, setHelperLowWeightDraft] = useState('');
+  const [loraSearchQuery, setLoraSearchQuery] = useState('');
+  const [loraTargetFilter, setLoraTargetFilter] = useState<LoraTargetFilter>('all');
+  const [loraNameSort, setLoraNameSort] = useState<LoraNameSort>('asc');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeUploadRef = useRef<{
     aborted: boolean;
@@ -113,26 +118,40 @@ export function LoRAManagementDialog({
   } | null>(null);
 
   // Group LoRAs into pairs (high/low)
-  const groupLoRAsIntoPairs = useCallback((loraList: LoRAFile[]): LoRAPair[] => {
+  const groupLoRAsIntoPairs = useCallback((loraList: LoRAFile[], sortDirection: LoraNameSort): LoRAPair[] => {
     const componentPairs = buildLoraPairs(loraList);
     const pairedPaths = new Set(componentPairs.flatMap((pair) => [pair.high?.s3Path, pair.low?.s3Path]).filter(Boolean));
     const standalonePairs: LoRAPair[] = loraList
       .filter((lora) => !pairedPaths.has(lora.s3Path))
       .map((lora) => ({
+        key: `single:${lora.id}`,
         baseName: lora.name,
         high: lora,
         low: undefined,
         isComplete: false,
       }));
 
-    return [...componentPairs, ...standalonePairs].sort((a, b) => {
-      if (a.isComplete && !b.isComplete) return -1;
-      if (!a.isComplete && b.isComplete) return 1;
-      return a.baseName.localeCompare(b.baseName);
-    });
+    return [...componentPairs, ...standalonePairs].sort((a, b) => (
+      sortDirection === 'asc'
+        ? a.baseName.localeCompare(b.baseName)
+        : b.baseName.localeCompare(a.baseName)
+    ));
   }, []);
 
-  const loraPairs = groupLoRAsIntoPairs(loras);
+  const filteredLoras = useMemo(() => {
+    const targetFiltered = loraTargetFilter === 'all'
+      ? loras
+      : filterLorasForTarget(loras, loraTargetFilter);
+    const searchText = loraSearchQuery.trim().toLowerCase();
+    if (!searchText) return targetFiltered;
+
+    return targetFiltered.filter((lora) => getLoraSearchText(lora).includes(searchText));
+  }, [loras, loraSearchQuery, loraTargetFilter]);
+
+  const loraPairs = useMemo(
+    () => groupLoRAsIntoPairs(filteredLoras, loraNameSort),
+    [filteredLoras, groupLoRAsIntoPairs, loraNameSort]
+  );
 
   // Fetch LoRAs with retry logic
   const fetchLoras = useCallback(async (retryCount = 0) => {
@@ -904,19 +923,72 @@ export function LoRAManagementDialog({
 
           {/* LoRA List Section */}
           <div className="mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">
-                {t('loraManagement.yourLoras')} {loras.length > 0 && `(${loras.length})`}
-              </h3>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  {t('loraManagement.yourLoras')} {loras.length > 0 && `(${filteredLoras.length}/${loras.length})`}
+                </h3>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleSync}
                 disabled={isSyncing}
-                className="gap-2"
+                className="w-full gap-2 sm:w-auto"
               >
                 <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? t('loraManagement.actions.syncing') : t('loraManagement.actions.syncFromS3')}
+              </Button>
+            </div>
+
+            <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  value={loraSearchQuery}
+                  onChange={(event) => setLoraSearchQuery(event.target.value)}
+                  placeholder="Search LoRAs..."
+                  className="pl-9"
+                  aria-label="Search LoRAs"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted/30 p-1">
+                {([
+                  { value: 'all', label: 'All', icon: Package },
+                  { value: 'image', label: 'Image', icon: ImageIcon },
+                  { value: 'video', label: 'Video', icon: Video },
+                ] as const).map((option) => {
+                  const Icon = option.icon;
+                  const isActive = loraTargetFilter === option.value;
+                  return (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={isActive ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-8 gap-1.5 px-2"
+                      onClick={() => setLoraTargetFilter(option.value)}
+                      aria-pressed={isActive}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{option.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 gap-2"
+                onClick={() => setLoraNameSort((current) => current === 'asc' ? 'desc' : 'asc')}
+                aria-label={loraNameSort === 'asc' ? 'Sort by name descending' : 'Sort by name ascending'}
+              >
+                {loraNameSort === 'asc' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
+                <span>{loraNameSort === 'asc' ? 'Name A-Z' : 'Name Z-A'}</span>
               </Button>
             </div>
 
@@ -935,11 +1007,19 @@ export function LoRAManagementDialog({
                   {t('loraManagement.messages.uploadFirstLora')}
                 </p>
               </div>
+            ) : loraPairs.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium">No LoRAs match your filters</p>
+                <p className="text-sm mt-1">
+                  Try a different search term or target filter.
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {loraPairs.map((pair) => (
                   <Card 
-                    key={pair.baseName} 
+                    key={pair.key ?? pair.baseName}
                     className={`group hover:border-primary/50 hover:shadow-md transition-all duration-200 ${
                       pair.isComplete ? 'border-green-500/30' : 'border-yellow-500/30'
                     }`}
