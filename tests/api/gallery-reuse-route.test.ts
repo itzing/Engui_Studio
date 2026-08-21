@@ -102,7 +102,7 @@ describe('gallery reuse route', () => {
     });
   });
 
-  it('returns img2vid for WAN22 video assets', async () => {
+  it('returns img2vid and txt2vid for WAN22 I2V video assets', async () => {
     mockPrisma.galleryAsset.findUnique.mockResolvedValue({
       id: 'asset-video-1',
       type: 'video',
@@ -118,7 +118,7 @@ describe('gallery reuse route', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.actions).toEqual(['txt2img', 'img2vid']);
+    expect(json.actions).toEqual(['txt2img', 'img2vid', 'txt2vid']);
   });
 
   it('returns txt2img and txt2vid for WAN22 T2V video assets', async () => {

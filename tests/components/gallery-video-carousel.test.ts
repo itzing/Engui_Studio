@@ -320,7 +320,7 @@ describe('GalleryVideoCarousel', () => {
       expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'To txt2img' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'To img2vid' })).toBeTruthy();
-      expect(screen.queryByRole('button', { name: 'To T2V' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'To T2V' })).toBeTruthy();
 
       fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
       await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/gallery/assets/video-2/favorite', expect.any(Object)));

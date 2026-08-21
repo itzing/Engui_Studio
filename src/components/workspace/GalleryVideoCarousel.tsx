@@ -1529,7 +1529,7 @@ export function GalleryVideoCarousel({
   const activeTikTokActionAsset = activeTikTokActionSlot?.entry.kind === 'video' ? activeTikTokActionSlot.entry.asset : null;
   const canReuseTikTokToImage = activeTikTokActionAsset?.modelId === 'wan22' || activeTikTokActionAsset?.modelId === 'wan22-t2v';
   const canReuseTikTokToI2V = activeTikTokActionAsset?.modelId === 'wan22';
-  const canReuseTikTokToT2V = activeTikTokActionAsset?.modelId === 'wan22-t2v';
+  const canReuseTikTokToT2V = activeTikTokActionAsset?.modelId === 'wan22' || activeTikTokActionAsset?.modelId === 'wan22-t2v';
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabledRef.current) return;
