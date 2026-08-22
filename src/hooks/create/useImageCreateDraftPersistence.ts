@@ -21,6 +21,7 @@ export function useImageCreateDraftPersistence({
   const hasRestoredDraftRef = useRef(false);
   const hydratedModelRef = useRef<string | null>(null);
   const isHydratingDraftRef = useRef(false);
+  const skipNextAutosaveRef = useRef(false);
 
   const hydrateSnapshot = useCallback(async (modelId: string, nextSnapshot?: ImageCreateDraftSnapshot | null) => {
     isHydratingDraftRef.current = true;
@@ -74,6 +75,7 @@ export function useImageCreateDraftPersistence({
       setWorkflowActiveModel('image', modelId);
       setSelectedModel(modelId);
       hydratedModelRef.current = modelId;
+      skipNextAutosaveRef.current = true;
       void hydrateSnapshot(modelId, draft);
     };
 
@@ -83,6 +85,10 @@ export function useImageCreateDraftPersistence({
 
   useEffect(() => {
     if (!hasRestoredDraftRef.current || isHydratingDraftRef.current) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
     const modelId = selectedModel || defaultModelId;
     setWorkflowActiveModel('image', modelId);
     saveWorkflowDraft('image', modelId, normalizeImageDraftForModel(modelId, snapshot));

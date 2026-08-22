@@ -49,18 +49,20 @@ describe('useImageCreateDraftPersistence', () => {
     const setSelectedModel = vi.fn();
     const applySnapshot = vi.fn();
 
-    function Harness() {
+    function Harness({ snapshot }: { snapshot: { prompt: string; randomizeSeed: boolean; parameterValues: { seed: number } } }) {
       useImageCreateDraftPersistence({
         defaultModelId: 'z-image',
         selectedModel: 'z-image',
         setSelectedModel,
-        snapshot: { prompt: 'current', randomizeSeed: false, parameterValues: { seed: 42 } },
+        snapshot,
         applySnapshot,
       });
       return null;
     }
 
-    render(React.createElement(Harness));
+    const { rerender } = render(React.createElement(Harness, {
+      snapshot: { prompt: 'current', randomizeSeed: false, parameterValues: { seed: 42 } },
+    }));
 
     await waitFor(() => {
       expect(applySnapshot).toHaveBeenCalledWith('z-image', expect.objectContaining({
@@ -68,6 +70,7 @@ describe('useImageCreateDraftPersistence', () => {
         randomizeSeed: false,
       }));
     });
+    saveWorkflowDraft.mockClear();
 
     act(() => {
       window.dispatchEvent(new CustomEvent(CREATE_REUSE_DRAFT_EVENT, {
@@ -78,6 +81,9 @@ describe('useImageCreateDraftPersistence', () => {
         },
       }));
     });
+    rerender(React.createElement(Harness, {
+      snapshot: { prompt: 'stale current', randomizeSeed: false, parameterValues: { seed: 42 } },
+    }));
 
     await waitFor(() => {
       expect(setWorkflowActiveModel).toHaveBeenCalledWith('image', 'flux-krea');
@@ -88,5 +94,9 @@ describe('useImageCreateDraftPersistence', () => {
         parameterValues: expect.objectContaining({ seed: 12345 }),
       }));
     });
+    expect(saveWorkflowDraft).not.toHaveBeenCalledWith('image', 'z-image', expect.objectContaining({
+      prompt: 'stale current',
+      randomizeSeed: false,
+    }));
   });
 });
