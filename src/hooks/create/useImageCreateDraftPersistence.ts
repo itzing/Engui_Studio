@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { CREATE_REUSE_DRAFT_EVENT, type CreateReuseDraftEventDetail } from '@/lib/create/createModeEvents';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { normalizeImageDraftForModel, type ImageCreateDraftSnapshot } from '@/lib/create/imageDraft';
 
@@ -60,6 +61,25 @@ export function useImageCreateDraftPersistence({
 
     void restoreInitialDraft();
   }, [defaultModelId, hydrateSnapshot, setSelectedModel]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleReuseDraft = (event: Event) => {
+      const detail = (event as CustomEvent<CreateReuseDraftEventDetail>).detail;
+      if (detail?.workflow !== 'image' || !detail.modelId) return;
+
+      const modelId = detail.modelId;
+      const draft = getWorkflowDraft<ImageCreateDraftSnapshot>('image', modelId);
+      setWorkflowActiveModel('image', modelId);
+      setSelectedModel(modelId);
+      hydratedModelRef.current = modelId;
+      void hydrateSnapshot(modelId, draft);
+    };
+
+    window.addEventListener(CREATE_REUSE_DRAFT_EVENT, handleReuseDraft as EventListener);
+    return () => window.removeEventListener(CREATE_REUSE_DRAFT_EVENT, handleReuseDraft as EventListener);
+  }, [hydrateSnapshot, setSelectedModel]);
 
   useEffect(() => {
     if (!hasRestoredDraftRef.current || isHydratingDraftRef.current) return;

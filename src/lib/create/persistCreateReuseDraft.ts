@@ -1,6 +1,7 @@
 'use client';
 
 import { createImageDraftSnapshot, normalizeImageDraftForModel, normalizeRandomizeSeed, type ImageCreateDraftSnapshot } from '@/lib/create/imageDraft';
+import { announceCreateReuseDraft } from '@/lib/create/createModeEvents';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setActiveMode, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
@@ -186,6 +187,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     setActiveMode('image');
     setWorkflowActiveModel('image', modelId);
     saveWorkflowDraft('image', modelId, snapshot);
+    announceCreateReuseDraft('image', modelId);
 
     return { workflow: 'image' as const, modelId, snapshot };
   }
@@ -221,6 +223,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       setActiveMode('video');
       setWorkflowActiveModel('video', modelId);
       saveWorkflowDraft('video', modelId, snapshot);
+      announceCreateReuseDraft('video', modelId);
 
       return { workflow: 'video' as const, modelId, snapshot };
     }
@@ -245,6 +248,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
       setActiveMode('video');
       setWorkflowActiveModel('video', modelId);
       saveWorkflowDraft('video', modelId, snapshot);
+      announceCreateReuseDraft('video', modelId);
 
       return { workflow: 'video' as const, modelId, snapshot };
     }
@@ -262,6 +266,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     setActiveMode('video');
     setWorkflowActiveModel('video', modelId);
     saveWorkflowDraft('video', modelId, snapshot);
+    announceCreateReuseDraft('video', modelId);
 
     return { workflow: 'video' as const, modelId, snapshot };
   }

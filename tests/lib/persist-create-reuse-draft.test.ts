@@ -7,6 +7,7 @@ const getWorkflowActiveModel = vi.fn();
 const getWorkflowDraft = vi.fn();
 const getModelById = vi.fn();
 const isInputVisible = vi.fn();
+const announceCreateReuseDraft = vi.fn();
 
 vi.mock('@/lib/createDrafts', () => ({
   setActiveMode,
@@ -21,6 +22,10 @@ vi.mock('@/lib/models/modelConfig', () => ({
   isInputVisible,
 }));
 
+vi.mock('@/lib/create/createModeEvents', () => ({
+  announceCreateReuseDraft,
+}));
+
 describe('persistCreateReuseDraft', () => {
   beforeEach(() => {
     setActiveMode.mockReset();
@@ -30,6 +35,7 @@ describe('persistCreateReuseDraft', () => {
     getWorkflowDraft.mockReset();
     getModelById.mockReset();
     isInputVisible.mockReset();
+    announceCreateReuseDraft.mockReset();
   });
 
   it('updates only the prompt and scene linkage in the current image draft for Prompt Constructor handoff', async () => {
@@ -154,6 +160,7 @@ describe('persistCreateReuseDraft', () => {
         height: 1024,
       }),
     }));
+    expect(announceCreateReuseDraft).toHaveBeenCalledWith('image', 'z-image');
   });
 
   it('clears z-image controlnet mode when reuse payload has no image input', async () => {

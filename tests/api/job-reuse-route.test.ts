@@ -246,4 +246,46 @@ describe('job reuse route', () => {
       },
     });
   });
+
+  it('preserves randomize seed for image job txt2img payloads', async () => {
+    mockPrisma.job.findUnique.mockResolvedValue({
+      id: 'job-random',
+      type: 'image',
+      prompt: 'randomized source prompt',
+      resultUrl: '/generations/job-output.png',
+      modelId: 'z-image',
+      endpointId: 'z-image',
+      options: JSON.stringify({
+        prompt: 'randomized source prompt',
+        modelId: 'z-image',
+        width: 1024,
+        height: 1024,
+        seed: 2088649868,
+        randomizeSeed: true,
+        use_controlnet: false,
+      }),
+    });
+
+    const response = await POST(new Request('http://localhost/api/jobs/job-random/reuse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'txt2img', outputId: 'output-1' }),
+    }) as any, {
+      params: Promise.resolve({ id: 'job-random' }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.payload).toMatchObject({
+      action: 'txt2img',
+      type: 'image',
+      modelId: 'z-image',
+      prompt: 'randomized source prompt',
+      options: {
+        seed: 2088649868,
+        randomizeSeed: true,
+        use_controlnet: false,
+      },
+    });
+  });
 });
