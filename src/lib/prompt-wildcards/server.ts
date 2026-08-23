@@ -112,6 +112,23 @@ function pickIndexedVariants(variants: string[], indices: number[]) {
     .filter((entry): entry is { index: number; value: string } => typeof entry.value === 'string' && entry.value.trim().length > 0);
 }
 
+function getOccurrenceSelectionKey(key: string, occurrenceIndex: number) {
+  return `${key}__occ_${occurrenceIndex}`;
+}
+
+function countIndexedWildcardOccurrences(input: string) {
+  const counts = new Map<string, number>();
+  const matcher = /\{([A-Za-z][A-Za-z0-9_]*):([^{}\n]+)\}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(input)) !== null) {
+    if (!parsePromptWildcardIndexList(match[2])) continue;
+    counts.set(match[1], (counts.get(match[1]) || 0) + 1);
+  }
+
+  return counts;
+}
+
 export async function expandPromptWildcards(
   input: string,
   workspaceId: string | null | undefined,
@@ -135,6 +152,8 @@ export async function expandPromptWildcards(
 
   const byKey = new Map(wildcards.map((wildcard) => [wildcard.key, wildcard]));
   const replacements = new Map<string, PromptWildcardReplacement>();
+  const indexedOccurrenceTotals = countIndexedWildcardOccurrences(input);
+  const indexedOccurrenceCursors = new Map<string, number>();
   let prompt = input;
 
   prompt = prompt.replace(/\{([A-Za-z][A-Za-z0-9_]*):([^{}\n]+)\}/g, (match, key: string, rawVariant: string) => {
@@ -144,20 +163,26 @@ export async function expandPromptWildcards(
     const variants = getPromptWildcardVariants(wildcard.value);
     const requestedIndices = parsePromptWildcardIndexList(rawVariant);
     if (requestedIndices) {
+      const occurrenceIndex = indexedOccurrenceCursors.get(key) || 0;
+      indexedOccurrenceCursors.set(key, occurrenceIndex + 1);
+
       const selectedVariants = pickIndexedVariants(variants, requestedIndices);
       if (selectedVariants.length === 0) return match;
 
-      const selection = nextSelections[key];
+      const selectionKey = (indexedOccurrenceTotals.get(key) || 0) > 1
+        ? getOccurrenceSelectionKey(key, occurrenceIndex)
+        : key;
+      const selection = nextSelections[selectionKey] || nextSelections[key];
       if (selection?.mode === 'sequential') {
         const cursor = Math.max(0, Math.min(selection.cursor, selectedVariants.length - 1));
         const selected = selectedVariants[cursor] || selectedVariants[0];
-        nextSelections[key] = {
+        nextSelections[selectionKey] = {
           indices: selectedVariants.map((variant) => variant.index),
           mode: 'sequential',
           startIndex: Math.max(0, Math.min(selection.startIndex, selectedVariants.length - 1)),
           cursor: (cursor + 1) % selectedVariants.length,
         };
-        replacements.set(`${key}:${match}`, {
+        replacements.set(`${selectionKey}:${match}`, {
           key,
           name: wildcard.name,
           placeholder: match,

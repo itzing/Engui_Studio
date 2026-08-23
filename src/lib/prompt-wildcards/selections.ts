@@ -36,7 +36,7 @@ export function normalizePromptWildcardSelections(value: unknown): PromptWildcar
 
   const normalized: PromptWildcardSelectionMap = {};
   Object.entries(value).forEach(([key, selection]) => {
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || !isRecord(selection)) return;
+    if (!/^[A-Za-z][A-Za-z0-9_]*(?:__occ_\d+)?$/.test(key) || !isRecord(selection)) return;
     const indices = Array.isArray(selection.indices)
       ? Array.from(new Set(selection.indices
         .map((index) => Number(index))

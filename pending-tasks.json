@@ -1,5 +1,15 @@
 [
   {
+    "id": "engui-sequential-wildcard-occurrence-cursors-20260823T203505Z",
+    "createdAt": "2026-08-23T20:35:05Z",
+    "task": "Build, restart, smoke-check, commit, and push Engui sequential wildcard occurrence cursor fix",
+    "status": "done",
+    "chatId": "telegram:450189741",
+    "notes": "User reported duplicate identical sequential wildcards in one prompt share one counter. Scope: give each duplicate indexed sequential wildcard occurrence an independent persisted cursor, keep key-level selection metadata as fallback, focused tests, production build/restart/smoke, commit/push. Rollback: revert implementation commit, npm run build, sudo -n systemctl restart engui-studio.service.",
+    "finishedAt": "2026-08-23T20:43:45Z",
+    "result": "Fixed duplicate sequential wildcard placeholders by adding occurrence-level cursor keys for repeated indexed wildcard placeholders while keeping key-level selection metadata as fallback for existing drafts. Validation passed: focused Vitest 6/6, related Vitest 16/16, targeted ESLint, git diff --check, Prisma validate, production build exit_code 0, engui-studio.service restarted active, HTTP smoke returned 200."
+  },
+  {
     "id": "engui-mobile-batch-sequential-wildcards-20260814T074636Z",
     "createdAt": "2026-08-14T07:46:36Z",
     "task": "Fix mobile image batch sequential wildcard cursor advancement",

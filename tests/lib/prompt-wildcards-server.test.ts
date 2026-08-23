@@ -96,6 +96,104 @@ describe('expandPromptWildcards', () => {
     ]);
   });
 
+  it('keeps duplicate sequential wildcard placeholders on independent cursors', async () => {
+    const result = await expandPromptWildcards('portrait with {hairColor:0,2} and {hairColor:0,2}', 'ws-1', {
+      selections: {
+        hairColor: {
+          indices: [0, 2],
+          mode: 'sequential',
+          startIndex: 0,
+          cursor: 0,
+        },
+      },
+    });
+
+    expect(result.prompt).toBe('portrait with black hair and black hair');
+    expect(result.selections).toEqual({
+      hairColor: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 0,
+        cursor: 0,
+      },
+      hairColor__occ_0: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 0,
+        cursor: 1,
+      },
+      hairColor__occ_1: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 0,
+        cursor: 1,
+      },
+    });
+    expect(result.replacements).toEqual([
+      {
+        key: 'hairColor',
+        name: 'Hair color',
+        placeholder: '{hairColor:0,2}',
+        variant: 'black hair',
+        variantIndex: 0,
+        variantIndices: [0, 2],
+        mode: 'sequential',
+        selectedPosition: 0,
+      },
+      {
+        key: 'hairColor',
+        name: 'Hair color',
+        placeholder: '{hairColor:0,2}',
+        variant: 'black hair',
+        variantIndex: 0,
+        variantIndices: [0, 2],
+        mode: 'sequential',
+        selectedPosition: 0,
+      },
+    ]);
+  });
+
+  it('keeps duplicate sequential wildcard occurrence cursors across submissions', async () => {
+    const result = await expandPromptWildcards('portrait with {hairColor:0,2} and {hairColor:0,2}', 'ws-1', {
+      selections: {
+        hairColor: {
+          indices: [0, 2],
+          mode: 'sequential',
+          startIndex: 0,
+          cursor: 0,
+        },
+        hairColor__occ_0: {
+          indices: [0, 2],
+          mode: 'sequential',
+          startIndex: 0,
+          cursor: 1,
+        },
+        hairColor__occ_1: {
+          indices: [0, 2],
+          mode: 'sequential',
+          startIndex: 0,
+          cursor: 1,
+        },
+      },
+    });
+
+    expect(result.prompt).toBe('portrait with blonde hair and blonde hair');
+    expect(result.selections).toMatchObject({
+      hairColor__occ_0: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 0,
+        cursor: 0,
+      },
+      hairColor__occ_1: {
+        indices: [0, 2],
+        mode: 'sequential',
+        startIndex: 0,
+        cursor: 0,
+      },
+    });
+  });
+
   it('keeps normal wildcard expansion unchanged', async () => {
     const result = await expandPromptWildcards('portrait with {wardrobe}', 'ws-1');
 
