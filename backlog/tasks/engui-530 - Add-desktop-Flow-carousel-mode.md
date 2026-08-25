@@ -33,4 +33,6 @@ Add a separate desktop Flow mode beside the current carousel. Flow uses carousel
 Rollback: revert implementation commit, run npm run build, and restart engui-studio.service.
 
 2026-08-25 follow-up: Flow video auto-advance must not depend only on readable duration metadata. The active Flow video advances the queue on its `ended` event, with the duration timer kept as a fallback. The Flow settings panel opens from a dedicated right-edge hover target instead of only sharing the top controls hover area.
+
+2026-08-25 portrait layout follow-up: Flow portrait mode uses exactly three equal-width screen slots. Portrait media is contained and centered inside each slot so videos play at full height without overlapping neighboring slots.
 <!-- SECTION:NOTES:END -->

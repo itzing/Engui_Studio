@@ -189,27 +189,23 @@ function getFlowSlotCount(orientation: GalleryFlowOrientation) {
 }
 
 function buildFlowSlotLayout(
-  entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
+  _entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
   stage: { width: number; height: number },
-  measuredRatios: Record<string, number>,
+  _measuredRatios: Record<string, number>,
   orientation: GalleryFlowOrientation,
   slotIndex: number,
 ) {
   const stageWidth = Math.max(1, stage.width);
   const stageHeight = Math.max(1, stage.height);
   if (orientation === 'portrait') {
-    const ratio = readFeedEntryRatio(entry, measuredRatios);
-    const ratioWidth = stageHeight * (Number.isFinite(ratio) && ratio > 0 ? ratio : DEFAULT_VIDEO_RATIO);
-    const width = Math.min(stageWidth * 0.5, Math.max(ratioWidth, stageWidth * 0.42));
-    const centerX = (stageWidth - width) / 2;
-    const x = slotIndex === 0 ? 0 : slotIndex === 1 ? centerX : stageWidth - width;
-    const zIndex = slotIndex === 1 ? 1 : 2;
+    const width = stageWidth / FLOW_PORTRAIT_SLOT_COUNT;
+    const x = width * positiveModulo(slotIndex, FLOW_PORTRAIT_SLOT_COUNT);
     return {
       x,
       y: 0,
       width,
       height: stageHeight,
-      zIndex,
+      zIndex: 1,
     };
   }
 
@@ -2466,6 +2462,7 @@ export function GalleryVideoCarousel({
               : null;
             const isTikTokSlot = tiktokModeRef.current;
             const isFlowSlot = flowMode && slot.instanceId.startsWith('flow-');
+            const shouldContainMedia = isTikTokSlot || (isFlowSlot && slot.flowOrientation === 'portrait');
             const isTikTokCurrentSlot = !isTikTokSlot || Math.abs(slot.y) < 1;
             const tiktokDistanceFromCurrent = currentTikTokFeedIndex === null ? 0 : Math.abs(slot.feedIndex - currentTikTokFeedIndex);
             const shouldRenderVideo = isFlowSlot || !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
@@ -2567,7 +2564,7 @@ export function GalleryVideoCarousel({
                           handleFlowVideoEnded(slot.instanceId);
                         }
                       }}
-                      className={`h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'} ${(isTikTokSlot || isFlowSlot) && !isVideoReady ? 'opacity-0' : ''}`}
+                      className={`h-full w-full ${shouldContainMedia ? 'object-contain' : 'object-cover'} ${(isTikTokSlot || isFlowSlot) && !isVideoReady ? 'opacity-0' : ''}`}
                     />
                   ) : null}
                   {shouldShowPosterLayer && posterUrl ? (
@@ -2576,7 +2573,7 @@ export function GalleryVideoCarousel({
                       src={posterUrl}
                       alt=""
                       aria-hidden="true"
-                      className={`pointer-events-none absolute inset-0 z-10 h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'}`}
+                      className={`pointer-events-none absolute inset-0 z-10 h-full w-full ${shouldContainMedia ? 'object-contain' : 'object-cover'}`}
                       draggable={false}
                       data-testid="gallery-tiktok-video-poster"
                     />
@@ -2619,7 +2616,7 @@ export function GalleryVideoCarousel({
                   <img
                     src={image.previewUrl || image.originalUrl}
                     alt={image.prompt || image.id}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full ${shouldContainMedia ? 'object-contain' : 'object-cover'}`}
                     draggable={false}
                   />
                 );

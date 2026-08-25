@@ -193,7 +193,7 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByText('7s')).toBeTruthy();
   });
 
-  it('uses each portrait slot while manually advancing the Flow queue', async () => {
+  it('uses three equal-width portrait slots while manually advancing the Flow queue', async () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: true,
       imagesEnabled: false,
@@ -251,16 +251,25 @@ describe('GalleryVideoCarousel', () => {
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
-      await waitFor(() => expect(stage.querySelector('video[src="/portrait-1.mp4"]')).toBeTruthy());
-      expect((stage.querySelector('video[src="/portrait-1.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 0px, 0)');
+      const firstPortraitSlot = await waitFor(() => {
+        const video = stage.querySelector('video[src="/portrait-1.mp4"]') as HTMLVideoElement | null;
+        expect(video).toBeTruthy();
+        expect(video?.className).toContain('object-contain');
+        return video?.parentElement as HTMLElement;
+      });
+      expect(firstPortraitSlot.style.width).toBe(`${1280 / 3}px`);
+      expect(firstPortraitSlot.style.height).toBe('720px');
+      expect(firstPortraitSlot.style.transform).toBe('translate3d(0px, 0px, 0)');
 
       fireEvent.click(screen.getByLabelText('Next Flow item'));
       await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
-      expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(371.2px, 0px, 0)');
+      expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.width).toBe(`${1280 / 3}px`);
+      expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${1280 / 3}px, 0px, 0)`);
 
       fireEvent.click(screen.getByLabelText('Next Flow item'));
       await waitFor(() => expect(stage.querySelector('video[src="/portrait-3.mp4"]')).toBeTruthy());
-      expect((stage.querySelector('video[src="/portrait-3.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(742.4px, 0px, 0)');
+      expect((stage.querySelector('video[src="/portrait-3.mp4"]')?.parentElement as HTMLElement).style.width).toBe(`${1280 / 3}px`);
+      expect((stage.querySelector('video[src="/portrait-3.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${(1280 / 3) * 2}px, 0px, 0)`);
       expect(stage.querySelectorAll('video')).toHaveLength(3);
     } finally {
       rectSpy.mockRestore();
@@ -323,7 +332,7 @@ describe('GalleryVideoCarousel', () => {
     fireEvent.ended(firstVideo);
 
     await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
-    expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(371.2px, 0px, 0)');
+    expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${1280 / 3}px, 0px, 0)`);
   });
 
   it('slides the Flow side panel from the right edge hover area', async () => {

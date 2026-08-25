@@ -33,11 +33,10 @@ Add a separate desktop-only Flow mode beside the existing Gallery Carousel. Flow
 
 ## Layout
 
-- Portrait layout uses three overlapping slots:
-  - Center is centered and appears behind the side slots.
-  - Left starts from the left edge and overlaps the center.
-  - Right starts from the right edge and overlaps the center.
-  - Media fit matches the existing carousel.
+- Portrait layout uses three equal-width slots across the screen:
+  - Left, center, and right each take one third of the viewport width.
+  - Slots do not overlap.
+  - Portrait media is centered and contained inside each slot so the full height can play without covering neighboring slots.
 - Landscape layout uses four slots without overlap, arranged from the center.
   - Keep media as visible as practical by width.
   - Vertical crop is allowed so the screen stays filled.
