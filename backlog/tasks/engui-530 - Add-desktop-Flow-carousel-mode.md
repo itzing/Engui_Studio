@@ -37,4 +37,6 @@ Rollback: revert implementation commit, run npm run build, and restart engui-stu
 2026-08-25 portrait layout follow-up: Flow portrait mode uses exactly three equal-width screen slots. Portrait media is contained and centered inside each slot so videos play at full height without overlapping neighboring slots.
 
 2026-08-25 playback lifecycle follow-up: Flow video `ended` now advances the queue only when it belongs to the latest activated slot, then restarts that visible video locally. Older visible slots keep replaying in place without triggering additional queue advances.
+
+2026-08-25 next-slot timer follow-up: Flow settings now use a `Next slot` activation slider from 3 to 10 seconds. Auto-advance is timer-driven for videos and images, independent of video duration; video `ended` only restarts the visible video locally.
 <!-- SECTION:NOTES:END -->

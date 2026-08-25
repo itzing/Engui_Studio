@@ -138,7 +138,7 @@ describe('GalleryVideoCarousel', () => {
             orderMode: 'random',
             portraitCycles: 2,
             landscapeCycles: 3,
-            imageIntervalSeconds: 7,
+            slotActivationSeconds: 7,
           },
         },
       },
@@ -213,7 +213,7 @@ describe('GalleryVideoCarousel', () => {
             orderMode: 'order',
             portraitCycles: 1,
             landscapeCycles: 1,
-            imageIntervalSeconds: 7,
+            slotActivationSeconds: 7,
           },
         },
       },
@@ -276,7 +276,7 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
-  it('auto-advances the Flow queue when the active video ends', async () => {
+  it('auto-advances the Flow queue on the configured slot timer and keeps ended videos replaying', async () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: true,
       imagesEnabled: false,
@@ -296,7 +296,7 @@ describe('GalleryVideoCarousel', () => {
             orderMode: 'order',
             portraitCycles: 1,
             landscapeCycles: 1,
-            imageIntervalSeconds: 7,
+            slotActivationSeconds: 3,
           },
         },
       },
@@ -329,17 +329,20 @@ describe('GalleryVideoCarousel', () => {
       return video as HTMLVideoElement;
     });
     expect(firstVideo.loop).toBe(false);
+    Object.defineProperty(firstVideo, 'duration', { configurable: true, value: 90 });
     const firstVideoPlayCountBeforeEnded = playMock.mock.contexts.filter((context) => context === firstVideo).length;
     firstVideo.currentTime = 4;
 
     fireEvent.ended(firstVideo);
 
-    await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
-    expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${1280 / 3}px, 0px, 0)`);
     await waitFor(() => {
       expect(playMock.mock.contexts.filter((context) => context === firstVideo).length).toBeGreaterThan(firstVideoPlayCountBeforeEnded);
     });
     expect(firstVideo.currentTime).toBe(0);
+    expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeNull();
+
+    await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy(), { timeout: 4000 });
+    expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${1280 / 3}px, 0px, 0)`);
   });
 
   it('slides the Flow side panel from the right edge hover area', async () => {

@@ -20,7 +20,7 @@ export type GalleryCarouselFlowProfileSettings = {
   orderMode: GalleryCarouselFlowOrderMode;
   portraitCycles: number;
   landscapeCycles: number;
-  imageIntervalSeconds: number;
+  slotActivationSeconds: number;
 };
 
 export type GalleryCarouselFlowSettings = {
@@ -39,7 +39,7 @@ export const GALLERY_CAROUSEL_DEFAULT_FLOW_PROFILE: GalleryCarouselFlowProfileSe
   orderMode: 'order',
   portraitCycles: 1,
   landscapeCycles: 1,
-  imageIntervalSeconds: 5,
+  slotActivationSeconds: 5,
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -57,6 +57,9 @@ function normalizeGalleryCarouselFlowProfile(
   fallback: GalleryCarouselFlowProfileSettings = GALLERY_CAROUSEL_DEFAULT_FLOW_PROFILE,
 ): GalleryCarouselFlowProfileSettings {
   const stored = value && typeof value === 'object' ? value as Partial<GalleryCarouselFlowProfileSettings> : {};
+  const legacyImageIntervalSeconds = value && typeof value === 'object'
+    ? (value as { imageIntervalSeconds?: unknown }).imageIntervalSeconds
+    : undefined;
   const id = typeof stored.id === 'string' && stored.id.trim().length > 0 ? stored.id.trim() : fallback.id;
   return {
     id,
@@ -64,7 +67,12 @@ function normalizeGalleryCarouselFlowProfile(
     orderMode: stored.orderMode === 'random' ? 'random' : stored.orderMode === 'order' ? 'order' : fallback.orderMode,
     portraitCycles: clampInteger(stored.portraitCycles, fallback.portraitCycles, 1, 10),
     landscapeCycles: clampInteger(stored.landscapeCycles, fallback.landscapeCycles, 1, 10),
-    imageIntervalSeconds: clampInteger(stored.imageIntervalSeconds, fallback.imageIntervalSeconds, 5, 10),
+    slotActivationSeconds: clampInteger(
+      stored.slotActivationSeconds ?? legacyImageIntervalSeconds,
+      fallback.slotActivationSeconds,
+      3,
+      10,
+    ),
   };
 }
 

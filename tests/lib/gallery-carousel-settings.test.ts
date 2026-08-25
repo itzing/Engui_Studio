@@ -17,7 +17,7 @@ describe('gallery carousel settings', () => {
           orderMode: 'random',
           portraitCycles: 99,
           landscapeCycles: -4,
-          imageIntervalSeconds: 13,
+          slotActivationSeconds: 13,
         },
       },
     });
@@ -28,8 +28,26 @@ describe('gallery carousel settings', () => {
       orderMode: 'random',
       portraitCycles: 10,
       landscapeCycles: 1,
-      imageIntervalSeconds: 10,
+      slotActivationSeconds: 10,
     });
+  });
+
+  it('migrates legacy Flow image interval into the next-slot activation setting', () => {
+    const settings = normalizeGalleryCarouselFlowSettings({
+      activeProfileId: 'default',
+      profiles: {
+        default: {
+          id: 'default',
+          name: 'Default',
+          orderMode: 'order',
+          portraitCycles: 1,
+          landscapeCycles: 1,
+          imageIntervalSeconds: 2,
+        },
+      },
+    });
+
+    expect(getActiveGalleryCarouselFlowProfile(settings).slotActivationSeconds).toBe(3);
   });
 
   it('includes disabled Flow defaults in the carousel settings payload', () => {
@@ -41,7 +59,7 @@ describe('gallery carousel settings', () => {
       orderMode: 'order',
       portraitCycles: 1,
       landscapeCycles: 1,
-      imageIntervalSeconds: 5,
+      slotActivationSeconds: 5,
     });
   });
 });

@@ -426,7 +426,6 @@ export function GalleryVideoCarousel({
   const [flowSettingsOpen, setFlowSettingsOpen] = useState(false);
   const [isFlowSettingsEdgeActive, setIsFlowSettingsEdgeActive] = useState(false);
   const [flowQueueCount, setFlowQueueCount] = useState(0);
-  const [flowTimingVersion, setFlowTimingVersion] = useState(0);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
   const [isLoading, setIsLoading] = useState(false);
@@ -1649,13 +1648,7 @@ export function GalleryVideoCarousel({
       : activeSlots[activeSlots.length - 1] || null;
     if (!latestSlot) return;
 
-    let delayMs = activeFlowProfile.imageIntervalSeconds * 1000;
-    if (latestSlot.entry.kind === 'video') {
-      const video = videoRefs.current[latestSlot.instanceId];
-      const duration = video?.duration;
-      if (!duration || !Number.isFinite(duration) || duration <= 0) return;
-      delayMs = Math.max(1000, duration * 1000 + 250);
-    }
+    const delayMs = activeFlowProfile.slotActivationSeconds * 1000;
 
     flowAdvanceTimeoutRef.current = window.setTimeout(() => {
       flowAdvanceTimeoutRef.current = null;
@@ -1663,15 +1656,12 @@ export function GalleryVideoCarousel({
     }, delayMs);
 
     return () => clearFlowAdvanceTimer();
-  }, [activateFlowRelative, activeFlowProfile.imageIntervalSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, flowTimingVersion, isLoading, paused]);
+  }, [activateFlowRelative, activeFlowProfile.slotActivationSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, isLoading, paused]);
 
   const handleFlowVideoEnded = useCallback((instanceId: string, video: HTMLVideoElement) => {
     if (!flowModeRef.current) return;
-    if (!pausedRef.current && flowLastActivatedInstanceIdRef.current === instanceId) {
-      activateFlowRelative(1, 'auto');
-    }
     restartFlowVideoAfterEnded(instanceId, video);
-  }, [activateFlowRelative, restartFlowVideoAfterEnded]);
+  }, [restartFlowVideoAfterEnded]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (flowModeRef.current) return;
@@ -2428,15 +2418,15 @@ export function GalleryVideoCarousel({
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium uppercase text-white/45">Image interval</span>
-                  <span className="tabular-nums text-white/70">{activeFlowProfile.imageIntervalSeconds}s</span>
+                  <span className="font-medium uppercase text-white/45">Next slot</span>
+                  <span className="tabular-nums text-white/70">{activeFlowProfile.slotActivationSeconds}s</span>
                 </div>
                 <Slider
-                  min={5}
+                  min={3}
                   max={10}
                   step={1}
-                  value={[activeFlowProfile.imageIntervalSeconds]}
-                  onValueChange={(value) => updateFlowProfile({ imageIntervalSeconds: value[0] || 5 }, { rebuildQueue: false })}
+                  value={[activeFlowProfile.slotActivationSeconds]}
+                  onValueChange={(value) => updateFlowProfile({ slotActivationSeconds: value[0] || 5 }, { rebuildQueue: false })}
                 />
               </div>
             </div>
@@ -2545,9 +2535,6 @@ export function GalleryVideoCarousel({
                         if (slot.entry.kind !== 'video') return;
                         handleMetadata(slot.entry.asset, event.currentTarget);
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
-                        if (isFlowSlot) {
-                          setFlowTimingVersion((version) => version + 1);
-                        }
                         if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
@@ -2561,9 +2548,6 @@ export function GalleryVideoCarousel({
                       onCanPlay={(event) => {
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
-                        if (isFlowSlot) {
-                          setFlowTimingVersion((version) => version + 1);
-                        }
                         if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
@@ -2571,9 +2555,6 @@ export function GalleryVideoCarousel({
                       onLoadedData={(event) => {
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
-                        if (isFlowSlot) {
-                          setFlowTimingVersion((version) => version + 1);
-                        }
                         if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
