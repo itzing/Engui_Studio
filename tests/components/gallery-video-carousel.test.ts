@@ -193,6 +193,131 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByText('7s')).toBeTruthy();
   });
 
+  it('uses each portrait slot while manually advancing the Flow queue', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: true,
+      imagesEnabled: false,
+      galleryViewEnabled: false,
+      onlyFavorites: false,
+      flowMode: true,
+      includeLandscape: false,
+      includePortrait: true,
+      speed: 1,
+      scrubSpeedMultiplier: 4,
+      flow: {
+        activeProfileId: 'default',
+        profiles: {
+          default: {
+            id: 'default',
+            name: 'Default',
+            orderMode: 'order',
+            portraitCycles: 1,
+            landscapeCycles: 1,
+            imageIntervalSeconds: 7,
+          },
+        },
+      },
+    }));
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 1280,
+      height: 720,
+      top: 0,
+      right: 1280,
+      bottom: 720,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const assets = Array.from({ length: 3 }, (_, index) => ({
+      id: `portrait-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/portrait-${index + 1}.mp4`,
+      previewUrl: `/portrait-${index + 1}.mp4`,
+      thumbnailUrl: `/portrait-${index + 1}.png`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(assets, 0),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video[src="/portrait-1.mp4"]')).toBeTruthy());
+      expect((stage.querySelector('video[src="/portrait-1.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 0px, 0)');
+
+      fireEvent.click(screen.getByLabelText('Next Flow item'));
+      await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
+      expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(371.2px, 0px, 0)');
+
+      fireEvent.click(screen.getByLabelText('Next Flow item'));
+      await waitFor(() => expect(stage.querySelector('video[src="/portrait-3.mp4"]')).toBeTruthy());
+      expect((stage.querySelector('video[src="/portrait-3.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(742.4px, 0px, 0)');
+      expect(stage.querySelectorAll('video')).toHaveLength(3);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('slides the Flow side panel with the top controls hover state', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: true,
+      imagesEnabled: false,
+      galleryViewEnabled: false,
+      onlyFavorites: false,
+      flowMode: true,
+      includeLandscape: false,
+      includePortrait: true,
+      speed: 1,
+      scrubSpeedMultiplier: 4,
+    }));
+    const assets = [
+      {
+        id: 'portrait-video',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/portrait-video.mp4',
+        previewUrl: '/portrait-video.mp4',
+        thumbnailUrl: '/portrait-video.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+    ];
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(assets, 0),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const controlsHoverArea = screen.getByTestId('gallery-carousel-controls-hover-area');
+    const controls = screen.getByTestId('gallery-carousel-controls');
+    const panel = screen.getByTestId('gallery-flow-settings-panel');
+
+    expect(controls.className).toContain('-translate-y-full');
+    expect(panel.className).toContain('translate-x-[calc(100%+1rem)]');
+
+    fireEvent.pointerEnter(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    await waitFor(() => expect(controls.className).toContain('translate-y-0'));
+    fireEvent.click(screen.getByLabelText('Flow settings'));
+    expect(panel.className).toContain('translate-x-0');
+
+    fireEvent.pointerLeave(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    expect(controls.className).toContain('-translate-y-full');
+    expect(panel.className).toContain('translate-x-[calc(100%+1rem)]');
+  });
+
   it('forces portrait-only filtering when launched in TikTok mode', async () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: true,

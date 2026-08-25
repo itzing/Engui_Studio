@@ -29,7 +29,7 @@ Add a separate desktop-only Flow mode beside the existing Gallery Carousel. Flow
 - Photos use an image interval setting. The slider range is 5 to 10 seconds.
 - Auto-advance starts the next queue item on half of the second loop of the last played video. Consecutive photos advance by the image interval setting.
 - Pause stops queue processing only. Already mounted videos keep playing.
-- Manual previous/next places the previous/next queue item into the last active slot. If that item has a different orientation, Flow switches layout immediately and starts it in the first slot of the new layout.
+- Manual previous/next follows the slot map too: next advances to the next slot and previous moves to the previous slot. If that item has a different orientation, Flow switches layout immediately and starts it in the first slot of the new layout.
 
 ## Layout
 
@@ -41,6 +41,7 @@ Add a separate desktop-only Flow mode beside the existing Gallery Carousel. Flow
 - Landscape layout uses four slots without overlap, arranged from the center.
   - Keep media as visible as practical by width.
   - Vertical crop is allowed so the screen stays filled.
+- Flow settings slide in and out with the top controls hover state instead of staying as a static side overlay.
 
 ## Persistence
 

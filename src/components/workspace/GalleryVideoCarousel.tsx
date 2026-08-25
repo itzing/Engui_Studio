@@ -597,7 +597,11 @@ export function GalleryVideoCarousel({
     };
   }, []);
 
-  const activateFlowQueueIndex = useCallback((targetQueueIndex: number, reason: 'auto' | 'manual' | 'reset' = 'auto') => {
+  const activateFlowQueueIndex = useCallback((
+    targetQueueIndex: number,
+    reason: 'auto' | 'manual' | 'reset' = 'auto',
+    slotDirection: -1 | 0 | 1 = reason === 'reset' ? 0 : 1,
+  ) => {
     if (!flowModeRef.current) return;
     const queue = feedRef.current;
     if (queue.length === 0) return;
@@ -612,9 +616,9 @@ export function GalleryVideoCarousel({
     const currentSlotIndex = positiveModulo(flowLastSlotIndexRef.current, slotCount);
     const nextSlotIndex = shouldSwitchOrientation
       ? 0
-      : reason === 'auto'
-        ? positiveModulo(currentSlotIndex + 1, slotCount)
-        : currentSlotIndex;
+      : slotDirection === 0
+        ? currentSlotIndex
+        : positiveModulo(currentSlotIndex + slotDirection, slotCount);
     const slot = buildFlowSlot(entry, safeQueueIndex, nextSlotIndex, orientation);
     const nextSlots = shouldSwitchOrientation
       ? [slot]
@@ -656,7 +660,7 @@ export function GalleryVideoCarousel({
     pausedRef.current = false;
     setPaused(false);
     if (queue.length > 0) {
-      window.setTimeout(() => activateFlowQueueIndex(0, 'reset'), 0);
+      window.setTimeout(() => activateFlowQueueIndex(0, 'reset', 0), 0);
     }
   }, [activateFlowQueueIndex, buildFlowQueueFromSource, clearFlowAdvanceTimer]);
 
@@ -676,7 +680,7 @@ export function GalleryVideoCarousel({
       targetIndex = queue.length - 1;
     }
     if (queue.length === 0) return;
-    activateFlowQueueIndex(targetIndex, reason);
+    activateFlowQueueIndex(targetIndex, reason, delta);
   }, [activateFlowQueueIndex, buildFlowQueueFromSource]);
 
   const rebuildActiveFlowQueue = useCallback((settings: GalleryCarouselFlowSettings = flowSettingsRef.current) => {
@@ -692,7 +696,7 @@ export function GalleryVideoCarousel({
     setActiveSlots([]);
     setFeedEnded(queue.length === 0);
     if (queue.length > 0) {
-      window.setTimeout(() => activateFlowQueueIndex(0, 'reset'), 0);
+      window.setTimeout(() => activateFlowQueueIndex(0, 'reset', 0), 0);
     }
   }, [activateFlowQueueIndex, buildFlowQueueFromSource, clearFlowAdvanceTimer]);
 
@@ -2042,13 +2046,13 @@ export function GalleryVideoCarousel({
     >
       {showControls ? (
         <div
-          className="absolute left-0 right-0 top-0 z-20 min-h-20 pb-3"
+          className="absolute left-0 right-0 top-0 z-30 min-h-20 pb-3"
           data-testid="gallery-carousel-controls-hover-area"
           onPointerEnter={revealControls}
           onPointerLeave={hideControls}
         >
         <div
-          className={`flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-opacity duration-150 ${isUiHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+          className={`flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-md transition-all duration-150 ease-out ${isUiHidden ? 'pointer-events-none -translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}
           data-testid="gallery-carousel-controls"
         >
         <div className="min-w-0">
@@ -2305,12 +2309,9 @@ export function GalleryVideoCarousel({
           ) : null}
         </div>
         </div>
-        </div>
-      ) : null}
-
-      {showControls && flowMode && flowSettingsOpen ? (
+      {flowMode ? (
         <aside
-          className="absolute right-4 top-20 z-30 w-80 rounded-md border border-white/10 bg-black/80 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-md"
+          className={`absolute right-4 top-20 w-80 rounded-md border border-white/10 bg-black/80 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-md transition-all duration-150 ease-out ${flowSettingsOpen && !isUiHidden ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none translate-x-[calc(100%+1rem)] opacity-0'}`}
           data-testid="gallery-flow-settings-panel"
           onClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -2392,6 +2393,8 @@ export function GalleryVideoCarousel({
             </div>
           </div>
         </aside>
+      ) : null}
+        </div>
       ) : null}
 
       <div
