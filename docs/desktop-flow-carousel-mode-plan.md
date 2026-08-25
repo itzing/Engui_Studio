@@ -25,9 +25,9 @@ Add a separate desktop-only Flow mode beside the existing Gallery Carousel. Flow
 - Every item has a next slot according to the active orientation slot map.
 - Portrait slots: left, center, right, then left again.
 - Landscape slots: top-left, bottom-right, top-right, bottom-left, then top-left again.
-- Videos are muted, autoplayed, looped, and shown poster-first. The video loads over the poster with no loader.
+- Videos are muted, autoplayed once per Flow activation, and shown poster-first. The video loads over the poster with no loader.
 - Photos use an image interval setting. The slider range is 5 to 10 seconds.
-- Auto-advance starts the next queue item on half of the second loop of the last played video. Consecutive photos advance by the image interval setting.
+- Auto-advance starts the next queue item when the last activated Flow video ends, with a duration-based fallback timer when duration metadata is available. Consecutive photos advance by the image interval setting.
 - Pause stops queue processing only. Already mounted videos keep playing.
 - Manual previous/next follows the slot map too: next advances to the next slot and previous moves to the previous slot. If that item has a different orientation, Flow switches layout immediately and starts it in the first slot of the new layout.
 
@@ -41,7 +41,7 @@ Add a separate desktop-only Flow mode beside the existing Gallery Carousel. Flow
 - Landscape layout uses four slots without overlap, arranged from the center.
   - Keep media as visible as practical by width.
   - Vertical crop is allowed so the screen stays filled.
-- Flow settings slide in and out with the top controls hover state instead of staying as a static side overlay.
+- Flow settings slide in and out from a right-edge hover target and can also be toggled from the top controls.
 
 ## Persistence
 

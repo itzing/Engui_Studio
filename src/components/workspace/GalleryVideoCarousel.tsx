@@ -428,6 +428,7 @@ export function GalleryVideoCarousel({
   const [flowMode, setFlowMode] = useState(false);
   const [flowSettings, setFlowSettings] = useState<GalleryCarouselFlowSettings>(() => getDefaultGalleryCarouselSettings().flow);
   const [flowSettingsOpen, setFlowSettingsOpen] = useState(false);
+  const [isFlowSettingsEdgeActive, setIsFlowSettingsEdgeActive] = useState(false);
   const [flowQueueCount, setFlowQueueCount] = useState(0);
   const [flowTimingVersion, setFlowTimingVersion] = useState(0);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
@@ -1247,6 +1248,19 @@ export function GalleryVideoCarousel({
     setIsUiHidden((current) => current ? false : current);
   }, [showControls]);
 
+  const revealFlowSettingsPanel = useCallback(() => {
+    if (!flowModeRef.current) return;
+    setIsFlowSettingsEdgeActive(true);
+    setFlowSettingsOpen(true);
+    revealControls();
+  }, [revealControls]);
+
+  const hideFlowSettingsPanel = useCallback(() => {
+    setIsFlowSettingsEdgeActive(false);
+    setFlowSettingsOpen(false);
+    hideControls();
+  }, [hideControls]);
+
   const toggleTikTokActionControls = useCallback(() => {
     const currentSlot = getCurrentTikTokSlot();
     const currentAsset = currentSlot?.entry.kind === 'video' ? currentSlot.entry.asset : null;
@@ -1319,7 +1333,7 @@ export function GalleryVideoCarousel({
 
   const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement, forceInteractionRetry = false) => {
     video.muted = true;
-    video.loop = true;
+    video.loop = !(flowModeRef.current && instanceId.startsWith('flow-'));
     video.playsInline = true;
     const alreadyRequested = playRequestedVideoInstanceIdsRef.current.has(instanceId);
     const alreadyRetriedAfterInteraction = playInteractionRetryVideoInstanceIdsRef.current.has(instanceId);
@@ -1628,7 +1642,7 @@ export function GalleryVideoCarousel({
       const video = videoRefs.current[latestSlot.instanceId];
       const duration = video?.duration;
       if (!duration || !Number.isFinite(duration) || duration <= 0) return;
-      delayMs = duration * 1500;
+      delayMs = Math.max(1000, duration * 1000 + 250);
     }
 
     flowAdvanceTimeoutRef.current = window.setTimeout(() => {
@@ -1638,6 +1652,11 @@ export function GalleryVideoCarousel({
 
     return () => clearFlowAdvanceTimer();
   }, [activateFlowRelative, activeFlowProfile.imageIntervalSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, flowTimingVersion, isLoading, paused]);
+
+  const handleFlowVideoEnded = useCallback((instanceId: string) => {
+    if (!flowModeRef.current || flowLastActivatedInstanceIdRef.current !== instanceId) return;
+    activateFlowRelative(1, 'auto');
+  }, [activateFlowRelative]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (flowModeRef.current) return;
@@ -1939,6 +1958,7 @@ export function GalleryVideoCarousel({
   const canReuseTikTokToImage = activeTikTokActionAsset?.modelId === 'wan22' || activeTikTokActionAsset?.modelId === 'wan22-t2v';
   const canReuseTikTokToI2V = activeTikTokActionAsset?.modelId === 'wan22';
   const canReuseTikTokToT2V = activeTikTokActionAsset?.modelId === 'wan22-t2v';
+  const isFlowSettingsPanelVisible = flowMode && flowSettingsOpen && (!isUiHidden || isFlowSettingsEdgeActive);
 
   const handleVideosToggle = useCallback((nextEnabled: boolean) => {
     if (!nextEnabled && !imagesEnabledRef.current) return;
@@ -1970,6 +1990,7 @@ export function GalleryVideoCarousel({
       flowSourceFeedRef.current = [];
       setFlowQueueCount(0);
       setFlowSettingsOpen(false);
+      setIsFlowSettingsEdgeActive(false);
     } else {
       setFlowSettingsOpen(true);
       tiktokModeRef.current = false;
@@ -2309,91 +2330,102 @@ export function GalleryVideoCarousel({
           ) : null}
         </div>
         </div>
-      {flowMode ? (
-        <aside
-          className={`absolute right-4 top-20 w-80 rounded-md border border-white/10 bg-black/80 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-md transition-all duration-150 ease-out ${flowSettingsOpen && !isUiHidden ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none translate-x-[calc(100%+1rem)] opacity-0'}`}
-          data-testid="gallery-flow-settings-panel"
-          onClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Flow Settings</div>
-              <div className="text-xs text-white/45">{flowQueueCount} eligible items</div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md text-white/60 hover:bg-white/5 hover:text-white"
-              onClick={() => setFlowSettingsOpen(false)}
-              aria-label="Close Flow settings"
-              title="Close Flow settings"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="space-y-5">
-            <div>
-              <div className="mb-2 text-xs font-medium uppercase text-white/45">Order</div>
-              <div className="grid grid-cols-2 gap-2">
-                {(['order', 'random'] as const).map((orderMode) => (
-                  <button
-                    key={orderMode}
-                    type="button"
-                    className={`h-9 rounded-md border text-sm transition-colors ${activeFlowProfile.orderMode === orderMode ? 'border-lime-300/45 bg-lime-500/15 text-lime-100' : 'border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.07]'}`}
-                    onClick={() => updateFlowProfile({ orderMode }, { rebuildQueue: true })}
-                  >
-                    {orderMode === 'order' ? 'Order' : 'Random'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium uppercase text-white/45">Portrait cycles</span>
-                <span className="tabular-nums text-white/70">{activeFlowProfile.portraitCycles}</span>
-              </div>
-              <Slider
-                min={1}
-                max={10}
-                step={1}
-                value={[activeFlowProfile.portraitCycles]}
-                onValueChange={(value) => updateFlowProfile({ portraitCycles: value[0] || 1 }, { rebuildQueue: true })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium uppercase text-white/45">Landscape cycles</span>
-                <span className="tabular-nums text-white/70">{activeFlowProfile.landscapeCycles}</span>
-              </div>
-              <Slider
-                min={1}
-                max={10}
-                step={1}
-                value={[activeFlowProfile.landscapeCycles]}
-                onValueChange={(value) => updateFlowProfile({ landscapeCycles: value[0] || 1 }, { rebuildQueue: true })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium uppercase text-white/45">Image interval</span>
-                <span className="tabular-nums text-white/70">{activeFlowProfile.imageIntervalSeconds}s</span>
-              </div>
-              <Slider
-                min={5}
-                max={10}
-                step={1}
-                value={[activeFlowProfile.imageIntervalSeconds]}
-                onValueChange={(value) => updateFlowProfile({ imageIntervalSeconds: value[0] || 5 }, { rebuildQueue: false })}
-              />
-            </div>
-          </div>
-        </aside>
+        </div>
       ) : null}
+
+      {showControls && flowMode ? (
+        <div
+          className={`absolute bottom-0 right-0 top-0 z-20 transition-[width] duration-150 ease-out ${isFlowSettingsPanelVisible ? 'w-[22rem]' : 'w-8'}`}
+          data-testid="gallery-flow-settings-edge-hover-area"
+          onPointerEnter={revealFlowSettingsPanel}
+          onPointerLeave={hideFlowSettingsPanel}
+        >
+          <aside
+            className={`absolute right-4 top-20 w-80 rounded-md border border-white/10 bg-black/80 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-md transition-all duration-150 ease-out ${isFlowSettingsPanelVisible ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none translate-x-[calc(100%+1rem)] opacity-0'}`}
+            data-testid="gallery-flow-settings-panel"
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Flow Settings</div>
+                <div className="text-xs text-white/45">{flowQueueCount} eligible items</div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-md text-white/60 hover:bg-white/5 hover:text-white"
+                onClick={() => {
+                  setFlowSettingsOpen(false);
+                  setIsFlowSettingsEdgeActive(false);
+                }}
+                aria-label="Close Flow settings"
+                title="Close Flow settings"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <div className="mb-2 text-xs font-medium uppercase text-white/45">Order</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['order', 'random'] as const).map((orderMode) => (
+                    <button
+                      key={orderMode}
+                      type="button"
+                      className={`h-9 rounded-md border text-sm transition-colors ${activeFlowProfile.orderMode === orderMode ? 'border-lime-300/45 bg-lime-500/15 text-lime-100' : 'border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.07]'}`}
+                      onClick={() => updateFlowProfile({ orderMode }, { rebuildQueue: true })}
+                    >
+                      {orderMode === 'order' ? 'Order' : 'Random'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium uppercase text-white/45">Portrait cycles</span>
+                  <span className="tabular-nums text-white/70">{activeFlowProfile.portraitCycles}</span>
+                </div>
+                <Slider
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={[activeFlowProfile.portraitCycles]}
+                  onValueChange={(value) => updateFlowProfile({ portraitCycles: value[0] || 1 }, { rebuildQueue: true })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium uppercase text-white/45">Landscape cycles</span>
+                  <span className="tabular-nums text-white/70">{activeFlowProfile.landscapeCycles}</span>
+                </div>
+                <Slider
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={[activeFlowProfile.landscapeCycles]}
+                  onValueChange={(value) => updateFlowProfile({ landscapeCycles: value[0] || 1 }, { rebuildQueue: true })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium uppercase text-white/45">Image interval</span>
+                  <span className="tabular-nums text-white/70">{activeFlowProfile.imageIntervalSeconds}s</span>
+                </div>
+                <Slider
+                  min={5}
+                  max={10}
+                  step={1}
+                  value={[activeFlowProfile.imageIntervalSeconds]}
+                  onValueChange={(value) => updateFlowProfile({ imageIntervalSeconds: value[0] || 5 }, { rebuildQueue: false })}
+                />
+              </div>
+            </div>
+          </aside>
         </div>
       ) : null}
 
@@ -2489,7 +2521,7 @@ export function GalleryVideoCarousel({
                       src={slot.entry.asset.previewUrl || slot.entry.asset.originalUrl}
                       poster={posterUrl || undefined}
                       muted
-                      loop
+                      loop={!isFlowSlot}
                       autoPlay={isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot}
                       playsInline
                       preload={isTikTokSlot || isFlowSlot ? 'auto' : 'metadata'}
@@ -2528,6 +2560,11 @@ export function GalleryVideoCarousel({
                         }
                         if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
+                        }
+                      }}
+                      onEnded={() => {
+                        if (isFlowSlot) {
+                          handleFlowVideoEnded(slot.instanceId);
                         }
                       }}
                       className={`h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'} ${(isTikTokSlot || isFlowSlot) && !isVideoReady ? 'opacity-0' : ''}`}

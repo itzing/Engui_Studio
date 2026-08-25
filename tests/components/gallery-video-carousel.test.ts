@@ -267,7 +267,66 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
-  it('slides the Flow side panel with the top controls hover state', async () => {
+  it('auto-advances the Flow queue when the active video ends', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: true,
+      imagesEnabled: false,
+      galleryViewEnabled: false,
+      onlyFavorites: false,
+      flowMode: true,
+      includeLandscape: false,
+      includePortrait: true,
+      speed: 1,
+      scrubSpeedMultiplier: 4,
+      flow: {
+        activeProfileId: 'default',
+        profiles: {
+          default: {
+            id: 'default',
+            name: 'Default',
+            orderMode: 'order',
+            portraitCycles: 1,
+            landscapeCycles: 1,
+            imageIntervalSeconds: 7,
+          },
+        },
+      },
+    }));
+    const assets = Array.from({ length: 2 }, (_, index) => ({
+      id: `portrait-${index + 1}`,
+      workspaceId: 'ws-1',
+      type: 'video',
+      originalUrl: `/portrait-${index + 1}.mp4`,
+      previewUrl: `/portrait-${index + 1}.mp4`,
+      thumbnailUrl: `/portrait-${index + 1}.png`,
+      mediaWidth: 720,
+      mediaHeight: 1280,
+      addedToGalleryAt: `2026-07-21T06:0${index}:00Z`,
+    }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => makeCarouselWindowResponse(assets, 0),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const stage = screen.getByTestId('gallery-video-carousel');
+    const firstVideo = await waitFor(() => {
+      const video = stage.querySelector('video[src="/portrait-1.mp4"]') as HTMLVideoElement | null;
+      expect(video).toBeTruthy();
+      return video as HTMLVideoElement;
+    });
+    expect(firstVideo.loop).toBe(false);
+
+    fireEvent.ended(firstVideo);
+
+    await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
+    expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(371.2px, 0px, 0)');
+  });
+
+  it('slides the Flow side panel from the right edge hover area', async () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: true,
       imagesEnabled: false,
@@ -301,19 +360,18 @@ describe('GalleryVideoCarousel', () => {
     render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const controlsHoverArea = screen.getByTestId('gallery-carousel-controls-hover-area');
     const controls = screen.getByTestId('gallery-carousel-controls');
+    const edgeHoverArea = screen.getByTestId('gallery-flow-settings-edge-hover-area');
     const panel = screen.getByTestId('gallery-flow-settings-panel');
 
     expect(controls.className).toContain('-translate-y-full');
     expect(panel.className).toContain('translate-x-[calc(100%+1rem)]');
 
-    fireEvent.pointerEnter(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    fireEvent.pointerEnter(edgeHoverArea, { pointerId: 1, pointerType: 'mouse' });
     await waitFor(() => expect(controls.className).toContain('translate-y-0'));
-    fireEvent.click(screen.getByLabelText('Flow settings'));
     expect(panel.className).toContain('translate-x-0');
 
-    fireEvent.pointerLeave(controlsHoverArea, { pointerId: 1, pointerType: 'mouse' });
+    fireEvent.pointerLeave(edgeHoverArea, { pointerId: 1, pointerType: 'mouse' });
     expect(controls.className).toContain('-translate-y-full');
     expect(panel.className).toContain('translate-x-[calc(100%+1rem)]');
   });
