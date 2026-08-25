@@ -118,6 +118,81 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByText('8x')).toBeTruthy();
   });
 
+  it('loads the separate Flow feed mode with persisted profile settings', async () => {
+    window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
+      videosEnabled: true,
+      imagesEnabled: true,
+      galleryViewEnabled: false,
+      onlyFavorites: false,
+      flowMode: true,
+      includeLandscape: true,
+      includePortrait: true,
+      speed: 1,
+      scrubSpeedMultiplier: 4,
+      flow: {
+        activeProfileId: 'default',
+        profiles: {
+          default: {
+            id: 'default',
+            name: 'Default',
+            orderMode: 'random',
+            portraitCycles: 2,
+            landscapeCycles: 3,
+            imageIntervalSeconds: 7,
+          },
+        },
+      },
+    }));
+    const assets = [
+      {
+        id: 'portrait-video',
+        workspaceId: 'ws-1',
+        type: 'video',
+        originalUrl: '/portrait-video.mp4',
+        previewUrl: '/portrait-video.mp4',
+        thumbnailUrl: '/portrait-video.png',
+        mediaWidth: 720,
+        mediaHeight: 1280,
+        addedToGalleryAt: '2026-07-21T06:00:00Z',
+      },
+      {
+        id: 'landscape-image',
+        workspaceId: 'ws-1',
+        type: 'image',
+        originalUrl: '/landscape-image.png',
+        previewUrl: '/landscape-image.png',
+        thumbnailUrl: '/landscape-image.png',
+        mediaWidth: 1280,
+        mediaHeight: 720,
+        addedToGalleryAt: '2026-07-21T06:01:00Z',
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const search = new URLSearchParams(url.split('?')[1] || '');
+      expect(search.get('mode')).toBe('flow');
+      expect(search.get('source')).toBe('galleryOrder');
+      expect(search.get('includeVideos')).toBe('true');
+      expect(search.get('includeImages')).toBe('true');
+      return {
+        ok: true,
+        json: async () => makeCarouselWindowResponse(assets, 0),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('Flow Carousel')).toBeTruthy());
+    expect((screen.getByLabelText('Flow mode') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText('Flow settings'));
+    expect(screen.getByTestId('gallery-flow-settings-panel')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
+    expect(screen.getByText('7s')).toBeTruthy();
+  });
+
   it('forces portrait-only filtering when launched in TikTok mode', async () => {
     window.localStorage.setItem('engui.gallery.carousel.settings.ws-1', JSON.stringify({
       videosEnabled: true,

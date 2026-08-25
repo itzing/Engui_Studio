@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Clapperboard, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, Type, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, SlidersHorizontal, Type, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -9,15 +9,21 @@ import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
 import { shareGalleryAsset } from '@/lib/galleryShare';
 import {
   getDefaultGalleryCarouselSettings,
+  getActiveGalleryCarouselFlowProfile,
   readStoredGalleryCarouselSettings,
   writeStoredGalleryCarouselSettings,
+  type GalleryCarouselFlowProfileSettings,
+  type GalleryCarouselFlowSettings,
   type GalleryCarouselSettings,
 } from '@/lib/galleryCarouselSettings';
 import {
+  buildGalleryFlowQueue,
   type GalleryCarouselFeedItem,
   type GalleryCarouselRatioFilter,
+  type GalleryFlowOrientation,
   getAdjacentGalleryCarouselSlotX,
   getFullHeightGalleryCarouselSlotSize,
+  getGalleryFlowFeedEntryOrientation,
   readGalleryCarouselAssetRatio,
   shouldSpawnAdjacentGalleryCarouselSlot,
 } from '@/lib/galleryVideoCarousel';
@@ -51,6 +57,7 @@ type CarouselFeedWindowPagination = {
 type CarouselFeedWindowResponse = {
   success: boolean;
   seed?: string;
+  mode?: CarouselFeedMode;
   previous?: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>;
   current?: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset> | null;
   next?: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>;
@@ -72,6 +79,9 @@ type CarouselSlot = {
   y: number;
   width: number;
   height: number;
+  zIndex?: number;
+  flowSlotIndex?: number;
+  flowOrientation?: GalleryFlowOrientation;
   imageCycleMs?: number;
   activeImageIndex?: number;
 };
@@ -85,6 +95,7 @@ type DragState = {
 
 type CarouselMovementAxis = 'horizontal' | 'vertical';
 type CarouselFeedSource = 'galleryOrder' | 'shuffle';
+type CarouselFeedMode = 'carousel' | 'flow';
 type ResetFeedOptions = {
   pause?: boolean;
   seedNeighborCount?: number;
@@ -119,6 +130,8 @@ const GALLERY_VIEW_WINDOW_SIDE_LIMIT = 12;
 const GALLERY_VIEW_PREFETCH_LIMIT = 24;
 const SHUFFLE_WINDOW_SIDE_LIMIT = 12;
 const SHUFFLE_PREFETCH_LIMIT = 24;
+const FLOW_PORTRAIT_SLOT_COUNT = 3;
+const FLOW_LANDSCAPE_SLOT_COUNT = 4;
 
 function createCarouselShuffleSeed() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -167,6 +180,55 @@ function buildTikTokSlotSize(stage: { width: number; height: number }) {
   };
 }
 
+function positiveModulo(value: number, length: number) {
+  return ((value % length) + length) % length;
+}
+
+function getFlowSlotCount(orientation: GalleryFlowOrientation) {
+  return orientation === 'portrait' ? FLOW_PORTRAIT_SLOT_COUNT : FLOW_LANDSCAPE_SLOT_COUNT;
+}
+
+function buildFlowSlotLayout(
+  entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
+  stage: { width: number; height: number },
+  measuredRatios: Record<string, number>,
+  orientation: GalleryFlowOrientation,
+  slotIndex: number,
+) {
+  const stageWidth = Math.max(1, stage.width);
+  const stageHeight = Math.max(1, stage.height);
+  if (orientation === 'portrait') {
+    const ratio = readFeedEntryRatio(entry, measuredRatios);
+    const ratioWidth = stageHeight * (Number.isFinite(ratio) && ratio > 0 ? ratio : DEFAULT_VIDEO_RATIO);
+    const width = Math.min(stageWidth * 0.5, Math.max(ratioWidth, stageWidth * 0.42));
+    const centerX = (stageWidth - width) / 2;
+    const x = slotIndex === 0 ? 0 : slotIndex === 1 ? centerX : stageWidth - width;
+    const zIndex = slotIndex === 1 ? 1 : 2;
+    return {
+      x,
+      y: 0,
+      width,
+      height: stageHeight,
+      zIndex,
+    };
+  }
+
+  const width = stageWidth / 2;
+  const height = stageHeight / 2;
+  const positions = [
+    { x: 0, y: 0 },
+    { x: width, y: height },
+    { x: width, y: 0 },
+    { x: 0, y: height },
+  ];
+  return {
+    ...positions[positiveModulo(slotIndex, FLOW_LANDSCAPE_SLOT_COUNT)],
+    width,
+    height,
+    zIndex: 1,
+  };
+}
+
 function getSlotTrimBuffer(stage: { width: number; height: number }, isVertical: boolean) {
   if (isVertical) {
     return Math.max(stage.height * VERTICAL_SLOT_TRIM_BUFFER_STAGE_RATIO, VERTICAL_SLOT_TRIM_BUFFER_MIN_PX);
@@ -178,6 +240,7 @@ async function fetchCarouselFeedWindow(
   workspaceId: string,
   options: {
     source: CarouselFeedSource;
+    mode?: CarouselFeedMode;
     direction: 'around' | 'before' | 'after';
     cursor?: number | null;
     anchorAssetId?: string | null;
@@ -194,6 +257,7 @@ async function fetchCarouselFeedWindow(
   const search = new URLSearchParams({
     workspaceId,
     source: options.source,
+    mode: options.mode || 'carousel',
     direction: options.direction,
     includeVideos: String(options.includeVideos),
     includeImages: String(options.includeImages),
@@ -331,6 +395,14 @@ export function GalleryVideoCarousel({
   const galleryViewEnabledRef = useRef(initialGalleryViewEnabled);
   const onlyFavoritesRef = useRef(initialOnlyFavorites);
   const tiktokModeRef = useRef(initialTiktokMode);
+  const flowModeRef = useRef(false);
+  const flowSettingsRef = useRef<GalleryCarouselFlowSettings>(getDefaultGalleryCarouselSettings().flow);
+  const flowSourceFeedRef = useRef<Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>>([]);
+  const flowQueueIndexRef = useRef(0);
+  const flowOrientationRef = useRef<GalleryFlowOrientation | null>(null);
+  const flowLastSlotIndexRef = useRef(0);
+  const flowLastActivatedInstanceIdRef = useRef<string | null>(null);
+  const flowAdvanceTimeoutRef = useRef<number | null>(null);
   const tiktokSnapAnimationTimeoutRef = useRef<number | null>(null);
   const isTiktokSnapAnimatingRef = useRef(false);
   const ratioFilterRef = useRef<GalleryCarouselRatioFilter>({
@@ -353,6 +425,11 @@ export function GalleryVideoCarousel({
   const [imagesEnabled, setImagesEnabled] = useState(initialImagesEnabled);
   const [galleryViewEnabled, setGalleryViewEnabled] = useState(initialGalleryViewEnabled);
   const [onlyFavorites, setOnlyFavorites] = useState(initialOnlyFavorites);
+  const [flowMode, setFlowMode] = useState(false);
+  const [flowSettings, setFlowSettings] = useState<GalleryCarouselFlowSettings>(() => getDefaultGalleryCarouselSettings().flow);
+  const [flowSettingsOpen, setFlowSettingsOpen] = useState(false);
+  const [flowQueueCount, setFlowQueueCount] = useState(0);
+  const [flowTimingVersion, setFlowTimingVersion] = useState(0);
   const [includeLandscape, setIncludeLandscape] = useState(initialIncludeLandscape);
   const [includePortrait, setIncludePortrait] = useState(initialIncludePortrait);
   const [isLoading, setIsLoading] = useState(false);
@@ -376,6 +453,7 @@ export function GalleryVideoCarousel({
   const totalImageCount = sourceImages.length;
   const totalMediaCount = totalVideoCount + totalImageCount;
   const visibleImageSlotCount = activeSlots.filter((slot) => slot.kind === 'images').length;
+  const activeFlowProfile = useMemo(() => getActiveGalleryCarouselFlowProfile(flowSettings), [flowSettings]);
 
   useEffect(() => {
     movementAxisRef.current = movementAxis;
@@ -477,12 +555,162 @@ export function GalleryVideoCarousel({
     setPaused(nextPaused);
   }, []);
 
-  const loadAssets = useCallback(async (includeVideos: boolean, includeImages: boolean, ratioFilter: GalleryCarouselRatioFilter, onlyFavoritedAssets: boolean, useGalleryView: boolean) => {
+  const clearFlowAdvanceTimer = useCallback(() => {
+    if (flowAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(flowAdvanceTimeoutRef.current);
+      flowAdvanceTimeoutRef.current = null;
+    }
+  }, []);
+
+  const buildFlowQueueFromSource = useCallback((
+    sourceFeed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>> = flowSourceFeedRef.current,
+    settings: GalleryCarouselFlowSettings = flowSettingsRef.current,
+  ) => {
+    const profile = getActiveGalleryCarouselFlowProfile(settings);
+    return buildGalleryFlowQueue(sourceFeed, {
+      orderMode: profile.orderMode,
+      portraitCycles: profile.portraitCycles,
+      landscapeCycles: profile.landscapeCycles,
+      random: Math.random,
+    });
+  }, []);
+
+  const buildFlowSlot = useCallback((
+    entry: GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>,
+    queueIndex: number,
+    slotIndex: number,
+    orientation: GalleryFlowOrientation,
+  ): CarouselSlot => {
+    const slotSeed = slotCounterRef.current + 1;
+    slotCounterRef.current = slotSeed;
+    const layout = buildFlowSlotLayout(entry, stageSizeRef.current, measuredRatiosRef.current, orientation, slotIndex);
+    return {
+      kind: entry.kind,
+      feedIndex: queueIndex,
+      instanceId: `flow-${entry.id}-${slotSeed}-${queueIndex}-${slotIndex}`,
+      entry,
+      flowSlotIndex: slotIndex,
+      flowOrientation: orientation,
+      ...layout,
+      imageCycleMs: entry.kind === 'images' ? 0 : undefined,
+      activeImageIndex: entry.kind === 'images' ? 0 : undefined,
+    };
+  }, []);
+
+  const activateFlowQueueIndex = useCallback((targetQueueIndex: number, reason: 'auto' | 'manual' | 'reset' = 'auto') => {
+    if (!flowModeRef.current) return;
+    const queue = feedRef.current;
+    if (queue.length === 0) return;
+    const safeQueueIndex = positiveModulo(Math.floor(targetQueueIndex), queue.length);
+    const entry = queue[safeQueueIndex];
+    const orientation = getGalleryFlowFeedEntryOrientation(entry);
+    if (!orientation) return;
+
+    const currentOrientation = flowOrientationRef.current;
+    const shouldSwitchOrientation = currentOrientation !== orientation || reason === 'reset';
+    const slotCount = getFlowSlotCount(orientation);
+    const currentSlotIndex = positiveModulo(flowLastSlotIndexRef.current, slotCount);
+    const nextSlotIndex = shouldSwitchOrientation
+      ? 0
+      : reason === 'auto'
+        ? positiveModulo(currentSlotIndex + 1, slotCount)
+        : currentSlotIndex;
+    const slot = buildFlowSlot(entry, safeQueueIndex, nextSlotIndex, orientation);
+    const nextSlots = shouldSwitchOrientation
+      ? [slot]
+      : [
+          ...activeSlotsRef.current.filter((candidate) => (
+            candidate.flowOrientation === orientation && candidate.flowSlotIndex !== nextSlotIndex
+          )),
+          slot,
+        ].sort((a, b) => (a.flowSlotIndex || 0) - (b.flowSlotIndex || 0));
+
+    flowQueueIndexRef.current = safeQueueIndex;
+    flowOrientationRef.current = orientation;
+    flowLastSlotIndexRef.current = nextSlotIndex;
+    flowLastActivatedInstanceIdRef.current = slot.instanceId;
+    activeSlotsRef.current = nextSlots;
+    nextIndexRef.current = safeQueueIndex + 1;
+    clearFlowAdvanceTimer();
+    setNextIndex(nextIndexRef.current);
+    setFeedEnded(false);
+    setActiveSlots(nextSlots);
+  }, [buildFlowSlot, clearFlowAdvanceTimer]);
+
+  const resetFlowFeed = useCallback((sourceFeed: Array<GalleryCarouselFeedItem<GalleryCarouselAsset, GalleryCarouselAsset>>) => {
+    flowSourceFeedRef.current = sourceFeed;
+    const queue = buildFlowQueueFromSource(sourceFeed);
+    feedRef.current = queue;
+    activeSlotsRef.current = [];
+    flowQueueIndexRef.current = 0;
+    flowOrientationRef.current = null;
+    flowLastSlotIndexRef.current = 0;
+    flowLastActivatedInstanceIdRef.current = null;
+    nextIndexRef.current = 0;
+    clearFlowAdvanceTimer();
+    setVideoReadyInstanceIds(new Set());
+    setFlowQueueCount(queue.length);
+    setActiveSlots([]);
+    setNextIndex(0);
+    setFeedEnded(queue.length === 0);
+    pausedRef.current = false;
+    setPaused(false);
+    if (queue.length > 0) {
+      window.setTimeout(() => activateFlowQueueIndex(0, 'reset'), 0);
+    }
+  }, [activateFlowQueueIndex, buildFlowQueueFromSource, clearFlowAdvanceTimer]);
+
+  const activateFlowRelative = useCallback((delta: -1 | 1, reason: 'auto' | 'manual' = 'manual') => {
+    if (!flowModeRef.current || feedRef.current.length === 0) return;
+    let queue = feedRef.current;
+    let targetIndex = flowQueueIndexRef.current + delta;
+    const profile = getActiveGalleryCarouselFlowProfile(flowSettingsRef.current);
+    if (targetIndex >= queue.length) {
+      if (profile.orderMode === 'random') {
+        queue = buildFlowQueueFromSource();
+        feedRef.current = queue;
+        setFlowQueueCount(queue.length);
+      }
+      targetIndex = 0;
+    } else if (targetIndex < 0) {
+      targetIndex = queue.length - 1;
+    }
+    if (queue.length === 0) return;
+    activateFlowQueueIndex(targetIndex, reason);
+  }, [activateFlowQueueIndex, buildFlowQueueFromSource]);
+
+  const rebuildActiveFlowQueue = useCallback((settings: GalleryCarouselFlowSettings = flowSettingsRef.current) => {
+    const queue = buildFlowQueueFromSource(flowSourceFeedRef.current, settings);
+    feedRef.current = queue;
+    setFlowQueueCount(queue.length);
+    flowQueueIndexRef.current = 0;
+    flowOrientationRef.current = null;
+    flowLastSlotIndexRef.current = 0;
+    flowLastActivatedInstanceIdRef.current = null;
+    activeSlotsRef.current = [];
+    clearFlowAdvanceTimer();
+    setActiveSlots([]);
+    setFeedEnded(queue.length === 0);
+    if (queue.length > 0) {
+      window.setTimeout(() => activateFlowQueueIndex(0, 'reset'), 0);
+    }
+  }, [activateFlowQueueIndex, buildFlowQueueFromSource, clearFlowAdvanceTimer]);
+
+  const loadAssets = useCallback(async (
+    includeVideos: boolean,
+    includeImages: boolean,
+    ratioFilter: GalleryCarouselRatioFilter,
+    onlyFavoritedAssets: boolean,
+    useGalleryView: boolean,
+    useFlowMode = flowModeRef.current,
+  ) => {
     if (!workspaceId) {
       setSourceVideos([]);
       setSourceImages([]);
       carouselWindowPaginationRef.current = null;
       carouselShuffleSeedRef.current = null;
+      flowSourceFeedRef.current = [];
+      setFlowQueueCount(0);
       resetFeed([], 0);
       return;
     }
@@ -496,20 +724,22 @@ export function GalleryVideoCarousel({
     setNextIndex(0);
     setFeedEnded(false);
     carouselWindowPaginationRef.current = null;
+    clearFlowAdvanceTimer();
     try {
-      const source: CarouselFeedSource = useGalleryView ? 'galleryOrder' : 'shuffle';
-      const shuffleSeed = useGalleryView ? null : createCarouselShuffleSeed();
+      const source: CarouselFeedSource = useFlowMode || useGalleryView ? 'galleryOrder' : 'shuffle';
+      const shuffleSeed = source === 'shuffle' ? createCarouselShuffleSeed() : null;
       const windowData = await fetchCarouselFeedWindow(workspaceId, {
         source,
+        mode: useFlowMode ? 'flow' : 'carousel',
         direction: 'around',
-        anchorAssetId: useGalleryView ? currentGalleryAssetId : null,
+        anchorAssetId: source === 'galleryOrder' ? currentGalleryAssetId : null,
         seed: shuffleSeed,
         includeVideos,
         includeImages,
         ratioFilter,
         onlyFavorites: onlyFavoritedAssets,
-        before: useGalleryView ? GALLERY_VIEW_WINDOW_SIDE_LIMIT : SHUFFLE_WINDOW_SIDE_LIMIT,
-        after: useGalleryView ? GALLERY_VIEW_WINDOW_SIDE_LIMIT : SHUFFLE_WINDOW_SIDE_LIMIT,
+        before: useFlowMode ? 0 : useGalleryView ? GALLERY_VIEW_WINDOW_SIDE_LIMIT : SHUFFLE_WINDOW_SIDE_LIMIT,
+        after: useFlowMode ? 0 : useGalleryView ? GALLERY_VIEW_WINDOW_SIDE_LIMIT : SHUFFLE_WINDOW_SIDE_LIMIT,
         galleryOrderFilter,
       });
       const feed = [
@@ -518,7 +748,7 @@ export function GalleryVideoCarousel({
         ...(windowData.next || []),
       ];
       carouselWindowPaginationRef.current = windowData.pagination || null;
-      carouselShuffleSeedRef.current = useGalleryView ? null : (windowData.seed || shuffleSeed);
+      carouselShuffleSeedRef.current = source === 'shuffle' ? (windowData.seed || shuffleSeed) : null;
       setSourceVideos(Array.from({ length: windowData.counts?.videos || 0 }, (_, index) => ({
         id: `carousel-video-count-${index}`,
         workspaceId,
@@ -534,6 +764,12 @@ export function GalleryVideoCarousel({
         originalUrl: '',
         addedToGalleryAt: '',
       })));
+      if (useFlowMode) {
+        resetFlowFeed(feed);
+        return;
+      }
+      flowSourceFeedRef.current = [];
+      setFlowQueueCount(0);
       resetFeed(feed, windowData.previous?.length || 0, {
         pause: useGalleryView,
         seedNeighborCount: useGalleryView ? GALLERY_VIEW_INITIAL_NEIGHBOR_COUNT : undefined,
@@ -542,13 +778,15 @@ export function GalleryVideoCarousel({
       setError(loadError instanceof Error ? loadError.message : 'Failed to load gallery feed');
       carouselWindowPaginationRef.current = null;
       carouselShuffleSeedRef.current = null;
+      flowSourceFeedRef.current = [];
+      setFlowQueueCount(0);
       setSourceVideos([]);
       setSourceImages([]);
       resetFeed([], 0);
     } finally {
       setIsLoading(false);
     }
-  }, [currentGalleryAssetId, galleryOrderFilter, resetFeed, workspaceId]);
+  }, [clearFlowAdvanceTimer, currentGalleryAssetId, galleryOrderFilter, resetFeed, resetFlowFeed, workspaceId]);
 
   const persistSettings = useCallback((overrides: Partial<GalleryCarouselSettings> = {}) => {
     writeStoredGalleryCarouselSettings(workspaceId, {
@@ -557,10 +795,12 @@ export function GalleryVideoCarousel({
       galleryViewEnabled: galleryViewEnabledRef.current,
       onlyFavorites: onlyFavoritesRef.current,
       tiktokMode: tiktokModeRef.current,
+      flowMode: flowModeRef.current,
       includeLandscape: ratioFilterRef.current.includeLandscape,
       includePortrait: ratioFilterRef.current.includePortrait,
       speed: speedRef.current,
       scrubSpeedMultiplier: scrubSpeedMultiplierRef.current,
+      flow: flowSettingsRef.current,
       ...overrides,
     });
   }, [workspaceId]);
@@ -581,6 +821,7 @@ export function GalleryVideoCarousel({
       ? {
           ...storedSettings,
           tiktokMode: true,
+          flowMode: false,
           videosEnabled: true,
           imagesEnabled: false,
           includeLandscape: false,
@@ -600,6 +841,10 @@ export function GalleryVideoCarousel({
     onlyFavoritesRef.current = effectiveSettings.onlyFavorites;
     setOnlyFavorites(effectiveSettings.onlyFavorites);
     tiktokModeRef.current = effectiveSettings.tiktokMode;
+    flowModeRef.current = effectiveSettings.flowMode;
+    setFlowMode(effectiveSettings.flowMode);
+    flowSettingsRef.current = effectiveSettings.flow;
+    setFlowSettings(effectiveSettings.flow);
     ratioFilterRef.current = nextRatioFilter;
     setIncludeLandscape(effectiveSettings.includeLandscape);
     setIncludePortrait(effectiveSettings.includePortrait);
@@ -607,7 +852,7 @@ export function GalleryVideoCarousel({
     setSpeed(effectiveSettings.speed);
     scrubSpeedMultiplierRef.current = effectiveSettings.scrubSpeedMultiplier;
     setScrubSpeedMultiplier(effectiveSettings.scrubSpeedMultiplier);
-    void loadAssets(effectiveSettings.videosEnabled, effectiveSettings.imagesEnabled, nextRatioFilter, effectiveSettings.onlyFavorites, effectiveSettings.galleryViewEnabled);
+    void loadAssets(effectiveSettings.videosEnabled, effectiveSettings.imagesEnabled, nextRatioFilter, effectiveSettings.onlyFavorites, effectiveSettings.galleryViewEnabled, effectiveSettings.flowMode);
   }, [initialGalleryViewEnabled, initialImagesEnabled, initialIncludeLandscape, initialIncludePortrait, initialOnlyFavorites, initialScrubSpeedMultiplier, initialSpeed, initialTiktokMode, initialVideosEnabled, loadAssets, workspaceId]);
 
   useEffect(() => {
@@ -636,6 +881,7 @@ export function GalleryVideoCarousel({
 
   const extendCarouselFeedWindow = useCallback(async (direction: 'before' | 'after') => {
     if (!workspaceId) return;
+    if (flowModeRef.current) return;
     const pagination = carouselWindowPaginationRef.current;
     if (!pagination) return;
     const source: CarouselFeedSource = galleryViewEnabledRef.current ? 'galleryOrder' : 'shuffle';
@@ -1359,7 +1605,38 @@ export function GalleryVideoCarousel({
     };
   }, []);
 
+  useEffect(() => {
+    return () => clearFlowAdvanceTimer();
+  }, [clearFlowAdvanceTimer]);
+
+  useEffect(() => {
+    clearFlowAdvanceTimer();
+    if (!flowMode || paused || isLoading || feedRef.current.length <= 1) return;
+
+    const latestInstanceId = flowLastActivatedInstanceIdRef.current;
+    const latestSlot = latestInstanceId
+      ? activeSlots.find((slot) => slot.instanceId === latestInstanceId)
+      : activeSlots[activeSlots.length - 1] || null;
+    if (!latestSlot) return;
+
+    let delayMs = activeFlowProfile.imageIntervalSeconds * 1000;
+    if (latestSlot.entry.kind === 'video') {
+      const video = videoRefs.current[latestSlot.instanceId];
+      const duration = video?.duration;
+      if (!duration || !Number.isFinite(duration) || duration <= 0) return;
+      delayMs = duration * 1500;
+    }
+
+    flowAdvanceTimeoutRef.current = window.setTimeout(() => {
+      flowAdvanceTimeoutRef.current = null;
+      activateFlowRelative(1, 'auto');
+    }, delayMs);
+
+    return () => clearFlowAdvanceTimer();
+  }, [activateFlowRelative, activeFlowProfile.imageIntervalSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, flowTimingVersion, isLoading, paused]);
+
   const manualScrubTape = useCallback((deltaMain: number) => {
+    if (flowModeRef.current) return;
     if (!Number.isFinite(deltaMain) || deltaMain === 0 || isLoading || totalMediaCount === 0) return;
     if (activeSlotsRef.current.length === 0) {
       spawnNext();
@@ -1409,6 +1686,10 @@ export function GalleryVideoCarousel({
     dragState.hasDragged = true;
     dragState.lastMain = pointerMain;
     setIsDragging(true);
+    if (flowModeRef.current) {
+      event.preventDefault();
+      return;
+    }
     if (tiktokModeRef.current) {
       hideTikTokActionControls();
       scrubTikTokSlots(deltaMain);
@@ -1464,6 +1745,10 @@ export function GalleryVideoCarousel({
 
       if (feedRef.current.length > 0) {
         if (tiktokModeRef.current) {
+          rafRef.current = window.requestAnimationFrame(frame);
+          return;
+        }
+        if (flowModeRef.current) {
           rafRef.current = window.requestAnimationFrame(frame);
           return;
         }
@@ -1529,6 +1814,11 @@ export function GalleryVideoCarousel({
 
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
+        if (flowModeRef.current) {
+          unlockVideoPlayback();
+          activateFlowRelative(event.key === 'ArrowRight' ? 1 : -1, 'manual');
+          return;
+        }
         keyboardScrubDirectionRef.current = event.key === 'ArrowRight' ? 1 : -1;
         return;
       }
@@ -1557,12 +1847,22 @@ export function GalleryVideoCarousel({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardControls, isLoading, totalMediaCount, unlockVideoPlayback]);
+  }, [activateFlowRelative, enableKeyboardControls, isLoading, totalMediaCount, unlockVideoPlayback]);
 
   useEffect(() => {
     if (activeSlotsRef.current.length === 0) return;
     const stage = stageSizeRef.current;
     activeSlotsRef.current = activeSlotsRef.current.map((slot) => {
+      if (flowModeRef.current && slot.flowOrientation) {
+        const layout = buildFlowSlotLayout(
+          slot.entry,
+          stage,
+          measuredRatios,
+          slot.flowOrientation,
+          slot.flowSlotIndex || 0,
+        );
+        return { ...slot, ...layout };
+      }
       const size = tiktokModeRef.current
         ? buildTikTokSlotSize(stage)
         : buildSlotSize(slot.entry, stage, measuredRatios, movementAxisRef.current);
@@ -1613,12 +1913,15 @@ export function GalleryVideoCarousel({
     if (isLoading) return 'Loading carousel feed';
     if (error) return 'Unable to load feed';
     if (totalMediaCount === 0) return onlyFavorites ? 'No selected favorite gallery media' : 'No selected gallery media';
+    if (flowMode && flowQueueCount === 0) return 'No Flow media with known portrait or landscape shape';
+    if (flowMode && paused) return 'Flow paused';
+    if (flowMode) return `${activeSlots.length} visible · ${flowQueueCount} in Flow queue`;
     if (feedEnded) return 'End of feed';
     if (paused) return 'Movement paused';
     if (isLoadingWindow) return 'Loading nearby carousel media';
     if (imagesEnabled) return `${visibleCount} slots · ${remainingCount} queued · ${visibleImageSlotCount} image slots`;
     return `${visibleCount} playing · ${remainingCount} queued`;
-  }, [error, feedEnded, imagesEnabled, isLoading, isLoadingWindow, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
+  }, [activeSlots.length, error, feedEnded, flowMode, flowQueueCount, imagesEnabled, isLoading, isLoadingWindow, onlyFavorites, paused, remainingCount, totalMediaCount, visibleCount, visibleImageSlotCount]);
   const activeTikTokActionSlot = useMemo(() => {
     if (!tiktokModeRef.current || !areTikTokActionControlsVisible || activeSlots.length === 0) return null;
     const centeredSlot = activeSlots.reduce((closestSlot, slot) => {
@@ -1655,6 +1958,50 @@ export function GalleryVideoCarousel({
     persistSettings({ galleryViewEnabled: nextEnabled });
     void loadAssets(videosEnabledRef.current, imagesEnabledRef.current, ratioFilterRef.current, onlyFavoritesRef.current, nextEnabled);
   }, [loadAssets, persistSettings]);
+
+  const handleFlowModeToggle = useCallback((nextEnabled: boolean) => {
+    setFlowMode(nextEnabled);
+    flowModeRef.current = nextEnabled;
+    if (!nextEnabled) {
+      flowSourceFeedRef.current = [];
+      setFlowQueueCount(0);
+      setFlowSettingsOpen(false);
+    } else {
+      setFlowSettingsOpen(true);
+      tiktokModeRef.current = false;
+    }
+    persistSettings({ flowMode: nextEnabled, tiktokMode: nextEnabled ? false : tiktokModeRef.current });
+    void loadAssets(
+      videosEnabledRef.current,
+      imagesEnabledRef.current,
+      ratioFilterRef.current,
+      onlyFavoritesRef.current,
+      galleryViewEnabledRef.current,
+      nextEnabled,
+    );
+  }, [loadAssets, persistSettings]);
+
+  const updateFlowProfile = useCallback((updates: Partial<GalleryCarouselFlowProfileSettings>, options: { rebuildQueue?: boolean } = {}) => {
+    const currentSettings = flowSettingsRef.current;
+    const currentProfile = getActiveGalleryCarouselFlowProfile(currentSettings);
+    const nextProfile = {
+      ...currentProfile,
+      ...updates,
+    };
+    const nextSettings: GalleryCarouselFlowSettings = {
+      ...currentSettings,
+      profiles: {
+        ...currentSettings.profiles,
+        [currentProfile.id]: nextProfile,
+      },
+    };
+    flowSettingsRef.current = nextSettings;
+    setFlowSettings(nextSettings);
+    persistSettings({ flow: nextSettings });
+    if (flowModeRef.current && options.rebuildQueue !== false) {
+      rebuildActiveFlowQueue(nextSettings);
+    }
+  }, [persistSettings, rebuildActiveFlowQueue]);
 
   const handleOnlyFavoritesToggle = useCallback((nextEnabled: boolean) => {
     setOnlyFavorites(nextEnabled);
@@ -1706,7 +2053,7 @@ export function GalleryVideoCarousel({
         >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold text-white">Video Carousel</div>
+            <div className="text-sm font-semibold text-white">{flowMode ? 'Flow Carousel' : 'Video Carousel'}</div>
             {paused ? (
               <div
                 className="inline-flex h-6 items-center gap-1.5 rounded-md border border-amber-300/25 bg-amber-400/10 px-2 text-xs font-medium text-amber-100"
@@ -1763,6 +2110,20 @@ export function GalleryVideoCarousel({
               aria-label="Gallery View"
             />
             Gallery View
+          </label>
+          <label
+            className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${flowMode ? 'border-lime-400/40 bg-lime-500/10 text-lime-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={flowMode}
+              disabled={isLoading || initialTiktokMode}
+              onChange={(event) => handleFlowModeToggle(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-lime-400"
+              aria-label="Flow mode"
+            />
+            Flow
           </label>
           <label
             className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs transition-colors ${includeLandscape ? 'border-sky-400/35 bg-sky-500/10 text-sky-100' : 'border-white/10 bg-white/[0.03] text-white/60'}`}
@@ -1831,6 +2192,71 @@ export function GalleryVideoCarousel({
             />
             <span className="w-9 text-right text-xs tabular-nums text-white/55">{scrubSpeedMultiplier.toFixed(0)}x</span>
           </div>
+          {flowMode ? (
+            <div className="flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] p-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md text-white/70 hover:bg-white/5 hover:text-white"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  unlockVideoPlayback();
+                  activateFlowRelative(-1, 'manual');
+                }}
+                disabled={isLoading || flowQueueCount === 0}
+                aria-label="Previous Flow item"
+                title="Previous Flow item"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md text-white/70 hover:bg-white/5 hover:text-white"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setPaused((current) => {
+                    const next = !current;
+                    pausedRef.current = next;
+                    return next;
+                  });
+                }}
+                disabled={isLoading || flowQueueCount === 0}
+                aria-label={paused ? 'Resume Flow queue' : 'Pause Flow queue'}
+                title={paused ? 'Resume Flow queue' : 'Pause Flow queue'}
+              >
+                {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md text-white/70 hover:bg-white/5 hover:text-white"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  unlockVideoPlayback();
+                  activateFlowRelative(1, 'manual');
+                }}
+                disabled={isLoading || flowQueueCount === 0}
+                aria-label="Next Flow item"
+                title="Next Flow item"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-7 w-7 rounded-md text-white/70 hover:bg-white/5 hover:text-white ${flowSettingsOpen ? 'bg-white/10 text-white' : ''}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setFlowSettingsOpen((current) => !current);
+                }}
+                aria-label="Flow settings"
+                title="Flow settings"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"
@@ -1882,6 +2308,92 @@ export function GalleryVideoCarousel({
         </div>
       ) : null}
 
+      {showControls && flowMode && flowSettingsOpen ? (
+        <aside
+          className="absolute right-4 top-20 z-30 w-80 rounded-md border border-white/10 bg-black/80 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-md"
+          data-testid="gallery-flow-settings-panel"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Flow Settings</div>
+              <div className="text-xs text-white/45">{flowQueueCount} eligible items</div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md text-white/60 hover:bg-white/5 hover:text-white"
+              onClick={() => setFlowSettingsOpen(false)}
+              aria-label="Close Flow settings"
+              title="Close Flow settings"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <div className="mb-2 text-xs font-medium uppercase text-white/45">Order</div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['order', 'random'] as const).map((orderMode) => (
+                  <button
+                    key={orderMode}
+                    type="button"
+                    className={`h-9 rounded-md border text-sm transition-colors ${activeFlowProfile.orderMode === orderMode ? 'border-lime-300/45 bg-lime-500/15 text-lime-100' : 'border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.07]'}`}
+                    onClick={() => updateFlowProfile({ orderMode }, { rebuildQueue: true })}
+                  >
+                    {orderMode === 'order' ? 'Order' : 'Random'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium uppercase text-white/45">Portrait cycles</span>
+                <span className="tabular-nums text-white/70">{activeFlowProfile.portraitCycles}</span>
+              </div>
+              <Slider
+                min={1}
+                max={10}
+                step={1}
+                value={[activeFlowProfile.portraitCycles]}
+                onValueChange={(value) => updateFlowProfile({ portraitCycles: value[0] || 1 }, { rebuildQueue: true })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium uppercase text-white/45">Landscape cycles</span>
+                <span className="tabular-nums text-white/70">{activeFlowProfile.landscapeCycles}</span>
+              </div>
+              <Slider
+                min={1}
+                max={10}
+                step={1}
+                value={[activeFlowProfile.landscapeCycles]}
+                onValueChange={(value) => updateFlowProfile({ landscapeCycles: value[0] || 1 }, { rebuildQueue: true })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium uppercase text-white/45">Image interval</span>
+                <span className="tabular-nums text-white/70">{activeFlowProfile.imageIntervalSeconds}s</span>
+              </div>
+              <Slider
+                min={5}
+                max={10}
+                step={1}
+                value={[activeFlowProfile.imageIntervalSeconds]}
+                onValueChange={(value) => updateFlowProfile({ imageIntervalSeconds: value[0] || 5 }, { rebuildQueue: false })}
+              />
+            </div>
+          </div>
+        </aside>
+      ) : null}
+
       <div
         ref={stageRef}
         data-testid="gallery-video-carousel"
@@ -1918,14 +2430,18 @@ export function GalleryVideoCarousel({
                 }, activeSlots[0]).feedIndex
               : null;
             const isTikTokSlot = tiktokModeRef.current;
+            const isFlowSlot = flowMode && slot.instanceId.startsWith('flow-');
             const isTikTokCurrentSlot = !isTikTokSlot || Math.abs(slot.y) < 1;
             const tiktokDistanceFromCurrent = currentTikTokFeedIndex === null ? 0 : Math.abs(slot.feedIndex - currentTikTokFeedIndex);
-            const shouldRenderVideo = !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
+            const shouldRenderVideo = isFlowSlot || !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
             const isVideoReady = videoReadyInstanceIds.has(slot.instanceId);
             const posterUrl = slot.entry.kind === 'video'
-              ? (isTikTokSlot ? readTikTokVideoPosterUrl(slot.entry.asset) : slot.entry.asset.thumbnailUrl || null)
+              ? (isTikTokSlot || isFlowSlot ? readTikTokVideoPosterUrl(slot.entry.asset) || slot.entry.asset.thumbnailUrl || null : slot.entry.asset.thumbnailUrl || null)
               : null;
-            const shouldShowPosterLayer = isTikTokSlot && Boolean(posterUrl) && (!shouldRenderVideo || !isVideoReady);
+            const shouldShowPosterLayer = Boolean(posterUrl) && (
+              (isTikTokSlot && (!shouldRenderVideo || !isVideoReady))
+              || (isFlowSlot && !isVideoReady)
+            );
             const shouldShowLoadingSpinner = isTikTokSlot && shouldRenderVideo && !isVideoReady;
             const shouldShowManualRetry = isTikTokSlot && isTikTokCurrentSlot && shouldRenderVideo && !isVideoReady && tiktokVideoRetryExhaustedInstanceIds.has(slot.instanceId);
             const loadProgress = Math.max(0.08, Math.min(0.98, videoLoadProgress[slot.instanceId] || 0));
@@ -1937,6 +2453,7 @@ export function GalleryVideoCarousel({
                 width: `${slot.width}px`,
                 height: `${slot.height}px`,
                 transform: `translate3d(${slot.x}px, ${slot.y}px, 0)`,
+                zIndex: slot.zIndex,
                 transition: isTikTokSlot && isTiktokSnapAnimating ? `transform ${TIKTOK_SNAP_ANIMATION_MS}ms ease-out` : undefined,
               }}
             >
@@ -1948,10 +2465,10 @@ export function GalleryVideoCarousel({
                       ref={(node) => {
                         if (node) {
                           videoRefs.current[slot.instanceId] = node;
-                          if (isTikTokSlot && node.preload !== 'auto') {
+                          if ((isTikTokSlot || isFlowSlot) && node.preload !== 'auto') {
                             node.preload = 'auto';
                           }
-                          if (isTikTokSlot && node.readyState === 0 && !preloadRequestedVideoInstanceIdsRef.current.has(slot.instanceId)) {
+                          if ((isTikTokSlot || isFlowSlot) && node.readyState === 0 && !preloadRequestedVideoInstanceIdsRef.current.has(slot.instanceId)) {
                             preloadRequestedVideoInstanceIdsRef.current.add(slot.instanceId);
                             try {
                               node.load();
@@ -1959,7 +2476,7 @@ export function GalleryVideoCarousel({
                               // Browsers may refuse explicit preload in constrained environments; the preload hint still applies.
                             }
                           }
-                          if (isTikTokCurrentSlot || !isTikTokSlot) {
+                          if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                             requestVideoPlayback(slot.instanceId, node);
                           }
                         } else {
@@ -1970,14 +2487,17 @@ export function GalleryVideoCarousel({
                       poster={posterUrl || undefined}
                       muted
                       loop
-                      autoPlay={isTikTokCurrentSlot || !isTikTokSlot}
+                      autoPlay={isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot}
                       playsInline
-                      preload={isTikTokSlot ? 'auto' : 'metadata'}
+                      preload={isTikTokSlot || isFlowSlot ? 'auto' : 'metadata'}
                       onLoadedMetadata={(event) => {
                         if (slot.entry.kind !== 'video') return;
                         handleMetadata(slot.entry.asset, event.currentTarget);
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
-                        if (isTikTokCurrentSlot || !isTikTokSlot) {
+                        if (isFlowSlot) {
+                          setFlowTimingVersion((version) => version + 1);
+                        }
+                        if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
@@ -1990,18 +2510,24 @@ export function GalleryVideoCarousel({
                       onCanPlay={(event) => {
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
-                        if (isTikTokCurrentSlot || !isTikTokSlot) {
+                        if (isFlowSlot) {
+                          setFlowTimingVersion((version) => version + 1);
+                        }
+                        if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
                       onLoadedData={(event) => {
                         updateVideoLoadProgress(slot.instanceId, event.currentTarget);
                         markVideoReady(slot.instanceId);
-                        if (isTikTokCurrentSlot || !isTikTokSlot) {
+                        if (isFlowSlot) {
+                          setFlowTimingVersion((version) => version + 1);
+                        }
+                        if (isFlowSlot || isTikTokCurrentSlot || !isTikTokSlot) {
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
-                      className={`h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'} ${isTikTokSlot && !isVideoReady ? 'opacity-0' : ''}`}
+                      className={`h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'} ${(isTikTokSlot || isFlowSlot) && !isVideoReady ? 'opacity-0' : ''}`}
                     />
                   ) : null}
                   {shouldShowPosterLayer && posterUrl ? (
@@ -2010,7 +2536,7 @@ export function GalleryVideoCarousel({
                       src={posterUrl}
                       alt=""
                       aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"
+                      className={`pointer-events-none absolute inset-0 z-10 h-full w-full ${isTikTokSlot ? 'object-contain' : 'object-cover'}`}
                       draggable={false}
                       data-testid="gallery-tiktok-video-poster"
                     />
@@ -2077,6 +2603,12 @@ export function GalleryVideoCarousel({
             <div className="absolute inset-0 flex items-center justify-center p-6">
               <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">
                 {onlyFavorites ? 'No selected favorite gallery media in this workspace.' : 'No selected gallery media in this workspace.'}
+              </div>
+            </div>
+          ) : flowMode && flowQueueCount === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="rounded-md border border-dashed border-white/15 px-5 py-4 text-sm text-white/55">
+                No Flow media with known portrait or landscape shape.
               </div>
             </div>
           ) : feedEnded ? (

@@ -34,6 +34,15 @@ export type GalleryCarouselRatioFilter = {
   includePortrait: boolean;
 };
 
+export type GalleryFlowOrientation = 'landscape' | 'portrait';
+
+export type GalleryFlowQueueOptions = {
+  orderMode?: 'order' | 'random';
+  portraitCycles?: number;
+  landscapeCycles?: number;
+  random?: () => number;
+};
+
 export const GALLERY_CAROUSEL_IMAGES_PER_SLOT = 5;
 export const GALLERY_CAROUSEL_VIDEOS_PER_IMAGE_SLOT = 2;
 
@@ -210,7 +219,7 @@ export function spreadShuffleGalleryVideoFeed<T extends { id: string; galleryOrd
   return repairGalleryOrderNeighbors(result, getMinimumGalleryOrderDistance(sorted.length), random);
 }
 
-function readKnownGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike): number | null {
+export function readKnownGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike): number | null {
   if (asset.mediaWidth && asset.mediaHeight && asset.mediaWidth > 0 && asset.mediaHeight > 0) {
     return asset.mediaWidth / asset.mediaHeight;
   }
@@ -224,6 +233,70 @@ export function readGalleryCarouselAssetRatio(asset: GalleryCarouselMediaLike, f
 
 export function getGalleryCarouselAssetOrientation(asset: GalleryCarouselMediaLike, fallbackRatio = 9 / 16): 'landscape' | 'portrait' {
   return readGalleryCarouselAssetRatio(asset, fallbackRatio) >= 1 ? 'landscape' : 'portrait';
+}
+
+export function getGalleryFlowAssetOrientation(asset: GalleryCarouselMediaLike): GalleryFlowOrientation | null {
+  const ratio = readKnownGalleryCarouselAssetRatio(asset);
+  if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return null;
+  if (Math.abs(ratio - 1) < 0.001) return null;
+  return ratio > 1 ? 'landscape' : 'portrait';
+}
+
+export function getGalleryFlowFeedEntryOrientation<TVideo extends GalleryCarouselMediaLike, TImage extends GalleryCarouselMediaLike>(
+  entry: GalleryCarouselFeedItem<TVideo, TImage>,
+): GalleryFlowOrientation | null {
+  if (entry.kind === 'video') {
+    return getGalleryFlowAssetOrientation(entry.asset);
+  }
+  if (Number.isFinite(entry.aspectRatio) && entry.aspectRatio > 0 && Math.abs(entry.aspectRatio - 1) >= 0.001) {
+    return entry.aspectRatio > 1 ? 'landscape' : 'portrait';
+  }
+  const firstImage = entry.images[0];
+  return firstImage ? getGalleryFlowAssetOrientation(firstImage) : null;
+}
+
+export function buildGalleryFlowQueue<TVideo extends GalleryCarouselMediaLike, TImage extends GalleryCarouselMediaLike>(
+  entries: Array<GalleryCarouselFeedItem<TVideo, TImage>>,
+  options: GalleryFlowQueueOptions = {},
+): Array<GalleryCarouselFeedItem<TVideo, TImage>> {
+  const {
+    orderMode = 'order',
+    portraitCycles = 1,
+    landscapeCycles = 1,
+    random = Math.random,
+  } = options;
+  const portraitBlockSize = Math.max(1, Math.floor(portraitCycles)) * 3;
+  const landscapeBlockSize = Math.max(1, Math.floor(landscapeCycles)) * 4;
+  const portraitEntries: Array<GalleryCarouselFeedItem<TVideo, TImage>> = [];
+  const landscapeEntries: Array<GalleryCarouselFeedItem<TVideo, TImage>> = [];
+
+  entries.forEach((entry) => {
+    const orientation = getGalleryFlowFeedEntryOrientation(entry);
+    if (orientation === 'portrait') {
+      portraitEntries.push(entry);
+    } else if (orientation === 'landscape') {
+      landscapeEntries.push(entry);
+    }
+  });
+
+  const orderedPortraitEntries = orderMode === 'random' ? shuffleGalleryVideoFeed(portraitEntries, random) : portraitEntries;
+  const orderedLandscapeEntries = orderMode === 'random' ? shuffleGalleryVideoFeed(landscapeEntries, random) : landscapeEntries;
+  const queue: Array<GalleryCarouselFeedItem<TVideo, TImage>> = [];
+  let portraitIndex = 0;
+  let landscapeIndex = 0;
+
+  while (portraitIndex < orderedPortraitEntries.length || landscapeIndex < orderedLandscapeEntries.length) {
+    if (portraitIndex < orderedPortraitEntries.length) {
+      queue.push(...orderedPortraitEntries.slice(portraitIndex, portraitIndex + portraitBlockSize));
+      portraitIndex += portraitBlockSize;
+    }
+    if (landscapeIndex < orderedLandscapeEntries.length) {
+      queue.push(...orderedLandscapeEntries.slice(landscapeIndex, landscapeIndex + landscapeBlockSize));
+      landscapeIndex += landscapeBlockSize;
+    }
+  }
+
+  return queue;
 }
 
 export function matchesGalleryCarouselRatioFilter(

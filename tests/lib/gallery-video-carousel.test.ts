@@ -4,7 +4,9 @@ import {
   aspectRatioFromDimensions,
   buildGalleryCarouselFeed,
   buildGalleryCarouselImageSlots,
+  buildGalleryFlowQueue,
   getGalleryCarouselAssetOrientation,
+  getGalleryFlowFeedEntryOrientation,
   getAdjacentGalleryCarouselSlotX,
   getFullHeightGalleryCarouselSlotSize,
   matchesGalleryCarouselRatioFilter,
@@ -181,5 +183,56 @@ describe('gallery video carousel helpers', () => {
       height: 720,
       y: 0,
     });
+  });
+
+  it('builds Flow queues in portrait and landscape blocks while excluding square and unknown assets', () => {
+    const entries = [
+      { kind: 'video' as const, id: 'portrait-1', asset: { id: 'portrait-1', mediaWidth: 720, mediaHeight: 1280 } },
+      { kind: 'video' as const, id: 'landscape-1', asset: { id: 'landscape-1', mediaWidth: 1280, mediaHeight: 720 } },
+      { kind: 'images' as const, id: 'portrait-image', images: [{ id: 'portrait-image', mediaWidth: 832, mediaHeight: 1216 }], aspectRatio: 832 / 1216 },
+      { kind: 'video' as const, id: 'square', asset: { id: 'square', mediaWidth: 1024, mediaHeight: 1024 } },
+      { kind: 'video' as const, id: 'unknown', asset: { id: 'unknown' } },
+      { kind: 'video' as const, id: 'portrait-2', asset: { id: 'portrait-2', mediaWidth: 768, mediaHeight: 1344 } },
+      { kind: 'video' as const, id: 'landscape-2', asset: { id: 'landscape-2', mediaWidth: 1920, mediaHeight: 1080 } },
+    ];
+
+    const queue = buildGalleryFlowQueue(entries, {
+      portraitCycles: 1,
+      landscapeCycles: 1,
+      orderMode: 'order',
+    });
+
+    expect(getGalleryFlowFeedEntryOrientation(entries[3])).toBeNull();
+    expect(getGalleryFlowFeedEntryOrientation(entries[4])).toBeNull();
+    expect(queue.map((entry) => entry.id)).toEqual([
+      'portrait-1',
+      'portrait-image',
+      'portrait-2',
+      'landscape-1',
+      'landscape-2',
+    ]);
+  });
+
+  it('uses Flow random ordering independently inside each orientation pool', () => {
+    const entries = [
+      { kind: 'video' as const, id: 'portrait-1', asset: { id: 'portrait-1', mediaWidth: 720, mediaHeight: 1280 } },
+      { kind: 'video' as const, id: 'portrait-2', asset: { id: 'portrait-2', mediaWidth: 720, mediaHeight: 1280 } },
+      { kind: 'video' as const, id: 'landscape-1', asset: { id: 'landscape-1', mediaWidth: 1280, mediaHeight: 720 } },
+      { kind: 'video' as const, id: 'landscape-2', asset: { id: 'landscape-2', mediaWidth: 1280, mediaHeight: 720 } },
+    ];
+
+    const queue = buildGalleryFlowQueue(entries, {
+      orderMode: 'random',
+      portraitCycles: 1,
+      landscapeCycles: 1,
+      random: () => 0,
+    });
+
+    expect(queue.map((entry) => entry.id)).toEqual([
+      'portrait-2',
+      'portrait-1',
+      'landscape-2',
+      'landscape-1',
+    ]);
   });
 });

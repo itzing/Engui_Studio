@@ -89,6 +89,38 @@ describe('GET /api/carousel/feed-window', () => {
     });
   });
 
+  it('returns individual gallery items for Flow mode without grouping images into carousel slots', async () => {
+    mockPrisma.galleryAsset.findMany.mockResolvedValue([
+      makeAsset('video-portrait', 1, {
+        type: 'video',
+        generationSnapshot: JSON.stringify({ width: 720, height: 1280 }),
+      }),
+      makeAsset('image-portrait', 2, {
+        type: 'image',
+        originalUrl: '/image-portrait.png',
+        previewUrl: '/image-portrait.png',
+        thumbnailUrl: '/image-portrait.png',
+        generationSnapshot: JSON.stringify({ width: 832, height: 1216 }),
+      }),
+    ]);
+
+    const response = await GET(new Request('http://localhost/api/carousel/feed-window?workspaceId=ws-1&source=galleryOrder&mode=flow&includeVideos=true&includeImages=true&includeLandscape=false&includePortrait=true') as any);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.mode).toBe('flow');
+    expect(json.current.id).toBe('video-portrait');
+    expect(json.next.map((entry: any) => entry.id)).toEqual(['image-portrait']);
+    expect(json.next[0]).toMatchObject({
+      kind: 'images',
+      images: [expect.objectContaining({ id: 'image-portrait' })],
+    });
+    expect(json.pagination).toMatchObject({
+      totalCount: 2,
+      hasAfter: false,
+    });
+  });
+
   it('resolves a non-favorite anchor to the nearest favorite without falling back to the first favorite', async () => {
     mockPrisma.galleryAsset.findMany.mockResolvedValue([
       makeAsset('video-1', 1, { favorited: true }),

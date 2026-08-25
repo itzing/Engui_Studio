@@ -298,12 +298,16 @@ export async function GET(request: NextRequest) {
     const tokens = Array.from(new Set(q.split(/\s+/).map(token => token.trim()).filter(Boolean)));
     const sort = searchParams.get('sort') || 'newest';
     const seed = normalizeSeed(searchParams.get('seed'));
+    const mode = searchParams.get('mode') || 'carousel';
 
     if (!workspaceId) {
       return NextResponse.json({ success: false, error: 'workspaceId is required' }, { status: 400 });
     }
     if (source !== 'galleryOrder' && source !== 'shuffle') {
       return NextResponse.json({ success: false, error: 'Unsupported carousel feed source' }, { status: 400 });
+    }
+    if (mode !== 'carousel' && mode !== 'flow') {
+      return NextResponse.json({ success: false, error: 'Unsupported carousel feed mode' }, { status: 400 });
     }
     if (!['around', 'before', 'after'].includes(direction)) {
       return NextResponse.json({ success: false, error: 'Unsupported carousel window direction' }, { status: 400 });
@@ -360,6 +364,34 @@ export async function GET(request: NextRequest) {
       acc.total += 1;
       return acc;
     }, { videos: 0, images: 0, total: 0 });
+
+    if (mode === 'flow') {
+      const feed = filteredAssets.map(({ asset }) => toFeedItem(asset));
+      return NextResponse.json({
+        success: true,
+        source,
+        mode,
+        direction,
+        previous: [],
+        current: feed[0] || null,
+        next: feed.slice(1),
+        pagination: {
+          totalCount: feed.length,
+          anchorIndex: feed.length > 0 ? 0 : null,
+          hasBefore: false,
+          hasAfter: false,
+          beforeCursor: null,
+          afterCursor: null,
+        },
+        counts,
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      });
+    }
 
     if (source === 'shuffle') {
       const shuffleAssets = filteredAssets.map(({ asset, sourceIndex }) => ({ ...asset, galleryOrderIndex: sourceIndex }));
