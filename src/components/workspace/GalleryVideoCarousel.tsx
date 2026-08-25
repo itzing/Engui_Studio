@@ -1349,6 +1349,22 @@ export function GalleryVideoCarousel({
     }
   }, []);
 
+  const restartFlowVideoAfterEnded = useCallback((instanceId: string, video: HTMLVideoElement) => {
+    if (!flowModeRef.current || !instanceId.startsWith('flow-')) return;
+    window.setTimeout(() => {
+      if (!flowModeRef.current) return;
+      if (videoRefs.current[instanceId] !== video || !video.isConnected) return;
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Some browser media implementations can reject seeking immediately after ended.
+      }
+      playRequestedVideoInstanceIdsRef.current.delete(instanceId);
+      playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
+      requestVideoPlayback(instanceId, video, true);
+    }, 0);
+  }, [requestVideoPlayback]);
+
   const markVideoReady = useCallback((instanceId: string) => {
     setVideoReadyInstanceIds((current) => {
       if (current.has(instanceId)) return current;
@@ -1649,10 +1665,13 @@ export function GalleryVideoCarousel({
     return () => clearFlowAdvanceTimer();
   }, [activateFlowRelative, activeFlowProfile.imageIntervalSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, flowTimingVersion, isLoading, paused]);
 
-  const handleFlowVideoEnded = useCallback((instanceId: string) => {
-    if (!flowModeRef.current || flowLastActivatedInstanceIdRef.current !== instanceId) return;
-    activateFlowRelative(1, 'auto');
-  }, [activateFlowRelative]);
+  const handleFlowVideoEnded = useCallback((instanceId: string, video: HTMLVideoElement) => {
+    if (!flowModeRef.current) return;
+    if (!pausedRef.current && flowLastActivatedInstanceIdRef.current === instanceId) {
+      activateFlowRelative(1, 'auto');
+    }
+    restartFlowVideoAfterEnded(instanceId, video);
+  }, [activateFlowRelative, restartFlowVideoAfterEnded]);
 
   const manualScrubTape = useCallback((deltaMain: number) => {
     if (flowModeRef.current) return;
@@ -2559,9 +2578,9 @@ export function GalleryVideoCarousel({
                           requestVideoPlayback(slot.instanceId, event.currentTarget);
                         }
                       }}
-                      onEnded={() => {
+                      onEnded={(event) => {
                         if (isFlowSlot) {
-                          handleFlowVideoEnded(slot.instanceId);
+                          handleFlowVideoEnded(slot.instanceId, event.currentTarget);
                         }
                       }}
                       className={`h-full w-full ${shouldContainMedia ? 'object-contain' : 'object-cover'} ${(isTikTokSlot || isFlowSlot) && !isVideoReady ? 'opacity-0' : ''}`}

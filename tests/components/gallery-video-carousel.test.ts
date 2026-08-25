@@ -322,17 +322,24 @@ describe('GalleryVideoCarousel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const stage = screen.getByTestId('gallery-video-carousel');
+    const playMock = vi.mocked(HTMLMediaElement.prototype.play);
     const firstVideo = await waitFor(() => {
       const video = stage.querySelector('video[src="/portrait-1.mp4"]') as HTMLVideoElement | null;
       expect(video).toBeTruthy();
       return video as HTMLVideoElement;
     });
     expect(firstVideo.loop).toBe(false);
+    const firstVideoPlayCountBeforeEnded = playMock.mock.contexts.filter((context) => context === firstVideo).length;
+    firstVideo.currentTime = 4;
 
     fireEvent.ended(firstVideo);
 
     await waitFor(() => expect(stage.querySelector('video[src="/portrait-2.mp4"]')).toBeTruthy());
     expect((stage.querySelector('video[src="/portrait-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe(`translate3d(${1280 / 3}px, 0px, 0)`);
+    await waitFor(() => {
+      expect(playMock.mock.contexts.filter((context) => context === firstVideo).length).toBeGreaterThan(firstVideoPlayCountBeforeEnded);
+    });
+    expect(firstVideo.currentTime).toBe(0);
   });
 
   it('slides the Flow side panel from the right edge hover area', async () => {

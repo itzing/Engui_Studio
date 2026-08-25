@@ -35,4 +35,6 @@ Rollback: revert implementation commit, run npm run build, and restart engui-stu
 2026-08-25 follow-up: Flow video auto-advance must not depend only on readable duration metadata. The active Flow video advances the queue on its `ended` event, with the duration timer kept as a fallback. The Flow settings panel opens from a dedicated right-edge hover target instead of only sharing the top controls hover area.
 
 2026-08-25 portrait layout follow-up: Flow portrait mode uses exactly three equal-width screen slots. Portrait media is contained and centered inside each slot so videos play at full height without overlapping neighboring slots.
+
+2026-08-25 playback lifecycle follow-up: Flow video `ended` now advances the queue only when it belongs to the latest activated slot, then restarts that visible video locally. Older visible slots keep replaying in place without triggering additional queue advances.
 <!-- SECTION:NOTES:END -->
