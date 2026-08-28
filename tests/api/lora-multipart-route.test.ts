@@ -111,7 +111,8 @@ describe('LoRA multipart upload routes', () => {
       s3Url: 'https://s3.local/models/loras/model.safetensors',
       fileSize: BigInt(128),
       extension: '.safetensors',
-      targetOverride: null,
+      targetOverride: 'image',
+      baseModel: 'z-image',
       uploadedAt: new Date('2026-08-11T13:20:00Z'),
       workspaceId: 'default',
     });
@@ -142,10 +143,13 @@ describe('LoRA multipart upload routes', () => {
         s3Url: 'https://s3.local/models/loras/model.safetensors',
         fileSize: BigInt(128),
         extension: '.safetensors',
+        baseModel: 'z-image',
+        targetOverride: 'image',
         workspaceId: 'default',
       },
     });
     expect(json.lora.fileSize).toBe('128');
+    expect(json.lora.baseModel).toBe('z-image');
   });
 
   it('rejects finalize for keys outside loras', async () => {

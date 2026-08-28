@@ -132,7 +132,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
 
     Object.keys(parsedOptions).forEach((key) => {
       if (!key.includes('_path') && key !== 'runpodJobId' && key !== 'error') {
-        if (modelId === 'z-image' && key === 'lora') {
+        if ((modelId === 'z-image' || modelId === 'krea2-turbo') && key === 'lora') {
           return;
         }
         parameterValues[key] = parsedOptions[key];
@@ -141,7 +141,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
 
     const primaryImagePath = detail.imageInputPath || parsedOptions.image_path;
 
-    if (modelId === 'z-image') {
+    if (modelId === 'z-image' || modelId === 'krea2-turbo') {
       const normalizedLoraSlots = normalizeZImageLoraSlots(parsedOptions);
 
       normalizedLoraSlots.forEach((slot, index) => {

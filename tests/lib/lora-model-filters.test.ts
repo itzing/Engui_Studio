@@ -94,6 +94,22 @@ describe('LoRA model filters', () => {
     ]);
   });
 
+  it('filters image LoRAs by explicit base model for Z-Image and Krea2 Turbo', () => {
+    const loras = [
+      { ...lora('z_style.safetensors', '/runpod-volume/loras/z_style.safetensors'), baseModel: 'z-image' },
+      { ...lora('krea_style.safetensors', '/runpod-volume/loras/krea_style.safetensors'), baseModel: 'krea2-turbo' },
+      lora('legacy_image.safetensors', '/runpod-volume/loras/legacy_image.safetensors'),
+    ];
+
+    expect(filterLorasForModel(loras, 'z-image').map((entry) => entry.fileName)).toEqual([
+      'z_style.safetensors',
+      'legacy_image.safetensors',
+    ]);
+    expect(filterLorasForModel(loras, 'krea2-turbo').map((entry) => entry.fileName)).toEqual([
+      'krea_style.safetensors',
+    ]);
+  });
+
   it('builds complete picker pairs with the same low/high rules as target filtering', () => {
     const loras = [
       lora('high_noise_model.safetensors', '/runpod-volume/loras/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors'),

@@ -28,7 +28,7 @@ function getLoraParamNames(model: ModelConfig | undefined, modelId?: string, par
       .map((param) => param.name)
   );
 
-  if (modelId === 'z-image' && parameterValues && typeof parameterValues === 'object') {
+  if ((modelId === 'z-image' || modelId === 'krea2-turbo') && parameterValues && typeof parameterValues === 'object') {
     Object.keys(parameterValues)
       .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
       .forEach((key) => names.add(key));

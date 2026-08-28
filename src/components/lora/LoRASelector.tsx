@@ -25,6 +25,7 @@ export interface LoRAFile {
   workspaceId?: string;
   lastUsed?: string;
   targetOverride?: 'image' | 'video' | string | null;
+  baseModel?: string | null;
   helperProfile?: LoRAHelperProfile | null;
   pairHelperProfile?: LoRAHelperProfile | null;
 }

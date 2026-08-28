@@ -121,7 +121,7 @@ export const submitImageGeneration = async ({
       .filter((param) => param.type === 'lora-selector')
       .forEach((param) => loraSlotNames.add(param.name));
 
-    if (currentModel.id === 'z-image') {
+    if (currentModel.id === 'z-image' || currentModel.id === 'krea2-turbo') {
       Object.keys(parameterValues)
         .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
         .forEach((key) => loraSlotNames.add(key));
@@ -150,7 +150,7 @@ export const submitImageGeneration = async ({
       }
     });
 
-    if (currentModel.id === 'z-image') {
+    if (currentModel.id === 'z-image' || currentModel.id === 'krea2-turbo') {
       Object.entries(parameterValues).forEach(([key, value]) => {
         if (appendedParamNames.has(key)) return;
         if (!/^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key)) return;

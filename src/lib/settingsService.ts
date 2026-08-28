@@ -74,6 +74,7 @@ interface RunPodConfig {
     upscale: string; // Upscale endpoint
     'qwen-image-edit': string; // Qwen Image Edit endpoint 추가
     'z-image': string; // Z-Image endpoint 추가
+    'krea2-turbo': string; // Krea2 Turbo endpoint
     onetoall: string; // OneToAll endpoint 추가
     'video-upscale': string; // Video Upscale endpoint 추가
     ltx2: string; // LTX2 endpoint 추가
@@ -167,6 +168,7 @@ class SettingsService {
             upscale: '', // Upscale endpoint
             'qwen-image-edit': '', // Qwen Image Edit endpoint 추가
             'z-image': '', // Z-Image endpoint 추가
+            'krea2-turbo': '', // Krea2 Turbo endpoint
             onetoall: '', // OneToAll endpoint 추가
             'video-upscale': '', // Video Upscale endpoint 추가
             ltx2: '' // LTX2 endpoint 추가
@@ -250,7 +252,7 @@ class SettingsService {
               settings.runpod.apiKey = value;
             } else if (setting.configKey.startsWith('endpoints.')) {
               const endpointType = setting.configKey.split('.')[1];
-              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan22-t2v', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
+              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan22-t2v', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'krea2-turbo', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
                 settings.runpod.endpoints[endpointType as keyof typeof settings.runpod.endpoints] = value;
               }
             } else if (setting.configKey === 'generateTimeout') {
@@ -738,6 +740,7 @@ class SettingsService {
       'endpoints.wan-animate',
       'endpoints.infinite-talk',
       'endpoints.video-upscale',
+      'endpoints.krea2-turbo',
       'endpoints.qwen-image-edit'
       // generateTimeout은 선택적 설정이므로 상태 계산에서 제외
     ]);

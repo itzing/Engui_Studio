@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
             s3Url: s3Url,
             fileSize: BigInt(file.size),
             extension: file.extension || '',
+            baseModel: 'z-image',
+            targetOverride: 'image',
             workspaceId: workspaceId || null,
             uploadedAt: file.lastModified,
           },

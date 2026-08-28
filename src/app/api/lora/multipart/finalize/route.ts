@@ -20,6 +20,7 @@ function serializeLora(lora: {
   fileSize: bigint;
   extension: string;
   targetOverride: string | null;
+  baseModel: string;
   uploadedAt: Date;
   workspaceId: string | null;
 }) {
@@ -32,6 +33,7 @@ function serializeLora(lora: {
     fileSize: lora.fileSize.toString(),
     extension: lora.extension,
     targetOverride: lora.targetOverride,
+    baseModel: lora.baseModel,
     uploadedAt: lora.uploadedAt.toISOString(),
     workspaceId: lora.workspaceId,
   };
@@ -50,6 +52,9 @@ export async function POST(request: NextRequest) {
     const uploadId = String(body.uploadId || '');
     const workspaceId = typeof body.workspaceId === 'string' && body.workspaceId ? body.workspaceId : null;
     const userId = typeof body.userId === 'string' && body.userId.trim() ? body.userId : 'user-with-settings';
+    const baseModel = typeof body.baseModel === 'string' && ['wan2.2', 'z-image', 'krea2-turbo'].includes(body.baseModel)
+      ? body.baseModel
+      : 'z-image';
     const parts = Array.isArray(body.parts) ? body.parts as CompletedUploadPart[] : undefined;
 
     const validation = validateLoRAFileServer(fileName, fileSize);
@@ -103,6 +108,8 @@ export async function POST(request: NextRequest) {
         s3Url: completedUpload.s3Url,
         fileSize: BigInt(fileSize),
         extension,
+        baseModel,
+        targetOverride: baseModel === 'wan2.2' ? 'video' : 'image',
         workspaceId,
       },
     });

@@ -1,10 +1,18 @@
 export type LoraTarget = 'image' | 'video';
+export type LoraBaseModel = 'wan2.2' | 'z-image' | 'krea2-turbo';
+
+export const LORA_BASE_MODELS: Array<{ value: LoraBaseModel; label: string; target: LoraTarget }> = [
+  { value: 'wan2.2', label: 'Wan 2.2', target: 'video' },
+  { value: 'z-image', label: 'Z-Image Turbo', target: 'image' },
+  { value: 'krea2-turbo', label: 'Krea2 Turbo', target: 'image' },
+];
 
 export type LoraFileLike = {
   name?: string;
   fileName: string;
   s3Path: string;
   targetOverride?: 'image' | 'video' | string | null;
+  baseModel?: LoraBaseModel | string | null;
 };
 
 type LoraComponent = 'high' | 'low' | null;
@@ -156,7 +164,19 @@ export function filterLorasForTarget<T extends LoraFileLike>(loras: T[], target:
 
 export function filterLorasForModel<T extends LoraFileLike>(loras: T[], modelId: string) {
   if (modelId === 'wan22' || modelId === 'wan22-t2v') {
-    return filterLorasForTarget(loras, 'video');
+    const videoLoras = filterLorasForTarget(loras, 'video');
+    const wanLoras = loras.filter((lora) => lora.baseModel === 'wan2.2');
+    const byPath = new Map<string, T>();
+    [...videoLoras, ...wanLoras].forEach((lora) => byPath.set(lora.s3Path, lora));
+    return Array.from(byPath.values());
+  }
+
+  if (modelId === 'krea2-turbo') {
+    return filterLorasForTarget(loras, 'image').filter((lora) => lora.baseModel === 'krea2-turbo');
+  }
+
+  if (modelId === 'z-image') {
+    return filterLorasForTarget(loras, 'image').filter((lora) => !lora.baseModel || lora.baseModel === 'z-image');
   }
 
   return filterLorasForTarget(loras, 'image');

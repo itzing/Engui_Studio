@@ -404,6 +404,7 @@ class RunPodService {
         };
 
       case 'z-image':
+      case 'krea2-turbo':
         const zImageInput: Record<string, any> = {
           prompt: input.prompt,
           seed: input.seed,

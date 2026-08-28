@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
 import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
-import { buildLoraPairs, filterLorasForTarget, getLoraSearchText } from '@/lib/lora/modelFilters';
+import { LORA_BASE_MODELS, buildLoraPairs, filterLorasForTarget, getLoraSearchText, getVideoLoraPathSet, type LoraBaseModel } from '@/lib/lora/modelFilters';
 import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save, Search, ImageIcon, Video, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { getPairHelperProfile, getSingleHelperProfile, LORA_HELPER_NOTES_MAX_LENGTH, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
@@ -33,6 +33,7 @@ interface LoRAFile {
   uploadedAt: string;
   workspaceId?: string;
   targetOverride?: 'image' | 'video' | string | null;
+  baseModel?: LoraBaseModel | string | null;
   helperProfile?: LoRAHelperProfile | null;
   pairHelperProfile?: LoRAHelperProfile | null;
 }
@@ -47,6 +48,7 @@ interface LoRAPair {
 
 type UploadStatus = 'idle' | 'initializing' | 'uploading' | 'completing' | 'failed';
 type LoraTargetFilter = 'all' | 'image' | 'video';
+type LoraBaseModelFilter = 'all' | LoraBaseModel;
 type LoraNameSort = 'asc' | 'desc';
 
 type MultipartUploadPart = {
@@ -107,7 +109,9 @@ export function LoRAManagementDialog({
   const [helperLowWeightDraft, setHelperLowWeightDraft] = useState('');
   const [loraSearchQuery, setLoraSearchQuery] = useState('');
   const [loraTargetFilter, setLoraTargetFilter] = useState<LoraTargetFilter>('all');
+  const [loraBaseModelFilter, setLoraBaseModelFilter] = useState<LoraBaseModelFilter>('all');
   const [loraNameSort, setLoraNameSort] = useState<LoraNameSort>('asc');
+  const [uploadBaseModel, setUploadBaseModel] = useState<LoraBaseModel>('z-image');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeUploadRef = useRef<{
     aborted: boolean;
@@ -138,15 +142,24 @@ export function LoRAManagementDialog({
     ));
   }, []);
 
+  const inferredVideoLoraPaths = useMemo(() => getVideoLoraPathSet(loras), [loras]);
+  const getDisplayBaseModel = useCallback((lora: LoRAFile): LoraBaseModel => {
+    if (inferredVideoLoraPaths.has(lora.s3Path)) return 'wan2.2';
+    return (lora.baseModel as LoraBaseModel | undefined) || 'z-image';
+  }, [inferredVideoLoraPaths]);
+
   const filteredLoras = useMemo(() => {
     const targetFiltered = loraTargetFilter === 'all'
       ? loras
       : filterLorasForTarget(loras, loraTargetFilter);
+    const baseModelFiltered = loraBaseModelFilter === 'all'
+      ? targetFiltered
+      : targetFiltered.filter((lora) => getDisplayBaseModel(lora) === loraBaseModelFilter);
     const searchText = loraSearchQuery.trim().toLowerCase();
-    if (!searchText) return targetFiltered;
+    if (!searchText) return baseModelFiltered;
 
-    return targetFiltered.filter((lora) => getLoraSearchText(lora).includes(searchText));
-  }, [loras, loraSearchQuery, loraTargetFilter]);
+    return baseModelFiltered.filter((lora) => getLoraSearchText(lora).includes(searchText));
+  }, [getDisplayBaseModel, loras, loraBaseModelFilter, loraSearchQuery, loraTargetFilter]);
 
   const loraPairs = useMemo(
     () => groupLoRAsIntoPairs(filteredLoras, loraNameSort),
@@ -414,6 +427,7 @@ export function LoRAManagementDialog({
         uploadId: init.uploadId,
         fileName: file.name,
         fileSize: file.size,
+        baseModel: uploadBaseModel,
         workspaceId,
         parts: completedParts.sort((a, b) => a.partNumber - b.partNumber),
       });
@@ -623,6 +637,39 @@ export function LoRAManagementDialog({
     }
   };
 
+  const handleBaseModelChange = async (lora: LoRAFile, baseModel: LoraBaseModel) => {
+    setTargetUpdatingId(lora.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`/api/lora/${lora.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseModel }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Update failed');
+      }
+
+      setLoras((previous) => previous.map((entry) => (
+        entry.id === lora.id ? {
+          ...entry,
+          baseModel: data.lora?.baseModel ?? baseModel,
+          targetOverride: data.lora?.targetOverride ?? (baseModel === 'wan2.2' ? 'video' : 'image'),
+        } : entry
+      )));
+      onLoRAUploaded?.();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update LoRA base model';
+      setError(`Update failed: ${errorMessage}. Please try again.`);
+    } finally {
+      setTargetUpdatingId(null);
+    }
+  };
+
   const getHelperEditorKey = (pair: LoRAPair) => {
     if (pair.high && pair.low) return `pair:${pair.high.id}:${pair.low.id}`;
     const single = pair.high ?? pair.low;
@@ -724,6 +771,23 @@ export function LoRAManagementDialog({
       </label>
     );
   };
+
+  const renderBaseModelControl = (lora: LoRAFile) => (
+    <label className="mt-2 block space-y-1 text-xs text-muted-foreground">
+      <span>Base model</span>
+      <select
+        value={getDisplayBaseModel(lora)}
+        disabled={targetUpdatingId === lora.id}
+        onChange={(event) => void handleBaseModelChange(lora, event.target.value as LoraBaseModel)}
+        className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground"
+        aria-label={`Base model for ${lora.fileName}`}
+      >
+        {LORA_BASE_MODELS.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
 
   // Handle S3 sync
   const handleSync = async () => {
@@ -830,6 +894,22 @@ export function LoRAManagementDialog({
           )}
 
           {/* Upload Section */}
+          <div className="mb-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="lora-upload-base-model">
+              Upload base model
+            </label>
+            <select
+              id="lora-upload-base-model"
+              value={uploadBaseModel}
+              onChange={(event) => setUploadBaseModel(event.target.value as LoraBaseModel)}
+              disabled={isUploading}
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            >
+              {LORA_BASE_MODELS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
           <div
             className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center transition-all duration-200 ${
               isDragging
@@ -941,7 +1021,7 @@ export function LoRAManagementDialog({
               </Button>
             </div>
 
-            <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+            <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto] xl:items-center">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -952,6 +1032,28 @@ export function LoRAManagementDialog({
                   className="pl-9"
                   aria-label="Search LoRAs"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/30 p-1 sm:grid-cols-4">
+                {([
+                  { value: 'all', label: 'All bases' },
+                  ...LORA_BASE_MODELS.map((model) => ({ value: model.value, label: model.label })),
+                ] as const).map((option) => {
+                  const isActive = loraBaseModelFilter === option.value;
+                  return (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={isActive ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => setLoraBaseModelFilter(option.value)}
+                      aria-pressed={isActive}
+                    >
+                      <span>{option.label}</span>
+                    </Button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted/30 p-1">
@@ -1012,7 +1114,7 @@ export function LoRAManagementDialog({
                 <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="font-medium">No LoRAs match your filters</p>
                 <p className="text-sm mt-1">
-                  Try a different search term or target filter.
+                  Try a different search term, target filter, or base model.
                 </p>
               </div>
             ) : (
@@ -1078,6 +1180,7 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.high.fileSize)} • {formatDate(pair.high.uploadedAt)}
                                 </p>
+                                {renderBaseModelControl(pair.high)}
                                 {renderTargetControl(pair.high, pair)}
                               </>
                             ) : (
@@ -1112,6 +1215,7 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.low.fileSize)} • {formatDate(pair.low.uploadedAt)}
                                 </p>
+                                {renderBaseModelControl(pair.low)}
                                 {renderTargetControl(pair.low, pair)}
                               </>
                             ) : (

@@ -410,6 +410,42 @@ export const MODELS: ModelConfig[] = [
             { name: 'loraWeight8', label: 'LoRA 8 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' }
         ]
     },
+    {
+        id: 'krea2-turbo',
+        name: 'Krea2 Turbo',
+        provider: 'Krea',
+        type: 'image',
+        inputs: ['text'],
+        api: {
+            type: 'runpod',
+            endpoint: 'krea2-turbo'
+        },
+        capabilities: {},
+        parameters: [
+            { name: 'width', label: 'Width', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
+            { name: 'height', label: 'Height', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
+            { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },
+            { name: 'seed', label: 'Seed', type: 'number', default: 533303727624653, group: 'advanced', description: 'Random seed for generation' },
+            { name: 'steps', label: 'Steps', type: 'number', default: 8, min: 1, max: 50, group: 'advanced' },
+            { name: 'cfg', label: 'CFG Scale', type: 'number', default: 1.0, min: 0.1, max: 20, step: 0.1, group: 'advanced' },
+            { name: 'lora', label: 'LoRA 1', type: 'lora-selector', default: '', group: 'advanced', description: 'Primary LoRA model for custom styling' },
+            { name: 'loraWeight', label: 'LoRA 1 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora2', label: 'LoRA 2', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional second LoRA model' },
+            { name: 'loraWeight2', label: 'LoRA 2 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora3', label: 'LoRA 3', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional third LoRA model' },
+            { name: 'loraWeight3', label: 'LoRA 3 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora4', label: 'LoRA 4', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional fourth LoRA model' },
+            { name: 'loraWeight4', label: 'LoRA 4 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora5', label: 'LoRA 5', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional fifth LoRA model' },
+            { name: 'loraWeight5', label: 'LoRA 5 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora6', label: 'LoRA 6', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional sixth LoRA model' },
+            { name: 'loraWeight6', label: 'LoRA 6 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora7', label: 'LoRA 7', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional seventh LoRA model' },
+            { name: 'loraWeight7', label: 'LoRA 7 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' },
+            { name: 'lora8', label: 'LoRA 8', type: 'lora-selector', default: '', group: 'advanced', description: 'Optional eighth LoRA model' },
+            { name: 'loraWeight8', label: 'LoRA 8 Weight', type: 'number', default: 1.0, min: -10.0, max: 10.0, step: 0.1, group: 'advanced' }
+        ]
+    },
 
     // --- Audio Models ---
 

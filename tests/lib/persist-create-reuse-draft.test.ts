@@ -300,6 +300,42 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it('restores Krea2 Turbo lora slots into the Krea2 image draft', async () => {
+    getModelById.mockReturnValue({
+      id: 'krea2-turbo',
+      parameters: [
+        { name: 'lora', default: '' },
+        { name: 'loraWeight', default: 1 },
+        { name: 'lora2', default: '' },
+        { name: 'loraWeight2', default: 1 },
+      ],
+    });
+    isInputVisible.mockReturnValue(false);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+
+    persistCreateReuseDraft({
+      type: 'image',
+      modelId: 'krea2-turbo',
+      prompt: 'raw editorial portrait',
+      options: {
+        zImageLoraSlots: [
+          { path: '/runpod-volume/loras/krea-style.safetensors', weight: 0.75 },
+          { path: '/runpod-volume/loras/krea-light.safetensors', weight: 0.4 },
+        ],
+      },
+    });
+
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('image', 'krea2-turbo', expect.objectContaining({
+      parameterValues: expect.objectContaining({
+        lora: '/runpod-volume/loras/krea-style.safetensors',
+        loraWeight: 0.75,
+        lora2: '/runpod-volume/loras/krea-light.safetensors',
+        loraWeight2: 0.4,
+      }),
+    }));
+    expect(announceCreateReuseDraft).toHaveBeenCalledWith('image', 'krea2-turbo');
+  });
+
   it('writes img2vid payloads into the video workflow draft before navigation', async () => {
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 

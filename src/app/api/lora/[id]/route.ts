@@ -7,14 +7,15 @@ import SettingsService from '@/lib/settingsService';
 import { logger } from '@/lib/logger';
 
 const validTargetOverrides = new Set(['image', 'video']);
+const validBaseModels = new Set(['wan2.2', 'z-image', 'krea2-turbo']);
 
 // PATCH /api/lora/[id] - Update LoRA metadata
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     if (!id) {
       return NextResponse.json(
         { success: false, error: 'LoRA ID is required' },
@@ -24,11 +25,15 @@ export async function PATCH(
 
     const body = await request.json();
     const rawTargetOverride = body?.targetOverride;
+    const rawBaseModel = body?.baseModel;
     const targetOverride = rawTargetOverride === null || rawTargetOverride === ''
       ? null
       : typeof rawTargetOverride === 'string'
         ? rawTargetOverride.trim().toLowerCase()
         : undefined;
+    const baseModel = typeof rawBaseModel === 'string'
+      ? rawBaseModel.trim().toLowerCase()
+      : undefined;
 
     if (targetOverride !== null && (!targetOverride || !validTargetOverrides.has(targetOverride))) {
       return NextResponse.json(
@@ -36,10 +41,22 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (baseModel !== undefined && !validBaseModels.has(baseModel)) {
+      return NextResponse.json(
+        { success: false, error: 'baseModel must be wan2.2, z-image, or krea2-turbo' },
+        { status: 400 }
+      );
+    }
 
     const lora = await prisma.loRA.update({
       where: { id },
-      data: { targetOverride },
+      data: {
+        ...(targetOverride !== undefined ? { targetOverride } : {}),
+        ...(baseModel !== undefined ? {
+          baseModel,
+          targetOverride: baseModel === 'wan2.2' ? 'video' : 'image',
+        } : {}),
+      },
     });
 
     return NextResponse.json({
@@ -53,6 +70,7 @@ export async function PATCH(
         fileSize: lora.fileSize.toString(),
         extension: lora.extension,
         targetOverride: lora.targetOverride,
+        baseModel: lora.baseModel,
         uploadedAt: lora.uploadedAt.toISOString(),
         workspaceId: lora.workspaceId,
       },
@@ -69,14 +87,14 @@ export async function PATCH(
 // DELETE /api/lora/[id] - Delete a LoRA file
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   let s3DeleteAttempted = false;
   let s3DeleteSucceeded = false;
   let dbDeleteSucceeded = false;
 
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(

@@ -139,7 +139,7 @@ export async function submitGenerationFormData(formData: FormData) {
             })()
             : null;
 
-        const secureModelIds = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'];
+        const secureModelIds = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'];
         const usesSecureTransport = secureModelIds.includes(modelId);
 
         // Process input files based on model.inputs
@@ -407,9 +407,9 @@ export async function submitGenerationFormData(formData: FormData) {
             }
         }
 
-        // Collect LoRA parameters for z-image from any submitted slot keys.
+        // Collect LoRA parameters for image multi-LoRA models from any submitted slot keys.
         // Format: lora: [["style_lora.safetensors", 0.8], ...] (filename only, not full path)
-        if (modelId === 'z-image') {
+        if (modelId === 'z-image' || modelId === 'krea2-turbo') {
             const isZImageI2IRequest = parameters.task_type === 'image_to_image' || parameters.task === 'i2i' || parameters.mode === 'i2i';
             if (isZImageI2IRequest) {
                 if (!primaryImageFile) {
@@ -478,7 +478,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 inputData['zImageLora'] = zImageLoraSlots[0].path;
                 inputData['zImageLoraWeight'] = zImageLoraSlots[0].weight;
 
-                console.log('Z-Image LoRAs attached', {
+                console.log('Image LoRAs attached', {
                     count: zImageLoraSlots.length,
                     loras: zImageLoraSlots.map((slot) => ({
                         fileName: slot.path.split('/').pop() || slot.path,
@@ -586,7 +586,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 }, { status: 400 });
             }
 
-            const requiresSecureKey = ['z-image', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'].includes(modelId);
+            const requiresSecureKey = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'].includes(modelId);
             if (requiresSecureKey && !settings.runpod.fieldEncKeyB64?.trim()) {
                 return NextResponse.json({
                     error: 'RunPod field encryption key is not configured',
@@ -734,7 +734,7 @@ export async function submitGenerationFormData(formData: FormData) {
                 });
             }
 
-            if (modelId === 'z-image') {
+            if (modelId === 'z-image' || modelId === 'krea2-turbo') {
                 runpodInput.__encryptSensitiveZImage = true;
             }
 

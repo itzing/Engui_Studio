@@ -73,7 +73,7 @@ export const normalizeImageDraftForModel = (
       .filter(([key]) => {
         if (allowedParameterNames.has(key)) return true;
         if (key === 'promptWildcardSelections') return true;
-        if (modelId === 'z-image' && (/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key))) return true;
+        if ((modelId === 'z-image' || modelId === 'krea2-turbo') && (/^lora\d*$/.test(key) || /^loraWeight\d*$/.test(key))) return true;
         return false;
       }),
   );

@@ -208,6 +208,7 @@ export default function ImageGenerationForm() {
         setParameterValues((prev) => ({ ...prev, promptWildcardSelections: selections }));
     }, []);
     const isZImageModel = currentModel?.id === 'z-image';
+    const isImageMultiLoraModel = currentModel?.id === 'z-image' || currentModel?.id === 'krea2-turbo';
     const zImageMode = isZImageModel && parameterValues.task_type === 'image_to_image'
         ? 'i2i'
         : isZImageModel && parameterValues.use_controlnet === true
@@ -215,11 +216,11 @@ export default function ImageGenerationForm() {
             : 'text';
     const zImageAddCap = 8;
     const zImageConfiguredLoraParamNames = useMemo(() => {
-        if (!isZImageModel || !currentModel) return [];
+        if (!isImageMultiLoraModel || !currentModel) return [];
         return currentModel.parameters.filter((param) => param.type === 'lora-selector').map((param) => param.name);
-    }, [currentModel, isZImageModel]);
+    }, [currentModel, isImageMultiLoraModel]);
     const zImageDynamicLoraParamNames = useMemo(() => {
-        if (!isZImageModel) return [];
+        if (!isImageMultiLoraModel) return [];
         const names = new Set<string>(zImageConfiguredLoraParamNames);
         Object.keys(parameterValues)
             .filter((key) => /^lora\d*$/.test(key) && !/^loraWeight\d*$/.test(key))
@@ -228,16 +229,16 @@ export default function ImageGenerationForm() {
             const getIndex = (value: string) => value === 'lora' ? 1 : Number.parseInt(value.slice(4), 10);
             return getIndex(a) - getIndex(b);
         });
-    }, [isZImageModel, parameterValues, zImageConfiguredLoraParamNames]);
+    }, [isImageMultiLoraModel, parameterValues, zImageConfiguredLoraParamNames]);
     const zImageLoraWeightByName = useMemo(() => {
         const map: Record<string, string> = {};
-        if (!isZImageModel) return map;
+        if (!isImageMultiLoraModel) return map;
         zImageDynamicLoraParamNames.forEach((name) => {
             const suffix = name === 'lora' ? '' : name.slice(4);
             map[name] = suffix ? `loraWeight${suffix}` : 'loraWeight';
         });
         return map;
-    }, [isZImageModel, zImageDynamicLoraParamNames]);
+    }, [isImageMultiLoraModel, zImageDynamicLoraParamNames]);
     const openPromptEditor = () => {
         if (isPhoneLayout || isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected) {
             return;
@@ -1620,7 +1621,7 @@ export default function ImageGenerationForm() {
 
                     <div className={`space-y-4 animate-in slide-in-from-top-2 duration-200 ${showAdvanced ? '' : 'hidden'}`}>
                         {renderDimensionPair(currentModel.parameters.filter(p => !p.group || p.group === 'advanced'))}
-                        {isZImageModel && zImageDynamicLoraParamNames.length > 0 && (
+                        {isImageMultiLoraModel && zImageDynamicLoraParamNames.length > 0 && (
                             <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
@@ -1689,7 +1690,7 @@ export default function ImageGenerationForm() {
                                 )}
                             </div>
                         )}
-                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height' && !(isZImageModel && (p.type === 'lora-selector' || /^loraWeight\d*$/.test(p.name)))).map(param => (
+                        {currentModel.parameters.filter(p => (!p.group || p.group === 'advanced') && isParameterVisible(p) && p.name !== 'width' && p.name !== 'height' && !(isImageMultiLoraModel && (p.type === 'lora-selector' || /^loraWeight\d*$/.test(p.name)))).map(param => (
                             <div key={`${param.name}-${param.default}`} className="space-y-2">
                                 {param.type !== 'boolean' && param.type !== 'lora-selector' && <Label className="text-xs">{param.label}</Label>}
                                 {param.type === 'lora-selector' ? (

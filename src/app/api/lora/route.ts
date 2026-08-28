@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
           fileSize: lora.fileSize.toString(),
           extension: lora.extension,
           targetOverride: lora.targetOverride,
+          baseModel: lora.baseModel,
           helperProfile: singleProfileByLoraId.get(lora.id) ?? null,
           pairHelperProfile: pairProfileByLoraId.get(lora.id) ?? null,
           uploadedAt: lora.uploadedAt.toISOString(),
