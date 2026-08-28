@@ -67,6 +67,12 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
 describe('CharacterManagerPanel gender behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
   });
 
   it('defaults a new desktop character draft to female', async () => {
@@ -262,5 +268,53 @@ describe('CharacterManagerPanel gender behavior', () => {
     });
 
     expect(screen.getAllByText('Queued').length).toBeGreaterThan(0);
+  });
+
+  it('copies the fully assembled prompt for the visible character draft', async () => {
+    const character = {
+      id: 'character-1',
+      name: 'Mira',
+      gender: 'female',
+      traits: { hair_color: 'silver', eye_shape: 'almond' },
+      editorState: {},
+      previewState: buildPreviewState(),
+      primaryPreviewImageUrl: null,
+      primaryPreviewThumbnailUrl: null,
+      currentVersionId: 'version-1',
+      previewStatusSummary: null,
+      createdAt: '2026-04-26T00:00:00.000Z',
+      updatedAt: '2026-04-26T00:00:00.000Z',
+      deletedAt: null,
+      versionCount: 1,
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (method === 'GET' && url.includes('/api/characters?includeDeleted=true')) {
+        return jsonResponse({ success: true, characters: [character] });
+      }
+      if (method === 'GET' && url.endsWith('/api/characters/character-1/versions')) {
+        return jsonResponse({ success: true, versions: [] });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(React.createElement(CharacterManagerPanel));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Mira').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        'Mira, female, Hair color: silver, Eye shape: almond'
+      );
+      expect(mockShowToast).toHaveBeenCalledWith('Prompt copied', 'success');
+    });
   });
 });

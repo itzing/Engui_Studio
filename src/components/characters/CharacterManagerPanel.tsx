@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
+import { ClipboardCopy, CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
@@ -17,6 +17,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { characterTraitDefinitionMap, characterTraitDefinitionsByGroup } from '@/lib/characters/schema';
 import { CHARACTER_PREVIEW_SLOT_META } from '@/lib/characters/previews';
+import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
 import type {
   CharacterExtractResult,
   CharacterPreviewSlot,
@@ -1330,6 +1331,40 @@ export default function CharacterManagerPanel() {
     }
   };
 
+  const copyCharacterPrompt = async () => {
+    if (!draft) return;
+
+    const prompt = buildCharacterPromptFromSummary({
+      id: draft.id || 'draft',
+      name: draft.name,
+      gender: normalizeCharacterGender(draft.gender, 'female') || 'female',
+      traits: draft.traits,
+      editorState: draft.editorState,
+      previewState: selectedCharacter?.previewState,
+      primaryPreviewImageUrl: selectedCharacter?.primaryPreviewImageUrl || null,
+      primaryPreviewThumbnailUrl: selectedCharacter?.primaryPreviewThumbnailUrl || null,
+      currentVersionId: selectedCharacter?.currentVersionId || null,
+      previewStatusSummary: draft.previewStatusSummary,
+      createdAt: selectedCharacter?.createdAt || new Date(0).toISOString(),
+      updatedAt: selectedCharacter?.updatedAt || new Date(0).toISOString(),
+      deletedAt: selectedCharacter?.deletedAt || null,
+      versionCount: selectedCharacter?.versionCount,
+    });
+
+    if (!prompt.trim()) {
+      showToast('No character prompt to copy', 'error');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      showToast('Prompt copied', 'success');
+    } catch (nextError) {
+      console.error('Failed to copy character prompt:', nextError);
+      showToast('Failed to copy prompt', 'error');
+    }
+  };
+
   return (
     <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]"> 
       <aside className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
@@ -1511,6 +1546,10 @@ export default function CharacterManagerPanel() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => void copyCharacterPrompt()} disabled={!draft}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" />
+                Copy prompt
+              </Button>
               {selectedCharacter?.deletedAt ? (
                 <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
                   <Undo2 className="w-3.5 h-3.5 mr-1" />
