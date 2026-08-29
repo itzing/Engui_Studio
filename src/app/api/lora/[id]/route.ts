@@ -35,13 +35,13 @@ export async function PATCH(
       ? rawBaseModel.trim().toLowerCase()
       : undefined;
 
-    if (targetOverride !== null && (!targetOverride || !validTargetOverrides.has(targetOverride))) {
+    if (rawTargetOverride !== undefined && targetOverride !== null && (!targetOverride || !validTargetOverrides.has(targetOverride))) {
       return NextResponse.json(
         { success: false, error: 'targetOverride must be image, video, or null' },
         { status: 400 }
       );
     }
-    if (baseModel !== undefined && !validBaseModels.has(baseModel)) {
+    if (rawBaseModel !== undefined && (!baseModel || !validBaseModels.has(baseModel))) {
       return NextResponse.json(
         { success: false, error: 'baseModel must be wan2.2, z-image, or krea2-turbo' },
         { status: 400 }
