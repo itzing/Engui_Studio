@@ -59,6 +59,18 @@ function getLoraComponent(lora: LoraFileLike): LoraComponent {
   return null;
 }
 
+function getExplicitTarget(lora: LoraFileLike): LoraTarget | null {
+  return lora.targetOverride === 'image' || lora.targetOverride === 'video'
+    ? lora.targetOverride
+    : null;
+}
+
+export function getExplicitBaseModel(lora: LoraFileLike): LoraBaseModel | null {
+  return lora.baseModel === 'wan2.2' || lora.baseModel === 'z-image' || lora.baseModel === 'krea2-turbo'
+    ? lora.baseModel
+    : null;
+}
+
 function isPairComponentToken(token: string) {
   return token === 'high' || token === 'low' || token === 'highnoise' || token === 'lownoise' || token === 'noise';
 }
@@ -138,14 +150,31 @@ export function buildLoraPairs<T extends LoraFileLike>(loras: T[]) {
 export function getVideoLoraPathSet(loras: LoraFileLike[]) {
   const videoPaths = new Set<string>();
   for (const lora of loras) {
-    if (lora.targetOverride === 'video') {
+    const targetOverride = getExplicitTarget(lora);
+    if (targetOverride === 'video') {
+      videoPaths.add(lora.s3Path);
+      continue;
+    }
+    if (targetOverride === 'image') {
+      continue;
+    }
+
+    const baseModel = getExplicitBaseModel(lora);
+    if (baseModel === 'wan2.2') {
       videoPaths.add(lora.s3Path);
     }
   }
 
   for (const pair of buildLoraPairs(loras)) {
     if (!pair.high || !pair.low) continue;
-    if (pair.high.targetOverride === 'image' || pair.low.targetOverride === 'image') continue;
+    if (
+      getExplicitTarget(pair.high) ||
+      getExplicitTarget(pair.low) ||
+      getExplicitBaseModel(pair.high) ||
+      getExplicitBaseModel(pair.low)
+    ) {
+      continue;
+    }
     videoPaths.add(pair.high.s3Path);
     videoPaths.add(pair.low.s3Path);
   }

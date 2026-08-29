@@ -110,6 +110,19 @@ describe('LoRA model filters', () => {
     ]);
   });
 
+  it('lets explicit image base models override complete high/low pair auto-detection', () => {
+    const loras = [
+      { ...lora('style_high.safetensors', '/runpod-volume/loras/style/style_high.safetensors'), baseModel: 'krea2-turbo' },
+      { ...lora('style_low.safetensors', '/runpod-volume/loras/style/style_low.safetensors'), baseModel: 'krea2-turbo' },
+    ];
+
+    expect(filterLorasForModel(loras, 'wan22')).toEqual([]);
+    expect(filterLorasForModel(loras, 'krea2-turbo').map((entry) => entry.fileName)).toEqual([
+      'style_high.safetensors',
+      'style_low.safetensors',
+    ]);
+  });
+
   it('builds complete picker pairs with the same low/high rules as target filtering', () => {
     const loras = [
       lora('high_noise_model.safetensors', '/runpod-volume/loras/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors'),

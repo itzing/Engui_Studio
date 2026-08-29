@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { validateLoRAFileClient } from '@/lib/loraValidation';
 import { removeDeletedLoraFromCreateDrafts } from '@/lib/create/loraDraftSanitizer';
-import { LORA_BASE_MODELS, buildLoraPairs, filterLorasForTarget, getLoraSearchText, getVideoLoraPathSet, type LoraBaseModel } from '@/lib/lora/modelFilters';
+import { LORA_BASE_MODELS, buildLoraPairs, filterLorasForTarget, getExplicitBaseModel, getLoraSearchText, getVideoLoraPathSet, type LoraBaseModel } from '@/lib/lora/modelFilters';
 import { Upload, Trash2, Package, AlertCircle, CheckCircle, X, RefreshCw, Pencil, Save, Search, ImageIcon, Video, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { getPairHelperProfile, getSingleHelperProfile, LORA_HELPER_NOTES_MAX_LENGTH, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
@@ -144,8 +144,10 @@ export function LoRAManagementDialog({
 
   const inferredVideoLoraPaths = useMemo(() => getVideoLoraPathSet(loras), [loras]);
   const getDisplayBaseModel = useCallback((lora: LoRAFile): LoraBaseModel => {
+    const explicitBaseModel = getExplicitBaseModel(lora);
+    if (explicitBaseModel) return explicitBaseModel;
     if (inferredVideoLoraPaths.has(lora.s3Path)) return 'wan2.2';
-    return (lora.baseModel as LoraBaseModel | undefined) || 'z-image';
+    return 'z-image';
   }, [inferredVideoLoraPaths]);
 
   const filteredLoras = useMemo(() => {
@@ -661,6 +663,7 @@ export function LoRAManagementDialog({
           targetOverride: data.lora?.targetOverride ?? (baseModel === 'wan2.2' ? 'video' : 'image'),
         } : entry
       )));
+      setSuccessMessage('✓ LoRA model updated.');
       onLoRAUploaded?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update LoRA base model';

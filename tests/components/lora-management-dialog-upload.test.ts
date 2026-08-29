@@ -230,4 +230,83 @@ describe('LoRAManagementDialog upload progress', () => {
     expect(screen.getByText('Alpha Motion')).toBeTruthy();
     expect(screen.queryByText('Beta Portrait')).toBeNull();
   });
+
+  it('saves base model changes immediately from the dropdown and keeps the saved value after reload', async () => {
+    let savedBaseModel = 'z-image';
+    const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.startsWith('/api/lora?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            loras: [
+              {
+                id: 'portrait-id',
+                name: 'Portrait Style',
+                fileName: 'portrait_style.safetensors',
+                s3Path: '/runpod-volume/loras/portrait_style.safetensors',
+                s3Url: 'https://s3.local/portrait_style.safetensors',
+                fileSize: '128',
+                extension: '.safetensors',
+                uploadedAt: new Date().toISOString(),
+                targetOverride: savedBaseModel === 'wan2.2' ? 'video' : 'image',
+                baseModel: savedBaseModel,
+              },
+            ],
+          }),
+        } as Response;
+      }
+
+      if (url === '/api/lora/portrait-id' && options?.method === 'PATCH') {
+        savedBaseModel = JSON.parse(String(options.body)).baseModel;
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            lora: {
+              id: 'portrait-id',
+              targetOverride: savedBaseModel === 'wan2.2' ? 'video' : 'image',
+              baseModel: savedBaseModel,
+            },
+          }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch ${url} ${options?.method || 'GET'}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { unmount } = render(
+      React.createElement(LoRAManagementDialog, {
+        open: true,
+        onOpenChange: vi.fn(),
+        workspaceId: 'default',
+      })
+    );
+
+    const baseModelSelect = await screen.findByLabelText('Base model for portrait_style.safetensors') as HTMLSelectElement;
+    expect(baseModelSelect.value).toBe('z-image');
+
+    fireEvent.change(baseModelSelect, { target: { value: 'krea2-turbo' } });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/lora/portrait-id', expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ baseModel: 'krea2-turbo' }),
+      }));
+    });
+    expect(await screen.findByText('✓ LoRA model updated.')).toBeTruthy();
+    expect((screen.getByLabelText('Base model for portrait_style.safetensors') as HTMLSelectElement).value).toBe('krea2-turbo');
+
+    unmount();
+    render(
+      React.createElement(LoRAManagementDialog, {
+        open: true,
+        onOpenChange: vi.fn(),
+        workspaceId: 'default',
+      })
+    );
+
+    expect((await screen.findByLabelText('Base model for portrait_style.safetensors') as HTMLSelectElement).value).toBe('krea2-turbo');
+  });
 });
