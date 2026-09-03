@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clapperboard, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clapperboard, Copy, Download, Heart, Loader2, RefreshCw, Sparkles, Trash2, Type } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const [tagsInput, setTagsInput] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
+  const [hasCopiedPrompt, setHasCopiedPrompt] = useState(false);
   const [navigation, setNavigation] = useState<MobileDetailsNavigationState>(EMPTY_NAVIGATION);
 
   useEffect(() => {
@@ -72,6 +73,19 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
   const handlePromptModeChange = (mode: GalleryPromptMode) => {
     setPromptMode(mode);
     writeDetailsPromptModePreference(mode);
+    setHasCopiedPrompt(false);
+  };
+
+  const copyPrompt = async () => {
+    if (!selectedPrompt.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(selectedPrompt);
+      setHasCopiedPrompt(true);
+      window.setTimeout(() => setHasCopiedPrompt(false), 1800);
+    } catch (error) {
+      console.error('Failed to copy mobile gallery prompt:', error);
+    }
   };
 
   useEffect(() => {
@@ -304,7 +318,21 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                   </div>
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <div className="text-muted-foreground">Prompt</div>
+                      <div className="flex items-center gap-1">
+                        <div className="text-muted-foreground">Prompt</div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => void copyPrompt()}
+                          disabled={!selectedPrompt.trim()}
+                          aria-label={hasCopiedPrompt ? 'Prompt copied' : 'Copy selected prompt'}
+                          title={hasCopiedPrompt ? 'Prompt copied' : 'Copy selected prompt'}
+                        >
+                          {hasCopiedPrompt ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
                       {promptModeOptions.length > 1 ? (
                         <div className="flex max-w-[75%] flex-wrap justify-end gap-1 rounded-md border border-border bg-muted/20 p-0.5">
                           {promptModeOptions.map(({ mode, label }) => (

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clapperboard, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { Check, Clapperboard, Copy, Download, Sparkles, Trash2, Type, X } from 'lucide-react';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { getPromptForMode, getPromptVersions, type PromptVersionMode } from '@/lib/promptVersions';
 import { shouldShowGenerationSeed } from '@/lib/generationSeed';
@@ -57,6 +57,7 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const [isReusing, setIsReusing] = useState<ReuseAction | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [promptMode, setPromptMode] = useState<GalleryPromptMode>(() => readDetailsPromptModePreference());
+  const [hasCopiedPrompt, setHasCopiedPrompt] = useState(false);
   const { showToast } = useToast();
   const promptVersions = getPromptVersions({
     prompt: asset?.prompt,
@@ -93,6 +94,24 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
   const handlePromptModeChange = (mode: GalleryPromptMode) => {
     setPromptMode(mode);
     writeDetailsPromptModePreference(mode);
+    setHasCopiedPrompt(false);
+  };
+
+  const handleCopyPrompt = async () => {
+    if (!selectedPrompt.trim()) {
+      showToast('No prompt to copy', 'error');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedPrompt);
+      setHasCopiedPrompt(true);
+      showToast('Prompt copied', 'success');
+      window.setTimeout(() => setHasCopiedPrompt(false), 1800);
+    } catch (error) {
+      console.error('Failed to copy gallery prompt:', error);
+      showToast('Failed to copy prompt', 'error');
+    }
   };
 
   const handleDownload = async () => {
@@ -236,7 +255,21 @@ export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">Prompt</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">Prompt</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => void handleCopyPrompt()}
+                        disabled={!selectedPrompt.trim()}
+                        aria-label={hasCopiedPrompt ? 'Prompt copied' : 'Copy selected prompt'}
+                        title={hasCopiedPrompt ? 'Prompt copied' : 'Copy selected prompt'}
+                      >
+                        {hasCopiedPrompt ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
                     {promptModeOptions.length > 1 ? (
                       <div className="flex max-w-full flex-wrap justify-end gap-1 rounded-md border border-border bg-muted/20 p-0.5">
                         {promptModeOptions.map(({ mode, label }) => (

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import MobileGalleryDetailsScreen from '@/components/mobile/gallery/MobileGalleryDetailsScreen';
@@ -55,6 +55,10 @@ describe('MobileGalleryDetailsScreen share action', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
     currentAsset = mockAsset;
   });
 
@@ -78,5 +82,26 @@ describe('MobileGalleryDetailsScreen share action', () => {
     render(React.createElement(MobileGalleryDetailsScreen, { assetId: 'asset-1' }));
 
     expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
+  });
+
+  it('copies the selected prompt from mobile details', async () => {
+    currentAsset = {
+      ...mockAsset,
+      type: 'video',
+      prompt: 'video prompt',
+      resolvedPrompt: 'resolved video prompt',
+      sourceImagePrompt: 'source image prompt',
+      sourceImageResolvedPrompt: 'resolved source prompt',
+      modelId: 'wan22',
+    };
+
+    render(React.createElement(MobileGalleryDetailsScreen, { assetId: 'asset-1' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved source' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy selected prompt' }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('resolved source prompt');
+    });
   });
 });

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GalleryAssetDialog, type GalleryAssetDialogAsset } from '@/components/workspace/GalleryAssetDialog';
@@ -50,6 +50,10 @@ function renderDialog(asset: Partial<GalleryAssetDialogAsset> = {}) {
 describe('GalleryAssetDialog source prompt toggle', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
   });
 
   it('switches video details from video prompt to source image prompt', () => {
@@ -128,6 +132,17 @@ describe('GalleryAssetDialog source prompt toggle', () => {
     expect(screen.queryByRole('button', { name: 'Source image' })).toBeNull();
     expect(screen.getByText('image prompt')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
+  });
+
+  it('copies the selected prompt variant', async () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source image' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy selected prompt' }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('source image prompt');
+    });
   });
 
   it('does not show seed for audio assets', () => {
