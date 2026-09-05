@@ -84,6 +84,25 @@ describe('MobileGalleryDetailsScreen share action', () => {
     expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   });
 
+  it('uses poster-backed metadata preload for video previews', () => {
+    currentAsset = {
+      ...mockAsset,
+      type: 'video',
+      originalUrl: '/video-original.mp4',
+      previewUrl: '/video-preview.mp4',
+      thumbnailUrl: '/video-poster.jpg',
+      seed: 42,
+      modelId: 'wan22',
+    };
+
+    render(React.createElement(MobileGalleryDetailsScreen, { assetId: 'asset-1' }));
+
+    const video = document.querySelector('video') as HTMLVideoElement | null;
+    expect(video?.getAttribute('src')).toBe('/video-preview.mp4');
+    expect(video?.getAttribute('poster')).toBe('/video-poster.jpg');
+    expect(video?.getAttribute('preload')).toBe('metadata');
+  });
+
   it('copies the selected prompt from mobile details', async () => {
     currentAsset = {
       ...mockAsset,

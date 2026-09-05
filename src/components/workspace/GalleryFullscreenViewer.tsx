@@ -50,6 +50,10 @@ function clampIndex(index: number, total: number): number {
   return Math.min(total - 1, Math.max(0, index));
 }
 
+function shouldUseDesktopViewerLayout() {
+  return typeof window !== 'undefined' && window.innerWidth >= 640;
+}
+
 export function GalleryFullscreenViewer({
   open,
   items,
@@ -73,7 +77,7 @@ export function GalleryFullscreenViewer({
   const previousVideoItemIdRef = useRef<string | null>(null);
   const zoomRef = useRef<ZoomRef | null>(null);
 
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(shouldUseDesktopViewerLayout);
   const [showControls, setShowControls] = useState(true);
   const [favoriteOverlay, setFavoriteOverlay] = useState<'added' | 'removed' | null>(null);
   const [currentImageLoaded, setCurrentImageLoaded] = useState(false);
@@ -104,7 +108,7 @@ export function GalleryFullscreenViewer({
     poster: item.posterUrl || undefined,
   })), [items]);
 
-  const resetVideoElement = useCallback((video: HTMLVideoElement | null) => {
+  const resetVideoElement = useCallback((video: HTMLVideoElement | null, options: { releaseSource?: boolean } = {}) => {
     if (!video) return;
     video.pause();
     try {
@@ -112,17 +116,25 @@ export function GalleryFullscreenViewer({
     } catch {
       // Some browsers can reject seeking before metadata is ready.
     }
+    if (options.releaseSource) {
+      video.removeAttribute('src');
+      try {
+        video.load();
+      } catch {
+        // Mobile browsers can reject load() during teardown; the source has already been removed.
+      }
+    }
   }, []);
 
-  const resetVideoByItemId = useCallback((itemId: string | null) => {
+  const resetVideoByItemId = useCallback((itemId: string | null, options: { releaseSource?: boolean } = {}) => {
     if (!itemId) return;
-    resetVideoElement(videoRefsRef.current.get(itemId) || null);
+    resetVideoElement(videoRefsRef.current.get(itemId) || null, options);
   }, [resetVideoElement]);
 
-  const resetCurrentVideo = useCallback(() => {
+  const resetCurrentVideo = useCallback((options: { releaseSource?: boolean } = {}) => {
     if (currentItem?.type !== 'video') return;
-    resetVideoByItemId(currentItem.id);
-    resetVideoElement(activeVideoRef.current);
+    resetVideoByItemId(currentItem.id, options);
+    resetVideoElement(activeVideoRef.current, options);
   }, [currentItem?.id, currentItem?.type, resetVideoByItemId, resetVideoElement]);
 
   const playVideoElement = useCallback((video: HTMLVideoElement | null) => {
@@ -133,7 +145,7 @@ export function GalleryFullscreenViewer({
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    setIsDesktop(window.innerWidth >= 640);
+    setIsDesktop(shouldUseDesktopViewerLayout());
 
     const storedInterval = window.localStorage.getItem('engui.galleryViewer.slideshowIntervalSeconds');
     const parsedInterval = Number.parseInt(storedInterval || '', 10);
@@ -164,8 +176,9 @@ export function GalleryFullscreenViewer({
     }
 
     if (!open) {
-      resetVideoByItemId(previousVideoItemIdRef.current);
-      resetCurrentVideo();
+      const releaseSource = !isDesktop;
+      resetVideoByItemId(previousVideoItemIdRef.current, { releaseSource });
+      resetCurrentVideo({ releaseSource });
       previousVideoItemIdRef.current = null;
       setCurrentImageLoaded(false);
       setImageNaturalSize(null);
@@ -177,19 +190,19 @@ export function GalleryFullscreenViewer({
     }
 
     previousOpenRef.current = open;
-  }, [open, resetCurrentVideo, resetVideoByItemId]);
+  }, [isDesktop, open, resetCurrentVideo, resetVideoByItemId]);
 
   useEffect(() => {
     if (!open) return;
 
     const previousVideoItemId = previousVideoItemIdRef.current;
     if (previousVideoItemId && previousVideoItemId !== currentItem?.id) {
-      resetVideoByItemId(previousVideoItemId);
+      resetVideoByItemId(previousVideoItemId, { releaseSource: !isDesktop });
     }
 
     previousVideoItemIdRef.current = currentItem?.type === 'video' ? currentItem.id : null;
     setVideoControlsItemId(null);
-  }, [currentItem?.id, currentItem?.type, open, resetVideoByItemId]);
+  }, [currentItem?.id, currentItem?.type, isDesktop, open, resetVideoByItemId]);
 
   useEffect(() => {
     if (!open || !currentItem) {
@@ -587,7 +600,7 @@ export function GalleryFullscreenViewer({
       <Lightbox
         open={open}
         close={() => {
-          resetCurrentVideo();
+          resetCurrentVideo({ releaseSource: !isDesktop });
           stopSlideshow();
           onClose();
         }}
@@ -597,7 +610,7 @@ export function GalleryFullscreenViewer({
         className="engui-yarl-root"
         carousel={{
           finite: true,
-          preload: 2,
+          preload: isDesktop ? 2 : 0,
           padding: isDesktop ? '16px' : '0px',
           spacing: isDesktop ? '16px' : '0px',
           imageFit: 'contain',
@@ -655,6 +668,25 @@ export function GalleryFullscreenViewer({
             if (customSlide.type === 'video') {
               const isActiveVideo = customSlide.id === currentItem?.id;
               const showNativeVideoControls = isActiveVideo && videoControlsItemId === customSlide.id;
+              if (!isDesktop && !isActiveVideo) {
+                return (
+                  <div className="flex h-full w-full items-center justify-center bg-black p-0">
+                    {customSlide.poster ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={customSlide.poster}
+                        alt=""
+                        aria-hidden="true"
+                        className="block h-full w-full object-contain"
+                        draggable={false}
+                        data-testid="gallery-fullscreen-video-poster"
+                      />
+                    ) : (
+                      <Play className="h-10 w-10 text-white/45" aria-hidden="true" />
+                    )}
+                  </div>
+                );
+              }
               return (
                 <div
                   className="flex h-full w-full items-center justify-center p-0"

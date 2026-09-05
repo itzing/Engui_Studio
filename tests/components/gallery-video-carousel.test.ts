@@ -432,7 +432,7 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
-  it('preloads adjacent videos and animates one item per vertical swipe in TikTok mode', async () => {
+  it('loads only the current video and animates one item per vertical swipe in TikTok mode', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -477,20 +477,22 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy());
-      expect(stage.querySelectorAll('video')).toHaveLength(3);
-      const previousSlot = stage.querySelector('video[src="/video-1.mp4"]')?.parentElement as HTMLElement;
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      const previousSlot = stage.querySelector('img[src="/video-1.png"]')?.parentElement as HTMLElement;
       const currentSlot = stage.querySelector('video[src="/video-2.mp4"]')?.parentElement as HTMLElement;
-      const nextSlot = stage.querySelector('video[src="/video-3.mp4"]')?.parentElement as HTMLElement;
+      const nextSlot = stage.querySelector('img[src="/video-3.png"]')?.parentElement as HTMLElement;
       expect(stage.querySelector('video[src="/video-2.mp4"]')?.className).toContain('object-contain');
-      expect(stage.querySelector('video[src="/video-3.mp4"]')?.className).toContain('object-contain');
+      expect(stage.querySelector('video[src="/video-1.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeNull();
+      expect(stage.querySelector('img[src="/video-3.png"]')?.className).toContain('object-contain');
       expect(currentSlot.style.width).toBe('390px');
       expect(currentSlot.style.height).toBe('844px');
       expect(previousSlot.style.transform).toBe('translate3d(0px, -844px, 0)');
       expect(currentSlot.style.transform).toBe('translate3d(0px, 0px, 0)');
       expect(nextSlot.style.transform).toBe('translate3d(0px, 844px, 0)');
-      expect(stage.querySelector('video[src="/video-3.mp4"]')?.getAttribute('preload')).toBe('auto');
-      expect(screen.getAllByTestId('gallery-tiktok-video-loading')).toHaveLength(3);
-      expect(screen.getAllByTestId('gallery-tiktok-video-progress')).toHaveLength(3);
+      expect(stage.querySelector('video[src="/video-2.mp4"]')?.getAttribute('preload')).toBe('auto');
+      expect(screen.getAllByTestId('gallery-tiktok-video-loading')).toHaveLength(1);
+      expect(screen.getAllByTestId('gallery-tiktok-video-progress')).toHaveLength(1);
       expect(screen.getAllByTestId('gallery-tiktok-video-poster')).toHaveLength(3);
       expect(stage.querySelector('img[src="/video-2.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-3.png"]')).toBeTruthy();
@@ -499,7 +501,7 @@ describe('GalleryVideoCarousel', () => {
       fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
       expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeTruthy();
       expect((stage.querySelector('video[src="/video-2.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, -200px, 0)');
-      expect((stage.querySelector('video[src="/video-3.mp4"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 644px, 0)');
+      expect((stage.querySelector('img[src="/video-3.png"]')?.parentElement as HTMLElement).style.transform).toBe('translate3d(0px, 644px, 0)');
       fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
 
       await waitFor(() => expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy());
@@ -664,7 +666,7 @@ describe('GalleryVideoCarousel', () => {
     expect(screen.getByRole('button', { name: 'To T2V' })).toBeTruthy();
   });
 
-  it('keeps TikTok neighbor videos mounted and uses poster-only second through fifth neighbors', async () => {
+  it('keeps only the current TikTok video mounted and uses poster-only neighbors', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -710,21 +712,22 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const stage = screen.getByTestId('gallery-video-carousel');
       await waitFor(() => expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeTruthy());
-      expect(stage.querySelectorAll('video')).toHaveLength(3);
-      expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeTruthy();
-      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy();
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      expect(stage.querySelector('video[src="/video-3.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeNull();
       expect(stage.querySelector('video[src="/video-2.mp4"]')).toBeNull();
       expect(stage.querySelector('video[src="/video-6.mp4"]')).toBeNull();
       expect(stage.querySelector('video[src="/video-4.mp4"]')?.className).toContain('object-contain');
-      expect(stage.querySelector('video[src="/video-5.mp4"]')?.className).toContain('object-contain');
+      expect(stage.querySelector('img[src="/video-3.png"]')?.className).toContain('object-contain');
+      expect(stage.querySelector('img[src="/video-5.png"]')?.className).toContain('object-contain');
       expect(stage.querySelector('img[src="/video-1.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-2.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-6.png"]')).toBeTruthy();
       expect(stage.querySelector('img[src="/video-7.png"]')).toBeTruthy();
-      expect(loadSpy).toHaveBeenCalledTimes(3);
+      expect(loadSpy).toHaveBeenCalledTimes(1);
 
-      const preloadedNextVideo = stage.querySelector('video[src="/video-5.mp4"]') as HTMLVideoElement;
-      fireEvent.loadedData(preloadedNextVideo);
+      const initialCurrentVideo = stage.querySelector('video[src="/video-4.mp4"]') as HTMLVideoElement;
+      fireEvent.loadedData(initialCurrentVideo);
 
       fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
       fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 202, clientY: 500 });
@@ -734,12 +737,15 @@ describe('GalleryVideoCarousel', () => {
       await act(async () => {
         await new Promise((resolve) => window.setTimeout(resolve, 220));
       });
-      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBe(preloadedNextVideo);
-      expect(stage.querySelector('img[src="/video-5.png"]')).toBeNull();
-      expect(stage.querySelector('video[src="/video-6.mp4"]')).toBeTruthy();
+      expect(initialCurrentVideo.hasAttribute('src')).toBe(false);
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeTruthy();
+      expect(stage.querySelector('img[src="/video-5.png"]')).toBeTruthy();
+      expect(stage.querySelector('video[src="/video-6.mp4"]')).toBeNull();
       expect(stage.querySelector('video[src="/video-7.mp4"]')).toBeNull();
       expect(stage.querySelector('img[src="/video-7.png"]')).toBeTruthy();
 
+      const secondCurrentVideo = stage.querySelector('video[src="/video-5.mp4"]') as HTMLVideoElement;
       fireEvent.pointerDown(stage, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 300 });
       fireEvent.pointerMove(stage, { pointerId: 2, pointerType: 'touch', clientX: 202, clientY: 500 });
       fireEvent.pointerUp(stage, { pointerId: 2, pointerType: 'touch', clientX: 202, clientY: 500 });
@@ -748,7 +754,9 @@ describe('GalleryVideoCarousel', () => {
       await act(async () => {
         await new Promise((resolve) => window.setTimeout(resolve, 220));
       });
-      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBe(preloadedNextVideo);
+      expect(secondCurrentVideo.hasAttribute('src')).toBe(false);
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeTruthy();
     } finally {
       loadSpy.mockRestore();
       rectSpy.mockRestore();
@@ -829,7 +837,7 @@ describe('GalleryVideoCarousel', () => {
     }
   });
 
-  it('plays a preloaded TikTok neighbor only after it becomes current and clears distant slots', async () => {
+  it('plays a TikTok neighbor only after it becomes current and clears distant slots', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -881,6 +889,9 @@ describe('GalleryVideoCarousel', () => {
       await waitFor(() => expect(stage.querySelector('video[src="/video-6.mp4"]')).toBeTruthy());
       await waitFor(() => expect(playCalls).toContain('/video-6.mp4'));
       expect(stage.querySelector('video[src="/video-6.mp4"]')?.className).toContain('object-contain');
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      expect(stage.querySelector('video[src="/video-5.mp4"]')).toBeNull();
+      expect(stage.querySelector('video[src="/video-7.mp4"]')).toBeNull();
       expect(playCalls).not.toContain('/video-5.mp4');
       expect(playCalls).not.toContain('/video-7.mp4');
       expect(stage.querySelector('video[src="/video-4.mp4"]')).toBeNull();

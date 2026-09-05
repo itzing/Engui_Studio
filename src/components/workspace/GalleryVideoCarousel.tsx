@@ -325,6 +325,17 @@ function shouldBackfillTikTokVideoPoster(asset: GalleryCarouselAsset) {
   return !readTikTokVideoPosterUrl(asset) || asset.derivativeStatus === 'pending' || asset.derivativeStatus === 'processing';
 }
 
+function releaseVideoElementSource(video: HTMLVideoElement | null | undefined) {
+  if (!video) return;
+  video.pause();
+  video.removeAttribute('src');
+  try {
+    video.load();
+  } catch {
+    // Ignore cleanup failures; removing the source is enough for constrained media stacks to release the pipeline.
+  }
+}
+
 type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
@@ -1332,8 +1343,7 @@ export function GalleryVideoCarousel({
     video.playsInline = true;
     const alreadyRequested = playRequestedVideoInstanceIdsRef.current.has(instanceId);
     const alreadyRetriedAfterInteraction = playInteractionRetryVideoInstanceIdsRef.current.has(instanceId);
-    if (!tiktokModeRef.current && alreadyRequested && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
-    if (alreadyRequested && !video.paused && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
+    if (alreadyRequested && (!forceInteractionRetry || alreadyRetriedAfterInteraction)) return;
 
     playRequestedVideoInstanceIdsRef.current.add(instanceId);
     if (forceInteractionRetry) {
@@ -1441,7 +1451,8 @@ export function GalleryVideoCarousel({
     preloadRequestedVideoInstanceIdsRef.current.delete(instanceId);
     playRequestedVideoInstanceIdsRef.current.delete(instanceId);
     playInteractionRetryVideoInstanceIdsRef.current.delete(instanceId);
-    videoRefs.current[instanceId]?.pause();
+    releaseVideoElementSource(videoRefs.current[instanceId]);
+    delete videoRefs.current[instanceId];
     setVideoReadyInstanceIds((current) => {
       if (!current.has(instanceId)) return current;
       const next = new Set(current);
@@ -1536,20 +1547,14 @@ export function GalleryVideoCarousel({
         .map((slot) => slot.instanceId),
     );
     const posterOnlyInstanceIds = slots
-      .filter((slot) => Math.abs(slot.feedIndex - currentSlot.feedIndex) > 1)
+      .filter((slot) => slot.instanceId !== currentSlot.instanceId)
       .map((slot) => slot.instanceId);
     clearVideoInstanceState(posterOnlyInstanceIds);
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
       const slot = slots.find((candidate) => candidate.instanceId === instanceId);
       const distanceFromCurrent = slot ? Math.abs(slot.feedIndex - currentSlot.feedIndex) : Number.POSITIVE_INFINITY;
-      if (!allowedInstanceIds.has(instanceId) || distanceFromCurrent > 1) {
-        video.pause();
-        video.removeAttribute('src');
-        try {
-          video.load();
-        } catch {
-          // Ignore cleanup failures; removing the ref is enough for React to release the node.
-        }
+      if (!allowedInstanceIds.has(instanceId) || distanceFromCurrent > 0) {
+        releaseVideoElementSource(video);
         delete videoRefs.current[instanceId];
         clearVideoInstanceState([instanceId]);
         return;
@@ -1583,16 +1588,17 @@ export function GalleryVideoCarousel({
 
   useEffect(() => {
     if (!tiktokModeRef.current) return;
+    const currentTikTokSlot = getCurrentTikTokSlot();
     activeSlots.forEach((slot) => {
       const video = videoRefs.current[slot.instanceId];
       if (!video) return;
-      if (Math.abs(slot.y) < 1) {
+      if (currentTikTokSlot?.instanceId === slot.instanceId) {
         requestVideoPlayback(slot.instanceId, video);
       } else {
         video.pause();
       }
     });
-  }, [activeSlots, requestVideoPlayback]);
+  }, [activeSlots, getCurrentTikTokSlot, requestVideoPlayback]);
 
   useEffect(() => {
     if (!tiktokModeRef.current) return;
@@ -1904,13 +1910,7 @@ export function GalleryVideoCarousel({
     const inactiveInstanceIds: string[] = [];
     Object.entries(videoRefs.current).forEach(([instanceId, video]) => {
       if (!activeInstanceIds.has(instanceId)) {
-        video.pause();
-        video.removeAttribute('src');
-        try {
-          video.load();
-        } catch {
-          // Ignore cleanup failures; removing the ref is enough for React to release the node.
-        }
+        releaseVideoElementSource(video);
         delete videoRefs.current[instanceId];
         inactiveInstanceIds.push(instanceId);
       }
@@ -2472,9 +2472,8 @@ export function GalleryVideoCarousel({
             const isTikTokSlot = tiktokModeRef.current;
             const isFlowSlot = flowMode && slot.instanceId.startsWith('flow-');
             const shouldContainMedia = isTikTokSlot || (isFlowSlot && slot.flowOrientation === 'portrait');
-            const isTikTokCurrentSlot = !isTikTokSlot || Math.abs(slot.y) < 1;
-            const tiktokDistanceFromCurrent = currentTikTokFeedIndex === null ? 0 : Math.abs(slot.feedIndex - currentTikTokFeedIndex);
-            const shouldRenderVideo = isFlowSlot || !isTikTokSlot || tiktokDistanceFromCurrent <= 1;
+            const isTikTokCurrentSlot = !isTikTokSlot || slot.feedIndex === currentTikTokFeedIndex;
+            const shouldRenderVideo = isFlowSlot || !isTikTokSlot || isTikTokCurrentSlot;
             const isVideoReady = videoReadyInstanceIds.has(slot.instanceId);
             const posterUrl = slot.entry.kind === 'video'
               ? (isTikTokSlot || isFlowSlot ? readTikTokVideoPosterUrl(slot.entry.asset) || slot.entry.asset.thumbnailUrl || null : slot.entry.asset.thumbnailUrl || null)
@@ -2521,6 +2520,10 @@ export function GalleryVideoCarousel({
                             requestVideoPlayback(slot.instanceId, node);
                           }
                         } else {
+                          const latestTikTokCurrentSlot = tiktokModeRef.current ? getCurrentTikTokSlot() : null;
+                          if (isTikTokSlot && latestTikTokCurrentSlot?.instanceId !== slot.instanceId) {
+                            releaseVideoElementSource(videoRefs.current[slot.instanceId]);
+                          }
                           delete videoRefs.current[slot.instanceId];
                         }
                       }}

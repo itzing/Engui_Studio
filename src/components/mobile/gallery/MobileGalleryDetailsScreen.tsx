@@ -293,7 +293,7 @@ export default function MobileGalleryDetailsScreen({ assetId }: { assetId: strin
                 <CardContent className="p-3">
                   <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-border bg-black/30">
                     {asset.type === 'video' ? (
-                      <video src={mediaUrl} controls playsInline className="max-h-[70vh] w-full object-contain" />
+                      <video src={mediaUrl} poster={asset.thumbnailUrl || undefined} controls playsInline preload="metadata" className="max-h-[70vh] w-full object-contain" />
                     ) : asset.type === 'audio' ? (
                       <audio src={asset.originalUrl} controls className="w-full" />
                     ) : (

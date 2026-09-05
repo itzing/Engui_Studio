@@ -6,11 +6,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockShareGalleryAsset = vi.hoisted(() => vi.fn().mockResolvedValue('file'));
+const mockLightboxProps = vi.hoisted(() => vi.fn());
 
 type MockLightboxProps = {
   open?: boolean;
   index?: number;
   slides?: Array<unknown>;
+  carousel?: {
+    preload?: number;
+  };
   render?: {
     controls?: () => React.ReactNode;
     slide?: (args: { slide: unknown }) => React.ReactNode;
@@ -25,6 +29,7 @@ vi.mock('yet-another-react-lightbox', async () => {
   return {
     default: (props: MockLightboxProps) => {
       if (!props.open) return null;
+      mockLightboxProps(props);
 
       const currentSlide = props.slides?.[props.index ?? 0] || {};
       const slide = props.render?.slide?.({ slide: currentSlide }) || ReactActual.createElement('div', null, 'slide');
@@ -71,6 +76,7 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
     window.localStorage.clear();
     Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
     Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: vi.fn() });
+    Object.defineProperty(HTMLMediaElement.prototype, 'load', { configurable: true, value: vi.fn() });
   });
 
   it('keeps desktop-width touch swipes disabled by default', async () => {
@@ -144,6 +150,37 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
     fireEvent.click(video.parentElement as HTMLElement);
 
     await waitFor(() => expect(video.hasAttribute('controls')).toBe(true));
+  });
+
+  it('uses poster-only inactive video slides and disables adjacent preload on mobile', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+    const videoItems = [
+      { id: 'asset-1', url: '/asset-1.mp4', posterUrl: '/asset-1.jpg', type: 'video' as const },
+      { id: 'asset-2', url: '/asset-2.mp4', posterUrl: '/asset-2.jpg', type: 'video' as const },
+    ];
+
+    render(React.createElement(GalleryFullscreenViewer, {
+      open: true,
+      items: videoItems,
+      currentIndex: 1,
+      onIndexChange: vi.fn(),
+      onClose: vi.fn(),
+    }));
+
+    const activeVideo = await screen.findByTestId('gallery-fullscreen-video');
+    expect(activeVideo.getAttribute('src')).toBe('/asset-2.mp4');
+    expect(activeVideo.getAttribute('preload')).toBe('auto');
+
+    await waitFor(() => {
+      const latestProps = mockLightboxProps.mock.calls[mockLightboxProps.mock.calls.length - 1]?.[0] as MockLightboxProps | undefined;
+      expect(latestProps?.carousel?.preload).toBe(0);
+    });
+    const latestProps = mockLightboxProps.mock.calls[mockLightboxProps.mock.calls.length - 1]?.[0] as MockLightboxProps;
+    const inactiveSlide = latestProps.render?.slide?.({ slide: latestProps.slides?.[0] });
+    const inactiveRender = render(React.createElement(React.Fragment, null, inactiveSlide));
+
+    expect(inactiveRender.container.querySelector('video')).toBeNull();
+    expect(inactiveRender.container.querySelector('img[src="/asset-1.jpg"]')).toBeTruthy();
   });
 
   it('shows Share for image and video slides and shares the current item URL', async () => {
