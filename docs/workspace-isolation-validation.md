@@ -53,7 +53,7 @@ Scope: desktop and mobile, per the approved specification and implementation pla
 
 - Schema validation/client generation and repeated migration rehearsal on a consistent copy.
 - API/database integration: A/B reads, foreign direct-ID mutation, mixed bulk, inherited parent ownership, immutable Default, shared-source permissions, scope mismatch, writer drain, confirmed provider cancellation, exact public/legacy/temp cleanup, repeat deletion, Default gallery preservation.
-- 24 focused workspace tests: browser/IndexedDB isolation, legacy draft preservation, delayed callbacks, all-drafts GC, safe S3 pruning, expired leases, multipart recovery proof, WAN path/pair separation.
+- 25 focused workspace tests: browser/IndexedDB isolation, legacy draft preservation, delayed callbacks, all-drafts GC with a fresh-upload grace period, safe S3 pruning, expired leases, multipart recovery proof, WAN path/pair separation.
 - 32 existing business regressions: LoRA filtering/weights, video presets, reuse and persisted reuse drafts.
 - Real Chromium desktop and mobile: management/create without auto-switch, reload persistence, independent tabs, new empty gallery, foreign-ID rejection and no API 5xx on the corrected WAL candidate.
 - Real S3 read-only listing and HEAD verification passed through the corrected SDK client.

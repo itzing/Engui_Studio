@@ -94,3 +94,10 @@ it('keeps delayed extracted prompt cache writes with the captured owner', async 
   expect(readVideoSourcePromptCache(key.key)).toBeNull();
   expect(readVideoSourcePromptCache(key.key, 'A')).toBe('fixture source prompt');
 });
+
+it('retains a fresh attachment while another tab has not committed its draft reference', async () => {
+  chooseBrowserWorkspace('A');
+  await putCreateMedia({ mediaId: 'fresh-other-tab', blob: new Blob(['fixture']), createdAt: Date.now(), updatedAt: Date.now() });
+  expect(await cleanupOrphanedCreateMedia(createDefaultUnifiedCreateDraftState())).toEqual([]);
+  expect(await getCreateMedia('fresh-other-tab')).not.toBeNull();
+});

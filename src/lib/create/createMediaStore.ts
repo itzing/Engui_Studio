@@ -108,7 +108,12 @@ export async function cleanupOrphanedCreateMedia(state: UnifiedCreateDraftState)
   const deleted: string[] = [];
   for (const entry of entries) {
     if (currentBrowserWorkspaceId() !== owner) break;
-    if (ownerOf(entry) === owner && !referenced.has(entry.mediaId) && await deleteCreateMedia(entry.mediaId)) deleted.push(entry.mediaId);
+    // A different tab may have just uploaded an attachment but not yet saved
+    // its draft. Keep a grace period and reread all draft references at deletion.
+    if (Date.now() - entry.createdAt < 5 * 60 * 1000) continue;
+    const latest = allReferencedMediaIds(state);
+    if (!latest) break;
+    if (ownerOf(entry) === owner && !referenced.has(entry.mediaId) && !latest.has(entry.mediaId) && await deleteCreateMedia(entry.mediaId)) deleted.push(entry.mediaId);
   }
   return deleted;
 }
