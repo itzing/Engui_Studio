@@ -85,3 +85,8 @@ temp_status.txt
 /src/app/generations/
 
 /prisma/db/backups/*.bak*
+
+# Workspace migration/runtime artifacts must never enter source control.
+prisma/db/*.db-wal
+prisma/db/*.db-shm
+__pycache__/
