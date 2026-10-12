@@ -1,6 +1,6 @@
 # Workspace isolation — implementation and validation
 
-Status: release candidate; production cutover pending.
+Status: deployed and verified.
 Date: 2026-10-12
 Scope: desktop and mobile, per the approved specification and implementation plan.
 
@@ -10,7 +10,7 @@ Scope: desktop and mobile, per the approved specification and implementation pla
 - The user explicitly accepted a backup on the same NVMe after the existing read error. This protects against application/migration mistakes, not physical device failure.
 - The unreadable PNG and its exact gallery record/derivatives were removed only after a separate explicit user instruction. Metadata and readable previews were retained privately.
 - Initial media backup verified 26,061 readable files; the one unreadable original was documented rather than silently substituted.
-- A fresh pre-cutover media copy is being retained because production continued to receive new images during implementation.
+- A fresh pre-cutover media copy was captured while the service was stopped because production continued to receive new images during implementation.
 - The versioned migration compares stable field hashes/counts and pre-existing ownership across all 42 original tables, checks foreign keys, and records a checksum. Repeating it is a verified no-op.
 - No existing S3 weights are relocated, rewritten or deleted by deployment. Their bytes are not duplicated into this local backup; existing paths remain the rollback reference.
 - Private evidence and rollback artifacts: `/home/engui/backups/workspaces-20261012/`. Do not commit database snapshots, settings, credentials, generated media or browser screenshots.
@@ -58,7 +58,7 @@ Scope: desktop and mobile, per the approved specification and implementation pla
 - Real Chromium desktop and mobile: management/create without auto-switch, reload persistence, independent tabs, new empty gallery, foreign-ID rejection and no API 5xx on the corrected WAL candidate.
 - Real S3 read-only listing and HEAD verification passed through the corrected SDK client.
 - Tiny unique temporary S3 fixtures verified multipart behavior. The complete new upload service was exercised on an isolated database: part upload, checksum-verified completion, idempotent retry, original display filename, unique physical key, exact object deletion and whole fixture-workspace cleanup. Fixture objects were deleted and absence confirmed.
-- Isolated production builds passed; a final production-path build is required at cutover.
+- Isolated builds and the final production-path build passed.
 - Existing repository-wide TypeScript diagnostics were compared separately against unchanged production. This release does not claim the entire pre-existing type-check/test suite is clean; new workspace-specific diagnostics are addressed.
 - No paid RunPod/Studio generation jobs were launched. Actual generated-image quality remains the user's validation.
 
@@ -72,3 +72,28 @@ Scope: desktop and mobile, per the approved specification and implementation pla
 6. Before reopening a failed release, rollback code/schema/client/build and the quiesced database snapshot. After users resume writing, capture/reconcile the new data first; do not blindly restore an older snapshot.
 
 No schema push/reset, destructive legacy migration endpoint, automatic S3 sync or data transfer is part of deployment.
+
+## Production release outcome
+
+- Deployed on 2026-10-12 at 20:10 UTC. Application release: `df4f65918753982a782c734fc65c9da115458110` (feature `cddfca0`, browser attachment race fix `ba1632e`, runtime-artifact ignore rules `df4f659`).
+- Applied migration ledger entry: `20261012-workspace-isolation-v1`.
+- The fresh quiesced snapshot contained **8,793 gallery assets and 88 LoRAs**. All 42 original-table preservation checks passed before reopening. The deployed APIs returned the same gallery/LoRA counts and the original protected Default identity.
+- Global settings and the old stable fields of LoRAs, presets, characters, vibes, prompt documents and wildcards were compared against the fresh snapshot after startup and matched. Secrets were never printed.
+- SQLite quick-check and foreign-key checks passed; WAL is active. The explicitly deleted damaged gallery record and its PNG remain absent.
+- Three original images spanning the archive were readable and byte-identical to the fresh local backup. The service is active; desktop, mobile Create, Advanced Settings, Gallery and representative content endpoints returned HTTP 200. The post-start service log had no application errors during verification.
+- Production build completed successfully, followed by the explicit system-service restart. No paid generation jobs or automatic LoRA sync/pruning were used to validate this release.
+- Two deployment attempts encountered pre-existing mixed-owner directory permissions. The second had already migrated but failed before reopening; the automatic rollback restored the fresh database, old build and old Prisma client, and the previous service worked. Directory ACLs were corrected and the third attempt completed with exit code 0 and `DEPLOYED_AND_VERIFIED`. Thus the pre-reopen rollback was also exercised against the fresh production snapshot.
+- Temporary isolated staging was stopped after validation. No synthetic workspaces were created in production. The unrelated untracked `tmp/` remains untouched.
+
+### Reproducible evidence
+
+Private artifacts under `/home/engui/backups/workspaces-20261012/`:
+
+- `cutover/database.db`, `cutover/baseline.json`, `cutover/media/`, `cutover/old-next/` and `cutover/old-prisma-client/`: fresh consistent rollback material.
+- `cutover.sh`, `cutover.log`, `cutover.pid`, `cutover.exit_code`: detached deployment history and final success.
+- `cutover-health.py`: deployed protected Default, gallery, LoRA, SQLite and deleted-asset assertions.
+- `post-deploy-verify.py` and `production-verification.json`: read-only settings/content preservation, representative HTTP pages and media-byte comparisons.
+- `rollback-before-reopen.sh`: rehearsed rollback, only valid before accepting new user writes.
+- `explicit-asset-removal/`: retained metadata and readable derivatives for the single user-authorized damaged-image deletion.
+
+The backup remains on the same physical device, as explicitly accepted. Existing S3 weights were not duplicated or modified; this release does not claim recovery from physical disk failure or later user-requested S3 deletion.
