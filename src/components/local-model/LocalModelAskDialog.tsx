@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useState } from 'react';
 import { Check, Clipboard, Loader2, Send } from 'lucide-react';
@@ -11,6 +14,7 @@ interface LocalModelAskDialogProps {
 }
 
 export default function LocalModelAskDialog({ open, onOpenChange }: LocalModelAskDialogProps) {
+  const fetch = useWorkspaceFetch();
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState<string | null>(null);

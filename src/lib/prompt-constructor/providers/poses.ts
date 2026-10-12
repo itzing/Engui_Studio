@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import type { PosePresetSummary } from '@/lib/poses/types';
 import type { PromptBlockProvider } from '@/lib/prompt-constructor/providers/types';
 

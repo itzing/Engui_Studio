@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { VideoCreatePreset } from '@/lib/create/videoPresets';
@@ -58,7 +59,8 @@ function toPreset(record: {
 async function listPresets(workspaceId: string): Promise<VideoCreatePreset[]> {
   const records = await prisma.preset.findMany({
     where: {
-      userId: workspaceId,
+      workspaceId,
+      userId: 'user-with-settings',
       type: { startsWith: TYPE_PREFIX },
     },
     orderBy: { createdAt: 'desc' },
@@ -70,7 +72,7 @@ async function listPresets(workspaceId: string): Promise<VideoCreatePreset[]> {
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json().catch(() => null);
@@ -82,7 +84,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     await prisma.preset.deleteMany({
       where: {
         id,
-        userId: workspaceId,
+        workspaceId,
+      userId: 'user-with-settings',
         type: { startsWith: TYPE_PREFIX },
       },
     });
@@ -93,3 +96,5 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
+
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

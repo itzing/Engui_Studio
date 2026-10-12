@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const volume = searchParams.get('volume');
@@ -75,3 +76,5 @@ function detectMimeType(fileName: string): string {
 
   return mimeByExt[ext] || 'application/octet-stream';
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'global');

@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
 
-export async function DELETE(request: NextRequest) {
+async function DELETEImpl(request: NextRequest) {
   try {
     const { volume, key, keys } = await request.json();
 
@@ -75,3 +76,5 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'global');

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { deleteStudioPoseCategory, getStudioPoseCategory, updateStudioPoseCategory } from '@/lib/studio-sessions/poseLibraryServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJson, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJs
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function GETImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const category = await getStudioPoseCategory(id);
@@ -16,7 +17,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await readStudioSessionJsonBody(request);
@@ -28,7 +29,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const deleted = await deleteStudioPoseCategory(id);
@@ -38,3 +39,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return handleStudioSessionApiError(error, 'Failed to delete Studio pose category:');
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

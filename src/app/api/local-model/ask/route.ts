@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { ensureHelperMode } from '@/lib/helperMode';
@@ -43,7 +44,7 @@ const systemPrompt = [
   'Return only the answer text unless the user explicitly asks for formatting.',
 ].join('\n');
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
@@ -119,3 +120,5 @@ export async function POST(request: NextRequest) {
   }
 }
 
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

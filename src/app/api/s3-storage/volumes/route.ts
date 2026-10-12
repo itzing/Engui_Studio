@@ -1,7 +1,8 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 
-export async function GET() {
+async function GETImpl() {
   try {
     const settingsService = new SettingsService();
     const { settings } = await settingsService.getSettings('user-with-settings');
@@ -46,3 +47,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'global');

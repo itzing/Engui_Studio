@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildPromptValidation, buildRenderedPrompt, normalizeConstraintIds, normalizePromptDocumentStatus, normalizePromptDocumentTitle, normalizePromptState, normalizePromptTemplateId, normalizePromptTemplateVersion, serializeConstraintIds, serializePromptState, toPromptDocument } from '@/lib/prompt-constructor/utils';
@@ -6,7 +7,7 @@ import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function GETImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const existing = await prisma.promptDocument.findUnique({ where: { id } });
@@ -28,7 +29,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -78,7 +79,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -113,3 +114,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PUT = withWorkspaceRoute(PUTImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');

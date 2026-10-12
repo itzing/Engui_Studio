@@ -1,4 +1,9 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
@@ -31,6 +36,7 @@ import type { CharacterSummary } from '@/lib/characters/types';
 import { normalizePromptWildcardSelections, type PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
 
 export default function ImageGenerationForm() {
+  const fetch = useWorkspaceFetch();
     const { t } = useI18n();
     const { settings, addJob, activeWorkspaceId } = useStudio();
     const [selectedModel, setSelectedModel] = useState<string>('');
@@ -164,8 +170,8 @@ export default function ImageGenerationForm() {
 
     useEffect(() => {
         try {
-            const storedInstruction = localStorage.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-            if (storedInstruction !== null) {
+            const storedInstruction = workspaceStorage()?.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            if (typeof storedInstruction === 'string') {
                 setPromptHelperInstruction(storedInstruction);
             }
         } catch (error) {
@@ -176,9 +182,9 @@ export default function ImageGenerationForm() {
     useEffect(() => {
         try {
             if (promptHelperInstruction.trim()) {
-                localStorage.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
+                workspaceStorage()?.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
             } else {
-                localStorage.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+                workspaceStorage()?.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
             }
         } catch (error) {
             console.warn('Failed to persist prompt helper instruction', error);

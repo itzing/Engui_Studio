@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { deleteStudioCollectionItem } from '@/lib/studio-sessions/portfolioServer';
 import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-ses
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string; itemId: string }> }) {
+async function DELETEImpl(_request: NextRequest, context: { params: Promise<{ id: string; itemId: string }> }) {
   try {
     const { id, itemId } = await context.params;
     const deleted = await deleteStudioCollectionItem(id, itemId);
@@ -15,3 +16,5 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return handleStudioSessionApiError(error, 'Failed to delete Studio collection item:');
   }
 }
+
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

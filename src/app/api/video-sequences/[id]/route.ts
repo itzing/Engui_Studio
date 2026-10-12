@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import {
   deleteVideoSequence,
@@ -14,7 +15,7 @@ import {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function GETImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const sequence = await getVideoSequence(id);
@@ -25,7 +26,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await readStudioSessionJsonBody(request);
@@ -36,7 +37,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     await deleteVideoSequence(id);
@@ -45,3 +46,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return handleStudioSessionApiError(error, 'Failed to delete video sequence:');
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

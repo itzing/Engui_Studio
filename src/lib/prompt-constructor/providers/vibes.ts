@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import type { VibePresetSummary } from '@/lib/vibes/types';
 import type { PromptBlockProvider } from '@/lib/prompt-constructor/providers/types';
 

@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
@@ -99,6 +102,7 @@ export default function PromptTemplateTextarea({
   promptWildcardSelections,
   onPromptWildcardSelectionsChange,
 }: PromptTemplateTextareaProps) {
+  const fetch = useWorkspaceFetch();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [wildcards, setWildcards] = useState<PromptWildcardSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);

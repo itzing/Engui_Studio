@@ -1,3 +1,4 @@
+import { requireWorkspaceId, rejectWorkspace } from '@/lib/workspaces/context';
 import { prisma } from '@/lib/prisma';
 
 export async function getDefaultWorkspaceId(userId: string): Promise<string | null> {
@@ -6,7 +7,7 @@ export async function getDefaultWorkspaceId(userId: string): Promise<string | nu
   const workspace = await prisma.workspace.findFirst({
     where: {
       userId,
-      isDefault: true,
+      isProtected: true,
     },
     select: { id: true },
   });
@@ -14,10 +15,8 @@ export async function getDefaultWorkspaceId(userId: string): Promise<string | nu
   return workspace?.id || null;
 }
 
-export async function resolveJobWorkspaceId(userId: string, requestedWorkspaceId?: string | null): Promise<string | null> {
-  if (requestedWorkspaceId && requestedWorkspaceId.trim()) {
-    return requestedWorkspaceId;
-  }
-
-  return getDefaultWorkspaceId(userId);
+export async function resolveJobWorkspaceId(userId: string, requestedWorkspaceId?: string | null): Promise<string> {
+  const id = requireWorkspaceId();
+  if (requestedWorkspaceId && requestedWorkspaceId !== id) rejectWorkspace('Request workspace mismatch.', 403);
+  return id;
 }

@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +15,7 @@ import VoiceDialog from '@/components/voice/VoiceDialog';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function AudioGenerationForm() {
+  const fetch = useWorkspaceFetch();
     const DEFAULT_MODEL = 'elevenlabs-tts';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();

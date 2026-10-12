@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { heuristicExtractVibe, normalizeChipArray } from '@/lib/vibes/utils';
@@ -147,7 +148,7 @@ async function extractWithPromptHelper(prompt: string) {
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
@@ -169,3 +170,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

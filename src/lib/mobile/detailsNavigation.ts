@@ -1,3 +1,4 @@
+import { currentBrowserWorkspaceId, workspaceStorageKey } from '@/lib/workspaces/client';
 export type MobileDetailsListKind = 'jobs' | 'gallery';
 
 export type MobileDetailsSnapshotEntry = {
@@ -60,7 +61,7 @@ export function writeMobileDetailsSnapshot(kind: MobileDetailsListKind, snapshot
   };
 
   try {
-    window.sessionStorage.setItem(getStorageKey(kind), JSON.stringify(normalized));
+    window.sessionStorage.setItem(workspaceStorageKey(getStorageKey(kind), currentBrowserWorkspaceId() || 'unselected'), JSON.stringify(normalized));
   } catch {
     // Ignore storage failures; details can still be used directly without list navigation.
   }
@@ -70,7 +71,7 @@ export function readMobileDetailsSnapshot(kind: MobileDetailsListKind): MobileDe
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = window.sessionStorage.getItem(getStorageKey(kind));
+    const raw = window.sessionStorage.getItem(workspaceStorageKey(getStorageKey(kind), currentBrowserWorkspaceId() || 'unselected'));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<MobileDetailsSnapshot>;
     if (parsed.version !== 1 || parsed.kind !== kind || !Array.isArray(parsed.entries)) return null;

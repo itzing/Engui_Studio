@@ -1,3 +1,6 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import ElevenLabsService from '@/lib/elevenlabsService';
@@ -9,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { writeFile } from 'fs/promises';
 import { resolveJobWorkspaceId } from '@/lib/defaultWorkspace';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 const settingsService = new SettingsService();
 
 // Local storage directory
@@ -46,7 +49,7 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
     };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
     try {
         const formData = await request.formData();
 
@@ -136,7 +139,7 @@ export async function POST(request: NextRequest) {
         // Save to local storage first
         const localPath = join(LOCAL_STORAGE_DIR, audioFilePath);
         const audioBuffer = await audioBlob.arrayBuffer();
-        await writeFile(localPath, Buffer.from(audioBuffer));
+        { await registerWorkspaceFile(localPath); await writeFile(localPath, Buffer.from(audioBuffer)); }
 
         // Convert Blob to File for S3 upload
         const audioFile = new File([audioBuffer], audioFileName, { type: 'audio/mpeg' });
@@ -159,7 +162,7 @@ export async function POST(request: NextRequest) {
                 modelId,
                 prompt,
                 status: 'completed',
-                resultUrl: finalFilePath,
+                resultUrl: `/results/${audioFilePath}`,
                 type: 'audio',
                 options: JSON.stringify(modelParameters),
             },
@@ -170,8 +173,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             jobId: job.id,
-            audioUrl: s3Url || `/api/results/${audioFileName}`,
-            localPath: `/api/results/${audioFileName}`,
+            audioUrl: s3Url || `/results/${audioFilePath}`,
+            localPath: `/results/${audioFilePath}`,
             duration: audioBlob.size, // Approximate duration based on file size
             model: modelName,
             message: `${modelName} generation completed successfully`,
@@ -209,3 +212,4 @@ export async function POST(request: NextRequest) {
         }, { status: 500 });
     }
 }
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

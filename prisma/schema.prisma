@@ -13,7 +13,7 @@ datasource db {
 model Job {
   id                        String    @id @default(uuid())
   userId                    String
-  workspaceId               String? // 워크스페이스 ID (선택적)
+  workspaceId               String // 워크스페이스 ID (선택적)
   status                    String
   type                      String
   prompt                    String?
@@ -40,7 +40,7 @@ model Job {
   audioInputPath String? // Path to input audio file
 
   // 관계 설정
-  workspace                        Workspace?                       @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
+  workspace                        Workspace                        @relation("WorkspaceJobs", fields: [workspaceId], references: [id])
   studioSessionShotVersions        StudioSessionShotVersion[]
   studioSessionMaterializationTask StudioSessionJobMaterialization?
   materializationTasks             JobMaterializationTask[]
@@ -54,12 +54,14 @@ model Job {
 }
 
 model Preset {
-  id        String   @id @default(uuid())
-  userId    String
-  name      String
-  type      String
-  options   String
-  createdAt DateTime @default(now())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  type        String
+  options     String
+  createdAt   DateTime  @default(now())
 
   @@map("presets")
 }
@@ -129,6 +131,14 @@ model Workspace {
   isDefault   Boolean  @default(false) // 기본 워크스페이스 여부
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  isProtected   Boolean        @default(false)
+  lifecycle     String         @default("active")
+  revision      Int            @default(0)
+  presets       Preset[]
+  characters    Character[]
+  vibes         VibePreset[]
+  videoProjects VideoProject[]
 
   // 관계 설정
   jobs                       Job[]                       @relation("WorkspaceJobs")
@@ -307,9 +317,11 @@ model VideoSegmentTemplate {
 }
 
 model VideoProject {
-  id          String @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
   title       String
-  description String @default("")
+  description String    @default("")
 
   // Resolution settings
   aspectRatio   String @default("16:9")
@@ -370,19 +382,23 @@ model VideoKeyFrame {
 }
 
 model LoRA {
-  id          String     @id @default(uuid())
-  name        String
-  fileName    String
-  s3Path      String // Path in S3 bucket
-  s3Url       String // Full S3 URL
-  fileSize    BigInt // File size in bytes
-  extension   String // .safetensors or .ckpt
+  isShared       Boolean   @default(false)
+  storageTarget  String?
+  sourceKey      String?
+  lifecycle      String    @default("active")
+  id             String    @id @default(uuid())
+  name           String
+  fileName       String
+  s3Path         String // Path in S3 bucket
+  s3Url          String // Full S3 URL
+  fileSize       BigInt // File size in bytes
+  extension      String // .safetensors or .ckpt
   targetOverride String? // 'image' | 'video' | null for automatic classification
-  baseModel   String     @default("z-image") // 'wan2.2' | 'z-image' | 'krea2-turbo'
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  uploadedAt  DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  baseModel      String    @default("z-image") // 'wan2.2' | 'z-image' | 'krea2-turbo'
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedAt     DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([workspaceId])
   @@index([baseModel])
@@ -392,7 +408,7 @@ model LoRA {
 
 model LoRAHelperProfile {
   id                    String   @id @default(uuid())
-  workspaceId           String?
+  workspaceId           String
   scope                 String // 'single' | 'pair'
   loraId                String?
   highLoraId            String?
@@ -410,6 +426,8 @@ model LoRAHelperProfile {
 }
 
 model Character {
+  workspaceId          String
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   id                   String    @id @default(uuid())
   name                 String
   gender               String?
@@ -451,6 +469,8 @@ model CharacterVersion {
 }
 
 model VibePreset {
+  workspaceId          String
+  workspace            Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   id                   String        @id @default(uuid())
   name                 String
   baseDescription      String
@@ -1006,7 +1026,7 @@ model StudioSessionJobMaterialization {
 model JobMaterializationTask {
   id             String    @id @default(uuid())
   jobId          String
-  workspaceId    String?
+  workspaceId    String
   targetType     String
   targetId       String
   payloadJson    String    @default("{}")
@@ -1026,4 +1046,76 @@ model JobMaterializationTask {
   @@index([workspaceId, status, updatedAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
   @@map("job_materialization_tasks")
+}
+
+// Durable operations survive workspace deletion and contain no credentials.
+model WorkspaceDeletion {
+  workspaceId  String    @id
+  userId       String
+  name         String
+  status       String    @default("pending")
+  stage        String    @default("cancel")
+  manifestJson String    @default("[]")
+  jobsJson     String    @default("[]")
+  error        String?
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  completedAt  DateTime?
+
+  @@map("workspace_deletions")
+}
+
+model WorkspaceUpload {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  uploadId      String   @unique
+  objectKey     String
+  storageTarget String
+  metadataJson  String   @default("{}")
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceId, status])
+  @@map("workspace_uploads")
+}
+
+model WorkspaceLease {
+  workspaceId String   @id
+  token       String
+  kind        String
+  expiresAt   DateTime
+
+  @@map("workspace_leases")
+}
+
+model WorkspaceFile {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  location      String
+  storageTarget String   @default("local")
+  createdAt     DateTime @default(now())
+
+  @@unique([workspaceId, storageTarget, location])
+  @@map("workspace_files")
+}
+
+model WorkspaceMigration {
+  id        String   @id
+  checksum  String
+  appliedAt DateTime @default(now())
+
+  @@map("workspace_migrations")
+}
+
+model WorkspaceActivity {
+  id          String   @id @default(uuid())
+  workspaceId String
+  kind        String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, expiresAt])
+  @@map("workspace_activities")
 }

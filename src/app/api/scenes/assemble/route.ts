@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizeCharacterCount } from '@/lib/poses/utils';
@@ -7,7 +8,7 @@ import { toCharacterSummary } from '@/lib/characters/utils';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const sceneName = typeof body?.sceneName === 'string' ? body.sceneName.trim() : '';
@@ -77,3 +78,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

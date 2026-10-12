@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -334,6 +337,7 @@ function Header({ breadcrumbs, jobsPanelOpen, activeJobsCount, onToggleJobsPanel
 }
 
 export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { activeWorkspaceId, jobs } = useStudio();
   const [collapsed, setCollapsed] = useState(false);
@@ -652,6 +656,7 @@ function EmptyTile({ title, description }: { title: string; description: string 
 function LoadingGrid() { return <TileGrid>{Array.from({ length: 6 }).map((_, index) => <div key={index} className="min-h-[220px] animate-pulse rounded-3xl border border-white/10 bg-white/[0.035]" />)}</TileGrid>; }
 function NameDialog({ open, title, value, onChange, onOpenChange, onSubmit }: { open: boolean; title: string; value: string; onChange: (value: string) => void; onOpenChange: (open: boolean) => void; onSubmit: () => void }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><Input value={value} onChange={(event) => onChange(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Name" /><Button onClick={onSubmit} className="bg-blue-500 text-white hover:bg-blue-400">Create</Button></DialogContent></Dialog>; }
 function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; framingPresets: StudioFramingPresetSummary[] }) {
+  const fetch = useWorkspaceFetch();
   const [shots, setShots] = useState<StudioSessionShotSummary[]>([]);
   const [revisions, setRevisions] = useState<StudioSessionShotRevisionSummary[]>([]);
   const [versions, setVersions] = useState<StudioSessionShotVersionSummary[]>([]);
@@ -1043,6 +1048,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   </div>;
 }
 function CollectionWorkspace({ detail, portfolioId, onCoverSet }: { detail: CollectionDetail; portfolioId: string | null; onCoverSet: () => void }) {
+  const fetch = useWorkspaceFetch();
   const [settingCoverItemId, setSettingCoverItemId] = useState<string | null>(null);
   const setAsCover = async (itemId: string) => {
     if (!portfolioId) return;

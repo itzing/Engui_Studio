@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardDocumentIcon, DocumentDuplicateIcon, PlusIcon, SparklesIcon, TrashIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
@@ -93,6 +96,7 @@ function matchesSearch(vibe: VibePresetSummary, query: string): boolean {
 }
 
 export default function VibeManagerPanel({ onRequestClose }: { onRequestClose?: () => void }) {
+  const fetch = useWorkspaceFetch();
   const { showToast } = useToast();
   const [vibes, setVibes] = useState<VibePresetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);

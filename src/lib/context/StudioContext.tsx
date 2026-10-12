@@ -1,5 +1,8 @@
 'use client';
+import { reconcileDeletedWorkspaces } from '@/lib/workspaces/client';
 
+import { chooseBrowserWorkspace, currentBrowserWorkspaceId, hasSavedWorkspaceChoice, initializeBrowserWorkspaces, isWorkspaceAbort, savedWorkspaceId, workspaceFetchFor } from '@/lib/workspaces/client';
+import WorkspaceManager from '@/components/workspaces/WorkspaceManager';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { announceCreateModeChange } from '@/lib/create/createModeEvents';
 import { persistCreateReuseDraft } from '@/lib/create/persistCreateReuseDraft';
@@ -70,6 +73,8 @@ export interface Workspace {
     id: string;
     name: string;
     isDefault: boolean;
+    isProtected: boolean;
+    lifecycle: string;
     createdAt: string;
 }
 
@@ -180,6 +185,8 @@ interface StudioContextType {
     workspaces: Workspace[];
     activeWorkspaceId: string | null;
     createWorkspace: (name: string) => Promise<void>;
+    refreshWorkspaces: () => Promise<void>;
+    renameWorkspace: (id: string, name: string) => Promise<void>;
     selectWorkspace: (id: string) => void;
     deleteWorkspace: (id: string) => Promise<void>;
 
@@ -226,6 +233,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     // Workspace State
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+    const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+    const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
+    const fetch = workspaceFetchFor(activeWorkspaceId);
 
     // Video Editor State
     const [currentProject, setCurrentProject] = useState<VideoProject | null>(null);
@@ -364,68 +374,63 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
     // --- Workspace Actions ---
 
+    const resetWorkspaceView = (id: string | null) => {
+        chooseBrowserWorkspace(id);
+        setJobs([]); setProjects([]); setCurrentProject(null); setTracks([]); setKeyframes({});
+        setActiveArtifactId(null); setSelectedModel(null); setSelectedKeyframeIds([]); setPlayerState('paused');
+        setActiveWorkspaceId(id);
+    };
     const fetchWorkspaces = async () => {
         try {
-            console.log('📂 Fetching workspaces for user: user-with-settings');
             const response = await fetch('/api/workspaces?userId=user-with-settings');
             const data = await response.json();
-            console.log('📂 Workspaces response:', data);
-            if (data.workspaces) {
-                setWorkspaces(data.workspaces);
-                console.log('📂 Found workspaces:', data.workspaces.length);
-
-                // Set default workspace if none active
-                if (!activeWorkspaceId && data.workspaces.length > 0) {
-                    const workspaceToSelect = data.workspaces.find((w: Workspace) => w.isDefault) || data.workspaces[0];
-
-                    if (workspaceToSelect) {
-                        console.log('✅ Setting startup workspace:', workspaceToSelect.id, workspaceToSelect.name);
-                        setActiveWorkspaceId(workspaceToSelect.id);
-                        if (typeof window !== 'undefined') {
-                            localStorage.setItem('activeWorkspaceId', workspaceToSelect.id);
-                        }
-                    }
-                } else if (data.workspaces.length === 0) {
-                    console.warn('⚠️ No workspaces found! Creating default workspace...');
-                    // Create default workspace
-                    await createWorkspace('Default');
-                }
+            if (!response.ok || !Array.isArray(data.workspaces)) throw new Error(data.error || 'Could not load workspaces.');
+            const list: Workspace[] = data.workspaces;
+            const original = list.find((workspace) => workspace.isProtected);
+            if (!original) throw new Error('The protected Default workspace is missing.');
+            initializeBrowserWorkspaces(original.id);
+            await reconcileDeletedWorkspaces((data.deletions || []).filter((d: any) => d.status === 'completed').map((d: any) => d.workspaceId));
+            setWorkspaces(list); setWorkspaceError(null);
+            if (!workspacesLoaded) {
+                const hasSaved = hasSavedWorkspaceChoice();
+                const saved = savedWorkspaceId();
+                const selected = hasSaved ? list.find((workspace) => workspace.id === saved && workspace.lifecycle === 'active') : original;
+                resetWorkspaceView(selected?.id || null);
+            } else if (activeWorkspaceId && !list.some((workspace) => workspace.id === activeWorkspaceId && workspace.lifecycle === 'active')) {
+                resetWorkspaceView(null);
             }
+            setWorkspacesLoaded(true);
         } catch (error) {
-            console.error('Failed to fetch workspaces:', error);
+            setWorkspaceError(error instanceof Error ? error.message : 'Could not load workspaces.');
         }
     };
-
     const createWorkspace = async (name: string) => {
-        try {
-            const response = await fetch('/api/workspaces', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, userId: 'user-with-settings' })
-            });
-            const data = await response.json();
-            if (data.workspace) {
-                setWorkspaces(prev => [...prev, data.workspace]);
-                setActiveWorkspaceId(data.workspace.id);
-            }
-        } catch (error) {
-            console.error('Failed to create workspace:', error);
-        }
+        const response = await fetch('/api/workspaces', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, userId: 'user-with-settings' }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.workspace) throw new Error(data.error || 'Could not create workspace.');
+        setWorkspaces((previous) => [...previous, data.workspace]);
     };
-
+    const renameWorkspace = async (id: string, name: string) => {
+        const response = await fetch(`/api/workspaces/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not rename workspace.');
+        setWorkspaces((previous) => previous.map((workspace) => workspace.id === id ? data.workspace : workspace));
+    };
     const deleteWorkspace = async (id: string) => {
-        // Optimistic update not ideal here as we need to handle jobs deletion or migration
-        // For now, just API call
-        // TODO: Implement API for delete
-        console.log('Delete workspace not implemented yet in API');
+        const workspace = workspaces.find((candidate) => candidate.id === id);
+        if (!workspace || workspace.isProtected) throw new Error('The Default workspace is protected.');
+        const response = await fetch(`/api/workspaces/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmName: workspace.name }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not delete workspace.');
+        if (id === activeWorkspaceId) resetWorkspaceView(null);
+        await fetchWorkspaces();
     };
-
     const selectWorkspace = (id: string) => {
-        setActiveWorkspaceId(id);
-        // Save to localStorage
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('activeWorkspaceId', id);
-        }
+        if (!workspaces.some((workspace) => workspace.id === id && workspace.lifecycle === 'active')) throw new Error('Workspace is unavailable.');
+        resetWorkspaceView(id);
     };
 
     // --- Job Actions ---
@@ -450,7 +455,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     };
 
     const addJob = async (job: Job) => {
-        const jobWithWorkspace = { ...job, workspaceId: activeWorkspaceId || undefined };
+        const jobWithWorkspace = { ...job, workspaceId: job.workspaceId || activeWorkspaceId || undefined };
+        if (jobWithWorkspace.workspaceId !== currentBrowserWorkspaceId()) return;
 
         console.log('➕ Adding job:', {
             jobId: job.id,
@@ -490,7 +496,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
      * This updates the local UI state without re-posting the job to the API.
      */
     const addCompletedJob = (job: Job) => {
-        const jobWithWorkspace = { ...job, workspaceId: activeWorkspaceId || undefined };
+        const jobWithWorkspace = { ...job, workspaceId: job.workspaceId || activeWorkspaceId || undefined };
+        if (jobWithWorkspace.workspaceId !== currentBrowserWorkspaceId()) return;
         console.log('➕ Adding completed job (local sync):', job.id);
 
         // Update jobs list
@@ -676,6 +683,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 announceCreateModeChange(result.workflow);
             }
         } catch (error) {
+            if (isWorkspaceAbort(error)) return;
             console.error('Failed to prepare reuse input:', error);
             const fallback = persistCreateReuseDraft({
                 modelId: job.modelId,
@@ -710,18 +718,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         console.log('🚀 StudioContext: Initial load, fetching workspaces and projects...');
         fetchWorkspaces();
-        fetchProjects();
     }, []);
 
     // Fetch jobs when workspace changes
     useEffect(() => {
         console.log('🔄 Workspace changed:', activeWorkspaceId);
         if (activeWorkspaceId) {
-            // Save to localStorage
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('activeWorkspaceId', activeWorkspaceId);
-            }
             fetchJobs();
+            fetchProjects();
         } else {
             console.warn('⚠️ No active workspace ID set');
         }
@@ -1404,6 +1408,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             createWorkspace,
             selectWorkspace,
             deleteWorkspace,
+            refreshWorkspaces: fetchWorkspaces,
+            renameWorkspace,
 
             // Video Editor State
             currentProject,
@@ -1437,7 +1443,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             clearSelection,
             setExportDialogOpen,
         }}>
-            {children}
+            {activeWorkspaceId ? <React.Fragment key={activeWorkspaceId}>{children}</React.Fragment> : (
+                <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-background text-foreground">
+                    <h1 className="text-xl font-semibold">Choose workspace</h1>
+                    {workspaceError && <p role="alert">{workspaceError}</p>}
+                    {!workspacesLoaded && !workspaceError && <p>Loading workspaces...</p>}
+                    {workspacesLoaded && <div className="w-full max-w-md"><WorkspaceManager /></div>}
+                    <button className="rounded border px-4 py-2" onClick={() => void fetchWorkspaces()}>Refresh workspaces</button>
+                </main>
+            )}
         </StudioContext.Provider>
     );
 }

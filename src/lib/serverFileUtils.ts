@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 // 서버 전용 파일 처리 헬퍼 함수들
 
 import { writeFileSync } from 'fs';
@@ -34,7 +35,7 @@ export const processFileUpload = async (
         const fileBuffer = Buffer.from(await file.arrayBuffer());
         const localFullPath = join(localStoragePath, fileName);
 
-        writeFileSync(localFullPath, fileBuffer);
+        { await registerWorkspaceFile(localFullPath); writeFileSync(localFullPath, fileBuffer); }
         console.log('✅ 로컬 백업 저장 완료:', localFullPath);
 
         result.localPath = localFullPath;

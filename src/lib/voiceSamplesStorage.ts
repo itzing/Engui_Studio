@@ -1,3 +1,5 @@
+
+import { workspaceStorage } from '@/lib/workspaces/client';
 // Voice Samples Storage (localStorage)
 export interface VoiceSample {
   voiceId: string;
@@ -26,7 +28,7 @@ export const voiceSamplesStorage = {
       cachedAt: Date.now(),
     };
     try {
-      localStorage.setItem(VOICE_SAMPLES_KEY, JSON.stringify(samples));
+      workspaceStorage()?.setItem(VOICE_SAMPLES_KEY, JSON.stringify(samples));
     } catch (error) {
       console.error('Failed to save voice sample:', error);
     }
@@ -41,7 +43,7 @@ export const voiceSamplesStorage = {
   // 모든 샘플 가져오기
   getAllSamples: (): Record<string, VoiceSample> => {
     try {
-      const data = localStorage.getItem(VOICE_SAMPLES_KEY);
+      const data = workspaceStorage()?.getItem(VOICE_SAMPLES_KEY);
       return data ? JSON.parse(data) : {};
     } catch (error) {
       console.error('Failed to get voice samples:', error);
@@ -64,7 +66,7 @@ export const voiceSamplesStorage = {
 
     if (cleaned) {
       try {
-        localStorage.setItem(VOICE_SAMPLES_KEY, JSON.stringify(samples));
+        workspaceStorage()?.setItem(VOICE_SAMPLES_KEY, JSON.stringify(samples));
       } catch (error) {
         console.error('Failed to clean old samples:', error);
       }
@@ -81,7 +83,7 @@ export const voiceSamplesStorage = {
         addedAt: Date.now(),
       });
       try {
-        localStorage.setItem(FAVORITE_VOICES_KEY, JSON.stringify(favorites));
+        workspaceStorage()?.setItem(FAVORITE_VOICES_KEY, JSON.stringify(favorites));
       } catch (error) {
         console.error('Failed to add favorite:', error);
       }
@@ -92,7 +94,7 @@ export const voiceSamplesStorage = {
   removeFromFavorites: (voiceId: string) => {
     const favorites = voiceSamplesStorage.getFavorites().filter(f => f.voiceId !== voiceId);
     try {
-      localStorage.setItem(FAVORITE_VOICES_KEY, JSON.stringify(favorites));
+      workspaceStorage()?.setItem(FAVORITE_VOICES_KEY, JSON.stringify(favorites));
     } catch (error) {
       console.error('Failed to remove favorite:', error);
     }
@@ -101,7 +103,7 @@ export const voiceSamplesStorage = {
   // 즐겨찾기 목록 가져오기
   getFavorites: (): FavoriteVoice[] => {
     try {
-      const data = localStorage.getItem(FAVORITE_VOICES_KEY);
+      const data = workspaceStorage()?.getItem(FAVORITE_VOICES_KEY);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Failed to get favorites:', error);
@@ -118,7 +120,7 @@ export const voiceSamplesStorage = {
   // 모든 샘플 삭제
   clearAllSamples: () => {
     try {
-      localStorage.removeItem(VOICE_SAMPLES_KEY);
+      workspaceStorage()?.removeItem(VOICE_SAMPLES_KEY);
     } catch (error) {
       console.error('Failed to clear samples:', error);
     }
@@ -127,7 +129,7 @@ export const voiceSamplesStorage = {
   // 모든 즐겨찾기 삭제
   clearAllFavorites: () => {
     try {
-      localStorage.removeItem(FAVORITE_VOICES_KEY);
+      workspaceStorage()?.removeItem(FAVORITE_VOICES_KEY);
     } catch (error) {
       console.error('Failed to clear favorites:', error);
     }

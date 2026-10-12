@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -15,6 +18,7 @@ const items: Array<{ id: CreateMode; label: string; icon: React.ElementType }> =
 ];
 
 function RunPodBalanceBadge() {
+  const fetch = useWorkspaceFetch();
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { pickManualFrameForVideoSequenceSegment } from '@/lib/video-sequences/server';
 import {
@@ -8,7 +9,7 @@ import {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(
+async function POSTImpl(
   request: NextRequest,
   context: { params: Promise<{ id: string; segmentId: string }> },
 ) {
@@ -21,3 +22,5 @@ export async function POST(
     return handleStudioSessionApiError(error, 'Failed to pick video sequence manual frame:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

@@ -1,3 +1,5 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -14,13 +16,11 @@ function parseNullableWeight(value: unknown) {
   return numberValue;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const scope = typeof body?.scope === 'string' ? body.scope.trim().toLowerCase() : '';
-    const workspaceId = typeof body?.workspaceId === 'string' && body.workspaceId.trim()
-      ? body.workspaceId.trim()
-      : null;
+    const workspaceId = requireWorkspaceId();
     const notes = typeof body?.notes === 'string' ? body.notes.trim() : '';
 
     if (!validScopes.has(scope)) {
@@ -41,14 +41,14 @@ export async function POST(request: NextRequest) {
     const recommendedLowWeight = scope === 'pair' ? parseNullableWeight(body?.recommendedLowWeight) : null;
 
     let lookupWhere: {
-      workspaceId: string | null;
+      workspaceId: string;
       scope: string;
       loraId?: string;
       highLoraId?: string;
       lowLoraId?: string;
     };
     let data: {
-      workspaceId: string | null;
+      workspaceId: string;
       scope: string;
       loraId?: string | null;
       highLoraId?: string | null;
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       }
 
       const lora = await prisma.loRA.findUnique({ where: { id: loraId } });
-      if (!lora) {
+      if (!lora || lora.workspaceId !== workspaceId) {
         return NextResponse.json(
           { success: false, error: 'LoRA not found' },
           { status: 404 }
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       }
 
       const pairLoras = await prisma.loRA.findMany({
-        where: { id: { in: [highLoraId, lowLoraId] } },
+        where: { id: { in: [highLoraId, lowLoraId] }, workspaceId },
         select: { id: true },
       });
       if (pairLoras.length !== 2) {
@@ -140,3 +140,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

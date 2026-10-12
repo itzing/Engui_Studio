@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -80,6 +83,7 @@ function compactLoraName(value: unknown) {
 }
 
 export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { showToast } = useToast();
   const { job, isLoading, error, refresh, setJob } = useMobileJobDetails(jobId);

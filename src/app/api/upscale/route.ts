@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -226,7 +227,7 @@ async function resolveSourceContext(body: { jobId?: string; galleryAssetId?: str
     };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
     try {
         const body = await request.json() as { jobId?: string; galleryAssetId?: string; type?: UpscaleRequestType };
         const requestedType = normalizeRequestedUpscaleType(body.type);
@@ -388,3 +389,5 @@ export async function POST(request: NextRequest) {
         }, { status });
     }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

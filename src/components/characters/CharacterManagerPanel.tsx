@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardCopy, CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
@@ -462,6 +465,7 @@ type CharacterListMode = 'active' | 'trash';
 type CharacterSortMode = 'updated_desc' | 'name_asc' | 'name_desc';
 
 export default function CharacterManagerPanel() {
+  const fetch = useWorkspaceFetch();
   const { showToast } = useToast();
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [versions, setVersions] = useState<CharacterVersionSummary[]>([]);

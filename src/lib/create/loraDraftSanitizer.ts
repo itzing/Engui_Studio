@@ -1,4 +1,6 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
 
 import { getModelById, type ModelConfig } from '@/lib/models/modelConfig';
 import {
@@ -15,7 +17,7 @@ const LORA_WEIGHT_NAME_PATTERN = /^lora(?:Weight|_high_\d+_weight|_low_\d+_weigh
 function getStorage() {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage;
+    return workspaceStorage();
   } catch {
     return null;
   }

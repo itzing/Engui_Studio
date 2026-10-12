@@ -1,11 +1,13 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 // src/app/api/results/[jobId]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
-export async function GET(
+async function GETImpl(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
@@ -92,3 +94,4 @@ export async function GET(
     );
   }
 }
+export const GET = withWorkspaceRoute(GETImpl, 'content');

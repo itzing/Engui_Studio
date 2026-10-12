@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildReadOnlyStatusPayload } from '@/lib/runpodSupervisor';
 
-export async function GET(request: Request) {
+async function GETImpl(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const jobId = searchParams.get('jobId');
@@ -28,3 +29,5 @@ export async function GET(request: Request) {
     }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

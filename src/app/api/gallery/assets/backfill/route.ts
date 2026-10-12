@@ -1,7 +1,8 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { backfillGalleryEnrichment } from '@/lib/galleryEnrichment';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const workspaceId = body.workspaceId;
@@ -18,3 +19,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

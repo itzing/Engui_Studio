@@ -1,4 +1,5 @@
 'use client';
+import { currentBrowserWorkspaceId } from '@/lib/workspaces/client';
 
 export type CreateWorkflow = 'image' | 'video' | 'tts' | 'music';
 export type CreateDraftVersion = 2;
@@ -75,6 +76,7 @@ export type WorkflowDraftBucket<TDraft = unknown> = {
 };
 
 export type UnifiedCreateDraftState = {
+  workspaceId?: string;
   version: CreateDraftVersion;
   activeMode: CreateWorkflow;
   workflows: {
@@ -95,6 +97,7 @@ export const createEmptyWorkflowBucket = <TDraft = unknown>(): WorkflowDraftBuck
 });
 
 export const createDefaultUnifiedCreateDraftState = (): UnifiedCreateDraftState => ({
+  ...(currentBrowserWorkspaceId() ? { workspaceId: currentBrowserWorkspaceId()! } : {}),
   version: CREATE_DRAFT_STATE_VERSION,
   activeMode: 'image',
   workflows: {

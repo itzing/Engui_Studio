@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
@@ -58,6 +61,7 @@ type MobileJobViewerItem = {
 const PAGE_SIZE = 24;
 
 export function useMobileJobsScreen() {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId, workspaces, deleteJob, cancelJob, clearFinishedJobs, addJob, reuseJobInput } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [loadedPages, setLoadedPages] = useState<Record<number, LoadedJobsPage>>({});

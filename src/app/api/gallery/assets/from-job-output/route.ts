@@ -1,3 +1,5 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
@@ -108,7 +110,7 @@ function normalizeBucket(value: unknown): 'common' | 'draft' | 'upscale' | null 
   return null;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const { jobId, outputId } = body;
@@ -162,7 +164,7 @@ export async function POST(request: NextRequest) {
     fs.mkdirSync(galleryDir, { recursive: true });
 
     const outputPath = path.join(galleryDir, fileName);
-    fs.writeFileSync(outputPath, fileBytes);
+    { await registerWorkspaceFile(outputPath); fs.writeFileSync(outputPath, fileBytes); }
 
     const originalUrl = `/generations/gallery/${job.workspaceId}/${fileName}`;
 
@@ -208,3 +210,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

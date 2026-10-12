@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -10,7 +11,7 @@ const ALLOWED_SERVICES = new Set([
   'vision-prompt-helper-llama.service',
 ]);
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const action = typeof body?.action === 'string' ? body.action : '';
@@ -38,3 +39,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

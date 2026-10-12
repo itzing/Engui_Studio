@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cancelJobExecution } from '@/lib/jobManagement';
 
-export async function POST(
+async function POSTImpl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -30,3 +31,5 @@ export async function POST(
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

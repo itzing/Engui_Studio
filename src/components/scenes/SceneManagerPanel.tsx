@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowPathIcon, ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PhotoIcon, PlusIcon, TrashIcon, UserGroupIcon } from '@heroicons/react/24/outline';
@@ -188,6 +191,7 @@ function formatDate(value: string | null | undefined): string {
 }
 
 export default function SceneManagerPanel({ onRequestClose }: { onRequestClose?: () => void }) {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId, addJob, jobs } = useStudio();
   const { showToast } = useToast();
 

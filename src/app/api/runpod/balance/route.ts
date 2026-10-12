@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 
@@ -26,7 +27,7 @@ function formatCurrencyAmount(value: number): string {
   }).format(value);
 }
 
-export async function GET() {
+async function GETImpl() {
   try {
     if (!settingsService) {
       settingsService = new SettingsService();
@@ -109,3 +110,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'global');

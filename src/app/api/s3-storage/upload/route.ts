@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const formData = await request.formData();
     const files = formData.getAll('files') as File[];
@@ -65,3 +66,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

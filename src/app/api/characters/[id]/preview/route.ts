@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { submitGenerationFormData } from '@/lib/generation/submitFormData';
@@ -9,7 +10,7 @@ import { toCharacterSummary } from '@/lib/characters/utils';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -89,3 +90,5 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

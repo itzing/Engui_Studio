@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { createJobMaterializationTask } from '@/lib/materialization/server';
 import { submitGenerationFormData } from '@/lib/generation/submitFormData';
@@ -7,7 +8,7 @@ import { buildStudioPosePreviewPrompt, ensureStudioPoseLibrarySettings, getStudi
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json().catch(() => ({}));
@@ -53,3 +54,5 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return handleStudioSessionApiError(error, 'Failed to queue Studio pose preview generation:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

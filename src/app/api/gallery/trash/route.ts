@@ -1,7 +1,8 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { emptyGalleryTrash } from '@/lib/galleryCleanup';
 
-export async function DELETE(request: NextRequest) {
+async function DELETEImpl(request: NextRequest) {
   try {
     const workspaceId = new URL(request.url).searchParams.get('workspaceId') || '';
 
@@ -16,3 +17,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -493,7 +494,7 @@ export async function composeOpenPosePngControlImage(input: OpenPosePngControlIn
   const buffer = encodePngRgba(width, height, dest);
   if (input.outputPath) {
     fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
-    fs.writeFileSync(input.outputPath, buffer);
+    { await registerWorkspaceFile(input.outputPath); fs.writeFileSync(input.outputPath, buffer); }
   }
   return { buffer, width, height };
 }
@@ -524,7 +525,7 @@ export async function renderOpenPoseControlImage(input: OpenPoseRendererInput): 
   const buffer = encodePngRgba(width, height, rgba);
   if (input.outputPath) {
     fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
-    fs.writeFileSync(input.outputPath, buffer);
+    { await registerWorkspaceFile(input.outputPath); fs.writeFileSync(input.outputPath, buffer); }
   }
   return { buffer, width, height };
 }

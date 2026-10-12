@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useState } from 'react';
 
@@ -29,6 +32,7 @@ export type MobileGalleryDetail = {
 };
 
 export function useMobileGalleryDetails(assetId: string) {
+  const fetch = useWorkspaceFetch();
   const [asset, setAsset] = useState<MobileGalleryDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

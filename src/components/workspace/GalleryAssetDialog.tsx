@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -51,6 +54,7 @@ interface GalleryAssetDialogProps {
 }
 
 export function GalleryAssetDialog({ asset, open, onOpenChange, onToggleFavorite, onTrash, onPermanentDelete, onSaveTags, onRemoveAutoTag, onTagClick, onReuseComplete }: GalleryAssetDialogProps) {
+  const fetch = useWorkspaceFetch();
   const safeOpen = open && !!asset;
   const [tagsInput, setTagsInput] = useState('');
   const [isEnriching, setIsEnriching] = useState(false);

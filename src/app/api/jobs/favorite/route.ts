@@ -1,10 +1,12 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getApiMessage } from '@/lib/apiMessages';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const { jobId } = await request.json();
 
@@ -49,3 +51,5 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

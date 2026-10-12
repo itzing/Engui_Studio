@@ -1,3 +1,8 @@
+import { validateContentReferences } from '@/lib/workspaces/references';
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { storageTarget } from '@/lib/workspaces/storage';
+import { validateGenerationLoras, resolveLoraReference, withGenerationLoraPins } from '@/lib/workspaces/loraAccess';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import RunPodService from '@/lib/runpodService';
@@ -21,7 +26,7 @@ import { expandPromptWildcards } from '@/lib/prompt-wildcards/server';
 import { normalizePromptWildcardSelections } from '@/lib/prompt-wildcards/selections';
 import { getSourceImagePromptVersions } from '@/lib/promptVersions';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 const settingsService = new SettingsService();
 
 function parseSceneSnapshot(value: FormDataEntryValue | null): SceneSnapshot | null {
@@ -98,6 +103,10 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
 }
 
 export async function submitGenerationFormData(formData: FormData) {
+    return withGenerationLoraPins(formData, () => submitOwnedGenerationFormData(formData));
+}
+
+async function submitOwnedGenerationFormData(formData: FormData) {
     try {
 
         // Extract basic info
@@ -106,6 +115,15 @@ export async function submitGenerationFormData(formData: FormData) {
         const language = formData.get('language') as 'ko' | 'en' || 'ko';
         const workspaceId = formData.get('workspaceId') as string;
         const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
+        await validateGenerationLoras(formData);
+        const referenceData: Record<string, unknown> = {};
+        for (const [key, value] of formData.entries()) {
+          if (typeof value !== 'string') continue;
+          if (['studioSessionContext', 'sceneSnapshot', 'sourceImageGenerationSnapshot'].includes(key)) {
+            try { referenceData[key] = JSON.parse(value); } catch { referenceData[key] = value; }
+          } else referenceData[key] = value;
+        }
+        await validateContentReferences(referenceData);
 
         if (!modelId) {
             return NextResponse.json({
@@ -463,7 +481,7 @@ export async function submitGenerationFormData(formData: FormData) {
 
                 const parsedWeight = rawWeight ? parseFloat(rawWeight) : 1.0;
                 const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1.0;
-                const loraFileName = lora.split('/').pop() || lora;
+                const loraFileName = (await resolveLoraReference(lora)).relative;
 
                 zImageLoraSlots.push({ path: lora, weight });
 
@@ -524,6 +542,7 @@ export async function submitGenerationFormData(formData: FormData) {
         // Create job in database with media input paths
         const jobId = (formData.get('jobId') as string) || uuidv4();
         const persistedOptions = JSON.stringify(buildPersistedOptions(parameters, inputData, {
+            workspaceStorageTarget: model.api.type === 'runpod' ? (await storageTarget()).fingerprint : undefined,
             prompt: promptTemplate,
             randomizeSeed,
             studioSessionContext,
@@ -892,7 +911,7 @@ export async function submitGenerationFormData(formData: FormData) {
                     // LOCAL_STORAGE_DIR is 'public/results'
                     const localPath = join(LOCAL_STORAGE_DIR, audioFileName);
                     const audioBuffer = Buffer.from(await audioBlob.arrayBuffer());
-                    await writeFile(localPath, audioBuffer);
+                    { await registerWorkspaceFile(localPath); await writeFile(localPath, audioBuffer); }
 
                     const resultUrl = `/results/${audioFileName}`;
 

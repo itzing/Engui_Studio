@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
@@ -46,6 +49,7 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 export default function PromptWildcardsDialog({ open, workspaceId, onOpenChange }: PromptWildcardsDialogProps) {
+  const fetch = useWorkspaceFetch();
   const [wildcards, setWildcards] = useState<PromptWildcardSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | 'new'>('new');
   const [draft, setDraft] = useState<Draft>(emptyDraft);

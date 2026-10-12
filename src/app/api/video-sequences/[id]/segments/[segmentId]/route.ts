@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import {
   deleteVideoSequenceSegment,
@@ -12,7 +13,7 @@ import {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function PATCH(
+async function PATCHImpl(
   request: NextRequest,
   context: { params: Promise<{ id: string; segmentId: string }> },
 ) {
@@ -26,7 +27,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function DELETEImpl(
   _request: NextRequest,
   context: { params: Promise<{ id: string; segmentId: string }> },
 ) {
@@ -38,3 +39,6 @@ export async function DELETE(
     return handleStudioSessionApiError(error, 'Failed to delete video sequence segment:');
   }
 }
+
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

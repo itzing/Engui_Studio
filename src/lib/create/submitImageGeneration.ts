@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import type { StudioSettings } from '@/lib/context/StudioContext';
 import { loadFileFromPath } from '@/lib/fileUtils';
 import { getLoraWeightInputError } from '@/lib/lora/loraWeightInput';

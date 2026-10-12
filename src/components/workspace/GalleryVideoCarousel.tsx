@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clapperboard, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, SlidersHorizontal, Type, X } from 'lucide-react';
@@ -373,6 +376,7 @@ export function GalleryVideoCarousel({
   currentGalleryAssetId = null,
   galleryOrderFilter,
 }: GalleryVideoCarouselProps) {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});

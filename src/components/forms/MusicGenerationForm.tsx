@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +13,7 @@ import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 
 export default function MusicGenerationForm() {
+  const fetch = useWorkspaceFetch();
     const DEFAULT_MODEL = 'elevenlabs-music';
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const { t } = useI18n();

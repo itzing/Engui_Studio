@@ -8,6 +8,8 @@ export const LORA_BASE_MODELS: Array<{ value: LoraBaseModel; label: string; targ
 ];
 
 export type LoraFileLike = {
+  workspaceId?: string;
+  isShared?: boolean;
   name?: string;
   fileName: string;
   s3Path: string;
@@ -97,7 +99,7 @@ function getLoraPairKey(lora: LoraFileLike) {
 
 function getLoraPairBaseName(lora: LoraFileLike) {
   const parentName = getParentName(lora);
-  if (parentName && parentName.toLowerCase() !== 'loras') {
+  if (parentName && parentName.toLowerCase() !== 'loras' && !lora.s3Path.includes('/loras/workspaces/')) {
     return parentName;
   }
 
@@ -124,7 +126,7 @@ export function buildLoraPairs<T extends LoraFileLike>(loras: T[]) {
     const component = getLoraComponent(lora);
     if (!component) continue;
 
-    const key = getLoraPairKey(lora);
+    const key = [lora.workspaceId || '', lora.isShared ? 'shared' : 'private', getLoraPairKey(lora)].join('::');
     if (!key) continue;
 
     const pair = pairs.get(key) || {

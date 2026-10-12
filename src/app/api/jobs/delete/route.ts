@@ -1,14 +1,16 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
 import { FINISHED_JOB_STATUSES, deleteFinishedJob } from '@/lib/jobManagement';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
 const RUNNING_STATUSES = new Set(['queueing_up', 'processing', 'queued', 'in_queue', 'in_progress']);
 
-export async function DELETE(request: NextRequest) {
+async function DELETEImpl(request: NextRequest) {
   try {
     const { jobId } = await request.json();
 
@@ -87,3 +89,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete job' }, { status: 500 });
   }
 }
+
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

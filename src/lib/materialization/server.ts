@@ -1,3 +1,5 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceActivity, workspaceIsActive } from '@/lib/workspaces/activity';
 import { prisma } from '@/lib/prisma';
 import {
   normalizeJobMaterializationPayload,
@@ -8,6 +10,7 @@ import { characterPreviewMaterializationHandler } from '@/lib/characters/server'
 import { studioPoseOpenPoseMaterializationHandler, studioPosePreviewMaterializationHandler } from '@/lib/studio-sessions/poseLibraryServer';
 
 type PersistedJobRecord = {
+  workspaceId: string;
   id: string;
   status: string;
   type: string | null;
@@ -143,7 +146,7 @@ export async function createJobMaterializationTask(
     return table.update({
       where: { id: existing.id },
       data: {
-        workspaceId: input.workspaceId ?? null,
+        workspaceId: input.workspaceId || requireWorkspaceId(),
         payloadJson,
         status: 'pending',
         materializedAt: null,
@@ -155,7 +158,7 @@ export async function createJobMaterializationTask(
   return table.create({
     data: {
       jobId: input.jobId,
-      workspaceId: input.workspaceId ?? null,
+      workspaceId: input.workspaceId || requireWorkspaceId(),
       targetType: input.targetType,
       targetId: input.targetId,
       payloadJson,
@@ -165,6 +168,10 @@ export async function createJobMaterializationTask(
 }
 
 async function processTask(task: PersistedTaskRecord, job: PersistedJobRecord) {
+  if (!job.workspaceId || !await workspaceIsActive(job.workspaceId)) return;
+  return withWorkspaceActivity(job.workspaceId, 'materialization', () => processOwnedTask(task, job));
+}
+async function processOwnedTask(task: PersistedTaskRecord, job: PersistedJobRecord) {
   const handler = handlers[task.targetType as MaterializationTargetType];
   if (!handler) {
     await markTaskFailed(task.id, `No materialization handler registered for target type \"${task.targetType}\"`);

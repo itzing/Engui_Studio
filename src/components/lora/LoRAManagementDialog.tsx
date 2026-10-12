@@ -1,4 +1,8 @@
 "use client";
+import PendingLoraUploads from '@/components/workspaces/PendingLoraUploads';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -22,6 +26,10 @@ import { getPairHelperProfile, getSingleHelperProfile, LORA_HELPER_NOTES_MAX_LEN
 
 // TypeScript interfaces
 interface LoRAFile {
+  isShared?: boolean;
+  canEdit?: boolean;
+  canShare?: boolean;
+  lifecycle?: string;
   id: string;
   name: string;
   fileName: string;
@@ -86,6 +94,7 @@ export function LoRAManagementDialog({
   onLoRAUploaded,
   workspaceId,
 }: LoRAManagementDialogProps) {
+  const fetch = useWorkspaceFetch();
   const { t } = useI18n();
   const [loras, setLoras] = useState<LoRAFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,6 +129,16 @@ export function LoRAManagementDialog({
     key?: string;
     uploadId?: string;
   } | null>(null);
+
+  async function toggleSharing(lora: LoRAFile) {
+    setError(null);
+    try {
+      const response = await fetch('/api/lora/' + lora.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isShared: !lora.isShared }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not change sharing.');
+      await fetchLoras();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not change sharing.'); }
+  }
 
   // Group LoRAs into pairs (high/low)
   const groupLoRAsIntoPairs = useCallback((loraList: LoRAFile[], sortDirection: LoraNameSort): LoRAPair[] => {
@@ -253,7 +272,7 @@ export function LoRAManagementDialog({
 
     if (uploadContext.volume && uploadContext.key && uploadContext.uploadId) {
       try {
-        await postJson('/api/s3-storage/multipart/abort', {
+        await postJson('/api/lora/multipart/abort', {
           volume: uploadContext.volume,
           key: uploadContext.key,
           uploadId: uploadContext.uploadId,
@@ -352,6 +371,7 @@ export function LoRAManagementDialog({
       const init = await postJson<LoraMultipartInitResponse>('/api/lora/multipart/init', {
         fileName: file.name,
         fileSize: file.size,
+        baseModel: uploadBaseModel,
         contentType: file.type || 'application/octet-stream',
       });
 
@@ -381,6 +401,7 @@ export function LoRAManagementDialog({
           key: init.key,
           uploadId: init.uploadId,
           partNumber: String(partNumber),
+          workspaceId: workspaceId || '',
         });
 
         let lastPartError: unknown;
@@ -389,7 +410,7 @@ export function LoRAManagementDialog({
         for (let attempt = 1; attempt <= 3; attempt += 1) {
           try {
             part = await uploadPartWithProgress({
-              url: `/api/s3-storage/multipart/proxy-part?${params.toString()}`,
+              url: `/api/lora/multipart/proxy-part?${params.toString()}`,
               blob: file.slice(start, end),
               partNumber,
               partProgress,
@@ -896,6 +917,8 @@ export function LoRAManagementDialog({
             </div>
           )}
 
+          <PendingLoraUploads onChange={() => fetchLoras()} />
+
           {/* Upload Section */}
           <div className="mb-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="lora-upload-base-model">
@@ -1136,6 +1159,8 @@ export function LoRAManagementDialog({
                           <div className="flex min-w-0 items-center gap-2">
                             <Package className={`h-5 w-5 ${pair.isComplete ? 'text-green-500' : 'text-yellow-500'}`} />
                             <h4 className="truncate text-sm font-medium">{pair.baseName}</h4>
+                            {(pair.high?.isShared || pair.low?.isShared) && <span className="text-xs text-primary">Shared from Default</span>}
+                            {(pair.high?.lifecycle === 'deleting' || pair.low?.lifecycle === 'deleting') && <span className="text-xs text-destructive">Deletion pending</span>}
                             {pair.isComplete ? (
                               <span className="text-xs bg-green-500/10 text-green-500 px-2 py-0.5 rounded">{t('loraManagement.status.complete')}</span>
                             ) : (
@@ -1147,6 +1172,7 @@ export function LoRAManagementDialog({
                             variant="outline"
                             size="sm"
                             className="h-8 shrink-0 gap-1.5"
+                            disabled={(pair.high || pair.low)?.canEdit === false}
                             onClick={() => openHelperEditor(pair)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -1154,6 +1180,9 @@ export function LoRAManagementDialog({
                           </Button>
                         </div>
 
+                        <div>
+                          {(pair.high || pair.low)?.canShare && <Button size="sm" variant="outline" onClick={() => void toggleSharing((pair.high || pair.low)!)}>{(pair.high || pair.low)?.isShared ? 'Stop sharing' : 'Share with all workspaces'}</Button>}
+                        </div>
                         {/* High/Low Files */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {/* High LoRA */}
@@ -1169,6 +1198,7 @@ export function LoRAManagementDialog({
                                     e.stopPropagation();
                                     setDeleteConfirmId(pair.high!.id);
                                   }}
+                                  disabled={pair.high.canEdit === false}
                                   aria-label={`Delete ${pair.high.fileName}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -1183,8 +1213,8 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.high.fileSize)} • {formatDate(pair.high.uploadedAt)}
                                 </p>
-                                {renderBaseModelControl(pair.high)}
-                                {renderTargetControl(pair.high, pair)}
+                                {pair.high.canEdit !== false && renderBaseModelControl(pair.high)}
+                                {pair.high.canEdit !== false && renderTargetControl(pair.high, pair)}
                               </>
                             ) : (
                               <p className="text-xs text-muted-foreground italic">{t('loraManagement.status.notUploaded')}</p>
@@ -1204,6 +1234,7 @@ export function LoRAManagementDialog({
                                     e.stopPropagation();
                                     setDeleteConfirmId(pair.low!.id);
                                   }}
+                                  disabled={pair.low.canEdit === false}
                                   aria-label={`Delete ${pair.low.fileName}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -1218,8 +1249,8 @@ export function LoRAManagementDialog({
                                 <p className="text-xs text-muted-foreground mt-1">
                                   {formatFileSize(pair.low.fileSize)} • {formatDate(pair.low.uploadedAt)}
                                 </p>
-                                {renderBaseModelControl(pair.low)}
-                                {renderTargetControl(pair.low, pair)}
+                                {pair.low.canEdit !== false && renderBaseModelControl(pair.low)}
+                                {pair.low.canEdit !== false && renderTargetControl(pair.low, pair)}
                               </>
                             ) : (
                               <p className="text-xs text-muted-foreground italic">{t('loraManagement.status.notUploaded')}</p>
@@ -1324,7 +1355,7 @@ export function LoRAManagementDialog({
           <DialogHeader>
             <DialogTitle>{t('loraManagement.deleteDialog.title')}</DialogTitle>
             <DialogDescription>
-              {t('loraManagement.deleteDialog.description')}
+              {t('loraManagement.deleteDialog.description')} This also removes access for all consumers if the LoRA is shared. Historical generated media is retained.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">

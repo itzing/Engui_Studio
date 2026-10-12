@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 type PromptHelperDebug = {
   content?: string;
   reasoningContent?: string;

@@ -1,7 +1,7 @@
+'use client';
 // src/components/ui/toast.tsx
 // Simple toast notification component
 
-'use client';
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';

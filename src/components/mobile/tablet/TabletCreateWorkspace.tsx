@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -1183,6 +1186,7 @@ export default function TabletCreateWorkspace({
   activeMode: CreateMode;
   onModeChange: (mode: CreateMode) => void;
 }) {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { showToast } = useToast();
   const {

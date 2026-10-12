@@ -1,4 +1,8 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+
 
 export type VideoCreatePresetSnapshot = {
   prompt: string;
@@ -18,9 +22,9 @@ export type VideoCreatePreset = VideoCreatePresetSnapshot & {
 const VIDEO_PRESETS_STORAGE_KEY = 'engui.create.video.presets.v1';
 const VIDEO_PRESETS_API_PATH = '/api/create/video-presets';
 
-function getStorage(): Storage | null {
+function getStorage(): ReturnType<typeof workspaceStorage> {
   if (typeof window === 'undefined') return null;
-  return window.localStorage;
+  return workspaceStorage();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

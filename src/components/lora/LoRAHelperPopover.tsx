@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Info, Plus, SlidersHorizontal } from 'lucide-react';
@@ -23,6 +26,7 @@ export function LoRAHelperPopover({
   className,
   dark = false,
 }: LoRAHelperPopoverProps) {
+  const fetch = useWorkspaceFetch();
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);

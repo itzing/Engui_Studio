@@ -1,3 +1,5 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceActivity, workspaceIsActive } from '@/lib/workspaces/activity';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -38,17 +40,17 @@ async function buildImageDerivatives(asset: { id: string; workspaceId: string; o
   const previewPath = path.join(derivativesDir, previewName);
   const thumbnailPath = path.join(derivativesDir, thumbnailName);
 
-  await sharp(inputPath)
+  { await registerWorkspaceFile(previewPath); await sharp(inputPath)
     .rotate()
     .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 82 })
-    .toFile(previewPath);
+    .toFile(previewPath); }
 
-  await sharp(inputPath)
+  { await registerWorkspaceFile(thumbnailPath); await sharp(inputPath)
     .rotate()
     .resize(480, 480, { fit: 'cover', position: 'centre' })
     .webp({ quality: 76 })
-    .toFile(thumbnailPath);
+    .toFile(thumbnailPath); }
 
   return {
     previewUrl: `/generations/gallery/${asset.workspaceId}/derived/${previewName}`,
@@ -87,6 +89,11 @@ function needsGeneratedImageDerivatives(asset: { originalUrl: string; previewUrl
 }
 
 export async function generateGalleryDerivatives(assetId: string) {
+  const owner = await prisma.galleryAsset.findUnique({ where: { id: assetId }, select: { workspaceId: true } });
+  if (!owner || !await workspaceIsActive(owner.workspaceId)) throw new Error('Gallery workspace is unavailable.');
+  return withWorkspaceActivity(owner.workspaceId, 'generateGalleryDerivatives', () => generateGalleryDerivativesOwned(assetId));
+}
+async function generateGalleryDerivativesOwned(assetId: string) {
   const asset = await prisma.galleryAsset.findUnique({
     where: { id: assetId },
     select: {

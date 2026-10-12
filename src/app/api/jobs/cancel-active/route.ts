@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cancelJobExecution, RUNNING_JOB_STATUSES } from '@/lib/jobManagement';
 
-export async function POST(request: Request) {
+async function POSTImpl(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const workspaceId = typeof body?.workspaceId === 'string' && body.workspaceId.trim()
@@ -50,3 +51,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: error?.message || 'Failed to cancel active jobs' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

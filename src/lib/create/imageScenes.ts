@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import type { ScenePresetSummary } from '@/lib/scenes/types';
 import type { ImageCreateDraftSnapshot } from './imageDraft';
 

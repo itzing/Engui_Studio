@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 // src/app/api/settings/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,7 +8,7 @@ import { getApiMessage } from '@/lib/apiMessages';
 // Initialize settings service
 let settingsService: SettingsService;
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     // Initialize settings service if not already done
     if (!settingsService) {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     // Initialize settings service if not already done
     if (!settingsService) {
@@ -230,3 +231,6 @@ function validateSettings(settings: any): string | null {
   
   return null;
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'global');
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

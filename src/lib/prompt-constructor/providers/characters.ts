@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import type { CharacterSummary } from '@/lib/characters/types';
 import { characterTraitDefinitionMap } from '@/lib/characters/schema';
 import type { PromptBlockProvider } from '@/lib/prompt-constructor/providers/types';

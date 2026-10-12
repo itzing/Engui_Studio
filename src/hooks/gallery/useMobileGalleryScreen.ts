@@ -1,4 +1,8 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
@@ -80,6 +84,7 @@ function serializeGalleryMediaFilters(filters: MediaFilter[]) {
 }
 
 export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile') {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId, workspaces } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [loadedPages, setLoadedPages] = useState<Record<number, LoadedGalleryPage>>({});
@@ -353,7 +358,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       return;
     }
     window.localStorage.setItem(`engui.mobile.gallery.semanticFilter.${effectiveWorkspaceId}`, semanticFilter);
-    window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
+    workspaceStorage()?.setItem('engui.mobile.library.semanticFilter', semanticFilter);
   }, [desktopOverlayKey, effectiveWorkspaceId, prefsHydrated, semanticFilter, surface]);
 
   useEffect(() => {

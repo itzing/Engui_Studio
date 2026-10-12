@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
@@ -11,7 +12,7 @@ import {
 } from '@/lib/apiErrorHandler';
 
 // Update video keyframe
-export async function PATCH(
+async function PATCHImpl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -77,7 +78,7 @@ export async function PATCH(
 }
 
 // Delete video keyframe
-export async function DELETE(
+async function DELETEImpl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -100,3 +101,6 @@ export async function DELETE(
     return createSuccessResponse({ success: true });
   });
 }
+
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

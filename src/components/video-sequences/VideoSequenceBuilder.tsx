@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+
+import { useStudio } from '@/lib/context/StudioContext';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -678,7 +681,7 @@ export function getSegmentInspectorActionTooltip(
 }
 
 export default function VideoSequenceBuilder() {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { activeWorkspaceId: workspaceId } = useStudio();
   const [sequences, setSequences] = useState<VideoSequence[]>([]);
   const [activeSequence, setActiveSequence] = useState<VideoSequence | null>(null);
   const [templates, setTemplates] = useState<VideoSegmentTemplate[]>([]);
@@ -873,41 +876,14 @@ export default function VideoSequenceBuilder() {
   }, [loadSequence]);
 
   useEffect(() => {
+    if (!workspaceId) return;
     let cancelled = false;
-
-    async function resolveWorkspace() {
-      setLoading(true);
-      try {
-        const storedWorkspaceId = typeof window !== 'undefined' ? localStorage.getItem('activeWorkspaceId') : null;
-        const workspaceData = await fetchJson<{ workspaces: Array<{ id: string; isDefault: boolean }> }>(`/api/workspaces?userId=${userId}`);
-        let workspace = workspaceData.workspaces.find((item) => item.id === storedWorkspaceId)
-          ?? workspaceData.workspaces.find((item) => item.isDefault)
-          ?? workspaceData.workspaces[0];
-
-        if (!workspace) {
-          const created = await fetchJson<{ workspace: { id: string; isDefault: boolean } }>('/api/workspaces', {
-            method: 'POST',
-            body: JSON.stringify({ userId, name: 'Default workspace' }),
-          });
-          workspace = created.workspace;
-        }
-
-        if (cancelled) return;
-        setWorkspaceId(workspace.id);
-        if (typeof window !== 'undefined') localStorage.setItem('activeWorkspaceId', workspace.id);
-        await loadWorkspaceData(workspace.id);
-      } catch (nextError) {
-        if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Failed to load Video Sequences');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    resolveWorkspace();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadWorkspaceData]);
+    setLoading(true);
+    void loadWorkspaceData(workspaceId).catch((error) => {
+      if (!cancelled) setError(error instanceof Error ? error.message : 'Failed to load Video Sequences');
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [workspaceId, loadWorkspaceData]);
 
   const fetchAvailableLoras = useCallback(async () => {
     if (!workspaceId) {

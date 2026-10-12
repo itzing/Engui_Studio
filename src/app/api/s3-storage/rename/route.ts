@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import S3Service from '@/lib/s3Service';
 import SettingsService from '@/lib/settingsService';
@@ -23,7 +24,7 @@ function buildDestinationKey(sourceKey: string, newName: string): string {
   return `${prefix}${cleanName}`;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const { volume, key, newName } = await request.json();
 
@@ -89,3 +90,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

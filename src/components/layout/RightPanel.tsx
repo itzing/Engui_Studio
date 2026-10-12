@@ -1,4 +1,10 @@
 'use client';
+import WorkspaceManager from '@/components/workspaces/WorkspaceManager';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStudio, Job, Workspace } from '@/lib/context/StudioContext';
@@ -111,6 +117,7 @@ function GalleryTileStatusBadges({ favorited, bucket, mobile = false }: { favori
 }
 
 export default function RightPanel({ mobile = false, mobileMode }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery' }) {
+  const fetch = useWorkspaceFetch();
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, cancelActiveJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [selectedGalleryAsset, setSelectedGalleryAsset] = useState<GalleryAsset | null>(null);
@@ -306,7 +313,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 }
             }
 
-            const savedSearch = window.localStorage.getItem('engui.mobile.library.search');
+            const savedSearch = workspaceStorage()?.getItem('engui.mobile.library.search');
             if (typeof savedSearch === 'string') {
                 setGallerySearchQuery(savedSearch);
             }
@@ -316,7 +323,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 setGallerySort(savedSort);
             }
 
-            const savedSemanticFilter = window.localStorage.getItem('engui.mobile.library.semanticFilter');
+            const savedSemanticFilter = workspaceStorage()?.getItem('engui.mobile.library.semanticFilter');
             if (savedSemanticFilter === 'all' || savedSemanticFilter === 'common' || savedSemanticFilter === 'draft' || savedSemanticFilter === 'upscale') {
                 setSemanticFilter(savedSemanticFilter);
             }
@@ -350,9 +357,9 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         }
         if (mobile) {
             window.localStorage.setItem('engui.mobile.library.filter', selectedFilters.length === TYPE_FILTERS.length ? 'all' : selectedFilters.join(','));
-            window.localStorage.setItem('engui.mobile.library.search', gallerySearchQuery);
+            workspaceStorage()?.setItem('engui.mobile.library.search', gallerySearchQuery);
             window.localStorage.setItem('engui.mobile.library.sort', gallerySort);
-            window.localStorage.setItem('engui.mobile.library.semanticFilter', semanticFilter);
+            workspaceStorage()?.setItem('engui.mobile.library.semanticFilter', semanticFilter);
         } else {
             window.localStorage.setItem('engui.rightPanel.gallery.semanticFilter', semanticFilter);
         }
@@ -881,7 +888,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         } : null;
 
         if (mobile && detail) {
-            window.localStorage.setItem('engui.mobile.pending-preview', JSON.stringify(detail));
+            workspaceStorage()?.setItem('engui.mobile.pending-preview', JSON.stringify(detail));
         }
 
         window.dispatchEvent(new CustomEvent('jobHoverPreview', {
@@ -1018,7 +1025,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         if (!mobile || typeof window === 'undefined') return;
         if (panelMode !== 'gallery' || filteredGalleryAssets.length === 0 || restoredMobileViewerRef.current) return;
 
-        const raw = window.localStorage.getItem('engui.mobile.library.viewer');
+        const raw = workspaceStorage()?.getItem('engui.mobile.library.viewer');
         if (!raw) {
             restoredMobileViewerRef.current = true;
             mobileViewerPersistenceReadyRef.current = true;
@@ -1053,7 +1060,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     useEffect(() => {
         if (!mobile || typeof window === 'undefined' || !mobileViewerPersistenceReadyRef.current) return;
-        window.localStorage.setItem('engui.mobile.library.viewer', JSON.stringify({
+        workspaceStorage()?.setItem('engui.mobile.library.viewer', JSON.stringify({
             open: galleryViewerOpen,
             assetId: galleryViewerOpen ? (galleryViewerItems[galleryViewerIndex]?.id || gallerySelectedAssetId || null) : null,
         }));
@@ -1800,50 +1807,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
         <div className={mobile ? 'flex h-full w-full flex-col bg-card' : 'flex h-full flex-col bg-card border-l border-border w-[320px]'}>
             {/* Header */}
             <div className={`${mobile ? 'p-3 pb-2 border-b border-border flex flex-col gap-3 bg-muted/5' : 'p-3 border-b border-border flex flex-col gap-3 bg-muted/5'}`}>
-                {/* Workspace Selector */}
-                <div className="flex items-center justify-between">
-                    {isCreatingWorkspace ? (
-                        <div className="flex items-center gap-1 w-full animate-in fade-in slide-in-from-left-2 duration-200">
-                            <Input
-                                ref={inputRef}
-                                value={newWorkspaceName}
-                                onChange={(e) => setNewWorkspaceName(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Workspace Name"
-                                className="h-7 text-xs"
-                            />
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-green-500 hover:text-green-600" onClick={handleCreateWorkspace}>
-                                <Check className="w-4 h-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setIsCreatingWorkspace(false)}>
-                                <X className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    ) : (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 px-2 -ml-2 text-sm font-semibold hover:bg-muted/50 w-full justify-between group">
-                                    <span className="truncate">{activeWorkspace?.name || 'Select Workspace'}</span>
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-[280px] bg-[#1a1a2e]/95 backdrop-blur-md border-white/10">
-                                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Switch Workspace</DropdownMenuLabel>
-                                {workspaces.map(ws => (
-                                    <DropdownMenuItem key={ws.id} onClick={() => selectWorkspace(ws.id)} className="justify-between">
-                                        <span className="truncate">{ws.name}</span>
-                                        {ws.id === activeWorkspaceId && <Check className="w-3 h-3 text-primary" />}
-                                    </DropdownMenuItem>
-                                ))}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setIsCreatingWorkspace(true)} className="text-primary focus:text-primary">
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Create New Workspace
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
+                {!mobile && <WorkspaceManager />}
 
                 {/* Filters & Actions */}
                 <div className="space-y-2">

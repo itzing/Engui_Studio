@@ -1,7 +1,8 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { createMultipartUpload } from '@/lib/s3MultipartUpload';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const result = await createMultipartUpload({
@@ -23,3 +24,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

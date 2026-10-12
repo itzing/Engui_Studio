@@ -1,15 +1,18 @@
+import { validateContentReferences } from '@/lib/workspaces/references';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
-export async function GET(
+async function GETImpl(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
     const { path } = await params;
     const filePath = path.join('/');
+    await validateContentReferences({ url: '/results/' + filePath });
     
     console.log(`📁 Serving static file: /results/${filePath}`);
     
@@ -79,3 +82,5 @@ function getMimeType(fileName: string): string {
       return 'application/octet-stream';
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

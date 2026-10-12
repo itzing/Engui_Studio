@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 export interface ThumbnailOptions {
   width?: number;
   height?: number;

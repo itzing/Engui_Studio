@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -76,7 +77,7 @@ function getExtensionFromUrl(url: string) {
   return path.extname(pathname) || '.png';
 }
 
-function materializeLocalOutput(url: string, characterId: string, slot: CharacterPreviewSlot, variant?: 'thumbnail') {
+async function materializeLocalOutput(url: string, characterId: string, slot: CharacterPreviewSlot, variant?: 'thumbnail') {
   const localPath = resolveLocalPathFromUrl(url);
   if (!localPath || !fs.existsSync(localPath)) {
     return url;
@@ -91,6 +92,7 @@ function materializeLocalOutput(url: string, characterId: string, slot: Characte
   const suffix = variant === 'thumbnail' ? '--thumb' : '';
   const fileName = `${contentHash}${suffix}${ext}`;
   const dest = path.join(dir, fileName);
+    await registerWorkspaceFile(dest);
   if (!fs.existsSync(dest)) {
     fs.writeFileSync(dest, bytes);
   }
@@ -216,9 +218,9 @@ export const characterPreviewMaterializationHandler = {
       throw new Error(`Completed character preview job ${job.id} has no output URL`);
     }
 
-    const imageUrl = materializeLocalOutput(outputUrl, task.targetId, slot);
+    const imageUrl = await materializeLocalOutput(outputUrl, task.targetId, slot);
     const thumbnailUrl = normalizeUrlCandidate(job.thumbnailUrl)
-      ? materializeLocalOutput(job.thumbnailUrl, task.targetId, slot, 'thumbnail')
+      ? await materializeLocalOutput(job.thumbnailUrl, task.targetId, slot, 'thumbnail')
       : imageUrl;
 
     previewState[slot] = {

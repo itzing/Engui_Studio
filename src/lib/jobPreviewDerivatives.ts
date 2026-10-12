@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -71,11 +72,11 @@ export async function generateJobImageThumbnail(params: {
   const fileName = buildThumbnailName(job, resultUrl);
   const outputPath = path.join(JOB_PREVIEWS_DIR, fileName);
 
-  await sharp(inputPath)
+  { await registerWorkspaceFile(outputPath); await sharp(inputPath)
     .rotate()
     .resize(size, size, { fit: 'cover', position: 'centre', withoutEnlargement: true })
     .webp({ quality })
-    .toFile(outputPath);
+    .toFile(outputPath); }
 
   return `/generations/job-previews/${fileName}`;
 }

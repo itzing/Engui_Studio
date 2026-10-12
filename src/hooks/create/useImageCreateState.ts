@@ -1,4 +1,9 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
@@ -42,7 +47,9 @@ const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = '
 };
 
 export function useImageCreateState() {
+  const fetch = useWorkspaceFetch();
   const { settings, addJob, activeWorkspaceId } = useStudio();
+  const mediaOwner = useRef(activeWorkspaceId);
 
   const imageModels = useMemo(() => getModelsByType('image'), []);
   const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
@@ -207,8 +214,8 @@ export function useImageCreateState() {
 
   useEffect(() => {
     try {
-      const storedInstruction = window.localStorage.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-      if (storedInstruction !== null) {
+      const storedInstruction = workspaceStorage()?.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+      if (typeof storedInstruction === 'string') {
         setPromptHelperInstruction(storedInstruction);
       }
     } catch {
@@ -219,9 +226,9 @@ export function useImageCreateState() {
   useEffect(() => {
     try {
       if (promptHelperInstruction.trim()) {
-        window.localStorage.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
+        workspaceStorage()?.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
       } else {
-        window.localStorage.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+        workspaceStorage()?.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
       }
     } catch {
       // ignore storage errors
@@ -447,12 +454,12 @@ export function useImageCreateState() {
   }, []);
 
   const selectPrimaryImageFile = useCallback(async (file: File) => {
-    const storedRef = await storeCreateFile(file);
+    const storedRef = await storeCreateFile(file, mediaOwner.current);
     setPrimaryImage(file, URL.createObjectURL(file), storedRef);
   }, [setPrimaryImage]);
 
   const selectSecondaryImageFile = useCallback(async (file: File) => {
-    const storedRef = await storeCreateFile(file);
+    const storedRef = await storeCreateFile(file, mediaOwner.current);
     setSecondaryImage(file, URL.createObjectURL(file), storedRef);
   }, [setSecondaryImage]);
 

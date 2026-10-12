@@ -1,11 +1,13 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 // src/app/api/settings/clear/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     // In a real app, get userId from authentication
     const userId = 'user123'; // TODO: Replace with actual user authentication
@@ -37,3 +39,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { ensureHelperMode } from '@/lib/helperMode';
@@ -84,7 +85,7 @@ function buildUserMessage(prompt: string): string {
   ].join('\n');
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
@@ -161,3 +162,5 @@ export async function POST(request: NextRequest) {
     return new NextResponse(message, { status: 500, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

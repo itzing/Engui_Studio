@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { createJobMaterializationTask } from '@/lib/materialization/server';
 import { submitGenerationFormData } from '@/lib/generation/submitFormData';
@@ -7,7 +8,7 @@ import { buildStudioPosePreviewPrompt, ensureStudioPoseLibrarySettings, getStudi
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await readStudioSessionJsonBody(request);
     const workspaceId = requireStudioSessionString(body?.workspaceId, 'workspaceId');
@@ -51,3 +52,5 @@ export async function POST(request: NextRequest) {
     return handleStudioSessionApiError(error, 'Failed to queue bulk Studio pose previews:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

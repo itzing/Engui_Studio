@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { addVideoSequenceFinalToGallery } from '@/lib/video-sequences/server';
 import {
@@ -8,7 +9,7 @@ import {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(
+async function POSTImpl(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -20,3 +21,5 @@ export async function POST(
     return handleStudioSessionApiError(error, 'Failed to add video sequence final to Gallery:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildPromptValidation, normalizeConstraintIds, normalizePromptDocumentTitle, normalizePromptState, normalizePromptTemplateId, normalizePromptTemplateVersion, serializeConstraintIds, serializePromptState, toPromptDocument, toPromptDocumentSummary } from '@/lib/prompt-constructor/utils';
@@ -6,7 +7,7 @@ import { getPromptTemplate } from '@/lib/prompt-constructor/templateRegistry';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = typeof searchParams.get('workspaceId') === 'string' ? searchParams.get('workspaceId')!.trim() : '';
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId.trim() : '';
@@ -91,3 +92,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

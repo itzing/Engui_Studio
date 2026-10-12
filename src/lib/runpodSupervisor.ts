@@ -1,3 +1,5 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceActivity, workspaceIsActive } from '@/lib/workspaces/activity';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -438,7 +440,7 @@ async function writeLocalResultBuffer(job: any, buffer: Buffer, params: {
   ensureGenerationsDir();
   const ext = detectResultExtension(params);
   const { filePath, relativePath } = buildLocalResultPath(job, ext);
-  fs.writeFileSync(filePath, buffer);
+  { await registerWorkspaceFile(filePath); fs.writeFileSync(filePath, buffer); }
   return { filePath, relativePath };
 }
 
@@ -895,7 +897,7 @@ async function downloadAndDecryptResultMediaWithRetry(params: {
   throw lastError || new Error('Secure result download failed');
 }
 
-async function finalizeSecureTransportResult(params: {
+async function finalizeSecureTransportResultOwned(params: {
   job: any;
   output: any;
   options: JsonObject;
@@ -1105,7 +1107,7 @@ async function finalizeSecureTransportResult(params: {
   }
 }
 
-async function finalizeLegacyResult(params: {
+async function finalizeLegacyResultOwned(params: {
   job: any;
   output: any;
   options: JsonObject;
@@ -1154,6 +1156,10 @@ async function finalizeLegacyResult(params: {
 }
 
 export async function processRunPodJob(job: any) {
+  if (!await workspaceIsActive(job.workspaceId)) return;
+  return withWorkspaceActivity(job.workspaceId, 'runpod-supervisor', () => processRunPodJobOwned(job));
+}
+async function processRunPodJobOwned(job: any) {
   const model = getModelById(job.modelId || 'unknown');
   if (!model || model.api.type !== 'runpod') {
     return;
@@ -1323,6 +1329,7 @@ export async function processRunPodJob(job: any) {
 export async function processRunPodJobsOnce() {
   const jobs = await prisma.job.findMany({
     where: {
+      workspace: { lifecycle: 'active' },
       status: { in: [...ACTIVE_JOB_STATUSES] },
     },
     orderBy: { createdAt: 'asc' },
@@ -1358,6 +1365,7 @@ export async function processRunPodJobsOnce() {
 async function retryTerminalSecureCleanupsOnce() {
   const jobs = await prisma.job.findMany({
     where: {
+      workspace: { lifecycle: 'active' },
       status: { in: ['completed', 'failed'] },
       OR: [
         { secureState: { contains: '"transportStatus":"pending"' } },
@@ -1439,6 +1447,7 @@ function buildRecoveredSecureTransportOutput(secureState: JsonObject | null) {
 async function retryFailedSecureFinalizationsOnce() {
   const jobs = await prisma.job.findMany({
     where: {
+      workspace: { lifecycle: 'active' },
       status: 'failed',
       secureState: { contains: '"transportResultStatus":"completed"' },
     },
@@ -1572,4 +1581,12 @@ export function startRunPodSupervisor() {
   });
 
   void tick();
+}
+
+async function finalizeSecureTransportResult(params: Parameters<typeof finalizeSecureTransportResultOwned>[0]) {
+  return withWorkspaceActivity(params.job.workspaceId, 'finalization', () => finalizeSecureTransportResultOwned(params));
+}
+
+async function finalizeLegacyResult(params: Parameters<typeof finalizeLegacyResultOwned>[0]) {
+  return withWorkspaceActivity(params.job.workspaceId, 'finalization', () => finalizeLegacyResultOwned(params));
 }

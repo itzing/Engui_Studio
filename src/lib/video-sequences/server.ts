@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import type { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -1471,7 +1472,7 @@ export async function addVideoSequenceFinalToGallery(sequenceId: string) {
   const fileName = `${contentHash}${ext}`;
   const outputPath = galleryOutputPath(sequence.workspaceId, fileName);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, fileBytes);
+  { await registerWorkspaceFile(outputPath); fs.writeFileSync(outputPath, fileBytes); }
 
   const originalUrl = galleryPublicUrl(sequence.workspaceId, fileName);
   const asset = await prisma.galleryAsset.create({
@@ -1667,13 +1668,13 @@ async function materializeVideoSequenceSegmentOutput(input: {
   const localSourcePath = resolveLocalPublicPath(input.sourceUrl);
   if (localSourcePath && fs.existsSync(localSourcePath)) {
     if (path.resolve(localSourcePath) !== path.resolve(outputPath)) {
-      fs.copyFileSync(localSourcePath, outputPath);
+      { await registerWorkspaceFile(outputPath); fs.copyFileSync(localSourcePath, outputPath); }
     }
   } else if (/^https?:\/\//i.test(input.sourceUrl)) {
     const response = await fetch(input.sourceUrl);
     if (!response.ok) throw new StudioSessionApiError(400, `Failed to copy segment output: ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(outputPath, bytes);
+    { await registerWorkspaceFile(outputPath); fs.writeFileSync(outputPath, bytes); }
   } else {
     throw new StudioSessionApiError(400, 'Completed job output must be a local public URL or http(s) URL before sequence materialization');
   }
@@ -1707,13 +1708,13 @@ async function materializeVideoSequenceContinuationFrame(input: {
   const localSourcePath = resolveLocalPublicPath(input.sourceUrl);
   if (localSourcePath && fs.existsSync(localSourcePath)) {
     if (path.resolve(localSourcePath) !== path.resolve(outputPath)) {
-      fs.copyFileSync(localSourcePath, outputPath);
+      { await registerWorkspaceFile(outputPath); fs.copyFileSync(localSourcePath, outputPath); }
     }
   } else if (/^https?:\/\//i.test(input.sourceUrl)) {
     const response = await fetch(input.sourceUrl);
     if (!response.ok) throw new StudioSessionApiError(400, `Failed to copy continuation frame: ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(outputPath, bytes);
+    { await registerWorkspaceFile(outputPath); fs.writeFileSync(outputPath, bytes); }
   } else {
     throw new StudioSessionApiError(400, 'Continuation frame must be a local public URL or http(s) URL before sequence materialization');
   }

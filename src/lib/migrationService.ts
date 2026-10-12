@@ -1,6 +1,7 @@
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
 export interface MigrationStatus {
   isRequired: boolean;

@@ -1,3 +1,5 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizeChipArray, normalizeStatus, serializeChipArray, toVibeSummary } from '@/lib/vibes/utils';
@@ -5,7 +7,7 @@ import { normalizeChipArray, normalizeStatus, serializeChipArray, toVibeSummary 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = normalizeStatus(searchParams.get('status'));
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.vibePreset.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         name,
         baseDescription,
         tags: serializeChipArray(body?.tags),
@@ -63,3 +66,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

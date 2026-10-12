@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDown, ArrowUp, Copy, Crop, FlipHorizontal2, ImageIcon, Plus, RotateCcw } from 'lucide-react';
@@ -317,6 +320,7 @@ function SliderField({ label, value, min, max, step, onChange, suffix = '' }: { 
 }
 
 export default function FramingLibraryWorkspace() {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId, addJob } = useStudio();
   const [presets, setPresets] = useState<StudioFramingPresetSummary[]>([]);
   const [query, setQuery] = useState('');

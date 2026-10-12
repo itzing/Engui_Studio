@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -35,6 +38,7 @@ const EMPTY_NAVIGATION: MobileDetailsNavigationState = {
 };
 
 export default function MobileGalleryDetailsScreen({ assetId }: { assetId: string }) {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { asset, isLoading, error, refresh, setAsset } = useMobileGalleryDetails(assetId);
   const [tagsInput, setTagsInput] = useState('');

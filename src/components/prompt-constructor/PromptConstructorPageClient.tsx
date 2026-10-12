@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -372,6 +375,7 @@ const sectionIcons: Record<string, typeof UserIcon> = {
 };
 
 export default function PromptConstructorPageClient({ embedded = false }: { embedded?: boolean }) {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
   const router = useRouter();

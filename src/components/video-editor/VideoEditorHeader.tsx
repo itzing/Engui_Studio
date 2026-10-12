@@ -1,4 +1,6 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+
 
 import React, { useCallback, useMemo } from 'react';
 import { useStudio, VideoProject } from '@/lib/context/StudioContext';

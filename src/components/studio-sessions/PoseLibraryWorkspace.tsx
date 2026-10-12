@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
@@ -86,6 +89,7 @@ function createDefaultPoseDraft(categoryId: string): PoseDraft {
 }
 
 export default function PoseLibraryWorkspace({ route }: { route: PoseLibraryRoute }) {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId } = useStudio();
   const [categories, setCategories] = useState<StudioPoseCategorySummary[]>([]);
   const [poses, setPoses] = useState<StudioPoseSummary[]>([]);

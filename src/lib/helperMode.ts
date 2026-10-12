@@ -1,3 +1,5 @@
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { promises as fs } from 'fs';
 
 const LOCK_DIR = '/tmp/engui-helper-mode.lock';

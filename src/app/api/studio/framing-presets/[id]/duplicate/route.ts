@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { duplicateStudioFramingPreset } from '@/lib/studio-sessions/framingLibraryServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, readStudioSessionJsonBody, studioSessionJs
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await readStudioSessionJsonBody(request);
@@ -16,3 +17,5 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return handleStudioSessionApiError(error, 'Failed to duplicate Studio framing preset:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

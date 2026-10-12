@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useState } from 'react';
 
@@ -32,6 +35,7 @@ export type MobileJobDetail = {
 };
 
 export function useMobileJobDetails(jobId: string) {
+  const fetch = useWorkspaceFetch();
   const [job, setJob] = useState<MobileJobDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -1,6 +1,6 @@
+'use client';
 // src/components/lora/LoRASelector.tsx
 
-'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, Package, ChevronDown, Upload } from 'lucide-react';
@@ -13,6 +13,7 @@ import { LoRAHelperPopover } from '@/components/lora/LoRAHelperPopover';
 import { getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 export interface LoRAFile {
+  isShared?: boolean;
   id: string;
   name: string;
   fileName: string;
@@ -180,7 +181,7 @@ export function LoRASelector({
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate group-hover:text-primary transition-colors" title={selectedLoRA.fileName}>
-                {selectedLoRA.fileName}
+                {selectedLoRA.fileName}{selectedLoRA.isShared && <span className="ml-2 text-xs text-primary">Shared from Default</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatFileSize(selectedLoRA.fileSize)} • {t('loraManagement.selector.uploaded')}{' '}
@@ -253,6 +254,7 @@ export function LoRASelector({
         </div>
       )}
 
+      {value && !selectedLoRA && <p role="alert" className="text-xs text-destructive">Selected LoRA is unavailable in this workspace. Choose another source or clear the selection.</p>}
       {/* Dropdown */}
       {isDropdownOpen && (
         <div

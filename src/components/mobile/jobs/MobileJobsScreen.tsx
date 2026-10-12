@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -215,6 +218,7 @@ const JobRow = React.memo(function JobRow({
 }, (prev, next) => prev.job === next.job && prev.isSelected === next.isSelected && prev.absoluteIndex === next.absoluteIndex);
 
 export default function MobileJobsScreen() {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { showToast } = useToast();
   const parentRef = useRef<HTMLDivElement | null>(null);

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPromptVersions, getSourceImagePrompt } from '@/lib/promptVersions';
@@ -277,7 +278,7 @@ function chooseAnchorIndex(sourceAssets: CarouselFeedAsset[], filteredAssets: Ar
   return nearestIndex;
 }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
@@ -510,3 +511,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

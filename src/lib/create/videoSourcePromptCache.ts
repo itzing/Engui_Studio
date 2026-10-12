@@ -1,4 +1,6 @@
 'use client';
+import { workspaceStorage, currentBrowserWorkspaceId } from '@/lib/workspaces/client';
+
 
 const STORAGE_KEY = 'engui:wan22-video:source-image-prompt-cache:v1';
 const MAX_CACHE_ENTRIES = 50;
@@ -7,6 +9,7 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const VIDEO_SOURCE_PROMPT_EXTRACTION_VERSION = 'wan22-i2v-source-context-v1';
 
 export type VideoSourcePromptCacheKey = {
+  workspaceId?: string | null;
   key: string;
   fingerprint: string;
   modelId: string;
@@ -28,17 +31,17 @@ type VideoSourcePromptCachePayload = {
   entries: VideoSourcePromptCacheEntry[];
 };
 
-function getStorage(): Storage | null {
+function getStorage(owner = currentBrowserWorkspaceId()): ReturnType<typeof workspaceStorage> {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage || null;
+    return workspaceStorage(owner);
   } catch {
     return null;
   }
 }
 
-function readPayload(): VideoSourcePromptCachePayload {
-  const storage = getStorage();
+function readPayload(owner = currentBrowserWorkspaceId()): VideoSourcePromptCachePayload {
+  const storage = getStorage(owner);
   if (!storage) return { version: 1, entries: [] };
 
   try {
@@ -67,8 +70,8 @@ function readPayload(): VideoSourcePromptCachePayload {
   }
 }
 
-function writePayload(payload: VideoSourcePromptCachePayload) {
-  const storage = getStorage();
+function writePayload(payload: VideoSourcePromptCachePayload, owner = currentBrowserWorkspaceId()) {
+  const storage = getStorage(owner);
   if (!storage) return;
 
   try {
@@ -115,7 +118,9 @@ function readFileArrayBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 export async function buildVideoSourcePromptCacheKey(file: File, modelId: string): Promise<VideoSourcePromptCacheKey> {
+  const workspaceId = currentBrowserWorkspaceId();
   const bytes = new Uint8Array(await readFileArrayBuffer(file));
+  if (workspaceId !== currentBrowserWorkspaceId()) throw new DOMException('Workspace changed.', 'AbortError');
   const fingerprint = [
     'fnv1a32',
     file.size,
@@ -125,6 +130,7 @@ export async function buildVideoSourcePromptCacheKey(file: File, modelId: string
   const safeModelId = modelId.trim() || 'unknown-model';
 
   return {
+    workspaceId,
     key: [safeModelId, VIDEO_SOURCE_PROMPT_EXTRACTION_VERSION, fingerprint].join('|'),
     fingerprint,
     modelId: safeModelId,
@@ -132,21 +138,21 @@ export async function buildVideoSourcePromptCacheKey(file: File, modelId: string
   };
 }
 
-export function readVideoSourcePromptCache(cacheKey: string): string | null {
-  const payload = readPayload();
+export function readVideoSourcePromptCache(cacheKey: string, owner = currentBrowserWorkspaceId()): string | null {
+  const payload = readPayload(owner);
   const now = Date.now();
   const entries = pruneEntries(payload.entries, now);
   const match = entries.find((entry) => entry.key === cacheKey);
 
   if (!match) {
     if (entries.length !== payload.entries.length) {
-      writePayload({ version: 1, entries });
+      writePayload({ version: 1, entries }, owner);
     }
     return null;
   }
 
   match.lastUsedAt = now;
-  writePayload({ version: 1, entries });
+  writePayload({ version: 1, entries }, owner);
   return match.prompt.trim() || null;
 }
 
@@ -156,10 +162,12 @@ export function writeVideoSourcePromptCache(input: VideoSourcePromptCacheKey & {
   fileSize?: number;
   fileType?: string;
 }) {
+  const owner = input.workspaceId === undefined ? currentBrowserWorkspaceId() : input.workspaceId;
+  if (!owner) return;
   const prompt = input.prompt.trim();
   if (!prompt) return;
 
-  const payload = readPayload();
+  const payload = readPayload(owner);
   const now = Date.now();
   const entries = payload.entries.filter((entry) => entry.key !== input.key);
   entries.unshift({
@@ -176,5 +184,5 @@ export function writeVideoSourcePromptCache(input: VideoSourcePromptCacheKey & {
     fileType: input.fileType,
   });
 
-  writePayload({ version: 1, entries: pruneEntries(entries, now) });
+  writePayload({ version: 1, entries: pruneEntries(entries, now) }, owner);
 }

@@ -1,0 +1,1308 @@
+[
+  {
+    "route": "/api/carousel/feed-window",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters/[id]/preview",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters/[id]",
+    "methods": [
+      "PATCH",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters/[id]/versions",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters/assist",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters/extract",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/characters",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/create/video-presets/[id]",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/create/video-presets",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/elevenlabs/generate",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]/enrich",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]/favorite",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]/reuse",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]/tags",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/[id]/trash",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/backfill",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/derivatives/backfill",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets/from-job-output",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/assets",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/gallery/trash",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/generate",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/generate/status",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/internal-systemctl",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/[id]/cancel",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/[id]/reuse",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/cancel-active",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/clear-finished",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/delete",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs/favorite",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/local-model/ask",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/[id]",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/helper-profile",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/multipart/abort",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/multipart/finalize",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/multipart/init",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/multipart/proxy-part",
+    "methods": [
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/sync",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/upload",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/lora/uploads",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/migration",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "disabled",
+    "enforcement": "410"
+  },
+  {
+    "route": "/api/poses/[id]",
+    "methods": [
+      "PATCH",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/poses/extract",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/poses",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-documents/[id]",
+    "methods": [
+      "GET",
+      "PATCH",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-documents",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-helper/improve",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-helper/test",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-helper/z-image-rewrite",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-wildcards/[id]",
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/prompt-wildcards",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/results/[...path]",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/results/[jobId]",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/runpod/balance",
+    "methods": [
+      "GET"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/create-folder",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/delete",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/download",
+    "methods": [
+      "GET"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/files",
+    "methods": [
+      "GET"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/loras",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/multipart/abort",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/multipart/complete",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/multipart/init",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/multipart/part",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/multipart/proxy-part",
+    "methods": [
+      "PUT"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/preview",
+    "methods": [
+      "GET"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/rename",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/upload",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/s3-storage/volumes",
+    "methods": [
+      "GET"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/save-audio",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/save-project-audio",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/scenes/[id]",
+    "methods": [
+      "PATCH",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/scenes/assemble",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/scenes",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/settings/clear",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/settings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/settings/test",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/collections/[id]/items/[itemId]",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/collections/[id]/items/reorder",
+    "methods": [
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/collections/[id]/items",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/collections/[id]",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/framing-presets/[id]/duplicate",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/framing-presets/[id]/preview",
+    "methods": [
+      "DELETE",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/framing-presets/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/framing-presets/reorder",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/framing-presets",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/portfolios/[id]/collections",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/portfolios/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/portfolios/[id]/sessions",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/portfolios",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/categories/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/categories/reorder",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/categories",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/export",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/import",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses/[id]/duplicate",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses/[id]/openpose",
+    "methods": [
+      "DELETE",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses/[id]/previews",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses/reorder",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/poses",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/previews/[candidateId]",
+    "methods": [
+      "DELETE"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/previews/[candidateId]/set-primary",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/previews/bulk",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-library/settings",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/pose-sets",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/runs/[id]/launch",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/runs/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/sessions/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/sessions/[id]/runs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/shots/[id]/poses",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/studio/versions/[id]/review",
+    "methods": [
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/thumbnail",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/upload",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/upscale",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/vibes/[id]",
+    "methods": [
+      "PATCH",
+      "PUT"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/vibes/extract",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/vibes",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-export/download",
+    "methods": [
+      "GET"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-export",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-keyframes/[id]",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-keyframes",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-projects/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-projects",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-segment-templates/[id]",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-segment-templates",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/add-to-gallery",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/generate-from",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/render",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/clear-stale",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/extract-frames",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/gallery-asset",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/generate",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/pick-frame",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/save-template",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/[segmentId]/sync-status",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments/from-template",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences/[id]/segments",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-sequences",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-tracks/[id]",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-tracks/create-muted",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-tracks/detect-audio",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-tracks/extract-audio",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/video-tracks",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/vision-prompt-helper/extract",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/vision-prompt-helper/test",
+    "methods": [
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/workspace-media",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "content",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/workspaces/[id]/jobs/[jobId]",
+    "methods": [
+      "DELETE",
+      "POST",
+      "PUT"
+    ],
+    "scope": "disabled",
+    "enforcement": "410"
+  },
+  {
+    "route": "/api/workspaces/[id]",
+    "methods": [
+      "DELETE",
+      "GET",
+      "PUT"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/workspaces/initialize",
+    "methods": [
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  },
+  {
+    "route": "/api/workspaces",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "scope": "global",
+    "enforcement": "withWorkspaceRoute + Prisma ownership guard + reference validation"
+  }
+]

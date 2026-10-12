@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import fs from 'fs';
 import path from 'path';
 import { NextRequest } from 'next/server';
@@ -58,7 +59,7 @@ function pickSourceImageUrl(pose: NonNullable<Awaited<ReturnType<typeof getStudi
   return candidate?.assetUrl || candidate?.thumbnailUrl || pose.primaryPreviewUrl || '';
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = (await readStudioSessionJsonBody(request)) ?? {};
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const pose = await getStudioPose(id);
@@ -127,3 +128,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return handleStudioSessionApiError(error, 'Failed to clear Studio pose OpenPose data:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

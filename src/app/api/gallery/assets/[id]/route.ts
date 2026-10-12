@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { permanentlyDeleteGalleryAsset } from '@/lib/galleryCleanup';
@@ -50,7 +51,7 @@ function toAssetResponse(asset: any, snapshot: Record<string, any>) {
   };
 }
 
-export async function GET(
+async function GETImpl(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -74,7 +75,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function PATCHImpl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -104,7 +105,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function DELETEImpl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -123,3 +124,7 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

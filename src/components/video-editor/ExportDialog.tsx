@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useState, useEffect } from 'react';
 import { useStudio, VideoProject } from '@/lib/context/StudioContext';
@@ -21,6 +24,7 @@ interface ExportDialogProps {
 type ExportState = 'idle' | 'rendering' | 'completed' | 'error';
 
 export function ExportDialog({ project }: ExportDialogProps) {
+  const fetch = useWorkspaceFetch();
   const { exportDialogOpen, setExportDialogOpen, tracks, keyframes } = useStudio();
   const { t } = useI18n();
   

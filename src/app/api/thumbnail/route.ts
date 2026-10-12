@@ -1,3 +1,5 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { ffmpegService } from '@/lib/ffmpegService';
 import * as fs from 'fs';
@@ -5,7 +7,7 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { getApiMessage } from '@/lib/apiMessages';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('video') as File;
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
     try {
       // 파일을 임시 디렉토리에 저장
       const arrayBuffer = await file.arrayBuffer();
-      fs.writeFileSync(tempVideoPath, Buffer.from(arrayBuffer));
+      { await registerWorkspaceFile(tempVideoPath); fs.writeFileSync(tempVideoPath, Buffer.from(arrayBuffer)); }
 
       // 비디오 파일 유효성 검사
       const isValidVideo = await ffmpegService.validateVideo(tempVideoPath);
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     // FFmpeg 사용 가능 여부 확인
     const isFFmpegAvailable = await ffmpegService.isFFmpegAvailable();
@@ -136,3 +138,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');
+export const GET = withWorkspaceRoute(GETImpl, 'content');

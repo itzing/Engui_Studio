@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { toCharacterVersionSummary } from '@/lib/characters/utils';
@@ -5,7 +6,7 @@ import { toCharacterVersionSummary } from '@/lib/characters/utils';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+async function GETImpl(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
 
@@ -38,3 +39,5 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

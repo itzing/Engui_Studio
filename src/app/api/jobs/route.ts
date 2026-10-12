@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
@@ -25,7 +26,7 @@ async function maybePopulateJobThumbnail(job: any) {
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const {
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const jobId = searchParams.get('jobId');
@@ -229,3 +230,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');
+export const GET = withWorkspaceRoute(GETImpl, 'content');

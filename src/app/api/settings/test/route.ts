@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 // src/app/api/settings/test/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,7 +18,7 @@ export interface TestResult {
   error?: string;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     // Request body를 한 번만 읽기
     const body = await request.json();
@@ -483,3 +484,4 @@ async function logApiCall(userId: string, service: string, testResult: TestResul
     console.error('❌ Failed to log API call:', error);
   }
 }
+export const POST = withWorkspaceRoute(POSTImpl, 'global');

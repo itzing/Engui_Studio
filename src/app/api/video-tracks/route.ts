@@ -1,8 +1,9 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Create new video track
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const { projectId, type, label, locked, order } = await request.json();
 
@@ -62,3 +63,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

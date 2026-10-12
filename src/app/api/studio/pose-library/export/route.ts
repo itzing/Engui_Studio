@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { exportStudioPoseLibrary } from '@/lib/studio-sessions/poseLibraryServer';
 import { handleStudioSessionApiError, requireStudioSessionString, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, requireStudioSessionString, studioSessionN
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const workspaceId = requireStudioSessionString(request.nextUrl.searchParams.get('workspaceId'), 'workspaceId');
     const categoryId = request.nextUrl.searchParams.get('categoryId')?.trim() || null;
@@ -15,3 +16,5 @@ export async function GET(request: NextRequest) {
     return handleStudioSessionApiError(error, 'Failed to export Studio pose library:');
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

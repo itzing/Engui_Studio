@@ -1,3 +1,5 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
@@ -5,11 +7,11 @@ import path from 'path';
 import { mkdir } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function GET() {
+async function GETImpl() {
   return NextResponse.json({ status: 'ok' });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   console.log('🎬 video-export POST called');
 
   try {
@@ -51,6 +53,7 @@ export async function POST(request: NextRequest) {
     const exportId = uuidv4();
     const filename = `export_${exportId}.${format}`;
     const outputPath = path.join(outputDir, filename);
+    await registerWorkspaceFile(outputPath);
 
     console.log('📦 Bundling Remotion project...');
 
@@ -269,3 +272,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

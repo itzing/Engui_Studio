@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getPromptHelperProvider, PromptHelperProviderError } from '@/lib/promptHelper';
@@ -12,7 +13,7 @@ function readPositiveNumber(value: unknown): number | undefined {
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
@@ -51,3 +52,5 @@ export async function POST(request: NextRequest) {
     });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

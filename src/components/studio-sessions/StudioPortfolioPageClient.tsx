@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { Camera, Image, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from 'lucide-react';
@@ -538,6 +541,7 @@ function CollectionsPanel({
 }
 
 export default function StudioPortfolioPageClient() {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId } = useStudio();
   const [portfolios, setPortfolios] = useState<StudioPortfolioSummary[]>([]);
   const [sessions, setSessions] = useState<StudioPhotoSessionSummary[]>([]);

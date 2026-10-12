@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { updateStudioVersionReview } from '@/lib/studio-sessions/portfolioServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSessionString, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSe
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await readStudioSessionJsonBody(request);
@@ -17,3 +18,5 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return handleStudioSessionApiError(error, 'Failed to update Studio version review:');
   }
 }
+
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');

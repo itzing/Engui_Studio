@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { ffmpegService } from '@/lib/ffmpegService';
 
@@ -5,7 +6,7 @@ import { ffmpegService } from '@/lib/ffmpegService';
  * POST /api/video-tracks/extract-audio
  * Extract audio from a video file
  */
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const { videoPath } = body;
@@ -29,3 +30,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

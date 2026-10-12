@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -160,6 +161,7 @@ export class FFmpegService {
     } = options;
 
     // Create the output directory.
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -219,6 +221,7 @@ export class FFmpegService {
       time,
     } = options;
 
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -275,6 +278,7 @@ export class FFmpegService {
       throw new Error('At least one input video is required');
     }
 
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -492,6 +496,7 @@ export class FFmpegService {
     }
 
     // Create output directory structure
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -611,6 +616,7 @@ export class FFmpegService {
     }
 
     // Create output directory structure
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -719,6 +725,7 @@ export class FFmpegService {
     }
 
     // 출력 디렉토리 생성
+    await registerWorkspaceFile(outputPath);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });

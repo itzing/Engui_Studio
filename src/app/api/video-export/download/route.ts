@@ -1,9 +1,11 @@
+import { validateContentReferences } from '@/lib/workspaces/references';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { access, readFile } from 'fs/promises';
 
 // GET /api/video-export/download - Download exported video
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const filename = searchParams.get('file');
@@ -22,6 +24,8 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await validateContentReferences({ url: '/exports/' + filename });
 
     // Construct file path
     const filePath = path.join(process.cwd(), 'public', 'exports', filename);
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
     const contentType = ext === '.mp4' ? 'video/mp4' : ext === '.webm' ? 'video/webm' : 'application/octet-stream';
 
     // Return file with appropriate headers
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -60,3 +64,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

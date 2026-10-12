@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Job, useStudio } from '@/lib/context/StudioContext';
@@ -130,6 +133,7 @@ type JobOutput = {
 };
 
 export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentIndex = 0, totalCount = 0 }: JobDetailsDialogProps) {
+  const fetch = useWorkspaceFetch();
     const { addJob, deleteJob, cancelJob } = useStudio();
     const { t } = useI18n();
     const { showToast } = useToast();

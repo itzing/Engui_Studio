@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useState } from 'react';
 import { useStudio, StudioSettings, VideoProject } from '@/lib/context/StudioContext';
@@ -23,6 +26,7 @@ interface SettingsDialogProps {
 type SettingsTab = 'video-project' | 'general' | 'runpod' | 'storage' | 'lora' | 'elevenlabs';
 
 export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+  const fetch = useWorkspaceFetch();
     const { 
         settings, 
         updateSettings, 

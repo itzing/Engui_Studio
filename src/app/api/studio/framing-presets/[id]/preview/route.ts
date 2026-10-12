@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -134,7 +135,7 @@ async function launchZImageControlPreview(params: {
   return submitGenerationFormData(formData);
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = (await readStudioSessionJsonBody(request)) ?? {};
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const preset = await getStudioFramingPreset(id);
@@ -245,3 +246,6 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return handleStudioSessionApiError(error, 'Failed to clean Studio framing preview assets:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

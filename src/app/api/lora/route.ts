@@ -1,3 +1,5 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 // src/app/api/lora/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -6,23 +8,22 @@ import { logger } from '@/lib/logger';
 import S3Service from '@/lib/s3Service';
 
 // GET /api/lora - Fetch all LoRAs for a workspace
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const workspaceId = searchParams.get('workspaceId');
+    const workspaceId = requireWorkspaceId();
+    const owner = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
     const generatePresignedUrls = searchParams.get('presigned') === 'true';
 
     // Build where clause
-    const where = workspaceId ? { workspaceId } : {};
+    const where = { OR: [{ lifecycle: 'active' }, { workspaceId, lifecycle: 'deleting' }] };
 
     const loras = await prisma.loRA.findMany({
       where,
       orderBy: { uploadedAt: 'desc' },
     });
 
-    const helperProfiles = await prisma.loRAHelperProfile.findMany({
-      where,
-    });
+    const helperProfiles = await prisma.loRAHelperProfile.findMany();
 
     const singleProfileByLoraId = new Map(
       helperProfiles
@@ -82,6 +83,10 @@ export async function GET(request: NextRequest) {
           pairHelperProfile: pairProfileByLoraId.get(lora.id) ?? null,
           uploadedAt: lora.uploadedAt.toISOString(),
           workspaceId: lora.workspaceId,
+          isShared: lora.isShared,
+          lifecycle: lora.lifecycle,
+          canShare: owner.isProtected && lora.workspaceId === workspaceId,
+          canEdit: lora.workspaceId === workspaceId,
         };
       })
     );
@@ -122,3 +127,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');

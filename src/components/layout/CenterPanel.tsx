@@ -1,4 +1,9 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -43,6 +48,7 @@ type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 type GalleryBucket = 'common' | 'draft';
 
 export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
+  const fetch = useWorkspaceFetch();
   const { activeArtifactId, activeTool, jobs, activeWorkspaceId, addJob } = useStudio();
   const { showToast } = useToast();
   const [mode, setMode] = useState<CenterMode>('image');
@@ -144,7 +150,7 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
       }
 
       if (mobile) {
-        const pendingPreview = window.localStorage.getItem('engui.mobile.pending-preview');
+        const pendingPreview = workspaceStorage()?.getItem('engui.mobile.pending-preview');
         if (pendingPreview) {
           try {
             applyPreviewDetail(JSON.parse(pendingPreview) as HoverPreview);

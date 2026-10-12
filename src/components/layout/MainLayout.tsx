@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { StudioProvider } from '@/lib/context/StudioContext';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
@@ -27,7 +26,7 @@ export default function MainLayout() {
     }, []);
 
     return (
-        <StudioProvider>
+        <>
             {isPhoneLayout ? (
                 <MobileStudioLayout />
             ) : (
@@ -37,6 +36,6 @@ export default function MainLayout() {
                     <RightPanel />
                 </div>
             )}
-        </StudioProvider>
+        </>
     );
 }

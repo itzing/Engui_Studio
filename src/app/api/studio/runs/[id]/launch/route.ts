@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { runAllStudioSessionShots } from '@/lib/studio-sessions/server';
 import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-ses
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function POSTImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const result = await runAllStudioSessionShots(id);
@@ -14,3 +15,5 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     return handleStudioSessionApiError(error, 'Failed to launch Studio run:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

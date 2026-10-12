@@ -1,10 +1,11 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadMultipartPartBuffer } from '@/lib/s3MultipartUpload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PUT(request: NextRequest) {
+async function PUTImpl(request: NextRequest) {
   try {
     if (!request.body) {
       return NextResponse.json(
@@ -36,3 +37,5 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+export const PUT = withWorkspaceRoute(PUTImpl, 'global');

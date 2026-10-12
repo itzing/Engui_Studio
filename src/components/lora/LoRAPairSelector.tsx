@@ -1,6 +1,6 @@
+'use client';
 // src/components/lora/LoRAPairSelector.tsx
 
-'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, Package, ChevronDown, Upload } from 'lucide-react';
@@ -14,6 +14,7 @@ import { LoRAHelperPopover } from '@/components/lora/LoRAHelperPopover';
 import { getPairHelperProfile, getSingleHelperProfile, type LoRAHelperProfile } from '@/lib/lora/helperProfiles';
 
 export interface LoRAFile {
+  isShared?: boolean;
   id: string;
   name: string;
   fileName: string;
@@ -285,6 +286,7 @@ export function LoRAPairSelector({
         </div>
       )}
 
+      {(highValue || lowValue) && !selectedPair && <p role="alert" className="text-xs text-destructive">Selected LoRA pair is unavailable in this workspace. Correct it before submitting.</p>}
       {/* Dropdown */}
       {isDropdownOpen && (
         <div
@@ -324,7 +326,7 @@ export function LoRAPairSelector({
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <Package className={`h-4 w-4 ${pair.isComplete ? 'text-green-500' : 'text-yellow-500'}`} />
-                      <span className="text-sm font-medium">{pair.baseName}</span>
+                      <span className="text-sm font-medium">{pair.baseName}{pair.high?.isShared && <span className="ml-2 text-xs text-primary">Shared from Default</span>}</span>
                       {pair.isComplete ? (
                         <span className="text-xs bg-green-500/10 text-green-500 px-1.5 py-0.5 rounded">{t('loraManagement.status.complete')}</span>
                       ) : (

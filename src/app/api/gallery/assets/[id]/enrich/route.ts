@@ -1,7 +1,8 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { enrichGalleryAsset } from '@/lib/galleryEnrichment';
 
-export async function POST(
+async function POSTImpl(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -14,3 +15,5 @@ export async function POST(
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

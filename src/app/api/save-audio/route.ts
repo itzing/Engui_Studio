@@ -1,8 +1,10 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { join, basename } from 'path';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     console.log('💾 Processing audio save request...');
 
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    await writeFile(filePath, buffer);
+    { await registerWorkspaceFile(filePath); await writeFile(filePath, buffer); }
     console.log(`✅ File saved to: ${filePath}`);
 
     // 클라이언트에 반환할 경로 (web accessible path)
@@ -53,3 +55,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

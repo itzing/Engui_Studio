@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { reorderStudioFramingPresets } from '@/lib/studio-sessions/framingLibraryServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSessionString, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSe
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await readStudioSessionJsonBody(request);
     const workspaceId = requireStudioSessionString(body?.workspaceId, 'workspaceId');
@@ -16,3 +17,5 @@ export async function POST(request: NextRequest) {
     return handleStudioSessionApiError(error, 'Failed to reorder Studio framing presets:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

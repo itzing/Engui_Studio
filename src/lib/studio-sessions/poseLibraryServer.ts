@@ -1,3 +1,4 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -537,7 +538,7 @@ function deletePreviewCandidateOutputs(candidates: Array<{ assetUrl: string; thu
   }
 }
 
-function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail' | 'openpose') {
+async function materializePosePreviewOutput(url: string, poseId: string, variant?: 'thumbnail' | 'openpose') {
   const localPath = resolveLocalPathFromUrl(url);
   if (!localPath || !fs.existsSync(localPath)) return url;
   try {
@@ -549,6 +550,7 @@ function materializePosePreviewOutput(url: string, poseId: string, variant?: 'th
     const suffix = variant === 'thumbnail' ? '--thumb' : variant === 'openpose' ? '--openpose' : '';
     const fileName = `${hash}${suffix}${ext}`;
     const dest = path.join(dir, fileName);
+    await registerWorkspaceFile(dest);
     if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
     return `/generations/studio-pose-library/${poseId}/${fileName}`;
   } catch (error) {
@@ -664,7 +666,7 @@ export const studioPoseOpenPoseMaterializationHandler = {
     const outputUrl = buildJobOutputUrls(job)[0];
     if (!outputUrl) throw new Error(`Completed OpenPose extraction job ${job.id} has no output URL`);
     const encryptedKeypoints = extractEncryptedPoseKeypoints(job);
-    const openPoseImageUrl = materializePosePreviewOutput(outputUrl, task.targetId, 'openpose');
+    const openPoseImageUrl = await materializePosePreviewOutput(outputUrl, task.targetId, 'openpose');
     await prisma.studioPose.update({
       where: { id: task.targetId },
       data: {
@@ -688,9 +690,9 @@ export const studioPosePreviewMaterializationHandler = {
     if (!pose) return;
     const outputUrl = buildJobOutputUrls(job)[0];
     if (!outputUrl) throw new Error(`Completed pose preview job ${job.id} has no output URL`);
-    const assetUrl = materializePosePreviewOutput(outputUrl, task.targetId);
+    const assetUrl = await materializePosePreviewOutput(outputUrl, task.targetId);
     const thumbnailUrl = typeof job.thumbnailUrl === 'string' && job.thumbnailUrl.trim()
-      ? materializePosePreviewOutput(job.thumbnailUrl.trim(), task.targetId, 'thumbnail')
+      ? await materializePosePreviewOutput(job.thumbnailUrl.trim(), task.targetId, 'thumbnail')
       : assetUrl;
     const candidate = await prisma.studioPosePreviewCandidate.create({
       data: {

@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowPathIcon, ArrowUturnLeftIcon, ClipboardDocumentIcon, DocumentDuplicateIcon, PlusIcon, SparklesIcon, TrashIcon, UserIcon, UsersIcon } from '@heroicons/react/24/outline';
@@ -160,6 +163,7 @@ function matchesSearch(pose: PosePresetSummary, query: string): boolean {
 }
 
 export default function PoseManagerPanel({ onRequestClose }: { onRequestClose?: () => void }) {
+  const fetch = useWorkspaceFetch();
   const { activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
   const [poses, setPoses] = useState<PosePresetSummary[]>([]);

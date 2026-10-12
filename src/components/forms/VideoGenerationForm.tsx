@@ -1,4 +1,9 @@
 'use client';
+import { workspaceStorage } from '@/lib/workspaces/client';
+
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -81,6 +86,7 @@ type SourceVideoDimensions = {
 const GALLERY_REFERENCE_PAGE_SIZE = 48;
 
 export default function VideoGenerationForm() {
+  const fetch = useWorkspaceFetch();
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const pathname = usePathname();
     const { t } = useI18n();
@@ -463,11 +469,11 @@ export default function VideoGenerationForm() {
 
     useEffect(() => {
         try {
-            const storedInstruction = localStorage.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-            if (storedInstruction !== null) {
+            const storedInstruction = workspaceStorage()?.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+            if (typeof storedInstruction === 'string') {
                 setPromptHelperInstruction(storedInstruction);
             }
-            const storedEmptyPrompt = localStorage.getItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY);
+            const storedEmptyPrompt = workspaceStorage()?.getItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY);
             if (storedEmptyPrompt !== null) {
                 setPromptHelperEmptyPrompt(storedEmptyPrompt === 'true');
             }
@@ -520,9 +526,9 @@ export default function VideoGenerationForm() {
     useEffect(() => {
         try {
             if (promptHelperInstruction.trim()) {
-                localStorage.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
+                workspaceStorage()?.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
             } else {
-                localStorage.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
+                workspaceStorage()?.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
             }
         } catch (error) {
             console.warn('Failed to persist video prompt helper instruction', error);
@@ -531,7 +537,7 @@ export default function VideoGenerationForm() {
 
     useEffect(() => {
         try {
-            localStorage.setItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY, promptHelperEmptyPrompt ? 'true' : 'false');
+            workspaceStorage()?.setItem(PROMPT_HELPER_EMPTY_PROMPT_STORAGE_KEY, promptHelperEmptyPrompt ? 'true' : 'false');
         } catch (error) {
             console.warn('Failed to persist video prompt helper Empty prompt preference', error);
         }
@@ -815,7 +821,7 @@ export default function VideoGenerationForm() {
                 const cacheKey = await buildVideoSourcePromptCacheKey(imageFile, currentModel.id);
                 let sourceImagePrompt = sourceImagePromptCacheRef.current?.key === cacheKey.key
                     ? sourceImagePromptCacheRef.current.prompt
-                    : readVideoSourcePromptCache(cacheKey.key) || '';
+                    : readVideoSourcePromptCache(cacheKey.key, cacheKey.workspaceId) || '';
 
                 if (!sourceImagePrompt) {
                     const imageDataUrl = await readFileAsDataUrl(imageFile);

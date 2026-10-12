@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { setStudioPosePrimaryPreview } from '@/lib/studio-sessions/poseLibraryServer';
 import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, studioSessionJson } from '@/lib/studio-ses
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(_request: NextRequest, context: { params: Promise<{ candidateId: string }> }) {
+async function POSTImpl(_request: NextRequest, context: { params: Promise<{ candidateId: string }> }) {
   try {
     const { candidateId } = await context.params;
     const pose = await setStudioPosePrimaryPreview(candidateId);
@@ -15,3 +16,5 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ c
     return handleStudioSessionApiError(error, 'Failed to set primary pose preview:');
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

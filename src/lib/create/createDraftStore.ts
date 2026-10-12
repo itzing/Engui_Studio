@@ -1,4 +1,5 @@
 'use client';
+import { currentBrowserWorkspaceId, workspaceStorage } from '@/lib/workspaces/client';
 
 import {
   CREATE_DRAFT_STATE_STORAGE_KEY,
@@ -10,36 +11,24 @@ import {
 } from '@/lib/create/createDraftSchema';
 import { normalizeCreateDraftState } from '@/lib/create/createDraftMigrations';
 
-function getStorage(): Storage | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage;
-}
-
-export function loadUnifiedCreateDraftState(): UnifiedCreateDraftState {
-  const storage = getStorage();
-  if (!storage) return createDefaultUnifiedCreateDraftState();
-
-  try {
-    const raw = storage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY);
-    if (raw) {
-      return normalizeCreateDraftState(JSON.parse(raw));
-    }
-
-    const legacyRaw = storage.getItem(LEGACY_CREATE_DRAFT_STATE_STORAGE_KEY);
-    if (legacyRaw) {
-      return normalizeCreateDraftState(JSON.parse(legacyRaw));
-    }
-  } catch {
-    return createDefaultUnifiedCreateDraftState();
+export function loadUnifiedCreateDraftState(workspaceId = currentBrowserWorkspaceId()): UnifiedCreateDraftState {
+  const storage = workspaceStorage(workspaceId);
+  const empty = { ...createDefaultUnifiedCreateDraftState(), ...(workspaceId ? { workspaceId } : {}) };
+  if (!storage) return empty;
+  const raw = storage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || storage.getItem(LEGACY_CREATE_DRAFT_STATE_STORAGE_KEY);
+  if (!raw) return empty;
+  try { return { ...normalizeCreateDraftState(JSON.parse(raw)), workspaceId: workspaceId! }; }
+  catch {
+    storage.setItem(CREATE_DRAFT_STATE_STORAGE_KEY + '.recovery.' + Date.now(), raw);
+    return empty;
   }
-
-  return createDefaultUnifiedCreateDraftState();
 }
 
 export function saveUnifiedCreateDraftState(state: UnifiedCreateDraftState) {
-  const storage = getStorage();
-  if (!storage) return;
-  storage.setItem(CREATE_DRAFT_STATE_STORAGE_KEY, JSON.stringify(state));
+  const owner = state.workspaceId || currentBrowserWorkspaceId();
+  const storage = workspaceStorage(owner);
+  if (!storage) throw new Error('Cannot save a draft without a workspace.');
+  storage.setItem(CREATE_DRAFT_STATE_STORAGE_KEY, JSON.stringify({ ...state, workspaceId: owner }));
 }
 
 export function getWorkflowBucket<TDraft = unknown>(state: UnifiedCreateDraftState, workflow: CreateWorkflow) {

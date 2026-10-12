@@ -1,6 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
+import { chooseBrowserWorkspace, initializeBrowserWorkspaces, workspaceStorage } from '@/lib/workspaces/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyVideoPresetParameterValues,
@@ -29,6 +30,9 @@ const makePreset = (id: string, updatedAt: number): VideoCreatePreset => ({
 describe('video create presets', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    initializeBrowserWorkspaces('default');
+    chooseBrowserWorkspace('default');
     vi.restoreAllMocks();
   });
 
@@ -109,7 +113,7 @@ describe('video create presets', () => {
       },
     }]);
 
-    const rawPresets = JSON.parse(window.localStorage.getItem('engui.create.video.presets.v1') || '[]');
+    const rawPresets = JSON.parse(workspaceStorage('default')!.getItem('engui.create.video.presets.v1') || '[]');
     expect(rawPresets[0].parameterValues).toEqual({ length: 81 });
     expect(loadVideoCreatePresets()[0].parameterValues).toEqual({ length: 81 });
   });

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { ensureStudioPoseLibrarySettings, updateStudioPoseLibrarySettings } from '@/lib/studio-sessions/poseLibraryServer';
 import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSessionString, studioSessionJson, studioSessionNoStoreJson } from '@/lib/studio-sessions/api';
@@ -5,7 +6,7 @@ import { handleStudioSessionApiError, readStudioSessionJsonBody, requireStudioSe
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = requireStudioSessionString(searchParams.get('workspaceId'), 'workspaceId');
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+async function PATCHImpl(request: NextRequest) {
   try {
     const body = await readStudioSessionJsonBody(request);
     const workspaceId = requireStudioSessionString(body?.workspaceId, 'workspaceId');
@@ -26,3 +27,6 @@ export async function PATCH(request: NextRequest) {
     return handleStudioSessionApiError(error, 'Failed to update Studio pose library settings:');
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');

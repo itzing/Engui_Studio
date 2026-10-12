@@ -1,10 +1,12 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
+import { prisma as workspacePrisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { deleteFinishedJob } from '@/lib/jobManagement';
 import { maybeGenerateJobThumbnail } from '@/lib/jobPreviewDerivatives';
 import { maybeAutoSaveUpscaleResult } from '@/lib/upscaleAutoSave';
 
-const prisma = new PrismaClient();
+const prisma = workspacePrisma;
 
 async function maybePopulateJobThumbnail(job: any) {
     const thumbnailUrl = await maybeGenerateJobThumbnail({
@@ -107,7 +109,7 @@ function buildNormalizedOutputs(job: any): NormalizedJobOutput[] {
     return outputs;
 }
 
-export async function GET(
+async function GETImpl(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
@@ -208,7 +210,7 @@ export async function GET(
     }
 }
 
-export async function PATCH(
+async function PATCHImpl(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
@@ -237,7 +239,7 @@ export async function PATCH(
     }
 }
 
-export async function DELETE(
+async function DELETEImpl(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
@@ -271,3 +273,7 @@ export async function DELETE(
         }, { status });
     }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const PATCH = withWorkspaceRoute(PATCHImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

@@ -1,8 +1,10 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Get list of video projects
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Create new video project
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const { title, description, aspectRatio, duration } = await request.json();
 
@@ -62,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     const project = await prisma.videoProject.create({
       data: {
+        workspaceId: requireWorkspaceId(),
         title,
         description: description || '',
         aspectRatio: aspectRatio || '16:9',
@@ -80,3 +83,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

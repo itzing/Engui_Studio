@@ -1,0 +1,5151 @@
+{
+  "Job": {
+    "table": "jobs",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "type",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "prompt",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sceneSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourcePromptDocumentId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourcePromptDocumentTitle",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "runpodJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "options",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "secureState",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "resultUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "isFavorite",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "modelId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "endpointId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "error",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "cost",
+        "type": "Float",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "executionMs",
+        "type": "Int",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "imageInputPath",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "videoInputPath",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "audioInputPath",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "studioSessionShotVersions",
+        "type": "StudioSessionShotVersion",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionMaterializationTask",
+        "type": "StudioSessionJobMaterialization",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "materializationTasks",
+        "type": "JobMaterializationTask",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPosePreviewCandidates",
+        "type": "StudioPosePreviewCandidate",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "Preset": {
+    "table": "presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "type",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "options",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "CreditActivity": {
+    "table": "credit_activities",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "activity",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "amount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "UserSetting": {
+    "table": "user_settings",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "serviceName",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "configKey",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "configValue",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "isEncrypted",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "ApiLog": {
+    "table": "api_logs",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "service",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "endpoint",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "method",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "requestBody",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "responseStatus",
+        "type": "Int",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "responseBody",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "errorMessage",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "durationMs",
+        "type": "Int",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "UsageStats": {
+    "table": "usage_stats",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "service",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "endpoint",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "callCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "successCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "errorCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "totalDurationMs",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "date",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "Workspace": {
+    "table": "workspaces",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "color",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "isDefault",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "isProtected",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "lifecycle",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "presets",
+        "type": "Preset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "characters",
+        "type": "Character",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "vibes",
+        "type": "VibePreset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "videoProjects",
+        "type": "VideoProject",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "jobs",
+        "type": "Job",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "galleryAssets",
+        "type": "GalleryAsset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "posePresets",
+        "type": "PosePreset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "scenePresets",
+        "type": "ScenePreset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "promptDocuments",
+        "type": "PromptDocument",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "loras",
+        "type": "LoRA",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionTemplates",
+        "type": "StudioSessionTemplate",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionRuns",
+        "type": "StudioSessionRun",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionShots",
+        "type": "StudioSessionShot",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionShotRevisions",
+        "type": "StudioSessionShotRevision",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionShotVersions",
+        "type": "StudioSessionShotVersion",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPortfolios",
+        "type": "StudioPortfolio",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPhotoSessions",
+        "type": "StudioPhotoSession",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionRunPresets",
+        "type": "StudioSessionRunPreset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioCollections",
+        "type": "StudioCollection",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioCollectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPoseCategories",
+        "type": "StudioPoseCategory",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPoses",
+        "type": "StudioPose",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPoseLibrarySettings",
+        "type": "StudioPoseLibrarySettings",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "studioFramingPresets",
+        "type": "StudioFramingPreset",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "videoSequences",
+        "type": "VideoSequence",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "videoSegmentTemplates",
+        "type": "VideoSegmentTemplate",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "promptWildcards",
+        "type": "PromptWildcard",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "PromptWildcard": {
+    "table": "prompt_wildcards",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "key",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "value",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "GalleryAsset": {
+    "table": "gallery_assets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "type",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "bucket",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "originKind",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceOutputId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "contentHash",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "originalUrl",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "previewUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "favorited",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "trashed",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userTags",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "autoTags",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "generationSnapshot",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "derivativeStatus",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "enrichmentStatus",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "addedToGalleryAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "VideoSequence": {
+    "table": "video_sequences",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "aspectRatio",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "width",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "height",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "targetFps",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "defaultModelId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "defaultGenerationOptionsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "finalVideoUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "finalRenderJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "segments",
+        "type": "VideoSequenceSegment",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "VideoSequenceSegment": {
+    "table": "video_sequence_segments",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sequenceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "orderIndex",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceMode",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceImageAssetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceSegmentId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceFrameRole",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceFrozen",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "prompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "negativePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "motionPrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "continuityPrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "modelId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "endpointId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "loraConfigJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generationOptionsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "seed",
+        "type": "Int",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "randomizeSeed",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "durationSeconds",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generationJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "outputVideoUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "firstFrameUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "lastFrameUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "templateId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "templateSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "generationSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "error",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sequence",
+        "type": "VideoSequence",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "template",
+        "type": "VideoSegmentTemplate",
+        "list": false,
+        "optional": true
+      }
+    ],
+    "relations": [
+      {
+        "field": "sequence",
+        "model": "VideoSequence",
+        "fields": [
+          "sequenceId"
+        ]
+      },
+      {
+        "field": "template",
+        "model": "VideoSegmentTemplate",
+        "fields": [
+          "templateId"
+        ]
+      }
+    ],
+    "parent": "sequence",
+    "operational": false
+  },
+  "VideoSegmentTemplate": {
+    "table": "video_segment_templates",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "category",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "promptTemplate",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "negativePromptTemplate",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "motionTemplate",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "continuityTemplate",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "variablesJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "loraConfigJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generationOptionsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "defaultDurationSeconds",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceSegmentId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "segments",
+        "type": "VideoSequenceSegment",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "VideoProject": {
+    "table": "video_projects",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "aspectRatio",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "qualityPreset",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "width",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "height",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "duration",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tracks",
+        "type": "VideoTrack",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "VideoTrack": {
+    "table": "video_tracks",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "projectId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "type",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "label",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "locked",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "order",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "volume",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "muted",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "project",
+        "type": "VideoProject",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "keyframes",
+        "type": "VideoKeyFrame",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "project",
+        "model": "VideoProject",
+        "fields": [
+          "projectId"
+        ]
+      }
+    ],
+    "parent": "project",
+    "operational": false
+  },
+  "VideoKeyFrame": {
+    "table": "video_keyframes",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "trackId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "timestamp",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "duration",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "dataType",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "mediaId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "url",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "prompt",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "fitMode",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "volume",
+        "type": "Int",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "track",
+        "type": "VideoTrack",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "track",
+        "model": "VideoTrack",
+        "fields": [
+          "trackId"
+        ]
+      }
+    ],
+    "parent": "track",
+    "operational": false
+  },
+  "LoRA": {
+    "table": "loras",
+    "owned": true,
+    "fields": [
+      {
+        "name": "isShared",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "storageTarget",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceKey",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "lifecycle",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "fileName",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "s3Path",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "s3Url",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "fileSize",
+        "type": "BigInt",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "extension",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "targetOverride",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "baseModel",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "LoRAHelperProfile": {
+    "table": "lora_helper_profiles",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scope",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "loraId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "highLoraId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "lowLoraId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "recommendedHighWeight",
+        "type": "Float",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "recommendedLowWeight",
+        "type": "Float",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "Character": {
+    "table": "characters",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "gender",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "traits",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "editorState",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "previewStateJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "currentVersionId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "previewStatusSummary",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "versions",
+        "type": "CharacterVersion",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "currentVersion",
+        "type": "CharacterVersion",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sceneBindings",
+        "type": "SceneCharacterBinding",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioSessionTemplates",
+        "type": "StudioSessionTemplate",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "studioPortfolios",
+        "type": "StudioPortfolio",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "currentVersion",
+        "model": "CharacterVersion",
+        "fields": [
+          "currentVersionId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "CharacterVersion": {
+    "table": "character_versions",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "traitsSnapshot",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "editorStateSnapshot",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "versionNumber",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "changeSummary",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "character",
+        "type": "Character",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "currentForCharacter",
+        "type": "Character",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "character",
+        "model": "Character",
+        "fields": [
+          "characterId"
+        ]
+      }
+    ],
+    "parent": "character",
+    "operational": false
+  },
+  "VibePreset": {
+    "table": "vibe_presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "baseDescription",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tags",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "compatibleSceneTypes",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scenePresets",
+        "type": "ScenePreset",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "PosePreset": {
+    "table": "pose_presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "summary",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "posePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tags",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "source",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "modelHint",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "charactersJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "relationshipJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scenePresets",
+        "type": "ScenePreset",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "ScenePreset": {
+    "table": "scene_presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "summary",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tags",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "posePresetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "vibePresetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sceneInstructions",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "assemblyMode",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generatedScenePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "latestPreviewImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "latestPreviewJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "posePreset",
+        "type": "PosePreset",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "vibePreset",
+        "type": "VibePreset",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "characterBindings",
+        "type": "SceneCharacterBinding",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "posePreset",
+        "model": "PosePreset",
+        "fields": [
+          "posePresetId"
+        ]
+      },
+      {
+        "field": "vibePreset",
+        "model": "VibePreset",
+        "fields": [
+          "vibePresetId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "SceneCharacterBinding": {
+    "table": "scene_character_bindings",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scenePresetId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "slot",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "roleLabel",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "characterPresetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "overrideInstructions",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scenePreset",
+        "type": "ScenePreset",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterPreset",
+        "type": "Character",
+        "list": false,
+        "optional": true
+      }
+    ],
+    "relations": [
+      {
+        "field": "scenePreset",
+        "model": "ScenePreset",
+        "fields": [
+          "scenePresetId"
+        ]
+      },
+      {
+        "field": "characterPreset",
+        "model": "Character",
+        "fields": [
+          "characterPresetId"
+        ]
+      }
+    ],
+    "parent": "scenePreset",
+    "operational": false
+  },
+  "PromptDocument": {
+    "table": "prompt_documents",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateVersion",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "stateJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "enabledConstraintIds",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionTemplate": {
+    "table": "studio_session_templates",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "environmentText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "outfitText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "hairstyleText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "positivePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "negativePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generationSettingsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shortSidePx",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "longSidePx",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "squareSideSource",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "canonicalStateJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "draftStateJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "character",
+        "type": "Character",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "categoryRules",
+        "type": "StudioSessionTemplateCategoryRule",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "runs",
+        "type": "StudioSessionRun",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "character",
+        "model": "Character",
+        "fields": [
+          "characterId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionTemplateCategoryRule": {
+    "table": "studio_session_template_category_rules",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "category",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "count",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "includedPoseIdsJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "excludedPoseIdsJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "preferredOrientation",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "preferredFraming",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "fixedPoseIdsJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "weightingJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "futureOverrideConfigJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "template",
+        "type": "StudioSessionTemplate",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "template",
+        "model": "StudioSessionTemplate",
+        "fields": [
+          "templateId"
+        ]
+      }
+    ],
+    "parent": "template",
+    "operational": false
+  },
+  "StudioPortfolio": {
+    "table": "studio_portfolios",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "coverCollectionItemId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "character",
+        "type": "Character",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "coverCollectionItem",
+        "type": "StudioCollectionItem",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sessions",
+        "type": "StudioPhotoSession",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collections",
+        "type": "StudioCollection",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "runs",
+        "type": "StudioSessionRun",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "character",
+        "model": "Character",
+        "fields": [
+          "characterId"
+        ]
+      },
+      {
+        "field": "coverCollectionItem",
+        "model": "StudioCollectionItem",
+        "fields": [
+          "coverCollectionItemId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioPhotoSession": {
+    "table": "studio_photo_sessions",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolioId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "settingText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "lightingText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "vibeText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "outfitText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "hairstyleText",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "negativePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolio",
+        "type": "StudioPortfolio",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "runs",
+        "type": "StudioSessionRun",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "portfolio",
+        "model": "StudioPortfolio",
+        "fields": [
+          "portfolioId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionRunPreset": {
+    "table": "studio_session_run_presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "generationSettingsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "resolutionPolicyJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "promptDefaultsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioCollection": {
+    "table": "studio_collections",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolioId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolio",
+        "type": "StudioPortfolio",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "items",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "portfolio",
+        "model": "StudioPortfolio",
+        "fields": [
+          "portfolioId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioCollectionItem": {
+    "table": "studio_collection_items",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "collectionId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolioId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "photoSessionId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "runId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "shotId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "versionId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sortOrder",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "caption",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "collection",
+        "type": "StudioCollection",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "portfolio",
+        "type": "StudioPortfolio",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "photoSession",
+        "type": "StudioPhotoSession",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "run",
+        "type": "StudioSessionRun",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "shot",
+        "type": "StudioSessionShot",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "version",
+        "type": "StudioSessionShotVersion",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "coverForPortfolios",
+        "type": "StudioPortfolio",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "collection",
+        "model": "StudioCollection",
+        "fields": [
+          "collectionId"
+        ]
+      },
+      {
+        "field": "portfolio",
+        "model": "StudioPortfolio",
+        "fields": [
+          "portfolioId"
+        ]
+      },
+      {
+        "field": "photoSession",
+        "model": "StudioPhotoSession",
+        "fields": [
+          "photoSessionId"
+        ]
+      },
+      {
+        "field": "run",
+        "model": "StudioSessionRun",
+        "fields": [
+          "runId"
+        ]
+      },
+      {
+        "field": "shot",
+        "model": "StudioSessionShot",
+        "fields": [
+          "shotId"
+        ]
+      },
+      {
+        "field": "version",
+        "model": "StudioSessionShotVersion",
+        "fields": [
+          "versionId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioPoseLibrarySettings": {
+    "table": "studio_pose_library_settings",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "subjectDescription",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "clothingDescription",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "backgroundDescription",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "stylePreset",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "previewAgeDescription",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "defaultVariantCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioPoseCategory": {
+    "table": "studio_pose_categories",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "slug",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sortOrder",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "coverPoseId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poses",
+        "type": "StudioPose",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioPose": {
+    "table": "studio_poses",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "categoryId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "slug",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tagsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "posePrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "orientation",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "framing",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "cameraAngle",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shotDistance",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sortOrder",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "primaryPreviewId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "openPoseImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "poseKeypointEncryptedJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "openPoseSourceImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "openPoseSourceJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "openPoseExtractedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "category",
+        "type": "StudioPoseCategory",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "previewCandidates",
+        "type": "StudioPosePreviewCandidate",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "category",
+        "model": "StudioPoseCategory",
+        "fields": [
+          "categoryId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioFramingPreset": {
+    "table": "studio_framing_presets",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tagsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "orientation",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "aspectRatio",
+        "type": "Float",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "centerX",
+        "type": "Float",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "centerY",
+        "type": "Float",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseHeight",
+        "type": "Float",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "rotationDeg",
+        "type": "Float",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "flipX",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "helperPrompt",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "previewImageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sortOrder",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioPosePreviewCandidate": {
+    "table": "studio_pose_preview_candidates",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "assetUrl",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "promptSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "settingsSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "pose",
+        "type": "StudioPose",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJob",
+        "type": "Job",
+        "list": false,
+        "optional": true
+      }
+    ],
+    "relations": [
+      {
+        "field": "pose",
+        "model": "StudioPose",
+        "fields": [
+          "poseId"
+        ]
+      },
+      {
+        "field": "sourceJob",
+        "model": "Job",
+        "fields": [
+          "sourceJobId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionRun": {
+    "table": "studio_session_runs",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "portfolioId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "photoSessionId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "poseSetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "runSettingsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "promptOverrideJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "resolutionPolicyJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "count",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateNameSnapshot",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "templateSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseLibraryVersion",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseLibraryHash",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "template",
+        "type": "StudioSessionTemplate",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "portfolio",
+        "type": "StudioPortfolio",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "photoSession",
+        "type": "StudioPhotoSession",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "shots",
+        "type": "StudioSessionShot",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "template",
+        "model": "StudioSessionTemplate",
+        "fields": [
+          "templateId"
+        ]
+      },
+      {
+        "field": "portfolio",
+        "model": "StudioPortfolio",
+        "fields": [
+          "portfolioId"
+        ]
+      },
+      {
+        "field": "photoSession",
+        "model": "StudioPhotoSession",
+        "fields": [
+          "photoSessionId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionShot": {
+    "table": "studio_session_shots",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "runId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "category",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "slotIndex",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "label",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "skipped",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "selectionVersionId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "currentRevisionId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "autoAssignmentHistoryJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "futureOverrideConfigJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "run",
+        "type": "StudioSessionRun",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "selectedVersion",
+        "type": "StudioSessionShotVersion",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "currentRevision",
+        "type": "StudioSessionShotRevision",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "revisions",
+        "type": "StudioSessionShotRevision",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "versions",
+        "type": "StudioSessionShotVersion",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "run",
+        "model": "StudioSessionRun",
+        "fields": [
+          "runId"
+        ]
+      },
+      {
+        "field": "selectedVersion",
+        "model": "StudioSessionShotVersion",
+        "fields": [
+          "selectionVersionId"
+        ]
+      },
+      {
+        "field": "currentRevision",
+        "model": "StudioSessionShotRevision",
+        "fields": [
+          "currentRevisionId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionShotRevision": {
+    "table": "studio_session_shot_revisions",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shotId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revisionNumber",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "poseSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "derivedOrientation",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "derivedFraming",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "assembledPromptSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "overrideFieldsJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "sourceKind",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shot",
+        "type": "StudioSessionShot",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "currentForShot",
+        "type": "StudioSessionShot",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "versions",
+        "type": "StudioSessionShotVersion",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "shot",
+        "model": "StudioSessionShot",
+        "fields": [
+          "shotId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionShotVersion": {
+    "table": "studio_session_shot_versions",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shotId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revisionId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "versionNumber",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "originKind",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "contentHash",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "originalUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "previewUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "generationSnapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "hidden",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "rejected",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "reviewState",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "reviewNote",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shot",
+        "type": "StudioSessionShot",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revision",
+        "type": "StudioSessionShotRevision",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJob",
+        "type": "Job",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "selectedForShot",
+        "type": "StudioSessionShot",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "collectionItems",
+        "type": "StudioCollectionItem",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "shot",
+        "model": "StudioSessionShot",
+        "fields": [
+          "shotId"
+        ]
+      },
+      {
+        "field": "revision",
+        "model": "StudioSessionShotRevision",
+        "fields": [
+          "revisionId"
+        ]
+      },
+      {
+        "field": "sourceJob",
+        "model": "Job",
+        "fields": [
+          "sourceJobId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "StudioSessionJobMaterialization": {
+    "table": "studio_session_job_materializations",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "runId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "shotId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revisionId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "attemptCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "lastAttemptAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "materializedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "lastError",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "job",
+        "type": "Job",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "job",
+        "model": "Job",
+        "fields": [
+          "jobId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "JobMaterializationTask": {
+    "table": "job_materialization_tasks",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "targetType",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "targetId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "payloadJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "attemptCount",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "lastAttemptAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "materializedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "lastError",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "job",
+        "type": "Job",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "job",
+        "model": "Job",
+        "fields": [
+          "jobId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "WorkspaceDeletion": {
+    "table": "workspace_deletions",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "stage",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "manifestJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "error",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "attempts",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": true
+  },
+  "WorkspaceUpload": {
+    "table": "workspace_uploads",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "uploadId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "objectKey",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "storageTarget",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "metadataJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": true
+  },
+  "WorkspaceLease": {
+    "table": "workspace_leases",
+    "owned": true,
+    "fields": [
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "token",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "kind",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": true
+  },
+  "WorkspaceFile": {
+    "table": "workspace_files",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "location",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "storageTarget",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "WorkspaceMigration": {
+    "table": "workspace_migrations",
+    "owned": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "checksum",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "appliedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": true
+  }
+}

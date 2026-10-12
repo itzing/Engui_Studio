@@ -1,3 +1,5 @@
+import { registerWorkspaceObject } from '@/lib/workspaces/files';
+import { storageFingerprint } from '@/lib/workspaces/storage';
 // src/lib/s3Service.ts
 
 import { exec, spawn, execFile } from 'child_process';
@@ -830,7 +832,8 @@ class S3Service {
           }
         }
 
-        // 임시 파일로 저장
+        await registerWorkspaceObject('/runpod-volume/' + objectKey, storageFingerprint(this.config.endpointUrl, this.config.bucketName));
+        // Write the staged upload file.
         const tempDir = os.tmpdir();
         const tempFilePath = path.join(tempDir, safeFileName);
         fs.writeFileSync(tempFilePath, file);

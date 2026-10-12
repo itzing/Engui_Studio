@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { trashPromptWildcard, updatePromptWildcard } from '@/lib/prompt-wildcards/server';
 
@@ -8,7 +9,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Internal server error';
 }
 
-export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -24,7 +25,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function DELETEImpl(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const wildcard = await trashPromptWildcard(id);
@@ -38,3 +39,6 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
+
+export const PUT = withWorkspaceRoute(PUTImpl, 'content');
+export const DELETE = withWorkspaceRoute(DELETEImpl, 'content');

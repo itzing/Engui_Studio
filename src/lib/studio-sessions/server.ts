@@ -1,3 +1,6 @@
+import { registerWorkspaceFile } from '@/lib/workspaces/files';
+import { withWorkspaceActivity, workspaceIsActive } from '@/lib/workspaces/activity';
+import { requireWorkspaceId } from '@/lib/workspaces/context';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -1207,6 +1210,7 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
 
   const response = await fetch('http://127.0.0.1:3010/api/generate', {
     method: 'POST',
+    headers: { 'x-workspace-id': requireWorkspaceId() },
     body: formData,
   });
   const data = await response.json();
@@ -1402,6 +1406,11 @@ export async function selectStudioSessionShotVersion(input: { shotId: string; ve
 }
 
 export async function materializeStudioSessionCompletedJob(jobId: string) {
+  const owner = await prisma.job.findUnique({ where: { id: jobId }, select: { workspaceId: true } });
+  if (!owner || !await workspaceIsActive(owner.workspaceId)) return null;
+  return withWorkspaceActivity(owner.workspaceId, 'materializeStudioSessionCompletedJob', () => materializeStudioSessionCompletedJobOwned(jobId));
+}
+async function materializeStudioSessionCompletedJobOwned(jobId: string) {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job || job.status !== 'completed') return null;
 
@@ -1461,7 +1470,7 @@ export async function materializeStudioSessionCompletedJob(jobId: string) {
         fs.mkdirSync(dir, { recursive: true });
         const fileName = `${contentHash}${ext}`;
         const dest = path.join(dir, fileName);
-        if (!fs.existsSync(dest)) fs.writeFileSync(dest, bytes);
+        if (!fs.existsSync(dest)) { await registerWorkspaceFile(dest); fs.writeFileSync(dest, bytes); }
         originalUrl = `/generations/studio-sessions/${context.workspaceId}/${context.runId}/${context.shotId}/${fileName}`;
       } catch (error) {
         console.warn('Studio Session materialization fallback: unable to copy output into namespaced directory, using original output URL instead.', error);

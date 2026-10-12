@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import SettingsService from '@/lib/settingsService';
 import { getCharacterAssistantProvider } from '@/lib/characterAssistant';
@@ -6,7 +7,7 @@ import { ensureHelperMode } from '@/lib/helperMode';
 const settingsService = new SettingsService();
 const userId = 'user-with-settings';
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
@@ -40,3 +41,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
+
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

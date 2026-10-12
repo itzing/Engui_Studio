@@ -1,3 +1,4 @@
+import { StudioProvider } from '@/lib/context/StudioContext';
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -57,7 +58,7 @@ export default function RootLayout({
         <I18nProvider>
           <ToastProvider>
             <PWARegistration />
-            {children}
+            <StudioProvider>{children}</StudioProvider>
           </ToastProvider>
         </I18nProvider>
       </body>

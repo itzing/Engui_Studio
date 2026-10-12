@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPromptWildcard, listPromptWildcards } from '@/lib/prompt-wildcards/server';
 
@@ -8,7 +9,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Internal server error';
 }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId')?.trim();
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId.trim() : '';
@@ -45,3 +46,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');

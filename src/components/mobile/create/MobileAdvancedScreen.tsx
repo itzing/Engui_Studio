@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceManager from '@/components/workspaces/WorkspaceManager';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -248,6 +249,7 @@ export default function MobileAdvancedScreen() {
       <MobileHeader title="Advanced" subtitle="Fine tune visible parameters for the current image model." />
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 custom-scrollbar">
         <div className="space-y-4">
+          <WorkspaceManager />
           {dynamicLoraParamNames.length > 0 ? (
             <Card>
               <CardContent className="space-y-3 pt-6">

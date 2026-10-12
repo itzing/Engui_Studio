@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -27,6 +30,7 @@ type JobDetail = {
 };
 
 export default function MobilePreviewScreen() {
+  const fetch = useWorkspaceFetch();
   const router = useRouter();
   const { preview } = useMobilePreviewState();
   const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);

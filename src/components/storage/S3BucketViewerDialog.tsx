@@ -1,4 +1,7 @@
 'use client';
+import { workspaceFetch as fetch } from '@/lib/workspaces/client';
+import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -118,6 +121,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function S3BucketViewerDialog({ open, onOpenChange }: S3BucketViewerDialogProps) {
+  const fetch = useWorkspaceFetch();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeUploadRef = useRef<{
     aborted: boolean;

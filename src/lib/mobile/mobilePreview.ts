@@ -1,3 +1,5 @@
+
+import { workspaceStorage } from '@/lib/workspaces/client';
 export type MobilePreviewKind = 'job' | 'gallery';
 
 export type MobilePreviewItem = {
@@ -44,7 +46,7 @@ export function normalizeMobilePreviewItem(value: unknown): MobilePreviewItem | 
 export function readStoredMobilePreview(): MobilePreviewItem | null {
   if (typeof window === 'undefined') return null;
   try {
-    return normalizeMobilePreviewItem(JSON.parse(window.localStorage.getItem(MOBILE_PREVIEW_STORAGE_KEY) || 'null'));
+    return normalizeMobilePreviewItem(JSON.parse(workspaceStorage()?.getItem(MOBILE_PREVIEW_STORAGE_KEY) || 'null'));
   } catch {
     return null;
   }
@@ -53,11 +55,11 @@ export function readStoredMobilePreview(): MobilePreviewItem | null {
 export function writeStoredMobilePreview(preview: MobilePreviewItem | null) {
   if (typeof window === 'undefined') return;
   if (!preview) {
-    window.localStorage.removeItem(MOBILE_PREVIEW_STORAGE_KEY);
+    workspaceStorage()?.removeItem(MOBILE_PREVIEW_STORAGE_KEY);
     return;
   }
 
-  window.localStorage.setItem(MOBILE_PREVIEW_STORAGE_KEY, JSON.stringify(preview));
+  workspaceStorage()?.setItem(MOBILE_PREVIEW_STORAGE_KEY, JSON.stringify(preview));
 }
 
 export function dispatchMobilePreview(preview: MobilePreviewItem | null) {

@@ -1,3 +1,5 @@
+import { requireWorkspaceId } from '@/lib/workspaces/context';
+import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { VideoCreatePreset } from '@/lib/create/videoPresets';
@@ -83,7 +85,8 @@ function toPreset(record: {
 async function listPresets(workspaceId: string, modelId?: string): Promise<VideoCreatePreset[]> {
   const records = await prisma.preset.findMany({
     where: {
-      userId: workspaceId,
+      workspaceId,
+      userId: 'user-with-settings',
       type: modelId ? `${TYPE_PREFIX}${modelId}` : { startsWith: TYPE_PREFIX },
     },
     orderBy: { createdAt: 'desc' },
@@ -95,7 +98,7 @@ async function listPresets(workspaceId: string, modelId?: string): Promise<Video
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export async function GET(request: NextRequest) {
+async function GETImpl(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const workspaceId = readString(searchParams.get('workspaceId'));
@@ -118,7 +121,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function POSTImpl(request: NextRequest) {
   try {
     const body = await request.json();
     const workspaceId = readString(body?.workspaceId);
@@ -138,7 +141,8 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction(presets.map((preset) => prisma.preset.upsert({
       where: { id: preset.id },
       update: {
-        userId: workspaceId,
+        workspaceId,
+      userId: 'user-with-settings',
         name: preset.name.trim(),
         type: `${TYPE_PREFIX}${preset.modelId}`,
         options: JSON.stringify({
@@ -153,7 +157,8 @@ export async function POST(request: NextRequest) {
       },
       create: {
         id: preset.id,
-        userId: workspaceId,
+        workspaceId,
+      userId: 'user-with-settings',
         name: preset.name.trim(),
         type: `${TYPE_PREFIX}${preset.modelId}`,
         options: JSON.stringify({
@@ -175,3 +180,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
+
+export const GET = withWorkspaceRoute(GETImpl, 'content');
+export const POST = withWorkspaceRoute(POSTImpl, 'content');
