@@ -36,22 +36,40 @@ export async function withGenerationLoraPins<T>(form: FormData, task: () => Prom
     }
   }
   if (!ids.size) return task();
-  const tokens: string[] = [];
+  // Source leases belong to the LoRA owner, which may be the protected Default
+  // workspace. Switch scope only for these internal tokens after validating
+  // the source through the consumer's readable LoRA view. The task itself
+  // stays in the original consumer context.
+  const inSourceWorkspace = <R>(workspaceId: string, action: () => Promise<R>) =>
+    workspaceContext.run({ kind: 'workspace', workspaceId }, async () => await action());
+  const tokens: Array<{ id: string; workspaceId: string }> = [];
   await prisma.$transaction(async tx => {
     for (const id of ids) {
       const row = await tx.loRA.findFirst({ where: { id, lifecycle: 'active' } });
       if (!row) throw new WorkspaceError('A selected LoRA became unavailable. Review the selection.', 409);
-      const token = randomUUID();
-      await tx.workspaceActivity.create({ data: { id: token, workspaceId: row.workspaceId, kind: 'lora-use:' + id, expiresAt: new Date(Date.now() + 120000) } });
+      const token = { id: randomUUID(), workspaceId: row.workspaceId };
+      await inSourceWorkspace(token.workspaceId, () => tx.workspaceActivity.create({
+        data: { ...token, kind: 'lora-use:' + id, expiresAt: new Date(Date.now() + 120000) },
+      }));
       tokens.push(token);
     }
   });
   const timer = setInterval(() => {
-    void prisma.workspaceActivity.updateMany({ where: { id: { in: tokens } }, data: { expiresAt: new Date(Date.now() + 120000) } }).catch(() => undefined);
+    void Promise.all(tokens.map(token => inSourceWorkspace(token.workspaceId, () =>
+      prisma.workspaceActivity.updateMany({
+        where: { id: token.id, workspaceId: token.workspaceId },
+        data: { expiresAt: new Date(Date.now() + 120000) },
+      }),
+    ))).catch(() => undefined);
   }, 30000);
   timer.unref?.();
   try { return await task(); }
-  finally { clearInterval(timer); await prisma.workspaceActivity.deleteMany({ where: { id: { in: tokens } } }); }
+  finally {
+    clearInterval(timer);
+    await Promise.all(tokens.map(token => inSourceWorkspace(token.workspaceId, () =>
+      prisma.workspaceActivity.deleteMany({ where: { id: token.id, workspaceId: token.workspaceId } }),
+    )));
+  }
 }
 async function ownedLora(id: string) {
   const row = await prisma.loRA.findUnique({ where: { id } });

@@ -1,3 +1,4 @@
+import { WorkspaceError } from '@/lib/workspaces/context';
 import { generationErrorMessage } from '@/lib/generation/imageModelPolicy';
 import { validateContentReferences } from '@/lib/workspaces/references';
 import { registerWorkspaceFile } from '@/lib/workspaces/files';
@@ -104,7 +105,17 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
 }
 
 export async function submitGenerationFormData(formData: FormData) {
-    return withGenerationLoraPins(formData, () => submitOwnedGenerationFormData(formData));
+    try {
+        return await withGenerationLoraPins(formData, () => submitOwnedGenerationFormData(formData));
+    } catch (error) {
+        // Source-lease validation happens before the main submit handler.
+        // Always return JSON so internal callers can preserve the actual cause.
+        console.error('Generation submission preparation failed:', error);
+        return NextResponse.json({
+            success: false,
+            error: generationErrorMessage(error),
+        }, { status: error instanceof WorkspaceError ? error.status : 500 });
+    }
 }
 
 async function submitOwnedGenerationFormData(formData: FormData) {

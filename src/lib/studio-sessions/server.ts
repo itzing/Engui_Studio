@@ -1217,9 +1217,12 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
     headers: { 'x-workspace-id': requireWorkspaceId() },
     body: formData,
   });
-  const data = await response.json();
+  const data = await response.json().catch(() => null);
   if (!response.ok || !data?.success || !data?.jobId) {
-    throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to launch Studio Session job');
+    const fallback = response.ok
+      ? 'Generation service returned an invalid job response.'
+      : `Generation request failed (HTTP ${response.status}).`;
+    throw new Error(typeof data?.error === 'string' && data.error.trim() ? data.error : fallback);
   }
 
   await prisma.studioSessionShot.update({
