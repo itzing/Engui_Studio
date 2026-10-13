@@ -11,6 +11,8 @@ Approved option 2, ENGUI-559–561. Shared deterministic region filtering for Ch
 - Production-mode staging build passed. Dev mode exposed an existing instrumentation/Sharp edge-bundling failure; validation used production-mode staging with supervisor disabled and external network denied instead.
 - Existing baseline: 6 failures in the old Studio server mock suite reproduce on unmodified a172c0b. Whole-repo TypeScript errors also reproduce on the baseline; no new error signatures in changed source. The repository build intentionally skips broad type/lint validation; focused tests and explicit baseline comparison are reported separately.
 ## Rollout
-Pending production cutover. Logs and test artifacts: /var/tmp/engui-framing-*.
+Deployed successfully at 2026-10-13 10:42 UTC. Runtime feature commit: e832af134ba6e23ce52da11685629579001e4a9a. Production build and explicit engui-studio.service restart passed. Live verification returned all 21 crop-specific prompts, zero new jobs, SQLite integrity OK and no foreign-key errors. Production backup: /home/engui/backups/framing-20261013/production-20261013-103717. Logs and test artifacts: /var/tmp/engui-framing-*.
 Backups and rehearsal copies: /home/engui/backups/framing-20261013.
 Historical executed runs stay unchanged. Start a new run from an existing session to use revised look metadata; five untouched compatible Showdown drafts are upgraded.
+
+Additional Studio browser checks passed on desktop and mobile: pose visibility save and custom-outfit parts save/reload. Production preservation verified 8,822 gallery records, 96 Studio result versions, 78 shot revisions and all pre-existing character versions. Existing preview images were deliberately not regenerated.
