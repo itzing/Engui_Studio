@@ -1,3 +1,6 @@
+import type { Region, PartDocument } from '@/lib/looks/parts';
+import type { VisibleLook } from '@/lib/looks/compiler';
+import type { CharacterLook } from '@/lib/outfits/types';
 export type StudioSessionTemplateStatus = 'active' | 'archived';
 export type StudioPortfolioStatus = 'active' | 'archived';
 export type StudioPhotoSessionStatus = 'draft' | 'active' | 'review' | 'completed' | 'archived';
@@ -110,6 +113,7 @@ export interface StudioPoseSummary {
   title: string;
   tags: string[];
   posePrompt: string;
+  visibleRegions?: Region[];
   orientation: StudioSessionPoseOrientation;
   framing: StudioSessionPoseFraming;
   cameraAngle: StudioPoseCameraAngle;
@@ -196,6 +200,7 @@ export interface StudioPhotoSessionSummary {
   vibeText: string;
   outfitText: string;
   outfitMode?: string;
+  outfitParts?: PartDocument | null;
   outfitId?: string | null;
   hairstyleText: string;
   negativePrompt: string;
@@ -280,6 +285,7 @@ export interface StudioSessionPoseSnapshot {
   category: string;
   name: string;
   prompt: string;
+  visibleRegions?: Region[];
   primaryPreviewUrl?: string | null;
   orientation: StudioSessionPoseOrientation;
   framing: StudioSessionPoseFraming;
@@ -289,6 +295,7 @@ export interface StudioSessionPoseSnapshot {
 }
 
 export interface StudioSessionPromptSnapshot {
+  composition?: VisibleLook;
   positivePrompt: string;
   negativePrompt: string;
   pieces: {
@@ -306,6 +313,7 @@ export interface StudioSessionRunSnapshot extends StudioSessionTemplateSavedStat
   templateId: string | null;
   templateName: string;
   characterPrompt?: string;
+  characterLookSnapshot?: CharacterLook;
 }
 
 export interface StudioSessionShotSummary {

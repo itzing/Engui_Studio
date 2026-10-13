@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+async function main(){
+ if(!process.env.ENGUI_DATABASE_URL?.includes('/var/tmp/'))throw new Error('Disposable /var/tmp database required');
+ globalThis.fetch=async()=>{throw new Error('NETWORK_FORBIDDEN');};
+ const {prisma}=await import('../../src/lib/prisma');
+ const {workspaceContext}=await import('../../src/lib/workspaces/context');
+ const {POST:lookRoute}=await import('../../src/app/api/characters/[id]/look/route');
+ const {PUT:characterRoute}=await import('../../src/app/api/characters/[id]/route');
+ const {saveOutfit,resolveCharacterLook}=await import('../../src/lib/outfits/server');
+ const {createStudioPhotoSessionRun,updateStudioPhotoSession}=await import('../../src/lib/studio-sessions/portfolioServer');
+ const {manualPickStudioSessionShot,runStudioSessionShot}=await import('../../src/lib/studio-sessions/server');
+ const {createStudioPoseSetIdFromCategory}=await import('../../src/lib/studio-sessions/poseSets');
+ const {partDocument,outfitSource}=await import('../../src/lib/looks/parts');
+ const {exportStudioPoseLibrary,importStudioPoseLibrary,updateStudioPose}=await import('../../src/lib/studio-sessions/poseLibraryServer');
+ const workspaceId='af66834c-0ed0-42ea-9c90-d96c1e7643e8';
+ const scope=(fn:()=>Promise<any>)=>workspaceContext.run({kind:'workspace',workspaceId,userId:'user-with-settings'},fn);
+ const prompts:any[]=[];
+ await scope(async()=>{
+  const jobCount=await prisma.job.count();
+  const characters=await prisma.character.findMany({where:{deletedAt:null}});
+  for(const c of characters) for(const slot of ['portrait','upper_body','full_body']){
+   const res=await lookRoute(new Request('http://localhost/api/characters/'+c.id+'/look',{method:'POST',headers:{'content-type':'application/json','x-workspace-id':workspaceId},body:JSON.stringify({mode:'default',slot})}),{params:Promise.resolve({id:c.id})});
+   const data=await res.json();assert.equal(res.status,200,JSON.stringify(data));assert.ok(data.prompt);
+   if(slot==='portrait')assert.doesNotMatch(data.prompt,/boots|loafers|stockings|ankles|trousers/i);
+   prompts.push({name:c.name,slot,prompt:data.prompt});
+  }
+  const female=characters.find(c=>c.name==='Bureaucrat Female')!;
+  const portfolio=await prisma.studioPortfolio.findFirstOrThrow({where:{characterId:female.id}});
+  const session=await prisma.studioPhotoSession.findFirstOrThrow({where:{portfolioId:portfolio.id}});
+  const created:any=await createStudioPhotoSessionRun(session.id,{name:'Framing QA',poseSetId:createStudioPoseSetIdFromCategory('4096f9de-4a66-4733-9ea8-158879b02b2b'),count:1,generationSettings:{modelId:'krea2-turbo'}});
+  const run=created.run;assert.ok(run?.id,created.error);
+  const shot=await prisma.studioSessionShot.findFirstOrThrow({where:{runId:run.id}});
+  const revision=await manualPickStudioSessionShot({shotId:shot.id,poseId:'46fdf031-aa02-4394-92a1-4f4d435272fd'});
+  assert.ok(revision?.assembledPromptSnapshot.composition);assert.doesNotMatch(revision!.assembledPromptSnapshot.positivePrompt,/loafers|stockings|ankles/);
+  const saved=JSON.stringify(revision!.assembledPromptSnapshot);
+  let submitted:any=null;
+  globalThis.fetch=async(url,init)=>{assert.equal(String(url),'http://127.0.0.1:3010/api/generate');submitted=init?.body as FormData;return Response.json({success:true,jobId:'offline-mocked-job',status:'queued'});};
+  await prisma.studioSessionRun.update({where:{id:run.id},data:{runSettingsJson:JSON.stringify({modelId:'krea2-turbo',framingPolicy:{fallbackPresetId:(await prisma.studioFramingPreset.findFirst())?.id}})}});
+  await runStudioSessionShot(shot.id);
+  assert.ok(submitted);assert.equal(submitted.get('modelId'),'krea2-turbo');assert.equal(submitted.get('image'),null);assert.doesNotMatch(submitted.get('prompt'),/centered full-body|loafers|stockings|ankles/);assert.equal(submitted.get('prompt'),revision!.assembledPromptSnapshot.positivePrompt);
+  globalThis.fetch=async()=>{throw new Error('NETWORK_FORBIDDEN');};
+  const old=await prisma.characterVersion.count({where:{characterId:female.id}});
+  const editor=JSON.parse(female.editorState);editor.promptParts.parts[0].text='Adult woman with unchanged dark skin';
+  const response=await characterRoute(new Request('http://localhost/api/characters/'+female.id,{method:'PUT',headers:{'content-type':'application/json','x-workspace-id':workspaceId},body:JSON.stringify({name:female.name,gender:female.gender,traits:JSON.parse(female.traits),editorState:editor})}),{params:Promise.resolve({id:female.id})});
+  assert.equal(response.status,200);assert.equal(await prisma.characterVersion.count({where:{characterId:female.id}}),old+1);
+  await saveOutfit({description:'Entirely different boots'},female.defaultOutfitId!);
+  const preserved=await prisma.studioSessionShotRevision.findUniqueOrThrow({where:{id:revision!.id}});
+  assert.equal(preserved.assembledPromptSnapshotJson,saved);
+  // A second revision still reads the original run's pinned look, not newly edited live data.
+  const next=await manualPickStudioSessionShot({shotId:shot.id,poseId:'b368fae3-c57d-4314-b977-00fed65dd052'});
+  assert.ok(next?.assembledPromptSnapshot.positivePrompt.includes('charcoal'));assert.doesNotMatch(next!.assembledPromptSnapshot.positivePrompt,/Entirely different/);
+  const customParts=partDocument(outfitSource('Red collar and blue shoes'),[{region:'neck',text:'Red collar'},{region:'feet',text:'Blue shoes'}]);
+  const custom=await updateStudioPhotoSession(session.id,{outfitMode:'custom',outfitText:'Red collar and blue shoes',outfitParts:customParts});
+  assert.equal(custom?.outfitParts?.sourceKey,customParts.sourceKey);
+  const foreign=await lookRoute(new Request('http://localhost/api/characters/'+female.id+'/look',{method:'POST',headers:{'content-type':'application/json','x-workspace-id':'214653b8-0416-447a-bdfd-22e00785bedd'},body:'{}'}),{params:Promise.resolve({id:female.id})});assert.equal(foreign.status,404);
+  const originalPose=await prisma.studioPose.findUniqueOrThrow({where:{id:'46fdf031-aa02-4394-92a1-4f4d435272fd'}});
+  const testPose=await prisma.studioPose.create({data:{workspaceId,categoryId:originalPose.categoryId,slug:'qa-framing-'+Date.now(),title:'QA framing invalidation',posePrompt:'A portrait',framing:'full_body',poseKeypointEncryptedJson:'qa-only',openPoseImageUrl:'/qa-only.png'}});
+  await updateStudioPose(testPose.id,{framing:'portrait',visibleRegions:['hands']});
+  const updatedPose=await prisma.studioPose.findUniqueOrThrow({where:{id:testPose.id}});
+  assert.equal(updatedPose.openPoseImageUrl,null);assert.equal(updatedPose.poseKeypointEncryptedJson,null);
+  const exported=await exportStudioPoseLibrary({workspaceId,categoryId:testPose.categoryId});
+  assert.deepEqual(exported.categories[0].poses.find(p=>p.title===testPose.title)?.visibleRegions,['hands']);
+  assert.equal(await prisma.job.count(),jobCount);
+ });
+ writeFileSync('/var/tmp/engui-framing-prompts.json',JSON.stringify(prompts,null,2));
+ console.log(JSON.stringify({previewPrompts:prompts.length,checks:['crop filtering','real Studio revision assembly','mocked Krea2 submission uses exact filtered prompt and no OpenPose','identity-only versioning','pinned look across edits','custom outfit persistence','workspace isolation','OpenPose invalidation after framing changes','pose visibility export','zero new jobs']}));
+ await prisma.$disconnect();await (globalThis as any).enguiAuditPrisma?.$disconnect();
+}
+main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>setTimeout(()=>process.exit(process.exitCode||0),50));

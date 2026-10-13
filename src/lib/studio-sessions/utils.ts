@@ -1,3 +1,6 @@
+import { compileVisibleLook } from '@/lib/looks/compiler';
+import { normalizeFraming, readPartDocument } from '@/lib/looks/parts';
+import type { CharacterLook } from '@/lib/outfits/types';
 import { joinPromptFragments } from '@/lib/prompt-constructor/normalization';
 import type {
   StudioSessionAutoPickResult,
@@ -151,6 +154,7 @@ type PersistedPortfolioRecord = {
 };
 
 type PersistedPhotoSessionRecord = {
+  outfitPartsJson?: string;
   id: string;
   workspaceId: string;
   portfolioId: string;
@@ -501,6 +505,7 @@ export function toStudioPhotoSessionSummary(record: PersistedPhotoSessionRecord)
     lightingText: record.lightingText,
     vibeText: record.vibeText,
     outfitText: record.outfitText,
+    outfitParts: readPartDocument(record.outfitPartsJson),
     outfitMode: record.outfitMode || (record.outfitText ? 'custom' : 'default'),
     outfitId: record.outfitId || null,
     hairstyleText: record.hairstyleText,
@@ -714,8 +719,15 @@ export function assembleStudioSessionPrompt(input: {
   hairstyleText: string;
   positivePrompt: string;
   negativePrompt: string;
-  pose: Pick<StudioSessionPoseSnapshot, 'prompt'>;
+  pose: Pick<StudioSessionPoseSnapshot, 'prompt'> & Partial<StudioSessionPoseSnapshot>;
+  look?: CharacterLook;
 }): StudioSessionPromptSnapshot {
+  if (input.look?.composition) {
+    const visible=compileVisibleLook(input.look,normalizeFraming(input.pose.framing),input.pose.visibleRegions||[]);
+    const pieces={character:visible.identity,characterAge:formatStudioSessionCharacterAge(input.characterAge),environment:(input.settingText??input.environmentText).trim(),outfit:visible.outfit,hairstyle:input.hairstyleText.trim(),masterPositive:input.positivePrompt.trim(),pose:input.pose.prompt.trim()};
+    const positivePrompt=[visible.framingPrompt,pieces.pose?'Pose: '+pieces.pose:'','Identity: '+pieces.character,pieces.characterAge?'Age: '+pieces.characterAge:'',pieces.hairstyle?'Hair styling: '+pieces.hairstyle:'',pieces.outfit?'Visible outfit: '+pieces.outfit:'',pieces.environment?'Environment: '+pieces.environment:'',input.lightingText?.trim()?'Lighting: '+input.lightingText.trim():'',input.vibeText?.trim()?'Vibe: '+input.vibeText.trim():'',pieces.masterPositive?'Style: '+pieces.masterPositive:''].filter(Boolean).join('\n');
+    return {positivePrompt,negativePrompt:input.negativePrompt.trim(),pieces,composition:visible};
+  }
   const pieces = {
     character: input.characterPrompt.trim(),
     characterAge: formatStudioSessionCharacterAge(input.characterAge),

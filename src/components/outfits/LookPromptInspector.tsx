@@ -1,0 +1,9 @@
+"use client";
+import {useState} from 'react';
+import {useWorkspaceFetch} from '@/lib/workspaces/useWorkspaceFetch';
+import type {OutfitSelection} from '@/lib/outfits/types';
+export default function LookPromptInspector({characterId,look}:{characterId:string;look:OutfitSelection}) {
+ const fetch=useWorkspaceFetch();const [slot,setSlot]=useState('portrait');const [text,setText]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);
+ async function inspect(){setBusy(true);setError('');try{const r=await fetch('/api/characters/'+characterId+'/look',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...look,slot})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Cannot compose this view');setText(d.prompt);}catch(e:any){setError(e.message);setText('');}finally{setBusy(false);}}
+ return <details className="rounded border border-white/15 p-3"><summary className="text-sm cursor-pointer">Inspect preview prompt</summary><p className="my-2 text-xs text-white/50">Uses saved character and outfit details. This does not generate an image.</p><div className="flex flex-wrap gap-2"><select aria-label="Prompt framing" value={slot} onChange={e=>{setSlot(e.target.value);setText('');}} className="rounded bg-zinc-900 p-2 text-xs"><option value="portrait">Portrait</option><option value="upper_body">Upper body</option><option value="full_body">Full body</option></select><button type="button" disabled={busy} onClick={()=>void inspect()} className="rounded border border-white/20 p-2 text-xs">{busy?'Composing…':'Inspect prompt'}</button></div>{error&&<p role="alert" className="mt-2 text-xs text-red-300">{error}</p>}{text&&<pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{text}</pre>}</details>;
+}

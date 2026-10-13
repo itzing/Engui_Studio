@@ -1,3 +1,4 @@
+import { partDocument, outfitSource } from '@/lib/looks/parts';
 import { describe,it,expect } from 'vitest';
 import { composeCharacterLook } from '@/lib/outfits/compose';
 import { buildLookPreviewPrompt } from '@/lib/outfits/previewPrompt';
@@ -10,7 +11,7 @@ describe('wardrobe composition',()=>{
  it('replaces old clothing, preserves permanent anatomy and unknown traits',()=>{const l=composeCharacterLook(c,{mode:'outfit'},outfit);expect(l.identity).toContain('EMPTY socket');expect(l.identity).toContain('scar');expect(l.identity).not.toContain('coat');expect(l.outfit).toContain('charcoal jacket');expect(l.outfit).not.toContain('old red coat');});
  it('custom and neutral modes never inherit the default costume or equipment',()=>{for(const mode of ['custom','neutral'] as const){const l=composeCharacterLook(c,{mode,customText:'blue suit'},null);expect(l.outfit).not.toContain('coat');expect(l.outfit).not.toContain('tool');expect(l.identity).toContain('LEFT');}});
  it('preserves a legacy default when no library outfit exists',()=>expect(composeCharacterLook(c,{mode:'default'},null).outfit).toContain('old red coat'));
- it('does not demand visible eyes behind a helmet',()=>{const l=composeCharacterLook(c,{mode:'outfit'},{...outfit,coversFace:true});const prompt=buildLookPreviewPrompt(l,'portrait');expect(prompt).toContain('Keep the outfit helmet');expect(prompt).not.toContain('face fully visible');expect(prompt).not.toContain('Natural readable facial');});
+ it('does not demand visible eyes behind a helmet',()=>{const l=composeCharacterLook({...c,traits:{hair_color:'black'}},{mode:'outfit'},{...outfit,coversFace:true,promptParts:partDocument(outfitSource(outfit.description,outfit.constraints,true),[{region:'headwear',text:'Black closed helmet'}])});const prompt=buildLookPreviewPrompt(l,'portrait');expect(prompt).toContain('Keep the assigned helmet');expect(prompt).not.toContain('face fully visible');expect(prompt).not.toContain('Natural readable facial');});
  it('rejects newly selecting an archived default',()=>expect(()=>composeCharacterLook(c,{}, {...outfit,deletedAt:'today'})).toThrow('archived'));
  it('captures independent outfit text and revision',()=>{const l=composeCharacterLook(c,{},outfit);outfit.description='changed';expect(l.outfit).toContain('charcoal');outfit.description='charcoal jacket';});
 });

@@ -47,7 +47,7 @@ type FStudioRoute =
 
 type RunDetail = { run?: StudioSessionRunSummary; shots?: StudioSessionShotSummary[]; revisions?: StudioSessionShotRevisionSummary[]; versions?: StudioSessionShotVersionSummary[] };
 type CollectionDetail = { collection: StudioCollectionSummary; items: StudioCollectionItemSummary[] } | null;
-type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'outfitMode' | 'outfitId' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
+type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'outfitMode' | 'outfitId' | 'outfitParts' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
 type FramingPolicyMode = 'default' | 'single' | 'orientation';
 
 const SESSION_BRIEF_FIELDS: Array<{ key: keyof SessionBriefDraft; label: string; multiline?: boolean; placeholder: string }> = [
@@ -230,6 +230,7 @@ function createSessionBriefDraft(session: StudioPhotoSessionSummary): SessionBri
     lightingText: session.lightingText || '',
     vibeText: session.vibeText || '',
     outfitText: session.outfitText || '',
+    outfitParts: session.outfitParts||null,
     outfitMode: session.outfitMode || (session.outfitText ? 'custom' : 'default'),
     outfitId: session.outfitId || null,
     hairstyleText: session.hairstyleText || '',
@@ -278,13 +279,13 @@ function SessionBriefEditor({ session, characterId, onSave, onOpenRuns }: { char
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <OutfitSelect characterId={characterId} value={{mode: draft.outfitMode as any, outfitId:draft.outfitId, customText:draft.outfitText}} onChange={look=>setDraft(current=>current?{...current,outfitMode:look.mode,outfitId:look.outfitId||null,outfitText:look.customText||''}:current)}/>
+          <OutfitSelect characterId={characterId} value={{mode: draft.outfitMode as any, outfitId:draft.outfitId, customText:draft.outfitText,customParts:draft.outfitParts}} onChange={look=>setDraft(current=>current?{...current,outfitMode:look.mode,outfitId:look.outfitId||null,outfitText:look.customText||'',outfitParts:look.customParts||null}:current)}/>
           {SESSION_BRIEF_FIELDS.map((field) => (
             <label key={field.key} className={`${field.key === 'notes' || field.key === 'negativePrompt' ? 'md:col-span-2' : ''} block rounded-2xl border border-white/10 bg-black/20 p-4`}>
               <div className="text-xs uppercase tracking-[0.16em] text-white/35">{field.label}</div>
               {field.multiline ? (
                 <textarea
-                  value={draft[field.key] || ''}
+                  value={typeof draft[field.key]==='string' ? draft[field.key] as string : ''}
                   onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
                   placeholder={field.placeholder}
                   rows={field.key === 'notes' || field.key === 'negativePrompt' ? 4 : 3}
@@ -292,7 +293,7 @@ function SessionBriefEditor({ session, characterId, onSave, onOpenRuns }: { char
                 />
               ) : (
                 <Input
-                  value={draft[field.key] || ''}
+                  value={typeof draft[field.key]==='string' ? draft[field.key] as string : ''}
                   onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
                   placeholder={field.placeholder}
                   className="mt-2 border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 focus:border-blue-400/60"

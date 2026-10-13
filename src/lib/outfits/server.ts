@@ -1,15 +1,19 @@
+import { readPartDocument, validateParts } from '@/lib/looks/parts';
 import { prisma } from '@/lib/prisma';
 import { requireWorkspaceId, WorkspaceError } from '@/lib/workspaces/context';
 import { toCharacterSummary } from '@/lib/characters/utils';
 import { composeCharacterLook } from './compose';
 import type { OutfitSelection, OutfitSummary } from './types';
-export const outfitSummary = (row: any): OutfitSummary => ({ ...row, deletedAt: row.deletedAt?.toISOString() || null });
+export const outfitSummary = (row: any): OutfitSummary => {
+  let source:any={};try{source=JSON.parse(row.sourceJson||'{}');}catch{}
+  return { ...row, promptParts:readPartDocument(source.promptParts), deletedAt: row.deletedAt?.toISOString() || null };
+};
 export function readOutfitSelection(body: any): OutfitSelection {
   const mode = body?.mode || 'default';
   if (!['default','outfit','custom','neutral'].includes(mode)) throw new WorkspaceError('Invalid outfit mode.',400);
   if (mode === 'outfit' && !body?.outfitId) throw new WorkspaceError('Choose an outfit.',400);
   if (mode === 'custom' && !String(body?.customText || '').trim()) throw new WorkspaceError('Describe the custom outfit.',400);
-  return { mode, outfitId: typeof body?.outfitId === 'string' ? body.outfitId : null, customText: String(body?.customText || '').trim() };
+  return { mode, outfitId: typeof body?.outfitId === 'string' ? body.outfitId : null, customText: String(body?.customText || '').trim(), customParts: readPartDocument(body?.customParts) };
 }
 export async function resolveCharacterLook(characterId: string, input: OutfitSelection = {}, db: any = prisma) {
   const selection = readOutfitSelection(input);
@@ -40,9 +44,15 @@ export async function saveOutfit(body: any, id?: string) {
   const ownerCharacterId = existing ? existing.ownerCharacterId : body.ownerCharacterId || null;
   if (ownerCharacterId && !await prisma.character.findFirst({ where: { id: ownerCharacterId, deletedAt: null } })) throw new WorkspaceError('Character not found.',404);
   const data = { name, description, constraints: String(body.constraints ?? existing?.constraints ?? '').trim(), coversFace: Boolean(body.coversFace ?? existing?.coversFace ?? false) };
+  let source:any={};try{source=JSON.parse(existing?.sourceJson||'{}');}catch{}
+  if(body.promptParts!==undefined) {
+    if(body.promptParts!==null && !readPartDocument(body.promptParts)) throw new WorkspaceError('Invalid visible-detail parts.',400);
+    source.promptParts=body.promptParts===null?null:{...body.promptParts,parts:validateParts(body.promptParts.parts)};
+  }
+  const sourceJson=JSON.stringify(source);
   return prisma.$transaction(async tx => {
-    const outfit = existing ? await tx.outfit.update({ where: { id }, data: { ...data, revision: { increment: 1 } } })
-      : await tx.outfit.create({ data: { ...data, workspaceId: requireWorkspaceId(), ownerCharacterId } });
+    const outfit = existing ? await tx.outfit.update({ where: { id }, data: { ...data, sourceJson, revision: { increment: 1 } } })
+      : await tx.outfit.create({ data: { ...data, sourceJson, workspaceId: requireWorkspaceId(), ownerCharacterId } });
     if (ownerCharacterId) await tx.characterOutfit.upsert({ where: { characterId_outfitId: { characterId: ownerCharacterId, outfitId: outfit.id } }, update: {}, create: { workspaceId: requireWorkspaceId(), characterId: ownerCharacterId, outfitId: outfit.id } });
     return outfitSummary(outfit);
   });

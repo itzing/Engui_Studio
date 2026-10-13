@@ -1,0 +1,11 @@
+"use client";
+import {useEffect,useState} from 'react';
+import {useWorkspaceFetch} from '@/lib/workspaces/useWorkspaceFetch';
+import {FRAMINGS, type Region} from '@/lib/looks/parts';
+import type {StudioPoseSummary} from '@/lib/studio-sessions/types';
+export default function PoseVisibilityEditor({pose,onSaved}:{pose:StudioPoseSummary;onSaved:(pose:StudioPoseSummary)=>void}) {
+ const fetch=useWorkspaceFetch();const [extra,setExtra]=useState<Region[]>(pose.visibleRegions||[]);const [framing,setFraming]=useState(pose.framing);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
+ useEffect(()=>{setExtra(pose.visibleRegions||[]);setFraming(pose.framing);},[pose.id,pose.updatedAt]);
+ async function save(){setBusy(true);setError('');try{const r=await fetch('/api/studio/pose-library/poses/'+pose.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(framing!==pose.framing?{framing}:{}),visibleRegions:extra})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Unable to save pose visibility');onSaved(d.pose);}catch(e:any){setError(e.message);}finally{setBusy(false);}}
+ return <details className="rounded border border-white/15 p-3"><summary className="text-sm cursor-pointer">Framing & visible details</summary><p className="my-2 text-xs text-white/50">Framing selects visible clothing. Add hands or arms only when the pose brings them into this crop. Existing shots keep their saved pose snapshots.</p><select aria-label="Pose framing" className="rounded bg-zinc-900 p-2 text-xs" value={framing} onChange={e=>setFraming(e.target.value as any)}>{FRAMINGS.map(f=><option key={f} value={f}>{f.replace('_',' ')}</option>)}</select><div className="my-3 flex flex-wrap gap-4">{(['arms','hands'] as Region[]).map(region=><label key={region} className="flex gap-2 text-xs"><input type="checkbox" checked={extra.includes(region)} onChange={e=>setExtra(e.target.checked?[...extra,region]:extra.filter(r=>r!==region))}/>{region} visible inside crop</label>)}</div><button type="button" disabled={busy} onClick={()=>void save()} className="rounded border border-white/20 p-2 text-xs">{busy?'Saving…':'Save framing & visibility'}</button>{error&&<p role="alert" className="text-xs text-red-300">{error}</p>}</details>;
+}

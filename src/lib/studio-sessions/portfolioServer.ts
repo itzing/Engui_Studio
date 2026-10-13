@@ -1,3 +1,4 @@
+import { readPartDocument } from '@/lib/looks/parts';
 import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { canonicalLoraKey } from '@/lib/workspaces/loraAccess';
 import { WorkspaceError } from '@/lib/workspaces/context';
@@ -200,7 +201,7 @@ export async function listStudioPhotoSessions(input: { portfolioId: string; stat
 export async function createStudioPhotoSession(portfolioId: string, input: Record<string, unknown>) {
   const portfolio = await prisma.studioPortfolio.findUnique({ where: { id: portfolioId }, select: { id: true, workspaceId: true, characterId: true } });
   if (!portfolio) return null;
-  const selection = readOutfitSelection({ mode: input.outfitMode || (input.outfitText ? 'custom' : 'default'), outfitId: input.outfitId, customText: input.outfitText });
+  const selection = readOutfitSelection({ mode: input.outfitMode || (input.outfitText ? 'custom' : 'default'), outfitId: input.outfitId, customText: input.outfitText, customParts: input.outfitParts as any });
   if (selection.mode === 'neutral') throw new Error('Neutral anatomy is a preview mode only.');
   await resolveCharacterLook(portfolio.characterId, selection);
   const name = readOptionalString(input.name);
@@ -212,7 +213,7 @@ export async function createStudioPhotoSession(portfolioId: string, input: Recor
       settingText: readOptionalString(input.settingText) ?? '',
       lightingText: readOptionalString(input.lightingText) ?? '',
       vibeText: readOptionalString(input.vibeText) ?? '',
-      outfitMode: selection.mode, outfitId: selection.outfitId,
+      outfitMode: selection.mode, outfitId: selection.outfitId, outfitPartsJson: JSON.stringify(selection.customParts||null),
       outfitText: readOptionalString(input.outfitText) ?? '',
       hairstyleText: readOptionalString(input.hairstyleText) ?? '',
       negativePrompt: readOptionalString(input.negativePrompt) ?? '',
@@ -240,10 +241,10 @@ export async function getStudioPhotoSession(sessionId: string) {
 export async function updateStudioPhotoSession(sessionId: string, input: Record<string, unknown>) {
   const existing = await prisma.studioPhotoSession.findUnique({ where: { id: sessionId }, include: { portfolio: true } });
   if (!existing) return null;
-  const selection = readOutfitSelection({ mode: input.outfitMode ?? existing.outfitMode, outfitId: input.outfitId ?? existing.outfitId, customText: input.outfitText ?? existing.outfitText });
+  const selection = readOutfitSelection({ mode: input.outfitMode ?? existing.outfitMode, outfitId: input.outfitId ?? existing.outfitId, customText: input.outfitText ?? existing.outfitText, customParts: input.outfitParts !== undefined ? input.outfitParts : readPartDocument(existing.outfitPartsJson) });
   if (selection.mode === 'neutral') throw new Error('Neutral anatomy is a preview mode only.');
   await resolveCharacterLook(existing.portfolio.characterId, selection);
-  const data: Record<string, any> = { outfitMode: selection.mode, outfitId: selection.outfitId };
+  const data: Record<string, any> = { outfitMode: selection.mode, outfitId: selection.outfitId, outfitPartsJson: JSON.stringify(selection.customParts||null) };
   for (const key of ['name', 'settingText', 'lightingText', 'vibeText', 'outfitText', 'hairstyleText', 'negativePrompt', 'notes']) {
     if (input[key] !== undefined) data[key] = readOptionalString(input[key]) ?? '';
   }
@@ -277,7 +278,7 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
   });
   if (!session) return { error: 'Session not found' as const };
 
-  const look = await resolveCharacterLook(session.portfolio.characterId, { mode: session.outfitMode as any, outfitId: session.outfitId, customText: session.outfitText });
+  const look = await resolveCharacterLook(session.portfolio.characterId, { mode: session.outfitMode as any, outfitId: session.outfitId, customText: session.outfitText, customParts:readPartDocument(session.outfitPartsJson) });
   const draft = readRunSettingsDraft(input);
   await validateRunLoras(draft.generationSettings);
   if (!draft.poseSetId) return { error: 'poseSetId is required' as const };

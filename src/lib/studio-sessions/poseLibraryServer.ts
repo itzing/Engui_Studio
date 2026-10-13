@@ -1,3 +1,4 @@
+import { visibleExtras } from '@/lib/looks/parts';
 import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -111,6 +112,7 @@ export function toStudioPoseSummary(record: any, includeCandidates = false): Stu
     title: record.title,
     tags: parseJson(record.tagsJson, []),
     posePrompt: record.posePrompt,
+    visibleRegions: visibleExtras(parseJson(record.visibleRegionsJson,[])),
     orientation: normalizeOrientation(record.orientation),
     framing: normalizeFraming(record.framing),
     cameraAngle: normalizeCameraAngle(record.cameraAngle),
@@ -324,6 +326,7 @@ export async function createStudioPose(workspaceId: string, input: Record<string
       title,
       tagsJson: JSON.stringify(readTags(input.tags)),
       posePrompt: readString(input.posePrompt),
+      visibleRegionsJson: JSON.stringify(visibleExtras(input.visibleRegions||[])),
       orientation: normalizeOrientation(input.orientation),
       framing: normalizeFraming(input.framing),
       cameraAngle: normalizeCameraAngle(input.cameraAngle),
@@ -352,6 +355,7 @@ export async function updateStudioPose(poseId: string, input: Record<string, unk
     data.categoryId = categoryId;
   }
   const semanticChanged = input.posePrompt !== undefined || input.orientation !== undefined || input.framing !== undefined || input.cameraAngle !== undefined || input.shotDistance !== undefined;
+  if (input.visibleRegions !== undefined) data.visibleRegionsJson=JSON.stringify(visibleExtras(input.visibleRegions));
   if (input.posePrompt !== undefined) data.posePrompt = readString(input.posePrompt);
   if (input.orientation !== undefined) data.orientation = normalizeOrientation(input.orientation);
   if (input.framing !== undefined) data.framing = normalizeFraming(input.framing);
@@ -359,7 +363,7 @@ export async function updateStudioPose(poseId: string, input: Record<string, unk
   if (input.shotDistance !== undefined) data.shotDistance = normalizeShotDistance(input.shotDistance);
   if (typeof input.sortOrder === 'number') data.sortOrder = Math.floor(input.sortOrder);
   if (semanticChanged) data.primaryPreviewId = null;
-  if (input.posePrompt !== undefined || input.orientation !== undefined || input.cameraAngle !== undefined) {
+  if (input.posePrompt !== undefined || input.orientation !== undefined || input.framing !== undefined || input.cameraAngle !== undefined) {
     data.openPoseImageUrl = null;
     data.poseKeypointEncryptedJson = null;
     data.openPoseSourceImageUrl = null;
@@ -401,6 +405,7 @@ export async function duplicateStudioPose(poseId: string, input: Record<string, 
       title,
       tagsJson: existing.tagsJson,
       posePrompt: existing.posePrompt,
+      visibleRegionsJson: existing.visibleRegionsJson,
       orientation: existing.orientation,
       framing: existing.framing,
       cameraAngle: existing.cameraAngle,
@@ -568,6 +573,7 @@ export function toStudioSessionPoseSnapshot(pose: StudioPoseSummary): StudioSess
     category: pose.categoryId,
     name: pose.title,
     prompt: pose.posePrompt,
+    visibleRegions: pose.visibleRegions||[],
     primaryPreviewUrl: pose.primaryPreviewUrl,
     orientation: pose.orientation,
     framing: pose.framing,
@@ -727,6 +733,7 @@ export type StudioPoseLibraryExportPayload = {
       title: string;
       tags: string[];
       posePrompt: string;
+      visibleRegions?: import('@/lib/looks/parts').Region[];
       orientation: StudioSessionPoseOrientation;
       framing: StudioSessionPoseFraming;
       cameraAngle: StudioPoseCameraAngle;
@@ -752,6 +759,7 @@ export async function exportStudioPoseLibrary(input: { workspaceId: string; cate
         title: pose.title,
         tags: parseJson<string[]>(pose.tagsJson, []),
         posePrompt: pose.posePrompt,
+        visibleRegions: visibleExtras(parseJson(pose.visibleRegionsJson,[])),
         orientation: normalizeOrientation(pose.orientation),
         framing: normalizeFraming(pose.framing),
         cameraAngle: normalizeCameraAngle(pose.cameraAngle),
@@ -779,6 +787,7 @@ function normalizeImportPayload(input: unknown): StudioPoseLibraryExportPayload 
             title: readString(pose.title, 'Imported pose') || 'Imported pose',
             tags: readTags(pose.tags),
             posePrompt: readString(pose.posePrompt),
+            visibleRegions: visibleExtras(pose.visibleRegions||[]),
             orientation: normalizeOrientation(pose.orientation),
             framing: normalizeFraming(pose.framing),
             cameraAngle: normalizeCameraAngle(pose.cameraAngle),
@@ -809,7 +818,7 @@ export async function importStudioPoseLibrary(input: { workspaceId: string; payl
         : await tx.studioPoseCategory.create({ data: { workspaceId: input.workspaceId, slug: `${slugify(category.name, 'category')}-${Date.now()}-${categoryIndex}`, name: category.name, description: category.description, sortOrder: categoryCount + categoryIndex } });
       if (!(input.categoryId && input.mode === 'replace_all' && categoryIndex === 0)) categoriesCreated += 1;
       for (const [poseIndex, pose] of category.poses.entries()) {
-        await tx.studioPose.create({ data: { workspaceId: input.workspaceId, categoryId: categoryRecord.id, slug: `${slugify(pose.title, 'pose')}-${Date.now()}-${categoryIndex}-${poseIndex}`, title: pose.title, tagsJson: JSON.stringify(pose.tags), posePrompt: pose.posePrompt, orientation: pose.orientation, framing: pose.framing, cameraAngle: pose.cameraAngle, shotDistance: pose.shotDistance, sortOrder: poseIndex } });
+        await tx.studioPose.create({ data: { workspaceId: input.workspaceId, categoryId: categoryRecord.id, slug: `${slugify(pose.title, 'pose')}-${Date.now()}-${categoryIndex}-${poseIndex}`, title: pose.title, tagsJson: JSON.stringify(pose.tags), posePrompt: pose.posePrompt, visibleRegionsJson: JSON.stringify(pose.visibleRegions||[]), orientation: pose.orientation, framing: pose.framing, cameraAngle: pose.cameraAngle, shotDistance: pose.shotDistance, sortOrder: poseIndex } });
         posesCreated += 1;
       }
     }

@@ -1,3 +1,4 @@
+import {readPartDocument} from '@/lib/looks/parts';
 import { requireWorkspaceId } from '@/lib/workspaces/context';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
@@ -56,6 +57,7 @@ async function POSTImpl(request: NextRequest) {
     const gender = normalizeCharacterGender(body?.gender, 'female');
     const traits = normalizeTraits(body?.traits);
     const editorState = normalizeEditorState(body?.editorState);
+    if(editorState.promptParts && !readPartDocument(editorState.promptParts)) return NextResponse.json({success:false,error:'Invalid identity visible-detail parts.'},{status:400});
     const previewStatusSummary = typeof body?.previewStatusSummary === 'string' && body.previewStatusSummary.trim()
       ? body.previewStatusSummary.trim()
       : null;

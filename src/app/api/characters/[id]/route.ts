@@ -1,3 +1,4 @@
+import { readPartDocument } from '@/lib/looks/parts';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -42,7 +43,10 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
     }
 
     const previousTraits = normalizeTraits(JSON.parse(existing.traits || '{}'));
-    const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits);
+    if (nextEditorState.promptParts && !readPartDocument(nextEditorState.promptParts)) return NextResponse.json({success:false,error:'Invalid identity visible-detail parts.'},{status:400});
+    const compositionChanged = JSON.stringify(nextEditorState.promptParts) !== JSON.stringify(JSON.parse(existing.editorState||'{}').promptParts)
+      || gender !== existing.gender;
+    const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits) || compositionChanged;
     const basicsChanged = name !== existing.name
       || gender !== normalizeCharacterGender(existing.gender, 'female')
       || previewStatusSummary !== existing.previewStatusSummary
@@ -93,7 +97,7 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
       const nextVersionNumber = (lastVersion?.versionNumber || 0) + 1;
       const changeSummary = typeof body?.changeSummary === 'string' && body.changeSummary.trim()
         ? body.changeSummary.trim()
-        : buildChangeSummary(previousTraits, nextTraits);
+        : compositionChanged ? 'Updated identity composition' : buildChangeSummary(previousTraits, nextTraits);
 
       const version = await tx.characterVersion.create({
         data: {

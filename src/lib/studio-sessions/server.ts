@@ -936,6 +936,7 @@ async function createStudioSessionShotRevision(params: {
     : null;
   const assembledPrompt = assembleStudioSessionPrompt({
     characterPrompt,
+    look: snapshot.characterLookSnapshot,
     characterAge: typeof snapshot.characterAge === 'string' ? snapshot.characterAge : '',
     settingText: typeof snapshot.settingText === 'string' ? snapshot.settingText : '',
     environmentText: typeof snapshot.environmentText === 'string' ? snapshot.environmentText : '',
@@ -1155,6 +1156,8 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
         framing: resolvedFraming,
       })
     : null;
+  // A structured revision already pins its framing. Preset helpers must not add a competing crop.
+  if (promptSnapshot.composition?.composerVersion === 1) resolvedFraming.helperPrompt = '';
   const helperPrompt = resolvedFraming.helperPrompt.trim();
   const basePrompt = typeof promptSnapshot?.positivePrompt === 'string' ? promptSnapshot.positivePrompt : '';
   const finalPrompt = !renderedOpenPoseControl && helperPrompt ? [basePrompt, helperPrompt].filter(Boolean).join(', ') : basePrompt;

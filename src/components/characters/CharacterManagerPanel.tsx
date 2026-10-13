@@ -1,4 +1,8 @@
 'use client';
+import LookPromptInspector from '@/components/outfits/LookPromptInspector';
+import PromptPartsEditor from '@/components/outfits/PromptPartsEditor';
+import { identitySource, inferIdentityParts, readPartDocument, visibleRegions, normalizeFraming, type PartDocument } from '@/lib/looks/parts';
+import { COSTUME_KEYS } from '@/lib/outfits/types';
 import ImageModelSelect, { useImageModelPreference } from '@/components/generation/ImageModelSelect';
 import OutfitSelect from '@/components/outfits/OutfitSelect';
 import WardrobePanel from '@/components/outfits/WardrobePanel';
@@ -1231,11 +1235,9 @@ export default function CharacterManagerPanel() {
         };
       }
 
-      const chips = characterTraitDefinitionsByGroup
-        .filter(({ group }) => meta.groupIds.includes(group.id))
-        .flatMap(({ traits }) => traits)
-        .filter((trait) => draft.traits[trait.key])
-        .map((trait) => `${trait.label}: ${draft.traits[trait.key]}`);
+      const visible=visibleRegions(normalizeFraming(slot));
+      const identityParts=readPartDocument(draft.editorState.promptParts,identitySource(draft.traits,draft.gender))?.parts || inferIdentityParts(Object.fromEntries(Object.entries(draft.traits).filter(([k])=>!COSTUME_KEYS.includes(k))),draft.gender);
+      const chips=identityParts.filter(p=>visible.has(p.region)).map(p=>p.text);
 
       const state = selectedCharacter?.previewState?.[slot] || null;
       return {
@@ -1832,6 +1834,8 @@ export default function CharacterManagerPanel() {
       <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5 xl:overflow-y-auto">
         <ImageModelSelect value={previewModel} onChange={setPreviewModel} disabled={!!generatingPreviewSlot}/>
         <OutfitSelect characterId={selectedCharacterId} value={previewLook} onChange={setPreviewLook} neutral refresh={wardrobeRefresh}/>
+        {selectedCharacterId && <LookPromptInspector characterId={selectedCharacterId} look={previewLook}/>}
+        {draft && <PromptPartsEditor title="Identity visible details" value={draft.editorState.promptParts as PartDocument | undefined} source={identitySource(draft.traits,draft.gender)} initialParts={inferIdentityParts(Object.fromEntries(Object.entries(draft.traits).filter(([k])=>!COSTUME_KEYS.includes(k))),draft.gender)} onChange={promptParts=>setDraft({...draft,editorState:{...draft.editorState,promptParts}})}/>}
         {selectedCharacterId && !selectedCharacter?.deletedAt && <WardrobePanel key={selectedCharacterId} refresh={wardrobeRefresh} characterId={selectedCharacterId} onChange={()=>setWardrobeRefresh(n=>n+1)}/>}
         {previewCards.map((card) => {
           const slotState = card.state;
@@ -1847,7 +1851,7 @@ export default function CharacterManagerPanel() {
                 ? 'Save the latest draft changes before generating previews.'
                 : card.traitCount > 0
                   ? card.summary
-                  : 'No mapped traits yet for this preview.';
+                  : 'No visible identity details yet for this preview.';
 
           return (
             <div key={card.slot} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-2.5">
@@ -1880,7 +1884,7 @@ export default function CharacterManagerPanel() {
                     <div>
                       <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Ready to generate' : 'Empty preview state'}</div>
                       <div className="mt-1.5 text-[11px] text-muted-foreground">
-                        {card.traitCount > 0 ? `${card.traitCount} mapped trait${card.traitCount === 1 ? '' : 's'} used` : 'No mapped traits yet for this preview.'}
+                        {card.traitCount > 0 ? `${card.traitCount} visible identity detail${card.traitCount === 1 ? '' : 's'} used` : 'No visible identity details yet for this preview.'}
                       </div>
                     </div>
                   )}

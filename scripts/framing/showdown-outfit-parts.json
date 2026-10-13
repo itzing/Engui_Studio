@@ -1,0 +1,276 @@
+{
+  "Gambler": [
+    {
+      "region": "neck",
+      "text": "Huge geometric rectangular yellow-gold architectural earrings and a rigid segmented gold choker, sharply defined true gold with crisp metallic reflections."
+    },
+    {
+      "region": "shoulders",
+      "text": "Enormous stiff upright charcoal-purple collar rises beside the head; exceptionally broad red-orange shoulder panels with dark navy edges."
+    },
+    {
+      "region": "torso",
+      "text": "Dark navy lapels converge at a small tilted two-piece gold clasp over a fitted silver-gray bodice."
+    },
+    {
+      "region": "arms",
+      "text": "Voluminous deep burgundy sleeves with wide cuffs."
+    },
+    {
+      "region": "hands",
+      "text": "Large angular geometric gold rings and chunky rigid gold bracelet cuffs, with crisp true-metal reflections."
+    },
+    {
+      "region": "hips",
+      "text": "Asymmetric orange-red fabric on her RIGHT, partly covered at the hip by pale gray fabric; wider flared silver-gray fabric on her LEFT."
+    },
+    {
+      "region": "lower_legs",
+      "text": "The asymmetric orange-red and silver-gray lower panels extend to the floor."
+    },
+    {
+      "region": "feet",
+      "text": "Black shoes with bright gold trim."
+    }
+  ],
+  "Protector": [
+    {
+      "region": "headwear",
+      "text": "Oversized angular black helmet with a projecting brow and SOLID DARK FACEPLATE COMPLETELY CONCEALING THE EYES; narrow red visor markings, triangular red vents and red-and-white upper-edge accents. Only the lower face is exposed."
+    },
+    {
+      "region": "neck",
+      "text": "Reinforced armored neck guard."
+    },
+    {
+      "region": "shoulders",
+      "text": "Massive angular charcoal and midnight-blue shoulder plates with bright red-orange edge accents."
+    },
+    {
+      "region": "torso",
+      "text": "Layered charcoal, midnight-blue and muted-purple chest armor, overlapping protective plates, rectangular compartments, dark straps and a wide diagonal black harness."
+    },
+    {
+      "region": "arms",
+      "text": "Thick gray sleeves with reinforced elbows and red-orange elbow accents."
+    },
+    {
+      "region": "hands",
+      "text": "Heavy dark-gray tactical gloves. A black baton and a transparent riot shield belong to this character; crop these props naturally at the image edge when only their upper sections are visible. Shield has silver-metal framing, blue-gray transparent panels, angular supports and a horizontal black rectangle bordered in vivid red."
+    },
+    {
+      "region": "waist",
+      "text": "Broad utility belt with attached pouches."
+    },
+    {
+      "region": "hips",
+      "text": "Rigid hip guards with red-orange accents over baggy gray combat trousers."
+    },
+    {
+      "region": "legs",
+      "text": "Reinforced gray trouser thighs, segmented knee protection and dark straps."
+    },
+    {
+      "region": "lower_legs",
+      "text": "Armored shin panels on the gray combat trousers."
+    },
+    {
+      "region": "feet",
+      "text": "Heavy black tactical boots."
+    }
+  ],
+  "Bureaucrat Female": [
+    {
+      "region": "neck",
+      "text": "High black turtleneck and one small geometric pale-gold earring."
+    },
+    {
+      "region": "shoulders",
+      "text": "Structured charcoal-gray shoulders and broad overlapping charcoal-gray wrap lapels. One shoulder has a short blue covering edged in gold."
+    },
+    {
+      "region": "torso",
+      "text": "Charcoal-gray asymmetrical wrap bodice with gray borders and a small rectangular gold official insignia."
+    },
+    {
+      "region": "arms",
+      "text": "One arm has a dark-gray sleeve with a broad black cuff; the other has a fitted blue segmented sleeve with angular seams."
+    },
+    {
+      "region": "hands",
+      "text": "A restrained metallic gold wrist bracelet belongs only to the arm with the blue segmented sleeve."
+    },
+    {
+      "region": "waist",
+      "text": "Fitted waist fastened by a narrow belt with a square gold clasp."
+    },
+    {
+      "region": "hips",
+      "text": "Asymmetrical dark-charcoal front skirt panel with gray borders over a vivid orange underlayer."
+    },
+    {
+      "region": "lower_legs",
+      "text": "Flowing vivid orange underskirt and charcoal front panel extend to the ankles; black stockings."
+    },
+    {
+      "region": "feet",
+      "text": "Dark blue-gray square-toed loafers with low heels."
+    }
+  ],
+  "Bureaucrat Male": [
+    {
+      "region": "neck",
+      "text": "High black turtleneck and one small geometric pale-gold stud earring."
+    },
+    {
+      "region": "shoulders",
+      "text": "Broad overlapping charcoal-gray lapels and squared structured shoulders; left shoulder has a short blue covering edged in pale gold. Straight masculine formal tailoring."
+    },
+    {
+      "region": "torso",
+      "text": "Asymmetrical charcoal-gray official-uniform coat over a broad flat chest, with a small rectangular pale-gold insignia. Straight, lightly tapered male tailoring."
+    },
+    {
+      "region": "arms",
+      "text": "RIGHT arm has a dark-gray sleeve and broad black cuff. LEFT arm has a fitted blue segmented sleeve with angular seams."
+    },
+    {
+      "region": "hands",
+      "text": "Restrained rigid pale-gold cuff on the LEFT wrist only."
+    },
+    {
+      "region": "waist",
+      "text": "Narrow formal black belt with square gold clasp at the natural waist; straight male silhouette rather than a tightly cinched waist."
+    },
+    {
+      "region": "hips",
+      "text": "Separated charcoal coat panels open over straight-cut charcoal tailored trousers, with a clearly distinct two-leg silhouette. Slim vivid orange inset and orange inner lining."
+    },
+    {
+      "region": "legs",
+      "text": "Straight charcoal trouser legs visible between separated coat panels, never a skirt."
+    },
+    {
+      "region": "lower_legs",
+      "text": "Long asymmetrical charcoal panels with gray borders approach the ankles. Vivid orange lining visible in the opening and side vent; plain black socks."
+    },
+    {
+      "region": "feet",
+      "text": "Dark blue-gray square-toed men's formal loafers with flat low-profile soles."
+    }
+  ],
+  "Cheater": [
+    {
+      "region": "headwear",
+      "text": "Black baseball cap with a curved brim and two small vertical gray markings on the front."
+    },
+    {
+      "region": "neck",
+      "text": "Small silver dangling earrings, layered black chokers and a delicate necklace with a metallic pendant."
+    },
+    {
+      "region": "shoulders",
+      "text": "Slate-gray bomber shoulders with dark panels and a large hood lined in crimson red."
+    },
+    {
+      "region": "torso",
+      "text": "Open oversized slate-gray bomber jacket with bright orange lining accents and gold zippers over a fitted black top with asymmetric straps."
+    },
+    {
+      "region": "arms",
+      "text": "Broad slate-gray bomber sleeves."
+    },
+    {
+      "region": "waist",
+      "text": "Black cropped top ends in a decorative band beneath the bust, exposing the toned abdomen and navel."
+    },
+    {
+      "region": "hips",
+      "text": "Low-rise loose charcoal-black cargo pants with a wide black belt and rectangular buckle."
+    },
+    {
+      "region": "legs",
+      "text": "Large cargo thigh pockets, horizontal gold zipper and layered charcoal trouser panels."
+    },
+    {
+      "region": "lower_legs",
+      "text": "Loose charcoal-black trouser legs gathered at the ankles."
+    },
+    {
+      "region": "feet",
+      "text": "Black ankle-high boots with burgundy-red vertical accents and thick light-gray soles."
+    }
+  ],
+  "Rebel": [
+    {
+      "region": "neck",
+      "text": "Red-orange round-lensed goggles rest around his neck against the cobalt-blue shirt; they are not worn over his eyes."
+    },
+    {
+      "region": "shoulders",
+      "text": "Tall open olive-green military coat collar and broad softly structured olive shoulders."
+    },
+    {
+      "region": "torso",
+      "text": "Open oversized olive-green military coat, large chest pockets and cobalt-blue shirt. Black tactical chest harness carries a rectangular orange panel and a large black utility pouch with small red accents."
+    },
+    {
+      "region": "arms",
+      "text": "Softly rumpled olive-green sleeves and dark cuffs."
+    },
+    {
+      "region": "hands",
+      "text": "One hand wears a black fingerless tactical glove."
+    },
+    {
+      "region": "hips",
+      "text": "Baggy dark-burgundy cargo trousers with an orange hanging utility strap."
+    },
+    {
+      "region": "legs",
+      "text": "Dark-burgundy trouser legs with a narrow red stripe and large red block lettering on one leg."
+    },
+    {
+      "region": "lower_legs",
+      "text": "Open olive trench coat extends below the knees with wide off-white reflective stripes near its lower hem."
+    },
+    {
+      "region": "feet",
+      "text": "Heavy dark-brown combat boots with thick soles, reinforced toes and wide ankle straps."
+    }
+  ],
+  "Inventor": [
+    {
+      "region": "neck",
+      "text": "Standing charcoal utility-jacket collar over a dark ribbed turtleneck."
+    },
+    {
+      "region": "shoulders",
+      "text": "Black reinforced shoulder panels on a charcoal-gray utility jacket."
+    },
+    {
+      "region": "torso",
+      "text": "Charcoal-gray utility jacket with two dark-brown rectangular chest pockets and a red central zipper."
+    },
+    {
+      "region": "arms",
+      "text": "Rolled utility-jacket sleeves with thick cream cuffs, adapted to the permanent LEFT-arm prosthesis."
+    },
+    {
+      "region": "hands",
+      "text": "The intact RIGHT hand holds a separate detachable forearm-length tool: elongated red mechanical forearm section, proximal coupling connector, black hinges, cyan accents and THREE broad flat angular hooked prongs. This tool is separate from the permanent LEFT prosthesis; its docking socket remains EMPTY. If the tool extends beyond a crop, show only its visible part without zooming out."
+    },
+    {
+      "region": "hips",
+      "text": "Dark tactical trousers."
+    },
+    {
+      "region": "legs",
+      "text": "Dark tactical trouser legs with orange-trimmed knee pads."
+    },
+    {
+      "region": "feet",
+      "text": "Heavy black combat boots."
+    }
+  ]
+}

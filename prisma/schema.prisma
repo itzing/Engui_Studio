@@ -679,6 +679,7 @@ model StudioPhotoSession {
   vibeText       String   @default("")
   outfitText     String   @default("")
   outfitMode     String   @default("default")
+  outfitPartsJson String  @default("null")
   outfitId       String?
   hairstyleText  String   @default("")
   negativePrompt String   @default("")
@@ -809,6 +810,7 @@ model StudioPose {
   title                     String
   tagsJson                  String    @default("[]")
   posePrompt                String    @default("")
+  visibleRegionsJson        String    @default("[]")
   orientation               String    @default("portrait")
   framing                   String    @default("full_body")
   cameraAngle               String    @default("front")

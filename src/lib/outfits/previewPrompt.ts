@@ -1,8 +1,10 @@
 import type { CharacterLook } from './types';
 import type { CharacterPreviewSlot } from '@/lib/characters/types';
+import { compileVisibleLook } from '@/lib/looks/compiler';
+import { normalizeFraming } from '@/lib/looks/parts';
 export function buildLookPreviewPrompt(look: CharacterLook, slot: CharacterPreviewSlot) {
- const framing=slot==='portrait'?'head and shoulders portrait':slot==='upper_body'?'upper body, torso and arms':'complete full body, feet in frame';
- return ['Professional realistic studio photograph, single person, '+framing,'IDENTITY: '+look.identity,'OUTFIT: '+look.outfit,
- look.coversFace?'Keep the outfit helmet and face covering in place; only exposed facial areas are visible.':'Natural readable facial features.',
- 'Neutral seamless studio background, softbox lighting, natural materials.'].join('. ');
+ const visible=compileVisibleLook(look,normalizeFraming(slot));
+ return [visible.framingPrompt, 'Single person. Identity: '+visible.identity,
+ visible.outfit?'Visible outfit: '+visible.outfit:'',
+ 'Professional realistic studio photograph. Neutral seamless studio background, softbox lighting, natural materials.'].filter(Boolean).join('\n');
 }

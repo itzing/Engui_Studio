@@ -1,3 +1,4 @@
+import { LookCompositionError } from '@/lib/looks/compiler';
 import { NextRequest, NextResponse } from 'next/server';
 
 export class StudioSessionApiError extends Error {
@@ -57,7 +58,7 @@ export function studioSessionNoStoreJson(payload: unknown, init?: ResponseInit) 
 }
 
 export function handleStudioSessionApiError(error: unknown, message: string) {
-  if (error instanceof StudioSessionApiError) {
+  if (error instanceof StudioSessionApiError || error instanceof LookCompositionError) {
     return NextResponse.json({ success: false, error: error.message }, { status: error.status });
   }
 
