@@ -96,6 +96,8 @@ function parseCharacterSlot(value: unknown, index: number): CharacterSlot {
     label: asString(slot.label) || `Character ${String.fromCharCode(65 + index)}`,
     role: asString(slot.role),
     enabled: slot.enabled !== false,
+    outfitSelection: slot.outfitSelection && typeof slot.outfitSelection === 'object' ? slot.outfitSelection as CharacterSlot['outfitSelection'] : undefined,
+    lookSnapshot: slot.lookSnapshot && typeof slot.lookSnapshot === 'object' ? slot.lookSnapshot as CharacterSlot['lookSnapshot'] : undefined,
     presetRef: slot.presetRef && typeof slot.presetRef === 'object'
       ? {
         id: asString((slot.presetRef as Record<string, unknown>).id),

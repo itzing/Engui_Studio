@@ -1,4 +1,8 @@
 'use client';
+import ImageModelSelect, { useImageModelPreference } from '@/components/generation/ImageModelSelect';
+import OutfitSelect from '@/components/outfits/OutfitSelect';
+import { imageModelPolicy } from '@/lib/generation/imageModelPolicy';
+import { filterLorasForModel } from '@/lib/lora/modelFilters';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -27,6 +31,8 @@ type StudioRunLoraFile = {
   fileName: string;
   s3Path: string;
   fileSize?: string;
+  baseModel?: string;
+  targetOverride?: string | null;
 };
 
 type FStudioRoute =
@@ -41,7 +47,7 @@ type FStudioRoute =
 
 type RunDetail = { run?: StudioSessionRunSummary; shots?: StudioSessionShotSummary[]; revisions?: StudioSessionShotRevisionSummary[]; versions?: StudioSessionShotVersionSummary[] };
 type CollectionDetail = { collection: StudioCollectionSummary; items: StudioCollectionItemSummary[] } | null;
-type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
+type SessionBriefDraft = Pick<StudioPhotoSessionSummary, 'name' | 'settingText' | 'lightingText' | 'vibeText' | 'outfitText' | 'outfitMode' | 'outfitId' | 'hairstyleText' | 'negativePrompt' | 'notes'>;
 type FramingPolicyMode = 'default' | 'single' | 'orientation';
 
 const SESSION_BRIEF_FIELDS: Array<{ key: keyof SessionBriefDraft; label: string; multiline?: boolean; placeholder: string }> = [
@@ -49,7 +55,6 @@ const SESSION_BRIEF_FIELDS: Array<{ key: keyof SessionBriefDraft; label: string;
   { key: 'settingText', label: 'Setting', multiline: true, placeholder: 'Location, scene, background, props…' },
   { key: 'lightingText', label: 'Lighting', multiline: true, placeholder: 'Studio lighting, mood, contrast, key/fill/rim…' },
   { key: 'vibeText', label: 'Vibe', multiline: true, placeholder: 'Mood, energy, expression direction…' },
-  { key: 'outfitText', label: 'Outfit', multiline: true, placeholder: 'Wardrobe for this session…' },
   { key: 'hairstyleText', label: 'Hairstyle', multiline: true, placeholder: 'Hair styling for this session…' },
   { key: 'negativePrompt', label: 'Negative prompt', multiline: true, placeholder: 'Things to avoid for this session…' },
   { key: 'notes', label: 'Notes', multiline: true, placeholder: 'Internal notes…' },
@@ -206,9 +211,9 @@ function Sidebar({ route, portfolioId, sessionId, collapsed, hydrated, onToggle 
     { key: 'collections', label: 'Collections', icon: FolderOpen, href: portfolioId ? `/studio-sessions/portfolios/${portfolioId}/collections` : '#', visible: Boolean(portfolioId), active: route.level === 'collection' || (route.level === 'portfolio' && route.section === 'collections') },
   ];
   return (
-    <aside className={`${collapsed ? 'w-[76px]' : 'w-64'} shrink-0 border-r border-white/10 bg-[#101014] p-3 ${hydrated ? 'transition-all' : ''}`}>
-      <Button variant="outline" onClick={onToggle} className="mb-4 h-10 w-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">{collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="mr-2 h-4 w-4" /> Collapse</>}</Button>
-      <nav className="space-y-2">
+    <aside className={`${collapsed ? 'md:w-[76px]' : 'md:w-64'} w-full shrink-0 border-r border-white/10 bg-[#101014] p-3 ${hydrated ? 'transition-all' : ''}`}>
+      <Button variant="outline" onClick={onToggle} className="mb-4 hidden md:flex h-10 w-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">{collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="mr-2 h-4 w-4" /> Collapse</>}</Button>
+      <nav className="flex gap-2 overflow-x-auto md:block md:space-y-2">
         {items.filter((item) => item.visible).map((item) => {
           const Icon = item.icon;
           return <Link key={item.key} href={item.href} className={`flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition ${item.active ? 'bg-blue-500/15 text-blue-100' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'}`}><Icon className="h-4 w-4 shrink-0" />{collapsed ? null : <span>{item.label}</span>}</Link>;
@@ -225,13 +230,15 @@ function createSessionBriefDraft(session: StudioPhotoSessionSummary): SessionBri
     lightingText: session.lightingText || '',
     vibeText: session.vibeText || '',
     outfitText: session.outfitText || '',
+    outfitMode: session.outfitMode || (session.outfitText ? 'custom' : 'default'),
+    outfitId: session.outfitId || null,
     hairstyleText: session.hairstyleText || '',
     negativePrompt: session.negativePrompt || '',
     notes: session.notes || '',
   };
 }
 
-function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPhotoSessionSummary | null; onSave: (sessionId: string, draft: SessionBriefDraft) => Promise<void>; onOpenRuns: () => void }) {
+function SessionBriefEditor({ session, characterId, onSave, onOpenRuns }: { characterId: string | null; session: StudioPhotoSessionSummary | null; onSave: (sessionId: string, draft: SessionBriefDraft) => Promise<void>; onOpenRuns: () => void }) {
   const [draft, setDraft] = useState<SessionBriefDraft | null>(session ? createSessionBriefDraft(session) : null);
   const [saving, setSaving] = useState(false);
 
@@ -263,7 +270,7 @@ function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPh
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xl font-semibold">Session brief</div>
-            <div className="mt-1 text-sm text-white/45">Editable until dedicated libraries/pickers are added for these fields.</div>
+            <div className="mt-1 text-sm text-white/45">New runs snapshot this brief and the selected character outfit.</div>
           </div>
           <Button type="button" onClick={() => void save()} disabled={!dirty || saving} className="bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">
             {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
@@ -271,12 +278,13 @@ function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPh
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
+          <OutfitSelect characterId={characterId} value={{mode: draft.outfitMode as any, outfitId:draft.outfitId, customText:draft.outfitText}} onChange={look=>setDraft(current=>current?{...current,outfitMode:look.mode,outfitId:look.outfitId||null,outfitText:look.customText||''}:current)}/>
           {SESSION_BRIEF_FIELDS.map((field) => (
             <label key={field.key} className={`${field.key === 'notes' || field.key === 'negativePrompt' ? 'md:col-span-2' : ''} block rounded-2xl border border-white/10 bg-black/20 p-4`}>
               <div className="text-xs uppercase tracking-[0.16em] text-white/35">{field.label}</div>
               {field.multiline ? (
                 <textarea
-                  value={draft[field.key]}
+                  value={draft[field.key] || ''}
                   onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
                   placeholder={field.placeholder}
                   rows={field.key === 'notes' || field.key === 'negativePrompt' ? 4 : 3}
@@ -284,7 +292,7 @@ function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPh
                 />
               ) : (
                 <Input
-                  value={draft[field.key]}
+                  value={draft[field.key] || ''}
                   onChange={(event) => setDraft((current) => current ? { ...current, [field.key]: event.target.value } : current)}
                   placeholder={field.placeholder}
                   className="mt-2 border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 focus:border-blue-400/60"
@@ -304,7 +312,7 @@ function SessionBriefEditor({ session, onSave, onOpenRuns }: { session: StudioPh
 
 function Header({ breadcrumbs, jobsPanelOpen, activeJobsCount, onToggleJobsPanel, onOpenCharacterManager }: { breadcrumbs: Array<{ label: string; href?: string }>; jobsPanelOpen: boolean; activeJobsCount: number; onToggleJobsPanel: () => void; onOpenCharacterManager: () => void }) {
   return (
-    <header className="border-b border-white/10 bg-[#0f0f11]/95 px-8 py-5">
+    <header className="border-b border-white/10 bg-[#0f0f11]/95 px-4 sm:px-8 py-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-3xl font-semibold tracking-tight text-white">F-Studio</div>
@@ -361,6 +369,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   const [newName, setNewName] = useState('');
   const [selectedPoseSetId, setSelectedPoseSetId] = useState('');
   const [newRunCount, setNewRunCount] = useState(5);
+  const [newRunModel,setNewRunModel] = useImageModelPreference();
   const [framingPolicyMode, setFramingPolicyMode] = useState<FramingPolicyMode>('default');
   const [fallbackFramingPresetId, setFallbackFramingPresetId] = useState('');
   const [framingPresetByOrientation, setFramingPresetByOrientation] = useState<Record<StudioSessionPoseOrientation, string>>({ portrait: '', landscape: '', square: '' });
@@ -505,7 +514,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (!portfolioId || !sessionId || !selectedPoseSetId) return;
     const pose = poseSets.find((item) => item.id === selectedPoseSetId);
     const framingPolicy = buildRunFramingPolicy();
-    const response = await fetch(`/api/studio/sessions/${sessionId}/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName || pose?.name || 'New run', poseSetId: selectedPoseSetId, count: newRunCount, generationSettings: { framingPolicy } }) });
+    const response = await fetch(`/api/studio/sessions/${sessionId}/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName || pose?.name || 'New run', poseSetId: selectedPoseSetId, count: newRunCount, generationSettings: { framingPolicy, ...imageModelPolicy(newRunModel) } }) });
     const data = await response.json();
     if (data?.success) router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${data.run.id}`); else setError(data?.error || 'Failed to create run');
   }
@@ -578,7 +587,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
     if (route.level === 'portfolios') return <TileGrid><AddTile label="New portfolio" onClick={() => setShowCreatePortfolio(true)} />{portfolios.map((portfolio) => <PortfolioTile key={portfolio.id} portfolio={portfolio} confirming={confirmingDeletePortfolioId === portfolio.id} deleting={deletingPortfolioId === portfolio.id} onDeleteClick={() => setConfirmingDeletePortfolioId(portfolio.id)} onConfirmDelete={() => void deletePortfolio(portfolio.id)} />)}{portfolios.length === 0 ? <EmptyTile title="No portfolios yet" description="Create the first character portfolio to start building sessions and collections." /> : null}</TileGrid>;
     if (route.level === 'portfolio' && route.section === 'collections') return <TileGrid><AddTile label="New collection" onClick={() => { setNewName(''); setShowCreateCollection(true); }} />{collections.map((collection) => <SimpleTile key={collection.id} title={collection.name} subtitle={`${collection.itemCount} photos`} href={`/studio-sessions/portfolios/${portfolioId}/collections/${collection.id}`} icon={<Image className="h-5 w-5" />} />)}{collections.length === 0 ? <EmptyTile title="No collections yet" description="Create a collection, then add reviewed run images into a final set." /> : null}</TileGrid>;
     if (route.level === 'portfolio') return <TileGrid><AddTile label="New session" onClick={() => { setNewName(''); setShowCreateSession(true); }} />{sessions.map((session) => <SessionTile key={session.id} session={session} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${session.id}`} confirming={confirmingDeleteSessionId === session.id} deleting={deletingSessionId === session.id} onDeleteClick={() => setConfirmingDeleteSessionId(session.id)} onConfirmDelete={() => void deleteSession(session.id)} />)}{sessions.length === 0 ? <EmptyTile title="No sessions yet" description="Create a photo session to define setting, vibe, outfit, and runs." /> : null}</TileGrid>;
-    if (route.level === 'session') return <SessionBriefEditor session={selectedSession} onSave={saveSessionBrief} onOpenRuns={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} />;
+    if (route.level === 'session') return <SessionBriefEditor characterId={selectedPortfolio?.characterId || null} session={selectedSession} onSave={saveSessionBrief} onOpenRuns={() => router.push(`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs`)} />;
     if (route.level === 'runs') return <TileGrid><AddTile label="New run" onClick={() => { setNewName(''); setSelectedPoseSetId(poseSets[0]?.id || ''); setNewRunCount(5); setFramingPolicyMode('default'); setFallbackFramingPresetId(''); setFramingPresetByOrientation({ portrait: '', landscape: '', square: '' }); setShowCreateRun(true); }} />{runs.map((run) => <RunTile key={run.id} run={run} href={`/studio-sessions/portfolios/${portfolioId}/sessions/${sessionId}/runs/${run.id}`} confirming={confirmingDeleteRunId === run.id} deleting={deletingRunId === run.id} onDeleteClick={() => setConfirmingDeleteRunId(run.id)} onConfirmDelete={() => void deleteRun(run.id)} />)}{runs.length === 0 ? <EmptyTile title="No runs yet" description="Create a run by choosing exactly one pose set for this session." /> : null}</TileGrid>;
     if (route.level === 'run') return <RunWorkspace detail={runDetail} framingPresets={framingPresets} />;
     if (route.level === 'collection') return <CollectionWorkspace detail={collectionDetail} portfolioId={portfolioId} onCoverSet={() => { refreshPortfolios(); if (portfolioId) refreshPortfolioDetail(portfolioId); }} />;
@@ -586,16 +595,16 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0b0b0d] text-white">
+    <div className="flex flex-col md:flex-row min-h-screen overflow-x-clip bg-[#0b0b0d] text-white">
       <Sidebar route={route} portfolioId={portfolioId} sessionId={sessionId} collapsed={collapsed} hydrated={sidebarHydrated} onToggle={toggleCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header breadcrumbs={breadcrumbs} jobsPanelOpen={jobsPanelOpen} activeJobsCount={activeJobsCount} onToggleJobsPanel={toggleJobsPanel} onOpenCharacterManager={() => setShowCharacterManager(true)} />
-        <main className="min-w-0 flex-1 overflow-auto p-8">
+        <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-8">
           {error ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div> : null}
           {renderCanvas()}
         </main>
       </div>
-      <div className={`fixed inset-y-0 right-0 z-40 flex transition-transform duration-300 ease-out ${jobsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 z-40 flex transition-transform duration-300 ease-out ${jobsPanelOpen ? 'translate-x-0' : 'invisible pointer-events-none translate-x-full'}`}>
         <div className="relative h-full w-[340px] max-w-[88vw] border-l border-white/10 bg-[#101014] shadow-2xl shadow-black/50">
           {jobsPanelOpen ? (
             <Button type="button" variant="outline" size="sm" onClick={toggleJobsPanel} className="absolute right-full top-5 mr-3 border-white/10 bg-[#101014] text-white hover:bg-white/[0.08]">
@@ -620,7 +629,7 @@ export default function FStudioPageClient({ route }: { route: FStudioRoute }) {
       <CharacterSelectModal open={showCreatePortfolio} characters={characters} loading={false} selectedCharacterId={null} onOpenChange={setShowCreatePortfolio} onSelect={createPortfolio} />
       <NameDialog open={showCreateSession} title="New session" value={newName} onChange={setNewName} onOpenChange={setShowCreateSession} onSubmit={createSession} />
       <NameDialog open={showCreateCollection} title="New collection" value={newName} onChange={setNewName} onOpenChange={setShowCreateCollection} onSubmit={createCollection} />
-      <Dialog open={showCreateRun} onOpenChange={setShowCreateRun}><DialogContent className="max-w-3xl border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>New run</DialogTitle><DialogDescription className="text-white/50">Choose one pose set, shot count, and the run-level framing policy.</DialogDescription></DialogHeader><Input value={newName} onChange={(event) => setNewName(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Run name" /><select value={selectedPoseSetId} onChange={(event) => setSelectedPoseSetId(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">{poseSets.map((poseSet) => <option key={poseSet.id} value={poseSet.id}>{poseSet.name}</option>)}</select><label className="space-y-1 text-sm text-white/60"><span>Shot count</span><Input type="number" min={1} max={50} value={newRunCount} onChange={(event) => setNewRunCount(Math.max(1, Math.min(50, Number(event.target.value) || 1)))} className="border-white/10 bg-black/30 text-white" /></label><RunFramingPolicySelector mode={framingPolicyMode} onModeChange={setFramingPolicyMode} presets={framingPresets} fallbackPresetId={fallbackFramingPresetId} onFallbackChange={setFallbackFramingPresetId} byOrientation={framingPresetByOrientation} onOrientationPresetChange={(orientation, presetId) => setFramingPresetByOrientation((current) => ({ ...current, [orientation]: presetId }))} /><Button onClick={createRun} disabled={!selectedPoseSetId || (framingPolicyMode === 'single' && !fallbackFramingPresetId)} className="bg-blue-500 text-white hover:bg-blue-400">Create run</Button></DialogContent></Dialog>
+      <Dialog open={showCreateRun} onOpenChange={setShowCreateRun}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto border-white/10 bg-[#101014] text-white"><DialogHeader><DialogTitle>New run</DialogTitle><DialogDescription className="text-white/50">Choose one pose set, shot count, and the run-level framing policy.</DialogDescription></DialogHeader><Input value={newName} onChange={(event) => setNewName(event.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Run name" /><ImageModelSelect value={newRunModel} onChange={setNewRunModel}/><select value={selectedPoseSetId} onChange={(event) => setSelectedPoseSetId(event.target.value)} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white">{poseSets.map((poseSet) => <option key={poseSet.id} value={poseSet.id}>{poseSet.name}</option>)}</select><label className="space-y-1 text-sm text-white/60"><span>Shot count</span><Input type="number" min={1} max={50} value={newRunCount} onChange={(event) => setNewRunCount(Math.max(1, Math.min(50, Number(event.target.value) || 1)))} className="border-white/10 bg-black/30 text-white" /></label><RunFramingPolicySelector mode={framingPolicyMode} onModeChange={setFramingPolicyMode} presets={framingPresets} fallbackPresetId={fallbackFramingPresetId} onFallbackChange={setFallbackFramingPresetId} byOrientation={framingPresetByOrientation} onOrientationPresetChange={(orientation, presetId) => setFramingPresetByOrientation((current) => ({ ...current, [orientation]: presetId }))} /><Button onClick={createRun} disabled={!selectedPoseSetId || (framingPolicyMode === 'single' && !fallbackFramingPresetId)} className="bg-blue-500 text-white hover:bg-blue-400">Create run</Button></DialogContent></Dialog>
     </div>
   );
 }
@@ -663,6 +672,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const [runOverride, setRunOverride] = useState<StudioSessionRunSummary | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [controlStrengthDraft, setControlStrengthDraft] = useState('1');
+  const [modelDraft,setModelDraft] = useState('z-image');
   const [loraSettingsDraft, setLoraSettingsDraft] = useState<Record<string, unknown>>({});
   const [availableLoras, setAvailableLoras] = useState<StudioRunLoraFile[]>([]);
   const [isLoadingLoras, setIsLoadingLoras] = useState(false);
@@ -690,6 +700,8 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
 
   const run = runOverride ?? detail?.run ?? null;
   const runSettings = run?.runSettings || {};
+  useEffect(()=>{setModelDraft(String(runSettings.modelId || 'z-image'));},[run?.id,runSettings.modelId]);
+  const compatibleLoras = filterLorasForModel(availableLoras,modelDraft);
   const snapshot = run?.templateSnapshot as Record<string, any> | undefined;
   const poseSetName = typeof snapshot?.poseSetName === 'string' && snapshot.poseSetName.trim() ? snapshot.poseSetName : run?.poseSetId;
   const currentControlStrength = typeof runSettings.controlnet_strength === 'number' ? runSettings.controlnet_strength : 1;
@@ -876,10 +888,11 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
   const saveRunSettings = async () => {
     if (!run) return;
     const parsed = Number(controlStrengthDraft);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
+    if (modelDraft === 'z-image' && (!Number.isFinite(parsed) || parsed < 0 || parsed > 2)) {
       setSettingsError('ControlNet strength must be between 0 and 2.');
       return;
     }
+    if(selectedLoraSlots.some(slot=>!compatibleLoras.some(l=>l.s3Path===slot.path))){setSettingsError('Clear incompatible or unavailable LoRAs before saving this model.');return;}
     const invalidLoraSlot = selectedLoraSlots.find((slot) => slot.weightError);
     if (invalidLoraSlot?.weightError) {
       setSettingsError(invalidLoraSlot.weightError);
@@ -891,7 +904,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       const response = await fetch(`/api/studio/runs/${encodeURIComponent(run.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generationSettings: { ...runSettings, ...loraSettingsDraft, controlnet_strength: parsed } }),
+        body: JSON.stringify({ generationSettings: { ...runSettings, ...loraSettingsDraft, modelId: modelDraft, steps: modelDraft !== runSettings.modelId ? imageModelPolicy(modelDraft).steps : runSettings.steps, use_controlnet: modelDraft === 'z-image', controlnet_strength: modelDraft === 'z-image' ? parsed : null } }),
       });
       const data = await response.json();
       if (!response.ok || !data?.success) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to save run settings');
@@ -1022,16 +1035,16 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
       </div>;
     })}{shots.length === 0 ? <EmptyTile title="No draft shots yet" description="Create a run with shot slots before launching." /> : null}</TileGrid>
 
-    <div className={`fixed inset-y-0 right-0 z-50 flex transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+    <div className={`fixed inset-y-0 right-0 z-50 flex transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'invisible pointer-events-none translate-x-full'}`}>
       <div className="h-full w-[420px] max-w-[92vw] overflow-y-auto border-l border-white/10 bg-[#101014] p-5 shadow-2xl shadow-black/60">
         <div className="mb-5 flex items-start justify-between gap-3"><div><div className="text-lg font-semibold text-white">Run settings</div><div className="mt-1 text-xs text-white/45">Settings affect the next launch. Active jobs are not changed.</div></div><Button type="button" variant="outline" size="sm" onClick={() => setSettingsOpen(false)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">Close</Button></div>
-        <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><Info label="Model" value={typeof runSettings.modelId === 'string' ? runSettings.modelId : 'z-image'} />
+        <div className="space-y-3"><Info label="Pose set / category" value={poseSetName || 'Not set'} /><ImageModelSelect value={modelDraft} onChange={value=>{setModelDraft(value);setSettingsError('Model changed. Review selected LoRAs for compatibility before saving.');}}/>
           <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
             <div className="flex items-center justify-between gap-3"><div><div className="text-xs uppercase tracking-[0.16em] text-white/35">LoRAs</div><div className="mt-1 text-xs text-white/40">Selected LoRAs are used on the next launch.</div></div><div className="text-xs text-white/35">{selectedLoraSlots.length}/8</div></div>
             {selectedLoraSlots.length > 0 ? <div className="space-y-2">{selectedLoraSlots.map((slot) => <div key={slot.slotName} className="rounded-xl border border-white/10 bg-white/[0.035] p-3"><div className="mb-2 flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-medium text-white/85">{slot.matchedLoRA?.fileName || slot.path.split('/').pop() || slot.path}</div><div className="mt-1 text-xs text-white/40">Weight {slot.weight.toFixed(2)}</div></div><Button type="button" variant="outline" size="sm" onClick={() => { updateLoraDraft(slot.slotName, ''); updateLoraDraft(slot.weightName, 1); }} className="h-7 border-white/10 bg-white/[0.04] px-2 text-xs text-white/65 hover:bg-white/[0.08]">Clear</Button></div><div className="space-y-1"><div className="flex items-center gap-2"><Input type="text" inputMode="decimal" value={String(loraSettingsDraft[slot.weightName] ?? slot.rawWeight)} onChange={(event) => updateLoraDraft(slot.weightName, event.target.value)} className={`h-8 w-24 border-white/10 bg-black/30 text-sm text-white ${slot.weightError ? 'border-red-500/60 focus-visible:ring-red-500/50' : ''}`} /><span className="text-xs text-white/35">weight</span></div>{slot.weightError ? <div className="text-xs text-red-300">{slot.weightError}</div> : <div className="text-xs text-white/35">Range -10 to 10</div>}</div></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 px-4 py-5 text-sm text-white/40">No LoRAs selected yet.</div>}
             {nextEmptyLoraSlot ? <Button type="button" variant="outline" onClick={() => setShowRunLoraSelector(true)} className="w-full border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]"><Plus className="mr-2 h-4 w-4" />Add LoRA</Button> : null}
           </div>
-          <label className="block rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65"><span className="text-xs uppercase tracking-[0.16em] text-white/35">ControlNet strength</span><Input type="number" min={0} max={2} step={0.05} value={controlStrengthDraft} onChange={(event) => setControlStrengthDraft(event.target.value)} className="mt-3 border-white/10 bg-black/30 text-white" /><span className="mt-2 block text-xs text-white/40">Used when a framing/OpenPose control image is attached. Default is 1.</span></label>
+          {modelDraft === 'z-image' && <label className="block rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65"><span className="text-xs uppercase tracking-[0.16em] text-white/35">ControlNet strength</span><Input type="number" min={0} max={2} step={0.05} value={controlStrengthDraft} onChange={(event) => setControlStrengthDraft(event.target.value)} className="mt-3 border-white/10 bg-black/30 text-white" /><span className="mt-2 block text-xs text-white/40">Used when a framing/OpenPose control image is attached. Default is 1.</span></label>}
           {settingsError ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">{settingsError}</div> : null}
           <Button type="button" onClick={() => void saveRunSettings()} disabled={!run || savingSettings} className="w-full bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</Button>
         </div>
@@ -1039,7 +1052,7 @@ function RunWorkspace({ detail, framingPresets }: { detail: RunDetail | null; fr
     </div>
 
     <Dialog open={showRunLoraSelector} onOpenChange={setShowRunLoraSelector}>
-      <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#101014] p-0 text-white"><DialogHeader className="border-b border-white/10 px-6 py-4"><DialogTitle>Select LoRA</DialogTitle></DialogHeader><div className="max-h-[65vh] overflow-y-auto px-6 py-4"><div className="space-y-2">{isLoadingLoras ? <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/45">Loading LoRAs…</div> : loraLoadError ? <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100"><div>{loraLoadError}</div><Button type="button" variant="outline" size="sm" onClick={() => { setAvailableLoras([]); setLoraLoadError(null); setShowRunLoraSelector(false); window.setTimeout(() => setShowRunLoraSelector(true), 0); }} className="border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]">Retry</Button></div> : availableLoras.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">No LoRAs installed yet.</div> : availableLoras.map((lora) => <button key={lora.id} type="button" className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-left hover:border-blue-400/40 hover:bg-blue-500/10" onClick={() => { if (!nextEmptyLoraSlot) return; updateLoraDraft(nextEmptyLoraSlot, lora.s3Path); updateLoraDraft(loraWeightName(nextEmptyLoraSlot), 1); setShowRunLoraSelector(false); }}><div className="min-w-0 pr-3"><div className="truncate text-sm font-medium text-white/85">{lora.fileName}</div><div className="mt-1 truncate text-xs text-white/40">{lora.fileSize}</div></div><Plus className="h-4 w-4 shrink-0 text-white/45" /></button>)}</div></div></DialogContent>
+      <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden border-white/10 bg-[#101014] p-0 text-white"><DialogHeader className="border-b border-white/10 px-6 py-4"><DialogTitle>Select LoRA</DialogTitle></DialogHeader><div className="max-h-[65vh] overflow-y-auto px-6 py-4"><div className="space-y-2">{isLoadingLoras ? <div className="rounded-lg border border-white/10 px-4 py-6 text-sm text-white/45">Loading LoRAs…</div> : loraLoadError ? <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100"><div>{loraLoadError}</div><Button type="button" variant="outline" size="sm" onClick={() => { setAvailableLoras([]); setLoraLoadError(null); setShowRunLoraSelector(false); window.setTimeout(() => setShowRunLoraSelector(true), 0); }} className="border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]">Retry</Button></div> : compatibleLoras.length === 0 ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">No compatible LoRAs for this model.</div> : compatibleLoras.map((lora) => <button key={lora.id} type="button" className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-left hover:border-blue-400/40 hover:bg-blue-500/10" onClick={() => { if (!nextEmptyLoraSlot) return; updateLoraDraft(nextEmptyLoraSlot, lora.s3Path); updateLoraDraft(loraWeightName(nextEmptyLoraSlot), 1); setShowRunLoraSelector(false); }}><div className="min-w-0 pr-3"><div className="truncate text-sm font-medium text-white/85">{lora.fileName}</div><div className="mt-1 truncate text-xs text-white/40">{lora.fileSize}</div></div><Plus className="h-4 w-4 shrink-0 text-white/45" /></button>)}</div></div></DialogContent>
     </Dialog>
 
     <GalleryFullscreenViewer open={viewerOpen} items={viewerItems} currentIndex={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerOpen(false)} />

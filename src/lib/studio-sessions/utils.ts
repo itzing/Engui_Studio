@@ -159,6 +159,8 @@ type PersistedPhotoSessionRecord = {
   lightingText: string;
   vibeText: string;
   outfitText: string;
+  outfitMode?: string;
+  outfitId?: string | null;
   hairstyleText: string;
   negativePrompt: string;
   notes: string;
@@ -499,6 +501,8 @@ export function toStudioPhotoSessionSummary(record: PersistedPhotoSessionRecord)
     lightingText: record.lightingText,
     vibeText: record.vibeText,
     outfitText: record.outfitText,
+    outfitMode: record.outfitMode || (record.outfitText ? 'custom' : 'default'),
+    outfitId: record.outfitId || null,
     hairstyleText: record.hairstyleText,
     negativePrompt: record.negativePrompt,
     notes: record.notes,

@@ -1,3 +1,8 @@
+import { filterLorasForModel } from '@/lib/lora/modelFilters';
+import { canonicalLoraKey } from '@/lib/workspaces/loraAccess';
+import { WorkspaceError } from '@/lib/workspaces/context';
+import { resolveCharacterLook, readOutfitSelection } from '@/lib/outfits/server';
+import { imageModelPolicy } from '@/lib/generation/imageModelPolicy';
 import { prisma } from '@/lib/prisma';
 import { getStudioSessionPoseLibrary } from './poseLibrary';
 import { buildStudioRunShotSlotsFromPoseSet, getStudioPoseSetById } from './poseSets';
@@ -40,15 +45,25 @@ function readCount(value: unknown, fallback = 5): number {
 
 function readGenerationSettings(value: unknown): StudioSessionGenerationSettingsSnapshot {
   const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const policy = imageModelPolicy(input.modelId || 'z-image');
   return {
-    modelId: typeof input.modelId === 'string' && input.modelId.trim() ? input.modelId.trim() : 'z-image',
-    steps: typeof input.steps === 'number' ? Math.max(1, Math.floor(input.steps)) : 9,
-    cfg: typeof input.cfg === 'number' ? input.cfg : 1,
-    seed: typeof input.seed === 'number' ? Math.floor(input.seed) : -1,
-    sampler: null,
-    cfgScale: null,
     ...input,
+    modelId: policy.modelId,
+    steps: typeof input.steps === 'number' && Number.isFinite(input.steps) ? Math.max(1, Math.floor(input.steps)) : policy.steps,
+    cfg: typeof input.cfg === 'number' && Number.isFinite(input.cfg) ? input.cfg : 1,
+    seed: typeof input.seed === 'number' && Number.isFinite(input.seed) ? Math.floor(input.seed) : -1,
+    sampler: null, cfgScale: null,
+    ...(policy.modelId === 'krea2-turbo' ? { use_controlnet: false, controlnet_strength: null } : {}),
   };
+}
+
+async function validateRunLoras(settings: StudioSessionGenerationSettingsSnapshot) {
+  for (const [key,value] of Object.entries(settings)) {
+    if (!/^lora([2-8])?$/.test(key) || typeof value !== 'string' || !value.trim()) continue;
+    const sourceKey = canonicalLoraKey(value);
+    const lora = await prisma.loRA.findFirst({where:{sourceKey,lifecycle:'active'}});
+    if(!lora || !filterLorasForModel([lora],String(settings.modelId)).length) throw new WorkspaceError('A selected LoRA is unavailable or incompatible with this model.',400);
+  }
 }
 
 function readResolutionPolicy(value: unknown): StudioSessionResolutionPolicy {
@@ -183,8 +198,11 @@ export async function listStudioPhotoSessions(input: { portfolioId: string; stat
 }
 
 export async function createStudioPhotoSession(portfolioId: string, input: Record<string, unknown>) {
-  const portfolio = await prisma.studioPortfolio.findUnique({ where: { id: portfolioId }, select: { id: true, workspaceId: true } });
+  const portfolio = await prisma.studioPortfolio.findUnique({ where: { id: portfolioId }, select: { id: true, workspaceId: true, characterId: true } });
   if (!portfolio) return null;
+  const selection = readOutfitSelection({ mode: input.outfitMode || (input.outfitText ? 'custom' : 'default'), outfitId: input.outfitId, customText: input.outfitText });
+  if (selection.mode === 'neutral') throw new Error('Neutral anatomy is a preview mode only.');
+  await resolveCharacterLook(portfolio.characterId, selection);
   const name = readOptionalString(input.name);
   const session = await prisma.studioPhotoSession.create({
     data: {
@@ -194,6 +212,7 @@ export async function createStudioPhotoSession(portfolioId: string, input: Recor
       settingText: readOptionalString(input.settingText) ?? '',
       lightingText: readOptionalString(input.lightingText) ?? '',
       vibeText: readOptionalString(input.vibeText) ?? '',
+      outfitMode: selection.mode, outfitId: selection.outfitId,
       outfitText: readOptionalString(input.outfitText) ?? '',
       hairstyleText: readOptionalString(input.hairstyleText) ?? '',
       negativePrompt: readOptionalString(input.negativePrompt) ?? '',
@@ -219,9 +238,12 @@ export async function getStudioPhotoSession(sessionId: string) {
 }
 
 export async function updateStudioPhotoSession(sessionId: string, input: Record<string, unknown>) {
-  const existing = await prisma.studioPhotoSession.findUnique({ where: { id: sessionId }, select: { id: true } });
+  const existing = await prisma.studioPhotoSession.findUnique({ where: { id: sessionId }, include: { portfolio: true } });
   if (!existing) return null;
-  const data: Record<string, string> = {};
+  const selection = readOutfitSelection({ mode: input.outfitMode ?? existing.outfitMode, outfitId: input.outfitId ?? existing.outfitId, customText: input.outfitText ?? existing.outfitText });
+  if (selection.mode === 'neutral') throw new Error('Neutral anatomy is a preview mode only.');
+  await resolveCharacterLook(existing.portfolio.characterId, selection);
+  const data: Record<string, any> = { outfitMode: selection.mode, outfitId: selection.outfitId };
   for (const key of ['name', 'settingText', 'lightingText', 'vibeText', 'outfitText', 'hairstyleText', 'negativePrompt', 'notes']) {
     if (input[key] !== undefined) data[key] = readOptionalString(input[key]) ?? '';
   }
@@ -255,7 +277,9 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
   });
   if (!session) return { error: 'Session not found' as const };
 
+  const look = await resolveCharacterLook(session.portfolio.characterId, { mode: session.outfitMode as any, outfitId: session.outfitId, customText: session.outfitText });
   const draft = readRunSettingsDraft(input);
+  await validateRunLoras(draft.generationSettings);
   if (!draft.poseSetId) return { error: 'poseSetId is required' as const };
   const poseSet = await getStudioPoseSetById(session.workspaceId, draft.poseSetId);
   if (!poseSet) return { error: 'Pose set not found' as const };
@@ -277,7 +301,7 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
     characterId: session.portfolio.characterId,
     characterAge: '',
     environmentText: session.settingText,
-    outfitText: session.outfitText,
+    outfitText: look.outfit,
     hairstyleText: session.hairstyleText,
     positivePrompt: draft.positivePromptOverride,
     negativePrompt: [session.negativePrompt, draft.negativePromptOverride].filter(Boolean).join(', '),
@@ -303,7 +327,8 @@ export async function createStudioPhotoSessionRun(photoSessionId: string, input:
         templateNameSnapshot: '',
         templateSnapshotJson: JSON.stringify({
           ...canonicalState,
-          characterPrompt: '',
+          characterPrompt: look.identity,
+          characterLookSnapshot: look,
           portfolioId: session.portfolioId,
           photoSessionId: session.id,
           poseSetId: poseSet.id,
@@ -354,6 +379,7 @@ export async function updateStudioRun(runId: string, input: Record<string, unkno
     generationSettings: input.generationSettings ?? JSON.parse(run.runSettingsJson || '{}'),
     resolutionPolicy: input.resolutionPolicy ?? JSON.parse(run.resolutionPolicyJson || '{}'),
   });
+  await validateRunLoras(draft.generationSettings);
   if (draft.poseSetId && !await getStudioPoseSetById(run.workspaceId, draft.poseSetId)) return { error: 'Pose set not found' as const };
 
   const updated = await prisma.studioSessionRun.update({

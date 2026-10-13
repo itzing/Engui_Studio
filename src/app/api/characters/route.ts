@@ -24,6 +24,7 @@ async function GETImpl(request: NextRequest) {
       where: includeDeleted ? {} : { deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       include: {
+        defaultOutfit: true,
         _count: {
           select: {
             versions: true,
@@ -95,6 +96,7 @@ async function POSTImpl(request: NextRequest) {
         where: { id: character.id },
         data: { currentVersionId: version.id },
         include: {
+          defaultOutfit: true,
           _count: {
             select: {
               versions: true,

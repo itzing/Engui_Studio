@@ -65,6 +65,7 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
           previewStatusSummary,
         },
         include: {
+          defaultOutfit: true,
           _count: {
             select: {
               versions: true,
@@ -115,6 +116,7 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
           currentVersionId: version.id,
         },
         include: {
+          defaultOutfit: true,
           _count: {
             select: {
               versions: true,
@@ -144,6 +146,7 @@ async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: 
     const existing = await prisma.character.findUnique({
       where: { id },
       include: {
+        defaultOutfit: true,
         _count: {
           select: {
             versions: true,
@@ -167,6 +170,7 @@ async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: 
           deletedAt: new Date(),
         },
         include: {
+          defaultOutfit: true,
           _count: {
             select: {
               versions: true,
@@ -189,6 +193,7 @@ async function PATCHImpl(request: NextRequest, context: { params: Promise<{ id: 
           deletedAt: null,
         },
         include: {
+          defaultOutfit: true,
           _count: {
             select: {
               versions: true,

@@ -195,6 +195,8 @@ export interface StudioPhotoSessionSummary {
   lightingText: string;
   vibeText: string;
   outfitText: string;
+  outfitMode?: string;
+  outfitId?: string | null;
   hairstyleText: string;
   negativePrompt: string;
   notes: string;

@@ -202,6 +202,16 @@ export const characterPreviewMaterializationHandler = {
       throw new Error('Character preview materialization requires a valid slot');
     }
 
+    if (typeof payload.lookPreviewId === 'string') {
+      const variant = await prisma.characterLookPreview.findFirst({ where: { id: payload.lookPreviewId, characterId: task.targetId, jobId: job.id } });
+      if (!variant) return;
+      const url = buildJobOutputUrls(job)[0];
+      if (!url) throw new Error('Completed preview has no output URL');
+      const imageUrl = await materializeLocalOutput(url, task.targetId, slot);
+      const thumbnailUrl = job.thumbnailUrl ? await materializeLocalOutput(job.thumbnailUrl, task.targetId, slot, 'thumbnail') : imageUrl;
+      await prisma.characterLookPreview.update({ where: { id: variant.id }, data: { status: 'ready', imageUrl, thumbnailUrl, error: null } });
+      if (!payload.updateDefaultCover) return;
+    }
     const loaded = await loadCharacterPreviewState(task.targetId);
     if (!loaded) {
       return;
@@ -245,6 +255,10 @@ export const characterPreviewMaterializationHandler = {
       return;
     }
 
+    if (typeof payload.lookPreviewId === 'string') {
+      await prisma.characterLookPreview.updateMany({ where: { id: payload.lookPreviewId, characterId: task.targetId, jobId: job.id }, data: { status: 'failed', error: sourceError } });
+      if (!payload.updateDefaultCover) return;
+    }
     const loaded = await loadCharacterPreviewState(task.targetId);
     if (!loaded) {
       return;

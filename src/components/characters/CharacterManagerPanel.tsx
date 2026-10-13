@@ -1,4 +1,8 @@
 'use client';
+import ImageModelSelect, { useImageModelPreference } from '@/components/generation/ImageModelSelect';
+import OutfitSelect from '@/components/outfits/OutfitSelect';
+import WardrobePanel from '@/components/outfits/WardrobePanel';
+import type { OutfitSelection } from '@/lib/outfits/types';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -466,6 +470,9 @@ type CharacterSortMode = 'updated_desc' | 'name_asc' | 'name_desc';
 
 export default function CharacterManagerPanel() {
   const fetch = useWorkspaceFetch();
+  const [previewModel, setPreviewModel] = useImageModelPreference();
+  const [previewLook,setPreviewLook] = useState<OutfitSelection>({mode:'default'});
+  const [wardrobeRefresh,setWardrobeRefresh] = useState(0);
   const { showToast } = useToast();
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [versions, setVersions] = useState<CharacterVersionSummary[]>([]);
@@ -508,6 +515,8 @@ export default function CharacterManagerPanel() {
   const [isTrashMutating, setIsTrashMutating] = useState(false);
   const characterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const extractFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(()=>{setPreviewLook({mode:'default'});},[selectedCharacterId]);
 
   const importPreview = useMemo(() => parseImportText(importText), [importText]);
   const effectiveImportName = importOverrideName.trim() || importPreview.name.trim();
@@ -1317,13 +1326,14 @@ export default function CharacterManagerPanel() {
       const response = await fetch(`/api/characters/${selectedCharacter.id}/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot }),
+        body: JSON.stringify({ slot, modelId: previewModel, look: previewLook }),
       });
       const data = await response.json();
       if (!response.ok || !data.success || !data.character) {
         throw new Error(data.error || 'Failed to start character preview generation');
       }
 
+      setWardrobeRefresh(n=>n+1);
       applyCharacterSummaryUpdate(data.character as CharacterSummary);
       const hadExistingPreview = !!selectedCharacter.previewState?.[slot]?.imageUrl;
       showToast(hadExistingPreview ? 'Character preview regeneration started' : 'Character preview generation started', 'success');
@@ -1338,7 +1348,7 @@ export default function CharacterManagerPanel() {
   const copyCharacterPrompt = async () => {
     if (!draft) return;
 
-    const prompt = buildCharacterPromptFromSummary({
+    let prompt = buildCharacterPromptFromSummary({
       id: draft.id || 'draft',
       name: draft.name,
       gender: normalizeCharacterGender(draft.gender, 'female') || 'female',
@@ -1355,6 +1365,10 @@ export default function CharacterManagerPanel() {
       versionCount: selectedCharacter?.versionCount,
     });
 
+    if (draft.id && !canSave) {
+      try { const response=await fetch(`/api/characters/${draft.id}/look`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(previewLook)}); const data=await response.json(); if(!response.ok||!data.success)throw new Error(data.error);prompt=[data.look.identity,data.look.outfit].filter(Boolean).join('. '); }
+      catch(e:any){showToast(e.message,'error');return;}
+    }
     if (!prompt.trim()) {
       showToast('No character prompt to copy', 'error');
       return;
@@ -1370,7 +1384,7 @@ export default function CharacterManagerPanel() {
   };
 
   return (
-    <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]"> 
+    <div className="grid min-h-0 gap-4 xl:h-full xl:grid-cols-[280px_minmax(0,1fr)_320px]">
       <aside className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
         <div className="border-b border-border px-4 py-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -1433,7 +1447,7 @@ export default function CharacterManagerPanel() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border/70">
+        <div className="min-h-0 max-h-64 xl:max-h-none flex-1 overflow-y-auto divide-y divide-border/70">
           {isLoading ? (
             <div className="px-4 py-6 text-xs text-muted-foreground">Loading characters...</div>
           ) : error ? (
@@ -1596,7 +1610,7 @@ export default function CharacterManagerPanel() {
         {!draft ? (
           <div className="px-4 py-8 text-xs text-muted-foreground">Select a character or create a new one.</div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="min-h-0 flex-1 xl:overflow-y-auto p-4 space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -1815,7 +1829,10 @@ export default function CharacterManagerPanel() {
         )}
       </main>
 
-      <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5">
+      <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5 xl:overflow-y-auto">
+        <ImageModelSelect value={previewModel} onChange={setPreviewModel} disabled={!!generatingPreviewSlot}/>
+        <OutfitSelect characterId={selectedCharacterId} value={previewLook} onChange={setPreviewLook} neutral refresh={wardrobeRefresh}/>
+        {selectedCharacterId && !selectedCharacter?.deletedAt && <WardrobePanel key={selectedCharacterId} refresh={wardrobeRefresh} characterId={selectedCharacterId} onChange={()=>setWardrobeRefresh(n=>n+1)}/>}
         {previewCards.map((card) => {
           const slotState = card.state;
           const isSubmitting = generatingPreviewSlot === card.slot;

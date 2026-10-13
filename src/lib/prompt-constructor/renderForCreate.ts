@@ -1,3 +1,4 @@
+import { composeCharacterLook } from '@/lib/outfits/compose';
 import type { CharacterSummary } from '@/lib/characters/types';
 import { normalizeCharacterGender } from '@/lib/characters/utils';
 import { buildCharacterPromptFromSummary } from '@/lib/scenes/utils';
@@ -5,7 +6,7 @@ import type { CharacterSlot, PromptDocument, SceneSnapshot, SceneTemplateState }
 import { buildRenderedPrompt, buildSceneSnapshot } from './utils';
 
 function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
-  return buildCharacterPromptFromSummary(character, { includeName: false, includeGender: false });
+  return character ? composeCharacterLook(character,{mode:'default'},character.defaultOutfit || null).identity : '';
 }
 
 function pickRandomCharacterForSlot(slot: CharacterSlot, characters: CharacterSummary[]): CharacterSummary | null {
@@ -36,6 +37,7 @@ function applyRandomCharacterToSlot(slot: CharacterSlot, character: CharacterSum
       randomCharacterId: character.id,
       randomCharacterName: character.name || '',
       randomCharacterAppearance: buildCharacterAppearanceFromManager(character),
+      outfit: composeCharacterLook(character,{mode:'default'},character.defaultOutfit || null).outfit,
     },
   };
 }

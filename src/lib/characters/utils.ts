@@ -31,6 +31,8 @@ export function normalizeCharacterGender(input: unknown, fallback: string | null
 }
 
 type PersistedCharacterRecord = {
+  defaultOutfitId?: string | null;
+  defaultOutfit?: any;
   id: string;
   name: string;
   gender: string | null;
@@ -222,6 +224,8 @@ export function toCharacterSummary(record: PersistedCharacterRecord): CharacterS
     name: record.name,
     gender: record.gender,
     traits: parseJsonObject<CharacterTraitMap>(record.traits),
+    defaultOutfitId: record.defaultOutfitId || null,
+    defaultOutfit: record.defaultOutfit ? {...record.defaultOutfit,deletedAt:record.defaultOutfit.deletedAt?.toISOString() || null} : null,
     editorState: parseJsonObject<CharacterEditorState>(record.editorState),
     previewState,
     primaryPreviewImageUrl: primaryPreview.imageUrl,

@@ -132,13 +132,16 @@ model Workspace {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  isProtected   Boolean        @default(false)
-  lifecycle     String         @default("active")
-  revision      Int            @default(0)
-  presets       Preset[]
-  characters    Character[]
-  vibes         VibePreset[]
-  videoProjects VideoProject[]
+  isProtected           Boolean                @default(false)
+  lifecycle             String                 @default("active")
+  revision              Int                    @default(0)
+  presets               Preset[]
+  outfits               Outfit[]
+  characterOutfits      CharacterOutfit[]
+  characterLookPreviews CharacterLookPreview[]
+  characters            Character[]
+  vibes                 VibePreset[]
+  videoProjects         VideoProject[]
 
   // 관계 설정
   jobs                       Job[]                       @relation("WorkspaceJobs")
@@ -434,12 +437,17 @@ model Character {
   traits               String    @default("{}")
   editorState          String    @default("{}")
   previewStateJson     String    @default("{}")
+  defaultOutfitId      String?
   currentVersionId     String?
   previewStatusSummary String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
 
+  defaultOutfit          Outfit?                 @relation("CharacterDefaultOutfit", fields: [defaultOutfitId], references: [id], onDelete: SetNull)
+  personalOutfits        Outfit[]                @relation("PersonalOutfits")
+  wardrobe               CharacterOutfit[]
+  lookPreviews           CharacterLookPreview[]
   versions               CharacterVersion[]      @relation("CharacterVersions")
   currentVersion         CharacterVersion?       @relation("CharacterCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   sceneBindings          SceneCharacterBinding[]
@@ -670,6 +678,8 @@ model StudioPhotoSession {
   lightingText   String   @default("")
   vibeText       String   @default("")
   outfitText     String   @default("")
+  outfitMode     String   @default("default")
+  outfitId       String?
   hairstyleText  String   @default("")
   negativePrompt String   @default("")
   notes          String   @default("")
@@ -754,16 +764,17 @@ model StudioCollectionItem {
 }
 
 model StudioPoseLibrarySettings {
-  id                    String   @id @default(uuid())
-  workspaceId           String   @unique
-  subjectDescription    String   @default("adult neutral model")
-  clothingDescription   String   @default("simple fitted neutral clothing")
-  backgroundDescription String   @default("neutral seamless studio background")
-  stylePreset           String   @default("realistic studio photo, softbox lighting")
-  previewAgeDescription String   @default("")
-  defaultVariantCount   Int      @default(4)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  workspaceId           String    @unique
+  subjectDescription    String    @default("adult neutral model")
+  clothingDescription   String    @default("simple fitted neutral clothing")
+  backgroundDescription String    @default("neutral seamless studio background")
+  stylePreset           String    @default("realistic studio photo, softbox lighting")
+  previewAgeDescription String    @default("")
+  defaultVariantCount   Int       @default(4)
+  seededAt              DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -1118,4 +1129,63 @@ model WorkspaceActivity {
 
   @@index([workspaceId, expiresAt])
   @@map("workspace_activities")
+}
+
+model Outfit {
+  id               String            @id @default(uuid())
+  workspaceId      String
+  ownerCharacterId String?
+  name             String
+  description      String            @default("")
+  constraints      String            @default("")
+  coversFace       Boolean           @default(false)
+  revision         Int               @default(1)
+  sourceJson       String            @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerCharacter   Character?        @relation("PersonalOutfits", fields: [ownerCharacterId], references: [id], onDelete: Cascade)
+  defaultFor       Character[]       @relation("CharacterDefaultOutfit")
+  wardrobe         CharacterOutfit[]
+
+  @@index([workspaceId, deletedAt])
+  @@map("outfits")
+}
+
+model CharacterOutfit {
+  id          String    @id @default(uuid())
+  workspaceId String
+  characterId String
+  outfitId    String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  outfit      Outfit    @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, outfitId])
+  @@map("character_outfits")
+}
+
+model CharacterLookPreview {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  characterId    String
+  slot           String
+  modelId        String
+  lookName       String
+  snapshotJson   String
+  promptSnapshot String
+  jobId          String?   @unique
+  status         String    @default("queued")
+  imageUrl       String?
+  thumbnailUrl   String?
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  character      Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, characterId, createdAt])
+  @@map("character_look_previews")
 }

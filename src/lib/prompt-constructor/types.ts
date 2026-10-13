@@ -123,6 +123,8 @@ export type CharacterStaging = {
 };
 
 export type CharacterSlot = {
+  outfitSelection?: import('@/lib/outfits/types').OutfitSelection;
+  lookSnapshot?: import('@/lib/outfits/types').CharacterLook | null;
   id: string;
   label: string;
   role: string;

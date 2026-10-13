@@ -30,6 +30,8 @@ export type CharacterPreviewSlotState = {
 export type CharacterPreviewState = Record<CharacterPreviewSlot, CharacterPreviewSlotState>;
 
 export type CharacterSummary = {
+  defaultOutfit?: import('@/lib/outfits/types').OutfitSummary | null;
+  defaultOutfitId?: string | null;
   id: string;
   name: string;
   gender: string | null;

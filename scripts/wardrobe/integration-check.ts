@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+async function main(){
+ if(!process.env.ENGUI_DATABASE_URL?.includes('/var/tmp/'))throw new Error('Integration checks require a disposable /var/tmp database.');
+ const {prisma}=await import('../../src/lib/prisma');
+ const {workspaceContext}=await import('../../src/lib/workspaces/context');
+ const {saveOutfit,resolveCharacterLook,assignOutfit,archiveOutfit,wardrobe}=await import('../../src/lib/outfits/server');
+ const {ensureStudioPoseLibrarySeeded}=await import('../../src/lib/studio-sessions/poseLibraryServer');
+ const {createStudioPhotoSession,createStudioPhotoSessionRun,updateStudioPhotoSession,updateStudioRun}=await import('../../src/lib/studio-sessions/portfolioServer');
+ const {validateContentReferences}=await import('../../src/lib/workspaces/references');
+ const {characterPreviewMaterializationHandler}=await import('../../src/lib/characters/server');
+ const {POST:lookRoute}=await import('../../src/app/api/characters/[id]/look/route');
+ // Any accidental remote/provider call fails this test.
+ globalThis.fetch=async()=>{throw new Error('NETWORK_FORBIDDEN_IN_WARDROBE_CHECK');};
+ const a=randomUUID(),b=randomUUID(),c=randomUUID(),other=randomUUID();
+ await prisma.workspace.createMany({data:[{id:a,userId:'user-with-settings',name:'Wardrobe QA '+a},{id:b,userId:'user-with-settings',name:'Wardrobe QA '+b}]});
+ const scope=(id:string,fn:()=>Promise<any>)=>workspaceContext.run({kind:'workspace',workspaceId:id},fn);
+ let sharedId='';let personalId='';let runId='';
+ await scope(a,async()=>{
+  for(const [id,name] of [[c,'QA Inventor'],[other,'QA Other']])await prisma.character.create({data:{id,workspaceId:a,name,gender:'male',traits:JSON.stringify({hair_color:'brown',left_arm_prosthesis:'EMPTY left docking socket',outerwear:'legacy costume'})}});
+  const personal=await saveOutfit({name:'Personal armor',description:'Blue armor',ownerCharacterId:c,coversFace:true});personalId=personal.id;
+  const shared=await saveOutfit({name:'Shared suit',description:'Red suit'});sharedId=shared.id;
+  await assignOutfit(c,personal.id,'default');
+  const look=await resolveCharacterLook(c);assert(look.outfit.includes('Blue armor'));assert(!look.identity.includes('legacy costume'));assert(look.identity.includes('EMPTY'));
+  await assert.rejects(()=>resolveCharacterLook(other,{mode:'outfit',outfitId:personal.id}),/unavailable/);
+  await assignOutfit(other,shared.id,'default');await assignOutfit(c,shared.id,'link');
+  assert.equal((await wardrobe(c)).linkedOutfitIds.length,2);
+  const custom=await resolveCharacterLook(c,{mode:'custom',customText:'White swim shorts'});assert.equal(custom.outfit,'White swim shorts');assert(!custom.coversFace);
+  const neutral=await resolveCharacterLook(c,{mode:'neutral'});assert(neutral.outfit.includes('swim shorts'));assert(neutral.identity.includes('EMPTY'));
+  await Promise.all([ensureStudioPoseLibrarySeeded(a),ensureStudioPoseLibrarySeeded(a)]);
+  const cats=await prisma.studioPoseCategory.findMany();assert(cats.length>0);assert.equal(new Set(cats.map(x=>x.slug)).size,cats.length);
+  await prisma.studioPose.deleteMany({where:{categoryId:cats[0].id}});await prisma.studioPoseCategory.delete({where:{id:cats[0].id}});await ensureStudioPoseLibrarySeeded(a);assert.equal(await prisma.studioPoseCategory.count(),cats.length-1);
+  const portfolio=await prisma.studioPortfolio.create({data:{workspaceId:a,characterId:c,name:'QA portfolio'}});
+  const session=await createStudioPhotoSession(portfolio.id,{name:'QA session',outfitMode:'outfit',outfitId:shared.id});assert(session);
+  const {getStudioPoseSets}=await import('../../src/lib/studio-sessions/poseSets');
+  const sets=await getStudioPoseSets(a);assert(sets.length);
+  const made=await createStudioPhotoSessionRun(session!.id,{name:'QA draft only',poseSetId:sets[0].id,count:1,generationSettings:{modelId:'krea2-turbo'}});assert('run' in made);runId=made.run!.id;
+  const run=await prisma.studioSessionRun.findUniqueOrThrow({where:{id:runId}});const snapshot=JSON.parse(run.templateSnapshotJson);assert(snapshot.characterPrompt.includes('EMPTY'));assert.equal(snapshot.outfitText,'Red suit');assert.equal(JSON.parse(run.runSettingsJson).steps,8);assert.equal(JSON.parse(run.runSettingsJson).use_controlnet,false);
+  await saveOutfit({description:'Changed suit'},shared.id);await prisma.character.update({where:{id:c},data:{traits:'{"hair_color":"green"}'}});
+  assert.equal((await prisma.studioSessionRun.findUniqueOrThrow({where:{id:runId}})).templateSnapshotJson,run.templateSnapshotJson);
+  await updateStudioPhotoSession(session!.id,{outfitMode:'custom',outfitText:'Black suit'});
+  const updated=await updateStudioRun(runId,{generationSettings:{modelId:'z-image'}});assert('run' in updated);assert.equal(updated.run!.runSettings.steps,9);
+  await assert.rejects(()=>updateStudioRun(runId,{generationSettings:{modelId:'krea2-turbo',lora:'/runpod-volume/loras/missing.safetensors'}}),/unavailable|incompatible/);
+  const v1=await prisma.characterLookPreview.create({data:{workspaceId:a,characterId:c,slot:'portrait',modelId:'z-image',lookName:'A',snapshotJson:'{"outfit":"A"}',promptSnapshot:'A',jobId:randomUUID()}});
+  const v2=await prisma.characterLookPreview.create({data:{workspaceId:a,characterId:c,slot:'portrait',modelId:'krea2-turbo',lookName:'B',snapshotJson:'{"outfit":"B"}',promptSnapshot:'B',jobId:randomUUID()}});
+  await characterPreviewMaterializationHandler.materialize({job:{id:v1.jobId,resultUrl:'/results/nonexistent-qa.png'},task:{targetId:c},payload:{slot:'portrait',lookPreviewId:v1.id,updateDefaultCover:false}});
+  assert.equal((await prisma.characterLookPreview.findUniqueOrThrow({where:{id:v1.id}})).status,'ready');assert.equal((await prisma.characterLookPreview.findUniqueOrThrow({where:{id:v2.id}})).status,'queued');
+  await characterPreviewMaterializationHandler.onSourceJobFailed({job:{id:v2.jobId},task:{targetId:c},payload:{slot:'portrait',lookPreviewId:v2.id},sourceError:'Test failure'});
+  assert.equal((await prisma.characterLookPreview.findUniqueOrThrow({where:{id:v1.id}})).snapshotJson,'{"outfit":"A"}');
+  await archiveOutfit(personal.id);await assert.rejects(()=>resolveCharacterLook(c),/unavailable/);assert((await prisma.characterLookPreview.count())===2);
+ });
+ await scope(b,async()=>{assert.equal(await prisma.outfit.count(),0);assert.equal(await prisma.characterLookPreview.count(),0);await assert.rejects(()=>resolveCharacterLook(c),/not found/);await assert.rejects(()=>validateContentReferences({outfitId:sharedId}),/another workspace/);});
+ const response=await lookRoute(new Request('http://localhost/api/characters/'+c+'/look',{method:'POST',headers:{'content-type':'application/json','x-workspace-id':b},body:'{}'}),{params:Promise.resolve({id:c})});assert.equal(response.status,404);
+ await scope(a,async()=>{await prisma.workspace.delete({where:{id:a}});});await scope(b,async()=>{await prisma.workspace.delete({where:{id:b}});});
+ assert.deepEqual(await prisma.$queryRawUnsafe('PRAGMA foreign_key_check'),[]);
+ await prisma.$disconnect();console.log(JSON.stringify({workspaceIsolation:true,personalShared:true,defaultReplacement:true,neutralAnatomy:true,concurrentSeed:true,deletedCategoryNotReseeded:true,frozenRun:true,modelDefaults:true,loraRejection:true,previewIsolation:true,archiveSafety:true,cascadeCleanup:true,paidJobs:0}));
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

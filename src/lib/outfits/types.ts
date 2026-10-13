@@ -1,0 +1,5 @@
+export type OutfitSelection = { mode?: 'default' | 'outfit' | 'custom' | 'neutral'; outfitId?: string | null; customText?: string };
+export type OutfitSummary = { id: string; workspaceId: string; ownerCharacterId: string | null; name: string; description: string; constraints: string; coversFace: boolean; revision: number; deletedAt: string | null };
+export type CharacterLook = { characterId: string; characterName: string; characterVersionId: string | null; identity: string; outfit: string; outfitId: string | null; outfitRevision: number | null; name: string; mode: string; coversFace: boolean; resolvedAt: string };
+// Explicit legacy costume keys only; unknown traits remain identity until classified by the user.
+export const COSTUME_KEYS = ['earrings','neck_jewelry','outerwear','top','lower_garment','hand_jewelry','footwear','signature_detail','face_visibility','helmet','body_armor','sleeves','gloves','belt_and_hip_guards','trousers','armor_accents','baton','riot_shield','earring','dress','asymmetric_sleeves','wrist_jewelry','chest_detail','belt','skirt','hosiery','headwear','goggles','shirt','chest_harness','glove','right_hand_tool','tool_separation'];

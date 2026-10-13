@@ -578,6 +578,24 @@
         "optional": false
       },
       {
+        "name": "outfits",
+        "type": "Outfit",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "characterOutfits",
+        "type": "CharacterOutfit",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "characterLookPreviews",
+        "type": "CharacterLookPreview",
+        "list": true,
+        "optional": false
+      },
+      {
         "name": "characters",
         "type": "Character",
         "list": true,
@@ -1950,6 +1968,12 @@
         "optional": false
       },
       {
+        "name": "defaultOutfitId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
         "name": "currentVersionId",
         "type": "String",
         "list": false,
@@ -1978,6 +2002,30 @@
         "type": "DateTime",
         "list": false,
         "optional": true
+      },
+      {
+        "name": "defaultOutfit",
+        "type": "Outfit",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "personalOutfits",
+        "type": "Outfit",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "wardrobe",
+        "type": "CharacterOutfit",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "lookPreviews",
+        "type": "CharacterLookPreview",
+        "list": true,
+        "optional": false
       },
       {
         "name": "versions",
@@ -2016,6 +2064,13 @@
         "model": "Workspace",
         "fields": [
           "workspaceId"
+        ]
+      },
+      {
+        "field": "defaultOutfit",
+        "model": "Outfit",
+        "fields": [
+          "defaultOutfitId"
         ]
       },
       {
@@ -3057,6 +3112,18 @@
         "optional": false
       },
       {
+        "name": "outfitMode",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "outfitId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
         "name": "hairstyleText",
         "type": "String",
         "list": false,
@@ -3539,6 +3606,12 @@
         "type": "Int",
         "list": false,
         "optional": false
+      },
+      {
+        "name": "seededAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
       },
       {
         "name": "createdAt",
@@ -5147,5 +5220,369 @@
     "relations": [],
     "parent": null,
     "operational": true
+  },
+  "WorkspaceActivity": {
+    "table": "workspace_activities",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "kind",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [],
+    "parent": null,
+    "operational": false
+  },
+  "Outfit": {
+    "table": "outfits",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "ownerCharacterId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "constraints",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "coversFace",
+        "type": "Boolean",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "sourceJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "ownerCharacter",
+        "type": "Character",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "defaultFor",
+        "type": "Character",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "wardrobe",
+        "type": "CharacterOutfit",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "ownerCharacter",
+        "model": "Character",
+        "fields": [
+          "ownerCharacterId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "CharacterOutfit": {
+    "table": "character_outfits",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "outfitId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "character",
+        "type": "Character",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "outfit",
+        "type": "Outfit",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "character",
+        "model": "Character",
+        "fields": [
+          "characterId"
+        ]
+      },
+      {
+        "field": "outfit",
+        "model": "Outfit",
+        "fields": [
+          "outfitId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
+  },
+  "CharacterLookPreview": {
+    "table": "character_look_previews",
+    "owned": true,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "slot",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "modelId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "lookName",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "snapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "promptSnapshot",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "status",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "imageUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "error",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "character",
+        "type": "Character",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "character",
+        "model": "Character",
+        "fields": [
+          "characterId"
+        ]
+      }
+    ],
+    "parent": null,
+    "operational": false
   }
 }

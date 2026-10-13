@@ -1,3 +1,4 @@
+import { imageModelPolicy } from '@/lib/generation/imageModelPolicy';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest } from 'next/server';
 import { createJobMaterializationTask } from '@/lib/materialization/server';
@@ -12,6 +13,7 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
   try {
     const { id } = await context.params;
     const body = await request.json().catch(() => ({}));
+    const model = imageModelPolicy(body.modelId || 'z-image');
     const variantCount = typeof body?.variantCount === 'number' ? Math.max(1, Math.min(8, Math.floor(body.variantCount))) : 1;
     const pose = await getStudioPose(id);
     if (!pose) return studioSessionNoStoreJson({ success: false, error: 'Pose not found' }, { status: 404 });
@@ -24,12 +26,12 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
       formData.append('userId', 'user-with-settings');
       formData.append('workspaceId', pose.workspaceId);
       formData.append('language', 'en');
-      formData.append('modelId', typeof body?.modelId === 'string' && body.modelId.trim() ? body.modelId.trim() : 'z-image');
+      formData.append('modelId', model.modelId);
       formData.append('prompt', prompt);
       formData.append('use_controlnet', 'false');
       formData.append('width', pose.orientation === 'landscape' ? '1216' : pose.orientation === 'square' ? '1024' : '832');
       formData.append('height', pose.orientation === 'landscape' ? '832' : pose.orientation === 'square' ? '1024' : '1216');
-      formData.append('steps', '9');
+      formData.append('steps', String(model.steps));
       formData.append('cfg', '1.0');
       formData.append('randomizeSeed', 'true');
       const response = await submitGenerationFormData(formData);
@@ -43,9 +45,9 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
         workspaceId: pose.workspaceId,
         targetType: 'studio_pose_preview',
         targetId: pose.id,
-        payload: { promptSnapshot: prompt, settingsSnapshot: settings, variantIndex: index },
+        payload: { promptSnapshot: prompt, settingsSnapshot: { ...settings, modelId: model.modelId, steps: model.steps, cfg: model.cfg }, variantIndex: index },
       });
-      await queueStudioPosePreviewGeneration({ poseId: pose.id, jobId, promptSnapshot: prompt, settingsSnapshot: settings });
+      await queueStudioPosePreviewGeneration({ poseId: pose.id, jobId, promptSnapshot: prompt, settingsSnapshot: { ...settings, modelId: model.modelId, steps: model.steps, cfg: model.cfg } });
       jobs.push({ jobId, status: payload.status || 'IN_QUEUE' });
     }
 

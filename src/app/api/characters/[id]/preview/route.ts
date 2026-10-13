@@ -1,3 +1,6 @@
+import { buildLookPreviewPrompt } from '@/lib/outfits/previewPrompt';
+import { resolveCharacterLook } from '@/lib/outfits/server';
+import { imageModelPolicy, generationErrorMessage } from '@/lib/generation/imageModelPolicy';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -23,6 +26,7 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
     const character = await prisma.character.findUnique({
       where: { id },
       include: {
+        defaultOutfit: true,
         _count: {
           select: {
             versions: true,
@@ -35,7 +39,11 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, error: 'Character not found' }, { status: 404 });
     }
 
+    const policy = imageModelPolicy(body.modelId || 'z-image');
+    const look = await resolveCharacterLook(id, body.look || {});
     const submission = buildCharacterPreviewSubmission(toCharacterSummary(character), slot);
+    submission.modelId = policy.modelId;
+    submission.prompt = buildLookPreviewPrompt(look, slot);
     const formData = new FormData();
     formData.append('userId', 'user-with-settings');
     formData.append('language', 'en');
@@ -44,7 +52,7 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
     formData.append('use_controlnet', 'false');
     formData.append('width', String(submission.width));
     formData.append('height', String(submission.height));
-    formData.append('steps', '9');
+    formData.append('steps', String(policy.steps));
     formData.append('cfg', '1.0');
 
     const submitResponse = await submitGenerationFormData(formData);
@@ -56,21 +64,27 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
         : 'Failed to start character preview generation';
       return NextResponse.json({
         success: false,
-        error: errorMessage,
+        error: generationErrorMessage(errorMessage),
       }, { status: submitResponse.status || 500 });
     }
 
     const updatedCharacter = await prisma.$transaction(async (tx) => {
+      const variant = await tx.characterLookPreview.create({ data: {
+        workspaceId: character.workspaceId, characterId: id, slot, modelId: policy.modelId,
+        lookName: look.name, snapshotJson: JSON.stringify({ look, generation: { ...policy, width: submission.width, height: submission.height } }),
+        promptSnapshot: submission.prompt, jobId, status: 'queued',
+      } });
       await createJobMaterializationTask({
         jobId,
         workspaceId: null,
         targetType: 'character_preview',
         targetId: id,
         payload: {
-          slot,
+          slot, lookPreviewId: variant.id, updateDefaultCover: look.mode === 'default',
         },
       }, tx as any);
 
+      if (look.mode !== 'default') return toCharacterSummary(character);
       return queueCharacterPreviewGeneration({
         characterId: id,
         slot,
@@ -87,7 +101,7 @@ async function POSTImpl(request: NextRequest, context: { params: Promise<{ id: s
     });
   } catch (error: any) {
     console.error('Failed to queue character preview generation:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: typeof error.status === 'number' ? error.status : 500 });
   }
 }
 

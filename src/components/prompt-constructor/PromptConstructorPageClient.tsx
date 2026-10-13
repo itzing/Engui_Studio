@@ -1,4 +1,7 @@
 'use client';
+import OutfitSelect from '@/components/outfits/OutfitSelect';
+import type { OutfitSelection } from '@/lib/outfits/types';
+import { composeCharacterLook } from '@/lib/outfits/compose';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -184,7 +187,7 @@ function parseCharacterSlotFieldPath(slotId: string): { characterId: string; fie
 }
 
 function buildCharacterAppearanceFromManager(character: CharacterSummary | null | undefined): string {
-  return buildCharacterPromptFromSummary(character, { includeName: false, includeGender: false });
+  return character ? composeCharacterLook(character,{mode:'default'},character.defaultOutfit || null).identity : '';
 }
 
 function pickRandomCharacterForSlot(slot: CharacterSlot, characters: CharacterSummary[]): CharacterSummary | null {
@@ -215,6 +218,7 @@ function applyRandomCharacterToSlot(slot: CharacterSlot, character: CharacterSum
       randomCharacterId: character.id,
       randomCharacterName: character.name || '',
       randomCharacterAppearance: buildCharacterAppearanceFromManager(character),
+      outfit: composeCharacterLook(character,{mode:'default'},character.defaultOutfit || null).outfit,
     },
   };
 }
@@ -847,28 +851,19 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
     applyTextToActiveSlot(block.content, mode);
   };
 
+  const applyCharacterLook = async (slotId: string, characterId: string, selection: OutfitSelection) => {
+    try {
+      const response = await fetch(`/api/characters/${characterId}/look`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(selection)});
+      const data = await response.json();
+      if(!response.ok || !data.success) throw new Error(data.error || 'Failed to resolve outfit');
+      const look = data.look;
+      updateCharacterSlot(slotId, current=>({...current,presetRef:{id:characterId,name:look.characterName},outfitSelection:selection,lookSnapshot:look,
+        fields:{...current.fields,nameOrRole:look.characterName,appearance:look.identity,outfit:look.outfit,useRandomCharacterAppearance:false}}));
+    } catch(error:any) { showToast(error.message,'error'); }
+  };
   const selectCharacterForActiveAppearance = (character: CharacterSummary) => {
     if (!isSceneTemplateState(draft.state) || !activeCharacterField || activeCharacterField.fieldId !== 'appearance') return;
-    const appearance = buildCharacterAppearanceFromManager(character);
-    setDraft((current) => {
-      if (!isSceneTemplateState(current.state)) return current;
-      return {
-        ...current,
-        state: {
-          ...current.state,
-          characterSlots: current.state.characterSlots.map((slot) => slot.id === activeCharacterField.characterId
-            ? {
-              ...slot,
-              fields: {
-                ...slot.fields,
-                nameOrRole: character.name || slot.fields.nameOrRole,
-                appearance,
-              },
-            }
-            : slot),
-        },
-      };
-    });
+    void applyCharacterLook(activeCharacterField.characterId,character.id,{mode:'default'});
   };
 
   const handleCopy = async () => {
@@ -1349,6 +1344,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                                         <div className="flex min-h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80" data-testid={`character-preset-badge-${slot.id}`}>
                                           {slot.presetRef?.name?.trim() || 'No character preset linked'}
                                         </div>
+                                        {slot.presetRef?.id && <div className="mt-3"><OutfitSelect characterId={slot.presetRef.id} value={slot.outfitSelection || {mode:'default'}} onChange={selection=>updateCharacterSlot(slot.id,current=>({...current,outfitSelection:selection}))}/><Button type="button" size="sm" className="mt-2" onClick={()=>void applyCharacterLook(slot.id,slot.presetRef!.id,slot.outfitSelection||{mode:'default'})}>Apply selected outfit</Button><p className="mt-1 text-xs text-white/40">Replaces this slot's identity and outfit only. Pose and staging are preserved.</p></div>}
                                       </div>
                                       <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                                         <div className="mb-1 text-xs uppercase tracking-[0.16em] text-white/45">Pose preset</div>
@@ -1603,7 +1599,7 @@ export default function PromptConstructorPageClient({ embedded = false }: { embe
                     <div className="rounded-lg border border-white/10 bg-black/10 p-3">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div className="text-xs uppercase tracking-[0.18em] text-white/45">Character Manager</div>
-                        <div className="text-xs text-white/45">Select fills name and appearance</div>
+                        <div className="text-xs text-white/45">Select fills identity and default outfit</div>
                       </div>
 
                       {isHelperCharactersLoading ? (

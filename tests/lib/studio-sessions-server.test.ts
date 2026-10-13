@@ -17,7 +17,7 @@ const {
     studioSessionShotRevision: { findMany: vi.fn(), findUnique: vi.fn() },
     studioSessionShotVersion: { findFirst: vi.fn(), create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
     studioSessionJobMaterialization: { upsert: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-    studioPoseLibrarySettings: { upsert: vi.fn() },
+    studioPoseLibrarySettings: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({seededAt:new Date()}) },
     studioPoseCategory: { count: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     studioPose: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     studioPosePreviewCandidate: { create: vi.fn() },

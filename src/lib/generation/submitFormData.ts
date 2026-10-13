@@ -1,3 +1,4 @@
+import { generationErrorMessage } from '@/lib/generation/imageModelPolicy';
 import { validateContentReferences } from '@/lib/workspaces/references';
 import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import { storageTarget } from '@/lib/workspaces/storage';
@@ -842,7 +843,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
                 });
 
                 return NextResponse.json({
-                    error: error.message || getApiMessage('RUNPOD', 'API_ERROR', language),
+                    error: generationErrorMessage(error.message || getApiMessage('RUNPOD', 'API_ERROR', language)),
                     requiresSetup: false,
                 }, { status: 500 });
             }

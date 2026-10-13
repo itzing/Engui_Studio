@@ -175,15 +175,17 @@ export async function ensureStudioPoseLibrarySettings(workspaceId: string) {
 }
 
 export async function ensureStudioPoseLibrarySeeded(workspaceId: string) {
-  const existing = await prisma.studioPoseCategory.count({ where: { workspaceId } });
-  if (existing > 0) {
-    await ensureStudioPoseLibrarySettings(workspaceId);
-    return;
-  }
-
+  const ready = await prisma.studioPoseLibrarySettings.findUnique({ where: { workspaceId } });
+  if (ready?.seededAt) return;
   const library = getStudioSessionPoseLibrary();
   await prisma.$transaction(async (tx) => {
-    await tx.studioPoseLibrarySettings.upsert({ where: { workspaceId }, update: {}, create: { workspaceId } });
+    // A write first serializes SQLite initializers before checking the marker/count.
+    const settings = await tx.studioPoseLibrarySettings.upsert({ where: { workspaceId }, update: { updatedAt: new Date() }, create: { workspaceId } });
+    if (settings.seededAt) return;
+    if (await tx.studioPoseCategory.count({ where: { workspaceId } })) {
+      await tx.studioPoseLibrarySettings.update({ where: { workspaceId }, data: { seededAt: new Date() } });
+      return;
+    }
     for (const [categoryIndex, category] of library.categories.entries()) {
       const categoryRecord = await tx.studioPoseCategory.create({
         data: {
@@ -213,7 +215,8 @@ export async function ensureStudioPoseLibrarySeeded(workspaceId: string) {
         });
       }
     }
-  });
+    await tx.studioPoseLibrarySettings.update({ where: { workspaceId }, data: { seededAt: new Date() } });
+  }, { timeout: 30000 });
 }
 
 export async function listStudioPoseCategories(workspaceId: string) {

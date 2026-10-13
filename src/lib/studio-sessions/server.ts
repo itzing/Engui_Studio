@@ -1,3 +1,5 @@
+import { resolveCharacterLook } from '@/lib/outfits/server';
+import { imageModelPolicy } from '@/lib/generation/imageModelPolicy';
 import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import { withWorkspaceActivity, workspaceIsActive } from '@/lib/workspaces/activity';
 import { requireWorkspaceId } from '@/lib/workspaces/context';
@@ -592,7 +594,8 @@ export async function createStudioSessionRun(input: { workspaceId: string; templ
   if (!template || template.workspaceId !== input.workspaceId) return null;
 
   const canonicalState = createStudioSessionSavedStateFromDraft(JSON.parse(template.canonicalStateJson || '{}'));
-  const characterPrompt = await resolveStudioSessionCharacterPrompt(canonicalState as Record<string, any>);
+  const look = canonicalState.characterId ? await resolveCharacterLook(canonicalState.characterId, canonicalState.outfitText?.trim() ? {mode:'custom',customText:canonicalState.outfitText} : {mode:'default'}) : null;
+  const characterPrompt = look?.identity || await resolveStudioSessionCharacterPrompt(canonicalState as Record<string, any>);
   const slots = buildStudioSessionShotSlotsFromRules(canonicalState.categoryRules);
 
   const created = await prisma.$transaction(async (tx) => {
@@ -604,6 +607,7 @@ export async function createStudioSessionRun(input: { workspaceId: string; templ
         templateSnapshotJson: JSON.stringify({
           ...canonicalState,
           characterPrompt,
+          ...(look ? { outfitText:look.outfit,characterLookSnapshot:look } : {}),
           templateId: template.id,
           templateName: template.name,
         }),
@@ -1192,7 +1196,7 @@ async function launchStudioSessionShotJob(shotId: string, executionMode: 'shot_r
     ...generationSettings,
     width: typeof generationSettings.width === 'number' ? generationSettings.width : resolvedSize.width,
     height: typeof generationSettings.height === 'number' ? generationSettings.height : resolvedSize.height,
-    steps: typeof generationSettings.steps === 'number' ? generationSettings.steps : 9,
+    steps: typeof generationSettings.steps === 'number' ? generationSettings.steps : imageModelPolicy(modelId).steps,
     cfg: typeof generationSettings.cfg === 'number' ? generationSettings.cfg : 1,
     seed: resolvedSeed,
     negativePrompt: typeof promptSnapshot?.negativePrompt === 'string' ? promptSnapshot.negativePrompt : (typeof generationSettings.negativePrompt === 'string' ? generationSettings.negativePrompt : ''),

@@ -1,3 +1,4 @@
+import { resolveCharacterLook } from '@/lib/outfits/server';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -35,6 +36,7 @@ async function POSTImpl(request: NextRequest) {
       : [];
     const characterMap = new Map(characters.map((character) => [character.id, toCharacterSummary(character)]));
 
+    const looks = new Map(await Promise.all(characters.map(async c => [c.id, await resolveCharacterLook(c.id)] as const)));
     const assembled = assembleScenePrompt({
       sceneName,
       sceneSummary,
@@ -61,7 +63,7 @@ async function POSTImpl(request: NextRequest) {
           roleLabel: typeof binding?.roleLabel === 'string' && binding.roleLabel.trim() ? binding.roleLabel.trim() : null,
           characterId,
           characterName: character?.name || null,
-          resolvedCharacterPrompt: buildCharacterPromptFromSummary(character),
+          resolvedCharacterPrompt: characterId && looks.has(characterId) ? [looks.get(characterId)!.identity,looks.get(characterId)!.outfit].filter(Boolean).join('. ') : buildCharacterPromptFromSummary(character),
           overrideInstructions: typeof binding?.overrideInstructions === 'string' && binding.overrideInstructions.trim() ? binding.overrideInstructions.trim() : null,
         };
       }),

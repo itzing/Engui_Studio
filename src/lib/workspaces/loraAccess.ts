@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { buildLoraPairs } from '@/lib/lora/modelFilters';
+import { buildLoraPairs, filterLorasForModel } from '@/lib/lora/modelFilters';
 import { requireWorkspaceId, workspaceContext, WorkspaceError } from './context';
 import { assertTarget, deleteOwnedObject, loraPrefix, withStorageLease } from './storage';
 
@@ -21,6 +21,8 @@ export async function validateGenerationLoras(form: FormData) {
   for (const [key, value] of form.entries()) {
     if (!/^lora(\d*|_(high|low)_\d+)$/.test(key) || typeof value !== 'string' || !value.trim()) continue;
     const resolved = await resolveLoraReference(value.trim());
+    const modelId = String(form.get('modelId') || '');
+    if (['z-image', 'krea2-turbo'].includes(modelId) && !filterLorasForModel([resolved.row], modelId).length) throw new WorkspaceError('A selected LoRA is incompatible with ' + modelId + '. Choose a matching LoRA.',400);
     form.set(key, resolved.path);
   }
 }
