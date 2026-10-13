@@ -15,6 +15,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardCopy, CopyPlus, Download, ImagePlus, Lock, LockOpen, Pencil, Plus, RefreshCw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
 import { GalleryFullscreenViewer, type GalleryFullscreenViewerItem } from '@/components/workspace/GalleryFullscreenViewer';
 import {
@@ -478,6 +479,18 @@ export default function CharacterManagerPanel() {
   const [previewLook,setPreviewLook] = useState<OutfitSelection>({mode:'default'});
   const [wardrobeRefresh,setWardrobeRefresh] = useState(0);
   const { showToast } = useToast();
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [showPreviewSettings, setShowPreviewSettings] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktop(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [versions, setVersions] = useState<CharacterVersionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -812,6 +825,7 @@ export default function CharacterManagerPanel() {
   };
 
   const selectCharacter = (character: CharacterSummary) => {
+    setActiveTab('overview');
     setAssistantError(null);
     setAssistantNote(null);
     setSelectedCharacterId(character.id);
@@ -834,6 +848,7 @@ export default function CharacterManagerPanel() {
   };
 
   const startNewCharacter = () => {
+    setActiveTab('details');
     setAssistantError(null);
     setAssistantNote(null);
     setSelectedCharacterId(null);
@@ -1249,10 +1264,10 @@ export default function CharacterManagerPanel() {
           ? chips.slice(0, 2).join(' • ')
           : 'No preview-driving traits captured yet.',
         state,
-        imageUrl: state?.previewUrl || state?.thumbnailUrl || state?.imageUrl || null,
+        imageUrl: (isDesktop ? state?.imageUrl : null) || state?.previewUrl || state?.thumbnailUrl || state?.imageUrl || null,
       };
     });
-  }, [draft, selectedCharacter]);
+  }, [draft, selectedCharacter, isDesktop]);
 
   const moveCharacterToTrash = async () => {
     if (!selectedCharacter || selectedCharacter.deletedAt) return;
@@ -1385,239 +1400,124 @@ export default function CharacterManagerPanel() {
     }
   };
 
-  return (
-    <div className="grid min-h-0 gap-4 xl:h-full xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-      <aside className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
-        <div className="border-b border-border px-4 py-4 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Characters</div>
-              <div className="text-xs text-muted-foreground">Search, switch, and pick a draft target.</div>
-            </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => void fetchCharacters()} title="Refresh characters">
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+  const previewSettings = (
+    <div className={isDesktop ? 'grid grid-cols-2 gap-3 [&>details]:col-span-2' : 'contents'}>
+      <ImageModelSelect value={previewModel} onChange={setPreviewModel} disabled={!!generatingPreviewSlot}/>
+        <OutfitSelect characterId={selectedCharacterId} value={previewLook} onChange={setPreviewLook} neutral refresh={wardrobeRefresh}/>
+        {selectedCharacterId && <LookPromptInspector characterId={selectedCharacterId} look={previewLook}/>}
+    </div>
+  );
 
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openImportDialog}>
-              <Download className="w-3.5 h-3.5 mr-1" />
-              Import
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openExtractDialog}>
-              <ImagePlus className="w-3.5 h-3.5 mr-1" />
-              Extract
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={startNewCharacter}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              New
-            </Button>
-          </div>
+  const detailEditors = (
+    <>
+      {draft && <PromptPartsEditor title="Identity visible details" value={draft.editorState.promptParts as PartDocument | undefined} source={identitySource(draft.traits,draft.gender)} initialParts={inferIdentityParts(Object.fromEntries(Object.entries(draft.traits).filter(([k])=>!COSTUME_KEYS.includes(k))),draft.gender)} onChange={promptParts=>setDraft({...draft,editorState:{...draft.editorState,promptParts}})}/>}
+        {selectedCharacterId && !selectedCharacter?.deletedAt && <WardrobePanel key={selectedCharacterId} refresh={wardrobeRefresh} characterId={selectedCharacterId} onChange={()=>setWardrobeRefresh(n=>n+1)}/>}
+    </>
+  );
 
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search characters by name..."
-            className="h-9 text-xs"
-          />
+  const previewGallery = (
+    <div className={isDesktop ? 'grid min-h-[280px] flex-1 grid-cols-3 gap-3' : 'contents'}>
+      {previewCards.map((card) => {
+          const slotState = card.state;
+          const isSubmitting = generatingPreviewSlot === card.slot;
+          const isActive = slotState?.status === 'queued' || slotState?.status === 'running';
+          const canGenerate = !!selectedCharacter?.id && !selectedCharacter.deletedAt && !canSave && card.traitCount > 0 && !isSubmitting && !isActive;
+          const actionLabel = slotState?.imageUrl || slotState?.previewUrl || slotState?.thumbnailUrl ? 'Regenerate' : 'Generate';
+          const helperText = !selectedCharacter?.id
+            ? 'Save the character once before generating previews.'
+            : selectedCharacter.deletedAt
+              ? 'Restore the character before generating previews.'
+              : canSave
+                ? 'Save the latest draft changes before generating previews.'
+                : card.traitCount > 0
+                  ? card.summary
+                  : 'No visible identity details yet for this preview.';
 
-          <select
-            value={sortMode}
-            onChange={(event) => setSortMode(event.target.value as CharacterSortMode)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Sort characters"
-          >
-            <option value="updated_desc">Recently updated</option>
-            <option value="name_asc">Name A-Z</option>
-            <option value="name_desc">Name Z-A</option>
-          </select>
-
-          <div className="flex items-center gap-1 rounded-md bg-muted/30 p-1">
-            {(['active', 'trash'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setListMode(mode)}
-                className={`flex-1 rounded-sm px-2 py-1 text-[11px] font-medium capitalize transition-all ${listMode === mode
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                  }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-h-0 max-h-64 xl:max-h-none flex-1 overflow-y-auto divide-y divide-border/70">
-          {isLoading ? (
-            <div className="px-4 py-6 text-xs text-muted-foreground">Loading characters...</div>
-          ) : error ? (
-            <div className="px-4 py-6 text-xs text-red-400">{error}</div>
-          ) : filteredCharacters.length === 0 ? (
-            <div className="px-4 py-6 text-xs text-muted-foreground">
-              {search.trim()
-                ? (listMode === 'trash' ? 'No trashed characters match this name.' : 'No characters match this name.')
-                : (listMode === 'trash' ? 'Trash is empty.' : 'No saved characters yet.')}
-            </div>
-          ) : (
-            filteredCharacters.map((character) => {
-              const isSelected = selectedCharacterId === character.id;
-              const isDirty = draft?.id === character.id && dirtyTraitCount > 0;
-
-              return (
-                <button
-                  key={character.id}
-                  ref={(node) => {
-                    characterButtonRefs.current[character.id] = node;
-                  }}
-                  type="button"
-                  onClick={() => selectCharacter(character)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      moveSelectionByOffset(1);
-                    } else if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      moveSelectionByOffset(-1);
-                    }
-                  }}
-                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 focus-visible:ring-inset ${isSelected
-                    ? 'border-l-blue-400 bg-blue-500/10 ring-1 ring-inset ring-blue-500/20'
-                    : 'border-l-transparent hover:bg-muted/20'
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background/60">
-                        {character.primaryPreviewThumbnailUrl ? (
-                          <img
-                            src={character.primaryPreviewThumbnailUrl}
-                            alt={`${character.name} portrait preview`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="text-sm font-semibold text-muted-foreground">
-                            {character.name.trim().charAt(0).toUpperCase() || 'C'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
-                        <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
-                          {renderGenderLabel(character.gender)} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
-                        </div>
-                        <div className={`mt-1 text-[10px] ${isSelected ? 'text-blue-100/70' : 'text-muted-foreground'}`}>
-                          Portrait {formatPreviewStatus(character.previewState?.portrait?.status)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {isSelected && (
-                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-200">
-                          Selected
-                        </span>
-                      )}
-                      {character.deletedAt && (
-                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
-                          Trash
-                        </span>
-                      )}
-                      {isDirty && !character.deletedAt && (
-                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-200">
-                          Dirty
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <div className="border-t border-border bg-muted/10 px-4 py-3 text-[11px] text-muted-foreground">
-          {activeCharacters.length} active • {trashedCharacters.length} in trash
-        </div>
-      </aside>
-
-      <main className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
-        <div className="border-b border-border px-4 py-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-base font-semibold">{draft?.name || 'Unsaved character draft'}</div>
-                {selectedCharacter?.deletedAt && (
-                  <span className="rounded-full px-2 py-0.5 text-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-200">
-                    In trash
-                  </span>
-                )}
-                <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
-                  ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
-                  : 'border-border bg-background/70 text-muted-foreground'
-                  }`}>
-                  {dirtyTraitCount > 0 ? `${dirtyTraitCount} unsaved change${dirtyTraitCount === 1 ? '' : 's'}` : 'No unsaved changes'}
+          return (
+            <div key={card.slot} data-preview-slot={card.slot} className={`flex min-w-0 flex-col rounded-lg border border-border bg-muted/20 p-2.5 ${isDesktop ? "min-h-0" : "flex-none"}`}>
+              <div className={`flex items-start justify-between gap-2 ${isDesktop ? "shrink-0" : ""}`}>
+                <div>
+                  <div className="text-xs font-medium">{isDesktop ? card.title.replace(' preview', '').replace('-', ' ') : card.title}</div>
+                  {!isDesktop && <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>}
+                </div>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] ${previewStatusClassName(slotState?.status)}`}>
+                  {formatPreviewStatus(slotState?.status)}
                 </span>
               </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">
-                {draft?.id ? 'Editing current saved character' : 'Nothing is persisted until Save'}
-                {draft ? ` • ${draftTraitCount} total traits in draft` : ''}
+
+              <div className={isDesktop ? "mt-3 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg bg-background/40 text-center" : "mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-2 text-center"}>
+                <div className={`relative flex items-center justify-center overflow-hidden rounded-lg border ${card.imageUrl ? 'border-border bg-background/70' : 'border-dashed border-border/80 bg-background/40'} ${isDesktop ? 'h-full w-full' : `px-3 ${previewAspectClassName(card.slot)}`}`}>
+                  {card.imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => openCharacterPreviewViewer(card.slot)}
+                      className="block h-full w-full cursor-zoom-in overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+                      aria-label={`Open ${card.title} preview viewer`}
+                    >
+                      <img
+                        src={card.imageUrl}
+                        alt={`${card.title} for ${draft?.name || 'character'}`}
+                        className="h-full w-full object-contain"
+                      />
+                    </button>
+                  ) : (
+                    <div>
+                      <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Ready to generate' : 'Empty preview state'}</div>
+                      <div className="mt-1.5 text-[11px] text-muted-foreground">
+                        {card.traitCount > 0 ? `${card.traitCount} visible identity detail${card.traitCount === 1 ? '' : 's'} used` : 'No visible identity details yet for this preview.'}
+                      </div>
+                    </div>
+                  )}
+                  {isActive && (
+                    <div className="absolute inset-x-2 bottom-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-blue-100 backdrop-blur-sm">
+                      {slotState?.status === 'running' ? 'Generation running…' : 'Generation queued…'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {(!isDesktop || canSave || !selectedCharacter?.id || selectedCharacter.deletedAt || card.traitCount === 0) && (
+                <div className="mt-2 shrink-0 text-[11px] text-muted-foreground">{helperText}</div>
+              )}
+              {slotState?.error && (
+                <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200">
+                  {slotState.error}
+                </div>
+              )}
+
+              <div className={`mt-2 flex gap-2 ${isDesktop ? "flex-wrap items-center shrink-0" : "items-center"}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 text-xs"
+                  onClick={() => void handleGeneratePreview(card.slot)}
+                  title={slotState?.updatedAt ? `Last updated: ${formatDateTime(slotState.updatedAt)}` : undefined}
+                  disabled={!canGenerate}
+                >
+                  <Sparkles className="mr-1 h-3.5 w-3.5" />
+                  {isSubmitting ? 'Starting...' : actionLabel}
+                </Button>
+                {!isDesktop && slotState?.updatedAt && (
+                  <div className="text-[10px] text-muted-foreground">
+                    {formatDateTime(slotState.updatedAt)}
+                  </div>
+                )}
               </div>
             </div>
+          );
+        })}
+    </div>
+  );
 
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => void copyCharacterPrompt()} disabled={!draft}>
-                <ClipboardCopy className="w-3.5 h-3.5 mr-1" />
-                Copy prompt
-              </Button>
-              {selectedCharacter?.deletedAt ? (
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
-                  <Undo2 className="w-3.5 h-3.5 mr-1" />
-                  {isTrashMutating ? 'Restoring...' : 'Restore'}
-                </Button>
-              ) : (
-                <>
-                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
-                    <CopyPlus className="w-3.5 h-3.5 mr-1" />
-                    Clone
-                  </Button>
-                  <InlineConfirmDeleteButton
-                    onConfirm={moveCharacterToTrash}
-                    disabled={!selectedCharacterId || isTrashMutating}
-                    resetKey={selectedCharacterId}
-                    className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input bg-background px-3 text-xs font-medium text-red-300 ring-offset-background transition-colors hover:bg-accent hover:text-red-200 disabled:pointer-events-none disabled:opacity-50"
-                    confirmClassName="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-300/30 bg-red-600 px-3 text-xs font-medium text-white ring-offset-background transition-colors hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
-                    title={selectedCharacter ? `Move ${selectedCharacter.name} to trash` : 'Move character to trash'}
-                    confirmTitle={selectedCharacter ? `Confirm move ${selectedCharacter.name} to trash` : 'Confirm move character to trash'}
-                    ariaLabel="Move character to trash"
-                    confirmAriaLabel="Confirm move character to trash"
-                    label={isTrashMutating ? 'Deleting...' : 'Delete'}
-                    confirmLabel="Confirm"
-                    iconClassName="w-3.5 h-3.5"
-                  />
-                </>
-              )}
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
-                <Undo2 className="w-3.5 h-3.5 mr-1" />
-                Cancel
-              </Button>
-              <Button size="sm" className="h-8 min-w-[88px] text-xs" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
-                <Save className="w-3.5 h-3.5 mr-1" />
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {!draft ? (
+  const detailContent = (!draft ? (
           <div className="px-4 py-8 text-xs text-muted-foreground">Select a character or create a new one.</div>
         ) : (
-          <div className="min-h-0 flex-1 xl:overflow-y-auto p-4 space-y-4">
+          <div className={`min-h-0 flex-1 p-4 space-y-4 ${isDesktop ? "overflow-y-auto" : "xl:overflow-y-auto"}`}>
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-xs font-medium">Basics</div>
-                  <div className="text-[11px] text-muted-foreground">Top-level fields stay compact and always visible.</div>
+                  <div className="text-[11px] text-muted-foreground">Name, gender and age.</div>
                 </div>
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={openBasicsModal}>
                   <Pencil className="w-3.5 h-3.5 mr-1" />
@@ -1644,7 +1544,7 @@ export default function CharacterManagerPanel() {
               </div>
             </div>
 
-            <div className="grid gap-3 2xl:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               {characterTraitDefinitionsByGroup.map(({ group, traits }) => {
                 const filledTraits = traits.filter((trait) => draft.traits[trait.key]);
                 const filledCount = filledTraits.length;
@@ -1716,6 +1616,8 @@ export default function CharacterManagerPanel() {
                 );
               })}
             </div>
+
+            {isDesktop && detailEditors}
 
             <details className="rounded-lg border border-border bg-muted/20 p-3">
               <summary className="cursor-pointer list-none text-xs font-medium">
@@ -1828,102 +1730,265 @@ export default function CharacterManagerPanel() {
               </details>
             )}
           </div>
-        )}
-      </main>
+        ));
 
-      <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5 xl:overflow-y-auto">
-        <ImageModelSelect value={previewModel} onChange={setPreviewModel} disabled={!!generatingPreviewSlot}/>
-        <OutfitSelect characterId={selectedCharacterId} value={previewLook} onChange={setPreviewLook} neutral refresh={wardrobeRefresh}/>
-        {selectedCharacterId && <LookPromptInspector characterId={selectedCharacterId} look={previewLook}/>}
-        {draft && <PromptPartsEditor title="Identity visible details" value={draft.editorState.promptParts as PartDocument | undefined} source={identitySource(draft.traits,draft.gender)} initialParts={inferIdentityParts(Object.fromEntries(Object.entries(draft.traits).filter(([k])=>!COSTUME_KEYS.includes(k))),draft.gender)} onChange={promptParts=>setDraft({...draft,editorState:{...draft.editorState,promptParts}})}/>}
-        {selectedCharacterId && !selectedCharacter?.deletedAt && <WardrobePanel key={selectedCharacterId} refresh={wardrobeRefresh} characterId={selectedCharacterId} onChange={()=>setWardrobeRefresh(n=>n+1)}/>}
-        {previewCards.map((card) => {
-          const slotState = card.state;
-          const isSubmitting = generatingPreviewSlot === card.slot;
-          const isActive = slotState?.status === 'queued' || slotState?.status === 'running';
-          const canGenerate = !!selectedCharacter?.id && !selectedCharacter.deletedAt && !canSave && card.traitCount > 0 && !isSubmitting && !isActive;
-          const actionLabel = slotState?.imageUrl || slotState?.previewUrl || slotState?.thumbnailUrl ? 'Regenerate' : 'Generate';
-          const helperText = !selectedCharacter?.id
-            ? 'Save the character once before generating previews.'
-            : selectedCharacter.deletedAt
-              ? 'Restore the character before generating previews.'
-              : canSave
-                ? 'Save the latest draft changes before generating previews.'
-                : card.traitCount > 0
-                  ? card.summary
-                  : 'No visible identity details yet for this preview.';
+  return (
+    <div className="grid min-h-0 gap-4 lg:h-full lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
+        <div className="border-b border-border px-4 py-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Characters</div>
+              <div className="text-xs text-muted-foreground">Search, switch, and pick a draft target.</div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => void fetchCharacters()} title="Refresh characters">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
 
-          return (
-            <div key={card.slot} className="flex flex-none flex-col rounded-lg border border-border bg-muted/20 p-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-xs font-medium">{card.title}</div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">{card.subtitle}</div>
-                </div>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] ${previewStatusClassName(slotState?.status)}`}>
-                  {formatPreviewStatus(slotState?.status)}
-                </span>
-              </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openImportDialog}>
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Import
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openExtractDialog}>
+              <ImagePlus className="w-3.5 h-3.5 mr-1" />
+              Extract
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={startNewCharacter}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              New
+            </Button>
+          </div>
 
-              <div className="mt-2 flex items-center justify-center overflow-hidden rounded-lg bg-background/20 px-3 py-2 text-center">
-                <div className={`relative flex items-center justify-center overflow-hidden rounded-lg border ${card.imageUrl ? 'border-border bg-background/70' : 'border-dashed border-border/80 bg-background/40'} px-3 ${previewAspectClassName(card.slot)}`}>
-                  {card.imageUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => openCharacterPreviewViewer(card.slot)}
-                      className="block h-full w-full cursor-zoom-in overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
-                      aria-label={`Open ${card.title} preview viewer`}
-                    >
-                      <img
-                        src={card.imageUrl}
-                        alt={`${card.title} for ${draft?.name || 'character'}`}
-                        className="h-full w-full object-contain"
-                      />
-                    </button>
-                  ) : (
-                    <div>
-                      <div className="text-[13px] font-medium">{card.traitCount > 0 ? 'Ready to generate' : 'Empty preview state'}</div>
-                      <div className="mt-1.5 text-[11px] text-muted-foreground">
-                        {card.traitCount > 0 ? `${card.traitCount} visible identity detail${card.traitCount === 1 ? '' : 's'} used` : 'No visible identity details yet for this preview.'}
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search characters by name..."
+            className="h-9 text-xs"
+          />
+
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as CharacterSortMode)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Sort characters"
+          >
+            <option value="updated_desc">Recently updated</option>
+            <option value="name_asc">Name A-Z</option>
+            <option value="name_desc">Name Z-A</option>
+          </select>
+
+          <div className="flex items-center gap-1 rounded-md bg-muted/30 p-1">
+            {(['active', 'trash'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setListMode(mode)}
+                className={`flex-1 rounded-sm px-2 py-1 text-[11px] font-medium capitalize transition-all ${listMode === mode
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                  }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 max-h-64 lg:max-h-none flex-1 overflow-y-auto divide-y divide-border/70">
+          {isLoading ? (
+            <div className="px-4 py-6 text-xs text-muted-foreground">Loading characters...</div>
+          ) : error ? (
+            <div className="px-4 py-6 text-xs text-red-400">{error}</div>
+          ) : filteredCharacters.length === 0 ? (
+            <div className="px-4 py-6 text-xs text-muted-foreground">
+              {search.trim()
+                ? (listMode === 'trash' ? 'No trashed characters match this name.' : 'No characters match this name.')
+                : (listMode === 'trash' ? 'Trash is empty.' : 'No saved characters yet.')}
+            </div>
+          ) : (
+            filteredCharacters.map((character) => {
+              const isSelected = selectedCharacterId === character.id;
+              const isDirty = draft?.id === character.id && dirtyTraitCount > 0;
+
+              return (
+                <button
+                  key={character.id}
+                  ref={(node) => {
+                    characterButtonRefs.current[character.id] = node;
+                  }}
+                  type="button"
+                  onClick={() => selectCharacter(character)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      moveSelectionByOffset(1);
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      moveSelectionByOffset(-1);
+                    }
+                  }}
+                  className={`w-full border-l-2 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 focus-visible:ring-inset ${isSelected
+                    ? 'border-l-blue-400 bg-blue-500/10 ring-1 ring-inset ring-blue-500/20'
+                    : 'border-l-transparent hover:bg-muted/20'
+                    }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background/60">
+                        {character.primaryPreviewThumbnailUrl ? (
+                          <img
+                            src={character.primaryPreviewThumbnailUrl}
+                            alt={`${character.name} portrait preview`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-sm font-semibold text-muted-foreground">
+                            {character.name.trim().charAt(0).toUpperCase() || 'C'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`truncate text-sm font-medium ${isSelected ? 'text-blue-100' : ''}`}>{character.name}</div>
+                        <div className={`mt-1 text-[11px] ${isSelected ? 'text-blue-100/80' : 'text-muted-foreground'}`}>
+                          {renderGenderLabel(character.gender)} • {character.versionCount || 0} version{(character.versionCount || 0) === 1 ? '' : 's'}
+                        </div>
+                        <div className={`mt-1 text-[10px] ${isSelected ? 'text-blue-100/70' : 'text-muted-foreground'}`}>
+                          Portrait {formatPreviewStatus(character.previewState?.portrait?.status)}
+                        </div>
                       </div>
                     </div>
-                  )}
-                  {isActive && (
-                    <div className="absolute inset-x-2 bottom-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-blue-100 backdrop-blur-sm">
-                      {slotState?.status === 'running' ? 'Generation running…' : 'Generation queued…'}
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {isSelected && (
+                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-200">
+                          Selected
+                        </span>
+                      )}
+                      {character.deletedAt && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                          Trash
+                        </span>
+                      )}
+                      {isDirty && !character.deletedAt && (
+                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-200">
+                          Dirty
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-2 text-[11px] text-muted-foreground">{helperText}</div>
-              {slotState?.error && (
-                <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200">
-                  {slotState.error}
-                </div>
-              )}
-
-              <div className="mt-2 flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 flex-1 text-xs"
-                  onClick={() => void handleGeneratePreview(card.slot)}
-                  disabled={!canGenerate}
-                >
-                  <Sparkles className="mr-1 h-3.5 w-3.5" />
-                  {isSubmitting ? 'Starting...' : actionLabel}
-                </Button>
-                {slotState?.updatedAt && (
-                  <div className="text-[10px] text-muted-foreground">
-                    {formatDateTime(slotState.updatedAt)}
                   </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t border-border bg-muted/10 px-4 py-3 text-[11px] text-muted-foreground">
+          {activeCharacters.length} active • {trashedCharacters.length} in trash
+        </div>
+      </aside>
+
+      <main className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card/60 overflow-hidden">
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-base font-semibold">{draft?.name || 'Unsaved character draft'}</div>
+                {selectedCharacter?.deletedAt && (
+                  <span className="rounded-full px-2 py-0.5 text-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-200">
+                    In trash
+                  </span>
                 )}
+                <span className={`rounded-full px-2 py-0.5 text-[10px] border ${dirtyTraitCount > 0
+                  ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                  : 'border-border bg-background/70 text-muted-foreground'
+                  }`}>
+                  {dirtyTraitCount > 0 ? `${dirtyTraitCount} unsaved change${dirtyTraitCount === 1 ? '' : 's'}` : 'No unsaved changes'}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {draft?.id ? 'Editing current saved character' : 'Nothing is persisted until Save'}
+                {draft ? ` • ${draftTraitCount} total traits in draft` : ''}
               </div>
             </div>
-          );
-        })}
-      </aside>
+
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => void copyCharacterPrompt()} disabled={!draft}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" />
+                Copy prompt
+              </Button>
+              {selectedCharacter?.deletedAt ? (
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={restoreCharacterFromTrash} disabled={isTrashMutating}>
+                  <Undo2 className="w-3.5 h-3.5 mr-1" />
+                  {isTrashMutating ? 'Restoring...' : 'Restore'}
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openCloneDialog} disabled={!selectedCharacterId || isLoadingVersions}>
+                    <CopyPlus className="w-3.5 h-3.5 mr-1" />
+                    Clone
+                  </Button>
+                  <InlineConfirmDeleteButton
+                    onConfirm={moveCharacterToTrash}
+                    disabled={!selectedCharacterId || isTrashMutating}
+                    resetKey={selectedCharacterId}
+                    className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input bg-background px-3 text-xs font-medium text-red-300 ring-offset-background transition-colors hover:bg-accent hover:text-red-200 disabled:pointer-events-none disabled:opacity-50"
+                    confirmClassName="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-300/30 bg-red-600 px-3 text-xs font-medium text-white ring-offset-background transition-colors hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
+                    title={selectedCharacter ? `Move ${selectedCharacter.name} to trash` : 'Move character to trash'}
+                    confirmTitle={selectedCharacter ? `Confirm move ${selectedCharacter.name} to trash` : 'Confirm move character to trash'}
+                    ariaLabel="Move character to trash"
+                    confirmAriaLabel="Confirm move character to trash"
+                    label={isTrashMutating ? 'Deleting...' : 'Delete'}
+                    confirmLabel="Confirm"
+                    iconClassName="w-3.5 h-3.5"
+                  />
+                </>
+              )}
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetDraft} disabled={!draft}>
+                <Undo2 className="w-3.5 h-3.5 mr-1" />
+                Cancel
+              </Button>
+              <Button size="sm" className="h-8 min-w-[88px] text-xs" onClick={saveDraft} disabled={!canSave || isSaving || !!selectedCharacter?.deletedAt}>
+                <Save className="w-3.5 h-3.5 mr-1" />
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {isDesktop ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
+              <TabsList aria-label="Character view">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="details">Details</TabsTrigger>
+              </TabsList>
+              {activeTab === 'overview' && (
+                <Button variant="ghost" size="sm" className="text-xs" aria-expanded={showPreviewSettings} onClick={() => setShowPreviewSettings(value => !value)}>
+                  Preview settings
+                </Button>
+              )}
+            </div>
+            <TabsContent value="overview" forceMount className="m-0 flex min-h-0 flex-1 flex-col overflow-y-auto p-4 data-[state=inactive]:hidden">
+              <div className={`mb-3 shrink-0 rounded-lg border border-border bg-muted/20 p-3 ${showPreviewSettings ? '' : 'hidden'}`}>
+                {previewSettings}
+              </div>
+              {previewGallery}
+            </TabsContent>
+            <TabsContent value="details" forceMount className="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+              {detailContent}
+            </TabsContent>
+          </Tabs>
+        ) : detailContent}
+      </main>
+
+      {!isDesktop && (
+        <aside className="flex min-h-0 flex-col gap-2 rounded-xl border border-border bg-card/60 p-2.5 xl:overflow-y-auto">
+          {previewSettings}
+          {detailEditors}
+          {previewGallery}
+        </aside>
+      )}
 
       <Dialog open={modalState.kind !== 'closed'} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent>
@@ -2169,13 +2234,38 @@ export default function CharacterManagerPanel() {
         </DialogContent>
       </Dialog>
 
-      <GalleryFullscreenViewer
-        open={previewViewerOpen}
-        items={characterPreviewViewerItems}
-        currentIndex={previewViewerIndex}
-        onIndexChange={setPreviewViewerIndex}
-        onClose={() => setPreviewViewerOpen(false)}
-      />
+      {isDesktop ? (
+        <Dialog open={previewViewerOpen} onOpenChange={setPreviewViewerOpen}>
+          <DialogContent className="inset-0 left-0 top-0 flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 bg-black p-0 sm:rounded-none [&>button]:z-10 [&>button]:bg-black/70 [&>button]:p-2 [&>button]:text-white">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Character preview</DialogTitle>
+              <DialogDescription>View the saved character images. Use Previous and Next to change the view.</DialogDescription>
+            </DialogHeader>
+            <div className="flex min-h-0 flex-1 items-center justify-center p-4 pb-20">
+              {characterPreviewViewerItems[previewViewerIndex] && (
+                <img
+                  src={characterPreviewViewerItems[previewViewerIndex].url}
+                  alt={`${draft?.name || 'Character'} — ${CHARACTER_PREVIEW_SLOT_META[characterPreviewViewerItems[previewViewerIndex].id.split(':').pop() as CharacterPreviewSlot]?.title || 'Preview'}`}
+                  className="h-full w-full object-contain"
+                />
+              )}
+            </div>
+            <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-4 text-white">
+              <Button variant="outline" onClick={() => setPreviewViewerIndex(index => index - 1)} disabled={previewViewerIndex === 0}>Previous</Button>
+              <span className="text-xs">{previewViewerIndex + 1} / {characterPreviewViewerItems.length}</span>
+              <Button variant="outline" onClick={() => setPreviewViewerIndex(index => index + 1)} disabled={previewViewerIndex >= characterPreviewViewerItems.length - 1}>Next</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <GalleryFullscreenViewer
+          open={previewViewerOpen}
+          items={characterPreviewViewerItems}
+          currentIndex={previewViewerIndex}
+          onIndexChange={setPreviewViewerIndex}
+          onClose={() => setPreviewViewerOpen(false)}
+        />
+      )}
 
       <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
         <DialogContent className="max-w-2xl">
