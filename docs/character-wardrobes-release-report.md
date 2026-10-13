@@ -24,4 +24,26 @@ The unchanged base commit already fails 14 cases in three older suites (Characte
 OpenClaw MCP browser/memory tools are not available in this session. Browser checks use the installed local Playwright runtime, not MCP. No MemPalace write is claimed.
 
 ## Production rollout
-Pending final cutover. Before stopping writers, verify no active jobs. Capture a fresh SQLite backup and retain the previous production build, then fast-forward main, apply the additive SQL/data migration, verify against the fresh backup, generate Prisma and run the production build as engui. Restart explicitly with sudo systemctl. Restore the matching previous code, database and build if any pre-opening check fails.
+Completed at 2026-10-13 07:54 UTC. Runtime revisions: `7cf844a` and `de200bd`; previous production revision: `83c42e3`.
+
+- No active jobs at cutover. The service was stopped before taking a fresh SQLite backup.
+- Backup: `/home/engui/backups/wardrobe-20261013/database-before.db`; previous production build retained in `next-before` in the same directory. This is a same-disk operational rollback copy, not protection against physical disk loss. No media files were modified by this release.
+- Additive migration created six personal Original outfits, linked them and selected them as defaults. Verification against the fresh backup preserved original rows in all 48 tables; rerunning the migration made no changes.
+- Production `npm run build` completed successfully as engui. The service restarted explicitly through sudo systemctl and returned healthy scoped Characters/Outfits responses.
+- Preserved counts at cutover: 77 characters (six Showdown), 8,816 gallery assets, 88 LoRAs, 16 prompt documents and five existing Studio runs. Six Original outfits were present; foreign-key check was clean. Jobs remained zero.
+- Existing prompt documents and historical previews/versions were not rewritten.
+- Deployment log and exit code: `/var/tmp/engui-wardrobe-20261013/deploy.log` and `deploy.exit` (0).
+
+## Authorized follow-up: Showdown Editorial preparation
+After rollout the user requested photo sessions for all six characters in their default costumes and fitting locations, using the Editorial pose set. Prepared through the scoped production API, without launching generation:
+
+- Gambler: Velvet Casino.
+- Protector: Civic Security Checkpoint.
+- Bureaucrat: Ministry Atrium.
+- Cheater: Neon Backstreet.
+- Rebel: Industrial Rooftop.
+- Inventor: Precision Workshop.
+
+Each session uses Character default (Original) and has one draft run with five unassigned slots from Editorial Dynamic, Krea2 Turbo, eight steps, CFG 1, random seed and text-only poses. Runs freeze the resolved identity and default outfit; session briefs retain the live default selection for future runs. Editorial photography is photorealistic on location. Helmet concealment, Inventor's empty left socket/separate right-hand tool, and Gambler's warm golden blonde hair are explicitly preserved.
+
+The existing Cheater Basic session was left unchanged. No new Characters or Outfits were created by this preparation. All six runs remain draft; there are no queued/running jobs. The local audit manifest is `/var/tmp/engui-wardrobe-20261013/showdown-editorials.json`.

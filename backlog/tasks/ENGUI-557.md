@@ -1,6 +1,6 @@
 # ENGUI-557 - Wardrobe release validation and production rollout
 
-Status: In Progress
+Status: Done
 Created: 2026-10-13
 Labels: [wardrobe, characters, studio, desktop, mobile]
 
@@ -8,6 +8,9 @@ Labels: [wardrobe, characters, studio, desktop, mobile]
 Rehearsed migration, tests, scoped smoke, backup, commit/push and production deployment.
 
 ## Acceptance Criteria
-- [ ] Implement the corresponding section of docs/character-wardrobes-model-selection-plan.md.
-- [ ] Verify workspace isolation and preserve existing content.
-- [ ] Validate without paid generation jobs.
+- [x] Implement the corresponding section of docs/character-wardrobes-model-selection-plan.md.
+- [x] Verify workspace isolation and preserve existing content.
+- [x] Validate without paid generation jobs.
+
+## Completion
+Production rollout succeeded; preservation and focused validation evidence is recorded in docs/character-wardrobes-release-report.md. No paid generation jobs were launched.
