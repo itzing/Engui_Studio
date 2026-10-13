@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isDeepStrictEqual } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { migrate, MAPPING, SHOWDOWN } from './migrate';
 const beforePath=process.argv[2],afterPath=process.argv[3];
@@ -13,7 +14,7 @@ async function main(){
    const omit=new Set<string>();
    if(name==='characters'&&MAPPING[row.id])['traits','currentVersionId','updatedAt'].forEach(k=>omit.add(k));
    if(name==='studio_session_runs'&&current.templateSnapshotJson!==row.templateSnapshotJson){const old=JSON.parse(row.templateSnapshotJson);const next=JSON.parse(current.templateSnapshotJson);assert(!old.characterPrompt&&MAPPING[old.characterId]);assert(next.characterPrompt&&next.wardrobeMigrationPinned);delete next.characterPrompt;delete next.wardrobeMigrationPinned;delete old.characterPrompt;assert.deepEqual(next,old);omit.add('templateSnapshotJson');omit.add('updatedAt');}
-   for(const key of Object.keys(row))if(!omit.has(key))assert.deepEqual(current[key],row[key],`${name}/${row.id}/${key}`);
+   for(const key of Object.keys(row))if(!omit.has(key))assert.ok(isDeepStrictEqual(current[key],row[key]),`${name}/${row.id}/${key}: preservation mismatch`);
   }
   if(name!=='character_versions')assert.equal(newRows.length,oldRows.length,name+' row count');preserved++;
  }
