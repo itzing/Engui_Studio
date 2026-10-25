@@ -7,6 +7,7 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
 import { writeMobileDetailsSnapshot } from '@/lib/mobile/detailsNavigation';
+import type { GalleryPosition, GalleryPositionRestoreResult } from '@/lib/mobile/galleryPosition';
 
 export type GallerySemanticFilter = 'all' | 'common' | 'draft' | 'upscale';
 
@@ -104,6 +105,10 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
   const [viewerIndex, setViewerIndex] = useState(0);
   const [restoreTick, setRestoreTick] = useState(0);
   const [restoreAbsoluteIndex, setRestoreAbsoluteIndex] = useState<number | null>(null);
+  const [restoreViewportOffset, setRestoreViewportOffset] = useState<number | null>(null);
+  const [positionRestoreTick, setPositionRestoreTick] = useState(0);
+  const [positionRestoreResult, setPositionRestoreResult] = useState<GalleryPositionRestoreResult | null>(null);
+  const pendingPositionRef = useRef<GalleryPosition | null>(null);
   const loadingPagesRef = useRef<Set<number>>(new Set());
   const hydratedSelectionRef = useRef(false);
   const loadGenerationRef = useRef(0);
@@ -269,15 +274,18 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
       return;
     }
 
+    const requestedPosition = pendingPositionRef.current?.workspaceId === effectiveWorkspaceId
+      ? pendingPositionRef.current : null;
+    pendingPositionRef.current = null;
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     loadingPagesRef.current.clear();
     setIsLoading(true);
     setError(null);
     try {
-      const savedSelection = !query.trim() && storageKey && typeof window !== 'undefined'
+      const savedSelection = requestedPosition?.assetId || (!query.trim() && storageKey && typeof window !== 'undefined'
         ? window.localStorage.getItem(storageKey)
-        : null;
+        : null);
 
       setLoadedPages({});
       const focusData = await loadPage(1, { focusAssetId: savedSelection, generation });
@@ -303,6 +311,14 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
 
       setSelectedAssetId(selectedId);
       setSelectedAbsoluteIndex(selectedIndex);
+      setRestoreViewportOffset(requestedPosition?.viewportOffset ?? null);
+      if (requestedPosition) {
+        setPositionRestoreResult({
+          workspaceId: effectiveWorkspaceId,
+          assetId: requestedPosition.assetId,
+          status: focusedAssetId ? 'restored' : 'missing',
+        });
+      }
       setRestoreAbsoluteIndex(focusedAbsoluteIndex);
       if (focusedAbsoluteIndex !== null) {
         setRestoreTick((value) => value + 1);
@@ -326,7 +342,19 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     if (!prefsHydrated) return;
     hydratedSelectionRef.current = false;
     void hydrateInitialState();
-  }, [hydrateInitialState, prefsHydrated]);
+  }, [hydrateInitialState, prefsHydrated, positionRestoreTick]);
+
+  const restorePosition = useCallback((position: GalleryPosition) => {
+    if (surface !== 'mobile' || position.workspaceId !== effectiveWorkspaceId) return;
+    pendingPositionRef.current = position;
+    setQuery(position.filters.query);
+    setSelectedFilters(position.filters.selectedFilters);
+    setSemanticFilter(position.filters.semanticFilter);
+    setShowTrashed(position.filters.showTrashed);
+    setFavoritesOnly(position.filters.favoritesOnly);
+    setPositionRestoreResult(null);
+    setPositionRestoreTick((value) => value + 1);
+  }, [effectiveWorkspaceId, surface]);
 
   const toggleMediaFilter = useCallback((filter: 'all' | MediaFilter) => {
     setSelectedFilters((prev) => {
@@ -506,6 +534,7 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
 
   const closeViewer = useCallback(() => {
     setViewerOpen(false);
+    setRestoreViewportOffset(null);
     if (selectedAbsoluteIndex !== null) {
       setRestoreAbsoluteIndex(selectedAbsoluteIndex);
       setRestoreTick((value) => value + 1);
@@ -653,6 +682,9 @@ export function useMobileGalleryScreen(surface: 'mobile' | 'desktop' = 'mobile')
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
+    restoreViewportOffset,
+    restorePosition,
+    positionRestoreResult,
     workspaceId: effectiveWorkspaceId,
     hydratedSelection: hydratedSelectionRef.current,
   };

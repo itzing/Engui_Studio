@@ -11,6 +11,11 @@ import {
   type MobileGalleryAsset,
 } from '@/hooks/gallery/useMobileGalleryScreen';
 
+// These unit tests exercise gallery state, not workspace transport/authentication.
+vi.mock('@/lib/workspaces/useWorkspaceFetch', () => ({
+  useWorkspaceFetch: () => globalThis.fetch,
+}));
+
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => ({
     activeWorkspaceId: 'ws-1',

@@ -3,7 +3,6 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  MOBILE_JOBS_DETAILS_NAVIGATION_KEY,
   buildMobileDetailsNavigationState,
   getMobileDetailsEntryIdAtIndex,
   readMobileDetailsSnapshot,
@@ -118,9 +117,8 @@ describe('mobile details navigation', () => {
       pageSize: 24,
     });
 
+    expect(readMobileDetailsSnapshot('jobs')).not.toBeNull();
     vi.setSystemTime(new Date('2026-07-30T18:21:00Z'));
-
-    expect(window.sessionStorage.getItem(MOBILE_JOBS_DETAILS_NAVIGATION_KEY)).toBeTruthy();
     expect(readMobileDetailsSnapshot('jobs')).toBeNull();
   });
 });

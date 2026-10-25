@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
+import { Bookmark, BookmarkX, Undo2, AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery/useMobileGalleryScreen';
+import { useMobileGalleryPosition } from '@/hooks/gallery/useMobileGalleryPosition';
+import { galleryPositionScrollOffset } from '@/lib/mobile/galleryPosition';
 import { useViewportFormFactor } from '@/hooks/mobile/useViewportFormFactor';
 import { useToast } from '@/components/ui/toast';
 import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
@@ -163,7 +165,28 @@ export default function MobileGalleryScreen() {
     toggleTrash,
     restoreTick,
     restoreAbsoluteIndex,
+    restoreViewportOffset,
+    restorePosition,
+    positionRestoreResult,
+    workspaceId,
   } = useMobileGalleryScreen('mobile');
+
+  const handleMissingPosition = useCallback(() => {
+    showToast('Saved item is no longer available. Position cleared.', 'info');
+  }, [showToast]);
+  const positionControl = useMobileGalleryPosition({
+    workspaceId,
+    containerRef: parentRef,
+    selectedAssetId,
+    filters: { query, selectedFilters, semanticFilter, showTrashed, favoritesOnly },
+    restorePosition,
+    restoreResult: positionRestoreResult,
+    onMissing: handleMissingPosition,
+  });
+  const positionLabel = positionControl.action === 'save' ? 'Save position'
+    : positionControl.action === 'clear' ? 'Clear position' : 'Return to position';
+  const PositionIcon = positionControl.action === 'save' ? Bookmark
+    : positionControl.action === 'clear' ? BookmarkX : Undo2;
 
   const isTabletGallery = formFactor === 'tablet-landscape';
   const galleryColumnCount = isTabletGallery ? tabletColumns : MOBILE_GALLERY_COLUMN_COUNT;
@@ -237,10 +260,18 @@ export default function MobileGalleryScreen() {
   useEffect(() => {
     if (restoreTick <= 0 || restoreHandledTickRef.current === restoreTick) return;
     if (typeof restoreAbsoluteIndex !== 'number' || restoreAbsoluteIndex < 0) return;
+    if (isLoading || !parentRef.current || galleryGridWidth <= 0) return;
     restoreHandledTickRef.current = restoreTick;
-    rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / galleryColumnCount), { align: 'center' });
+    if (typeof restoreViewportOffset === 'number') {
+      rowVirtualizer.scrollToOffset(galleryPositionScrollOffset(
+        restoreAbsoluteIndex, galleryColumnCount, galleryRowSize, parentRef.current.clientHeight, restoreViewportOffset,
+      ));
+    } else {
+      rowVirtualizer.scrollToIndex(Math.floor(restoreAbsoluteIndex / galleryColumnCount), { align: 'center' });
+    }
+    positionControl.updateViewport();
     void ensureRangeLoaded(Math.max(0, restoreAbsoluteIndex - galleryColumnCount * 8), restoreAbsoluteIndex + galleryColumnCount * 8);
-  }, [ensureRangeLoaded, galleryColumnCount, restoreAbsoluteIndex, restoreTick, rowVirtualizer]);
+  }, [ensureRangeLoaded, galleryColumnCount, galleryGridWidth, galleryRowSize, isLoading, positionControl.updateViewport, restoreAbsoluteIndex, restoreTick, restoreViewportOffset, rowVirtualizer]);
 
   const openAssetInfo = (asset: MobileGalleryAsset) => {
     router.push(`/m/gallery/${asset.id}`);
@@ -427,9 +458,25 @@ export default function MobileGalleryScreen() {
               </div>
             </div>
           )}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 text-base sm:text-sm" />
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 text-base sm:text-sm" />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`h-11 w-11 shrink-0 rounded border ${positionControl.action === 'save'
+                ? 'border-border/40 text-muted-foreground'
+                : 'border-blue-500/40 bg-blue-500/10 text-blue-400'}`}
+              aria-label={positionLabel}
+              title={positionLabel}
+              disabled={isLoading || !workspaceId || (positionControl.action === 'save' && !positionControl.canSave)}
+              onClick={positionControl.activate}
+            >
+              <PositionIcon className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
@@ -451,7 +498,7 @@ export default function MobileGalleryScreen() {
         ) : null}
 
         {!isLoading && totalCount > 0 ? (
-          <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
+          <div ref={parentRef} onScroll={positionControl.updateViewport} className="min-h-0 flex-1 overflow-auto">
             <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
               {virtualRows.map((virtualRow) => {
                 const rowStart = virtualRow.index * galleryColumnCount;
