@@ -21,3 +21,7 @@ Revert the feature commit, rebuild production and restart engui-studio.service. 
 On 2026-10-28, 34 focused tests and the targeted viewport-module type check passed. The final production build passed. Eleven Chromium scenarios passed both on the isolated preview and after deployment, covering a synthetic old-layout root-scroll gap, visual viewport changes, dismissal with and without blur/resize, inner gallery scroll retention, Jobs navigation, 320px width, phone/tablet orientation gates, and desktop document behavior. No final browser run produced page errors or API writes. This does not substitute for a physical iOS keyboard test.
 
 Use ENGUI_ISOLATED_VALIDATION=1 for temporary Next.js preview servers so they do not start the production RunPod supervisor. Browser tests intercept API requests and provide existing workspace/project fixtures; all writes are blocked. The production Next.js configuration skips full-repository type/lint checks; only the new viewport module received a targeted TypeScript pass.
+
+## Reverted after owner regression report
+
+The owner reported that mobile no longer opened after deployment of 0f445de. ENGUI-566 reverts the entire runtime/test change. The successful Chromium fixture checks did not establish native iPhone correctness. The original keyboard gap remains unresolved; do not treat this fix as shipped. See docs/mobile-viewport-regression-rollback.md.

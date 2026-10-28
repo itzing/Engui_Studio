@@ -1,7 +1,7 @@
 ---
 id: ENGUI-565
 title: Keep the mobile app shell anchored after keyboard dismissal
-status: Done
+status: To Do
 assignee: []
 created_date: '2026-10-28 21:49'
 labels: [mobile, frontend]
@@ -32,3 +32,7 @@ Mobile-only document scroll locking and a fixed visual-viewport shell now preven
 Validation: 34/34 focused tests; targeted TypeScript check for the viewport module; production build; 11/11 Chromium fixture checks against the preview and again against the deployed service. The former normal-flow layout reproduced an 80px gap under a synthetic root scroll; the fixed shell rejected the same drift. Final browser runs had zero page errors and zero API writes. Physical iPhone keyboard behavior remains to be confirmed on-device; no claim of a native iOS test.
 
 Service restarted at 2026-10-28 22:10:13 UTC. HTTP /, /m/create, /m/jobs and /m/gallery returned 200. No generation jobs were submitted for validation. Build logs: /home/engui/engui-runs/engui-565-20261028/. Browser reports and screenshots: OpenClaw workspace runs/engui-mobile-keyboard-20261028/.
+
+## Reverted after owner regression report
+
+The owner reported that mobile no longer opened after deployment of 0f445de. ENGUI-566 reverts the entire runtime/test change. The successful Chromium fixture checks did not establish native iPhone correctness. The original keyboard gap remains unresolved; do not treat this fix as shipped. See docs/mobile-viewport-regression-rollback.md.
