@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import MobileRouteEventBridge from './MobileRouteEventBridge';
+import { installMobileViewport } from '@/lib/mobile/mobileViewport';
 
 export default function MobileAppProviders({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    document.body.classList.add('engui-mobile-shell');
-    return () => {
-      document.body.classList.remove('engui-mobile-shell');
-    };
-  }, []);
+  const pathname = usePathname();
+  // A route can remove the focused input without dispatching focusout.
+  useEffect(() => installMobileViewport(), [pathname]);
 
   return (
     <>

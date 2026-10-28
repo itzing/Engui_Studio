@@ -10,7 +10,7 @@ export default function MobileBottomNav() {
 
   return (
     <nav
-      className="border-t border-border bg-background/95 px-2 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      className="shrink-0 border-t border-border bg-background/95 px-2 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
     >
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}>

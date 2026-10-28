@@ -29,8 +29,29 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* Mobile screens scroll internally; the document must not retain keyboard panning. */
+html.engui-mobile-shell,
 body.engui-mobile-shell {
-  overscroll-behavior-y: auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  scroll-behavior: auto;
+}
+
+body.engui-mobile-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+.engui-mobile-viewport {
+  position: fixed;
+  top: var(--engui-mobile-viewport-top, 0px);
+  right: 0;
+  left: 0;
+  height: var(--engui-mobile-viewport-height, 100dvh);
+  max-height: var(--engui-mobile-viewport-height, 100dvh);
 }
 
 @layer utilities {
