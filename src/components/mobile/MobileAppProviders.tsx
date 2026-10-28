@@ -1,32 +1,18 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, type ReactNode } from 'react';
 import MobileRouteEventBridge from './MobileRouteEventBridge';
-import { installMobileKeyboardRecovery } from '@/lib/mobile/mobileKeyboardRecovery';
-import { installMobileViewportDiagnostics } from '@/lib/mobile/mobileViewportDiagnostics';
+import { installStandalonePhoneHeight } from '@/lib/mobile/standalonePhoneHeight';
 
 export default function MobileAppProviders({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const recovery = useRef<ReturnType<typeof installMobileKeyboardRecovery> | null>(null);
-
   useEffect(() => {
     document.body.classList.add('engui-mobile-shell');
-    const controller = installMobileKeyboardRecovery();
-    recovery.current = controller;
-    const disposeDiagnostics = installMobileViewportDiagnostics();
+    const disposeHeight = installStandalonePhoneHeight();
     return () => {
-      recovery.current = null;
-      controller.dispose();
-      disposeDiagnostics();
+      disposeHeight();
       document.body.classList.remove('engui-mobile-shell');
     };
   }, []);
-
-  useEffect(() => {
-    // Route changes can remove the focused editor without a focusout event.
-    recovery.current?.schedule();
-  }, [pathname]);
 
   return (
     <>

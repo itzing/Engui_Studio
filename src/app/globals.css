@@ -30,7 +30,14 @@ body {
 }
 
 body.engui-mobile-shell {
+  min-height: var(--engui-standalone-phone-height, 100dvh);
   overscroll-behavior-y: auto;
+}
+
+/* Keep the installed iPhone shell independent of stale dynamic viewport dimensions. */
+.engui-mobile-frame {
+  height: var(--engui-standalone-phone-height, 100dvh);
+  max-height: var(--engui-standalone-phone-height, 100dvh);
 }
 
 @layer utilities {
