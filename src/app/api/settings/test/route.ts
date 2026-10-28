@@ -22,55 +22,57 @@ async function POSTImpl(request: NextRequest) {
   try {
     // Request body를 한 번만 읽기
     const body = await request.json();
-    const { service, endpointType, apiKey, endpointId, config } = body;
+    const { service, apiKey, endpointId, config } = body;
 
     console.log(`🧪 Testing ${service} connection...`);
 
     if (service === 'runpod') {
-      // RunPod endpoint 테스트
-      if (!apiKey || !endpointId) {
+      const runpodApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+      const runpodEndpointId = typeof endpointId === 'string' ? endpointId.trim() : '';
+      if (!runpodApiKey || !runpodEndpointId) {
         return NextResponse.json({ error: 'API key and endpoint ID are required' }, { status: 400 });
       }
 
       const startTime = Date.now();
-      
+
       try {
-        // RunPod API를 통해 endpoint 상태 확인
-        const response = await fetch(`https://api.runpod.io/v2/${endpointId}/status`, {
+        // A health probe checks access without queuing a billable job or requiring active workers.
+        const response = await fetch(`https://api.runpod.ai/v2/${encodeURIComponent(runpodEndpointId)}/health`, {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${runpodApiKey}`,
           },
+          cache: 'no-store',
+          redirect: 'error',
+          signal: AbortSignal.timeout(10000),
         });
 
-        const endTime = Date.now();
-        const responseTime = endTime - startTime;
+        const failures: Record<number, string> = {
+          401: 'RunPod authentication failed. Check your API key.',
+          403: 'RunPod access denied. Check your API key permissions.',
+          404: 'RunPod endpoint not found. Check your endpoint ID.',
+          429: 'RunPod rate limit reached. Try again later.',
+        };
 
-        if (response.ok) {
-          return NextResponse.json({
-            success: true,
-            message: `${endpointType} endpoint 연결 성공!`,
-            responseTime,
-            statusCode: response.status,
-            endpoint: endpointId
-          });
-        } else {
-          const errorData = await response.json();
-          return NextResponse.json({
-            success: false,
-            message: `${endpointType} endpoint 연결 실패: ${errorData.error || 'Unknown error'}`,
-            responseTime,
-            statusCode: response.status,
-            endpoint: endpointId
-          });
-        }
+        return NextResponse.json({
+          success: response.ok,
+          message: response.ok
+            ? 'RunPod endpoint is reachable.'
+            : failures[response.status] || `RunPod health check failed (HTTP ${response.status}). Try again later.`,
+          responseTime: Date.now() - startTime,
+          statusCode: response.status,
+          endpoint: runpodEndpointId,
+        });
       } catch (error) {
+        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
         return NextResponse.json({
           success: false,
-          message: `${endpointType} endpoint 연결 오류: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          responseTime: 0,
+          message: timedOut
+            ? 'RunPod health check timed out after 10 seconds. Try again later.'
+            : 'Unable to reach RunPod. Check your network connection and try again.',
+          responseTime: Date.now() - startTime,
           statusCode: 0,
-          endpoint: endpointId
+          endpoint: runpodEndpointId,
         });
       }
     } else if (service === 's3') {
@@ -184,193 +186,6 @@ async function POSTImpl(request: NextRequest) {
       { error: `Test failed: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     );
-  }
-}
-
-async function testRunPodConnection(config: any, endpointId?: string): Promise<TestResult> {
-  const startTime = Date.now();
-  
-  try {
-    const { apiKey } = config;
-    
-    if (!apiKey) {
-      return {
-        success: false,
-        message: 'RunPod API key is required',
-        error: 'Missing API key'
-      };
-    }
-    
-    // If no specific endpoint is provided, just test API key validity
-    if (!endpointId) {
-      // Test API key by trying to access a general RunPod API endpoint
-      const url = 'https://api.runpod.ai/graphql';
-      
-      console.log(`🔧 Testing RunPod API key validity...`);
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: '{ myself { id } }'
-        }),
-      });
-      
-      const responseTime = Date.now() - startTime;
-      
-      console.log(`📊 RunPod API key test response: ${response.status} (${responseTime}ms)`);
-      
-      if (response.status === 401) {
-        return {
-          success: false,
-          message: 'Invalid API key - Authentication failed',
-          error: 'Authentication failed',
-          details: {
-            responseTime,
-            statusCode: response.status,
-            endpoint: url
-          }
-        };
-      }
-      
-      if (response.status === 200) {
-        return {
-          success: true,
-          message: `RunPod API key is valid (${responseTime}ms)`,
-          details: {
-            responseTime,
-            statusCode: response.status,
-            endpoint: url
-          }
-        };
-      }
-      
-      return {
-        success: false,
-        message: `RunPod API test failed: ${response.status}`,
-        error: `HTTP ${response.status}`,
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    // Test specific endpoint
-    const url = `https://api.runpod.ai/v2/${endpointId}/run`;
-    
-    console.log(`🔧 Testing RunPod endpoint: ${url}`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: {
-          test: true,
-          prompt: 'connection test'
-        }
-      }),
-    });
-    
-    const responseTime = Date.now() - startTime;
-    const responseText = await response.text();
-    
-    console.log(`📊 RunPod endpoint test response: ${response.status} (${responseTime}ms)`);
-    
-    if (response.status === 401) {
-      return {
-        success: false,
-        message: 'Invalid API key - Authentication failed',
-        error: 'Authentication failed',
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    if (response.status === 404) {
-      return {
-        success: false,
-        message: 'Endpoint not found - Check your endpoint ID',
-        error: 'Endpoint not found',
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    // For RunPod, different status codes mean different things
-    if (response.status === 200) {
-      return {
-        success: true,
-        message: `✅ Endpoint ready and accessible (${responseTime}ms)`,
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    if (response.status === 400) {
-      return {
-        success: true,
-        message: `✅ Endpoint accessible, API key valid (${responseTime}ms) - Ready for use`,
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    if (response.status >= 200 && response.status < 500) {
-      return {
-        success: true,
-        message: `✅ Endpoint accessible (${responseTime}ms) - Status: ${response.status}`,
-        details: {
-          responseTime,
-          statusCode: response.status,
-          endpoint: url
-        }
-      };
-    }
-    
-    return {
-      success: false,
-      message: `RunPod server error: ${response.status}`,
-      error: responseText,
-      details: {
-        responseTime,
-        statusCode: response.status,
-        endpoint: url
-      }
-    };
-    
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    console.error('❌ RunPod connection test failed:', error);
-    
-    return {
-      success: false,
-      message: 'Connection failed - Check your network and API key',
-      error: `${error}`,
-      details: {
-        responseTime,
-        endpoint: endpointId ? `https://api.runpod.ai/v2/${endpointId}/run` : 'https://api.runpod.ai/graphql'
-      }
-    };
   }
 }
 
