@@ -1,7 +1,7 @@
 ---
 id: ENGUI-567
 title: Recover mobile panel position after keyboard dismissal without replacing the shell
-status: Done
+status: To Do
 assignee: []
 created_date: '2026-10-28 22:35'
 labels: [mobile, frontend, regression]
@@ -33,3 +33,7 @@ Validation: 51 focused tests and targeted TypeScript check passed. Native WebKit
 Service restarted at 2026-10-28 22:41:53 UTC. Previous owner-confirmed build retained at /home/engui/engui-runs/engui-567-20261028/previous.next. Preview stopped cleanly. No generation jobs or production API writes were submitted. Physical iPhone keyboard behavior still requires owner confirmation; Linux WebKit is not a native iPhone test.
 
 Evidence: /home/engui/engui-runs/engui-567-20261028/REPORT.md and OpenClaw workspace runs/engui-mobile-keyboard-v2-20261028/.
+
+## Native-device follow-up
+
+Owner confirmed 08dec6b does not resolve the panel drift immediately after keyboard dismissal. ENGUI-568 gathers actual device geometry; the panel issue remains open despite synthetic/browser test passes.

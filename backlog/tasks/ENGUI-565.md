@@ -1,7 +1,7 @@
 ---
 id: ENGUI-565
 title: Keep the mobile app shell anchored after keyboard dismissal
-status: Done
+status: To Do
 assignee: []
 created_date: '2026-10-28 21:49'
 labels: [mobile, frontend]
@@ -40,3 +40,7 @@ The owner reported that mobile no longer opened after deployment of 0f445de. ENG
 ## Replacement implementation
 
 ENGUI-567 provides a different, bounded keyboard-dismissal recovery while preserving the owner-confirmed shell from d7c1630. The original 0f445de controller remains reverted. See docs/mobile-keyboard-dismissal-recovery.md for design and evidence. Native-device dismissal confirmation is still required after the replacement deployment.
+
+## Native-device follow-up
+
+Owner confirmed 08dec6b does not resolve the panel drift immediately after keyboard dismissal. ENGUI-568 gathers actual device geometry; the panel issue remains open despite synthetic/browser test passes.
