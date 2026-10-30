@@ -23,3 +23,7 @@ Verify one request at successful clear, no requests on guarded/cancelled/short p
 62 targeted tests pass. Preview checks pass in Chromium and WebKit (28 scenarios each). Linux WebKit does not expose Apple-platform switch capability, so the browser fixture explicitly supplies that capability flag while testing real label activation, timing, focus and cleanup. Chromium spies on the Vibration API. Neither fixture proves a physical pulse. The first unadapted Linux run is retained under runs/engui-gallery-haptics-20261030/preview; corrected platform-aware preview evidence is under preview-verified. There were no production API writes or generation jobs.
 
 Production verification also passed 28 scenarios per engine after deployment at 11:38:43 UTC. The actual iPhone pulse remains unverified until owner feedback.
+
+## Superseded by ENGUI-572
+
+Owner confirmed no tactile response on iOS 26.6.2. The programmatic native-switch workaround is not a working solution on this device. ENGUI-572 replaces it with an approved visible confirmation above the same button and removes the helper.

@@ -27,3 +27,7 @@ See docs/mobile-gallery-clear-haptics.md.
 ## Completion
 
 62 tests and isolated production build pass. WebKit/Chromium each pass 28 preview and 28 deployed scenarios with zero page errors, production API writes or unexpected API paths. Safari native switch capability is explicitly simulated on Linux, while activation/focus/cleanup use real browser DOM; physical iPhone haptics still require owner confirmation. Deployed 2026-10-30 11:38:43 UTC. Previous build retained under /home/engui/engui-runs/engui-571-20261030/previous.next. No generation jobs, viewport changes, extra controls or dependencies.
+
+## Device outcome
+
+Owner reported no physical response on iOS 26.6.2. Automated checks were not evidence of a tactile result. Superseded by the approved visible confirmation in ENGUI-572; do not reapply the switch workaround.
