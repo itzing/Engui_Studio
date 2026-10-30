@@ -5,6 +5,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PromptTemplateTextarea from '@/components/prompt-wildcards/PromptTemplateTextarea';
+import { chooseBrowserWorkspace } from '@/lib/workspaces/client';
 
 const wildcards = [
   {
@@ -31,12 +32,11 @@ const wildcards = [
   },
 ];
 
-function jsonResponse(body: unknown, ok = true, status = 200) {
-  return Promise.resolve({
-    ok,
-    status,
-    json: async () => body,
-  } as Response);
+function jsonResponse(body: unknown) {
+  return Promise.resolve(new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  }));
 }
 
 function Harness() {
@@ -53,6 +53,7 @@ function Harness() {
 describe('PromptTemplateTextarea', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    chooseBrowserWorkspace('ws-1');
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ success: true, wildcards })));
   });
 
@@ -64,7 +65,7 @@ describe('PromptTemplateTextarea', () => {
     fireEvent.keyUp(textarea);
 
     await screen.findByTestId('prompt-template-autocomplete');
-    expect(screen.getByText('Hair color')).toBeTruthy();
+    expect(await screen.findByText('Hair color')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /hair color/i }));
 

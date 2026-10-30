@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, WandSparkles, X } from 'lucide-react';
+import { ClipboardPaste, Loader2, WandSparkles, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ export default function MobilePromptScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const { activeWorkspaceId } = useStudio();
+  const [isPasting, setIsPasting] = useState(false);
+  const pasteRequestRef = useRef(0);
   const [isZImageRewriteLoading, setIsZImageRewriteLoading] = useState(false);
   const [zImageRewriteError, setZImageRewriteError] = useState<string | null>(null);
   const {
@@ -40,9 +42,12 @@ export default function MobilePromptScreen() {
   useEffect(() => {
     initialPromptRef.current = prompt;
     initialPromptHelperInstructionRef.current = promptHelperInstruction;
+    return () => { pasteRequestRef.current += 1; };
   }, []);
 
   const navigateBackToCreate = useCallback(() => {
+    // Ignore clipboard results after Save/Cancel, even before the route unmounts.
+    pasteRequestRef.current += 1;
     if (typeof document !== 'undefined') {
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement) {
@@ -65,6 +70,32 @@ export default function MobilePromptScreen() {
 
   const handleSave = () => {
     navigateBackToCreate();
+  };
+
+  const handlePaste = async () => {
+    if (isPasting) return;
+    const request = ++pasteRequestRef.current;
+    if (typeof navigator.clipboard?.readText !== 'function') {
+      showToast('Clipboard access is unavailable. Touch and hold the prompt field to paste.', 'info');
+      return;
+    }
+    setIsPasting(true);
+    try {
+      // Read inside the user gesture; do not preflight Safari clipboard permissions.
+      const text = await navigator.clipboard.readText();
+      if (request !== pasteRequestRef.current) return;
+      if (text.length === 0) {
+        showToast('Clipboard has no text. Prompt unchanged.', 'info', 3000);
+        return;
+      }
+      setPrompt(text);
+    } catch {
+      if (request === pasteRequestRef.current) {
+        showToast('Cannot read clipboard. Touch and hold the prompt field to paste.', 'error');
+      }
+    } finally {
+      if (request === pasteRequestRef.current) setIsPasting(false);
+    }
   };
 
   const runZImagePromptRewrite = async () => {
@@ -109,19 +140,34 @@ export default function MobilePromptScreen() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prompt</label>
-                {prompt.trim() ? (
+                <div className="flex shrink-0 items-center gap-1">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 shrink-0 rounded-full text-muted-foreground"
-                    onClick={() => setPrompt('')}
-                    aria-label="Clear prompt"
-                    title="Clear prompt"
+                    className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+                    onClick={() => void handlePaste()}
+                    disabled={isPasting}
+                    aria-busy={isPasting}
+                    aria-label="Paste and replace prompt"
+                    title="Paste and replace prompt"
                   >
-                    <X className="h-4 w-4" />
+                    {isPasting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ClipboardPaste className="h-4 w-4" aria-hidden="true" />}
                   </Button>
-                ) : null}
+                  {prompt.trim() ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+                      onClick={() => setPrompt('')}
+                      aria-label="Clear prompt"
+                      title="Clear prompt"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <PromptTemplateTextarea
                 value={prompt}
