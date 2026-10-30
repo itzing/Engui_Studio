@@ -11,13 +11,12 @@ import { useToast } from '@/components/ui/toast';
 import PromptTemplateTextarea from '@/components/prompt-wildcards/PromptTemplateTextarea';
 import { useStudio } from '@/lib/context/StudioContext';
 import { requestZImagePromptRewrite } from '@/lib/create/imagePromptHelper';
+import { usePromptClipboardPaste } from '@/hooks/mobile/usePromptClipboardPaste';
 
 export default function MobilePromptScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const { activeWorkspaceId } = useStudio();
-  const [isPasting, setIsPasting] = useState(false);
-  const pasteRequestRef = useRef(0);
   const [isZImageRewriteLoading, setIsZImageRewriteLoading] = useState(false);
   const [zImageRewriteError, setZImageRewriteError] = useState<string | null>(null);
   const {
@@ -35,6 +34,10 @@ export default function MobilePromptScreen() {
     selectedPromptDocumentTitle,
     runSavedPromptHelperInstruction,
   } = useMobileCreate();
+  const { isPasting, pastePrompt, cancelPaste } = usePromptClipboardPaste({
+    scopeKey: JSON.stringify([activeWorkspaceId, currentModel?.id, isPromptDraftSelected]),
+    onPaste: setPrompt,
+  });
   const isZImageModel = currentModel?.id === 'z-image';
   const initialPromptRef = useRef(prompt);
   const initialPromptHelperInstructionRef = useRef(promptHelperInstruction);
@@ -42,12 +45,11 @@ export default function MobilePromptScreen() {
   useEffect(() => {
     initialPromptRef.current = prompt;
     initialPromptHelperInstructionRef.current = promptHelperInstruction;
-    return () => { pasteRequestRef.current += 1; };
   }, []);
 
   const navigateBackToCreate = useCallback(() => {
     // Ignore clipboard results after Save/Cancel, even before the route unmounts.
-    pasteRequestRef.current += 1;
+    cancelPaste();
     if (typeof document !== 'undefined') {
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement) {
@@ -60,7 +62,7 @@ export default function MobilePromptScreen() {
         router.push('/m/create');
       });
     }, 40);
-  }, [router]);
+  }, [router, cancelPaste]);
 
   const handleCancel = () => {
     setPrompt(initialPromptRef.current);
@@ -70,32 +72,6 @@ export default function MobilePromptScreen() {
 
   const handleSave = () => {
     navigateBackToCreate();
-  };
-
-  const handlePaste = async () => {
-    if (isPasting) return;
-    const request = ++pasteRequestRef.current;
-    if (typeof navigator.clipboard?.readText !== 'function') {
-      showToast('Clipboard access is unavailable. Touch and hold the prompt field to paste.', 'info');
-      return;
-    }
-    setIsPasting(true);
-    try {
-      // Read inside the user gesture; do not preflight Safari clipboard permissions.
-      const text = await navigator.clipboard.readText();
-      if (request !== pasteRequestRef.current) return;
-      if (text.length === 0) {
-        showToast('Clipboard has no text. Prompt unchanged.', 'info', 3000);
-        return;
-      }
-      setPrompt(text);
-    } catch {
-      if (request === pasteRequestRef.current) {
-        showToast('Cannot read clipboard. Touch and hold the prompt field to paste.', 'error');
-      }
-    } finally {
-      if (request === pasteRequestRef.current) setIsPasting(false);
-    }
   };
 
   const runZImagePromptRewrite = async () => {
@@ -146,7 +122,7 @@ export default function MobilePromptScreen() {
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
-                    onClick={() => void handlePaste()}
+                    onClick={() => void pastePrompt()}
                     disabled={isPasting}
                     aria-busy={isPasting}
                     aria-label="Paste and replace prompt"

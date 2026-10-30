@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ImagePlus, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
+import { ClipboardPaste, ImagePlus, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
 import type { CreateMode } from '@/lib/createDrafts';
@@ -11,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider';
+import { usePromptClipboardPaste } from '@/hooks/mobile/usePromptClipboardPaste';
+import { useStudio } from '@/lib/context/StudioContext';
 
 function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
@@ -28,11 +30,13 @@ export default function MobileCreateHome({
   onModeChange: (mode: CreateMode) => void;
 }) {
   const { showToast } = useToast();
+  const { activeWorkspaceId } = useStudio();
   const [showPromptDraftSelector, setShowPromptDraftSelector] = useState(false);
   const [fullscreenReferenceUrl, setFullscreenReferenceUrl] = useState<string | null>(null);
   const {
     currentModel,
     prompt,
+    setPrompt,
     previewUrl,
     previewUrl2,
     primaryImageVisible,
@@ -64,6 +68,12 @@ export default function MobileCreateHome({
     setMessage,
     isLoadingMedia,
   } = useMobileCreate();
+
+  const { isPasting, pastePrompt, cancelPaste } = usePromptClipboardPaste({
+    scopeKey: JSON.stringify([activeWorkspaceId, activeMode, currentModel?.id, isPromptDraftSelected]),
+    onPaste: setPrompt,
+    manualPasteHint: 'Open the prompt editor to paste manually.',
+  });
 
   const currentSeed = parameterValues.seed ?? currentModel?.parameters.find((param) => param.name === 'seed')?.default;
   const widthParameter = currentModel?.parameters.find((param) => param.name === 'width');
@@ -162,16 +172,32 @@ export default function MobileCreateHome({
           </Card>
 
           {!isPromptDraftSelected ? (
-            <Link href="/m/create/prompt" className="block" aria-label="Open prompt editor">
-              <Card className="transition-colors hover:bg-accent/40">
-                <CardContent className="pt-6">
-                  <p className="truncate text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">Prompt:</span>{' '}
-                    {promptPreview}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
+            <Card className="flex items-center gap-2 pr-4">
+              <Link
+                href="/m/create/prompt"
+                className="min-w-0 flex-1 rounded-lg px-6 py-6 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Open prompt editor"
+                onClick={cancelPaste}
+              >
+                <p className="truncate text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Prompt:</span>{' '}
+                  {promptPreview}
+                </p>
+              </Link>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+                onClick={() => void pastePrompt()}
+                disabled={isPasting}
+                aria-busy={isPasting}
+                aria-label="Paste and replace prompt"
+                title="Paste and replace prompt"
+              >
+                {isPasting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ClipboardPaste className="h-4 w-4" aria-hidden="true" />}
+              </Button>
+            </Card>
           ) : null}
 
           {(primaryImageVisible || secondaryImageVisible) && (
