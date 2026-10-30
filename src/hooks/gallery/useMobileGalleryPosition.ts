@@ -51,6 +51,14 @@ export function useMobileGalleryPosition({
     onMissing();
   }, [restoreResult, workspaceId, storedPosition, onMissing]);
 
+  const clearAway = () => {
+    if (!workspaceId || !position) return;
+    // A hold may span a viewport change; do not clear a point that is now visible.
+    if (visibleGalleryTiles(containerRef.current).some(tile => tile.assetId === position.assetId)) return;
+    writeGalleryPosition(workspaceId, null);
+    setStoredPosition(null);
+  };
+
   const activate = () => {
     if (!workspaceId) return;
     // Measure again at tap time, including scroll events between React commits.
@@ -71,5 +79,5 @@ export function useMobileGalleryPosition({
     }
   };
 
-  return { action: !position ? 'save' as const : visible ? 'clear' as const : 'return' as const, canSave, activate, updateViewport };
+  return { action: !position ? 'save' as const : visible ? 'clear' as const : 'return' as const, canSave, activate, clearAway, updateViewport };
 }

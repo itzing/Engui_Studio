@@ -2,10 +2,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bookmark, BookmarkX, Undo2, AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
+import { AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video } from 'lucide-react';
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import MobileScreen from '@/components/mobile/MobileScreen';
+import MobileGalleryPositionButton from './MobileGalleryPositionButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -183,11 +184,6 @@ export default function MobileGalleryScreen() {
     restoreResult: positionRestoreResult,
     onMissing: handleMissingPosition,
   });
-  const positionLabel = positionControl.action === 'save' ? 'Save position'
-    : positionControl.action === 'clear' ? 'Clear position' : 'Return to position';
-  const PositionIcon = positionControl.action === 'save' ? Bookmark
-    : positionControl.action === 'clear' ? BookmarkX : Undo2;
-
   const isTabletGallery = formFactor === 'tablet-landscape';
   const galleryColumnCount = isTabletGallery ? tabletColumns : MOBILE_GALLERY_COLUMN_COUNT;
   const galleryRowSize = getMobileGalleryRowSize(galleryGridWidth, galleryColumnCount);
@@ -463,20 +459,13 @@ export default function MobileGalleryScreen() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 text-base sm:text-sm" />
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={`h-11 w-11 shrink-0 rounded border ${positionControl.action === 'save'
-                ? 'border-border/40 text-muted-foreground'
-                : 'border-blue-500/40 bg-blue-500/10 text-blue-400'}`}
-              aria-label={positionLabel}
-              title={positionLabel}
+            <MobileGalleryPositionButton
+              action={positionControl.action}
+              workspaceId={workspaceId}
               disabled={isLoading || !workspaceId || (positionControl.action === 'save' && !positionControl.canSave)}
-              onClick={positionControl.activate}
-            >
-              <PositionIcon className="h-5 w-5" />
-            </Button>
+              onActivate={positionControl.activate}
+              onClearAway={positionControl.clearAway}
+            />
           </div>
         </div>
 

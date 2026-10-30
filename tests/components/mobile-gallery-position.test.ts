@@ -103,3 +103,72 @@ describe('mobile gallery single position control', () => {
     expect(mock.toast).toHaveBeenCalledTimes(1);
   });
 });
+
+
+const touch = { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0, clientX: 100, clientY: 100 };
+function savedOffscreen() {
+  const view = render(React.createElement(MobileGalleryScreen));
+  fireEvent.click(screen.getByRole('button', { name: 'Save position' }));
+  scrollTo(100);
+  return { view, button: screen.getByRole('button', { name: 'Return to position' }) };
+}
+describe('mobile gallery hold-to-clear', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('clears on hold without returning, consumes the trailing click, and accepts a new tap', () => {
+    const { button } = savedOffscreen();
+    fireEvent.pointerDown(button, touch);
+    act(() => vi.advanceTimersByTime(600));
+    expect(readGalleryPosition('ws-1')).toBeNull();
+    expect(mock.restore).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save position' })).toBe(button);
+    fireEvent.pointerUp(button, touch); fireEvent.click(button);
+    expect(readGalleryPosition('ws-1')).toBeNull();
+    fireEvent.pointerDown(button, touch); fireEvent.pointerUp(button, touch); fireEvent.click(button);
+    expect(readGalleryPosition('ws-1')?.assetId).toBe('asset-3');
+  });
+  it('keeps short tap as return', () => {
+    const { button } = savedOffscreen();
+    fireEvent.pointerDown(button, touch); act(() => vi.advanceTimersByTime(300));
+    fireEvent.pointerUp(button, touch); fireEvent.click(button);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(readGalleryPosition('ws-1')?.assetId).toBe('asset-0');
+    expect(mock.restore).toHaveBeenCalledTimes(1);
+  });
+  it('cancels movement so scrolling does not clear or return', () => {
+    const { button } = savedOffscreen();
+    fireEvent.pointerDown(button, touch);
+    fireEvent.pointerMove(button, { ...touch, clientY: 120 });
+    act(() => vi.advanceTimersByTime(1000));
+    fireEvent.pointerUp(button, touch); fireEvent.click(button);
+    expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+  });
+  it.each(['pointerCancel', 'pointerLeave'] as const)('cancels on %s', event => {
+    const { button } = savedOffscreen();
+    fireEvent.pointerDown(button, touch); fireEvent[event](button, touch);
+    act(() => vi.advanceTimersByTime(1000)); fireEvent.click(button);
+    expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+  });
+  it('does not clear a different workspace after a workspace change during hold', () => {
+    const { button, view } = savedOffscreen(); fireEvent.pointerDown(button, touch);
+    mock.workspaceId = 'ws-2'; view.rerender(React.createElement(MobileGalleryScreen));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(readGalleryPosition('ws-2')).toBeNull();
+  });
+  it('cancels a pending hold on unmount', () => {
+    const { button, view } = savedOffscreen(); fireEvent.pointerDown(button, touch); view.unmount();
+    act(() => vi.advanceTimersByTime(1000)); expect(readGalleryPosition('ws-1')).not.toBeNull();
+  });
+  it('rechecks actual item visibility even before a scroll event updates the icon', () => {
+    const { button } = savedOffscreen(); fireEvent.pointerDown(button, touch);
+    mock.scroll = 0;
+    act(() => vi.advanceTimersByTime(600)); fireEvent.pointerUp(button, touch); fireEvent.click(button);
+    expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+  });
+  it('keeps keyboard activation as the normal return action', () => {
+    const { button } = savedOffscreen();
+    fireEvent.keyDown(button, { key: 'Enter' }); fireEvent.click(button);
+    expect(mock.restore).toHaveBeenCalledTimes(1); expect(readGalleryPosition('ws-1')).not.toBeNull();
+  });
+});
