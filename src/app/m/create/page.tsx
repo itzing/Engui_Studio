@@ -26,7 +26,7 @@ export default function MobileCreatePage() {
   };
 
   return (
-    <MobileAppShell>
+    <MobileAppShell onCreateReselect={() => handleModeChange(activeMode === 'image' ? 'video' : 'image')}>
       {formFactor === 'tablet-landscape' ? (
         <TabletCreateWorkspace activeMode={activeMode} onModeChange={handleModeChange} />
       ) : activeMode === 'image' ? (

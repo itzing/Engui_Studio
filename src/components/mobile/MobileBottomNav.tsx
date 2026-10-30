@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getMobileTabForPathname, mobileNavItems } from './mobileNavigation';
 
-export default function MobileBottomNav() {
+export default function MobileBottomNav({ onCreateReselect }: { onCreateReselect?: () => void }) {
   const pathname = usePathname();
   const activeTab = getMobileTabForPathname(pathname);
+  const canReselectCreate = pathname === '/m/create' && !!onCreateReselect;
 
   return (
     <nav
@@ -21,6 +22,12 @@ export default function MobileBottomNav() {
               key={id}
               href={href}
               aria-current={active ? 'page' : undefined}
+              title={id === 'create' && canReselectCreate ? 'Switch between Image and Video' : undefined}
+              onClick={(event) => {
+                if (id !== 'create' || !canReselectCreate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onCreateReselect?.();
+              }}
               className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs transition-colors ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
             >
               <Icon className="h-4 w-4" />

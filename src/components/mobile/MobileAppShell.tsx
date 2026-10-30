@@ -22,9 +22,11 @@ function MobileOrientationGate({ title }: { title: string }) {
 export default function MobileAppShell({
   children,
   allowPhoneLandscape = false,
+  onCreateReselect,
 }: {
   children: ReactNode;
   allowPhoneLandscape?: boolean;
+  onCreateReselect?: () => void;
 }) {
   const formFactor = useViewportFormFactor();
 
@@ -45,7 +47,7 @@ export default function MobileAppShell({
           {children}
         </div>
       </div>
-      {isTabletLandscape ? null : <MobileBottomNav />}
+      {isTabletLandscape ? null : <MobileBottomNav onCreateReselect={onCreateReselect} />}
     </div>
   );
 }
