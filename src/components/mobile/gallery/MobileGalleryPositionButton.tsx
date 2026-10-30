@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Bookmark, BookmarkX, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { pulseHapticFeedback } from '@/lib/mobile/hapticFeedback';
 
 export default function MobileGalleryPositionButton({
   action, disabled, workspaceId, onActivate, onClearAway,
@@ -11,7 +12,7 @@ export default function MobileGalleryPositionButton({
   disabled: boolean;
   workspaceId: string | null;
   onActivate: () => void;
-  onClearAway: () => void;
+  onClearAway: () => boolean;
 }) {
   const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
   const suppressClick = useRef(false);
@@ -50,7 +51,7 @@ export default function MobileGalleryPositionButton({
         const timer = window.setTimeout(() => {
           // Consume the release click even though clearing changes this button to Save.
           suppressClick.current = true;
-          onClearAway();
+          if (onClearAway()) pulseHapticFeedback();
         }, 600);
         press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
       }}

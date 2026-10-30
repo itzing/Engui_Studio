@@ -52,11 +52,12 @@ export function useMobileGalleryPosition({
   }, [restoreResult, workspaceId, storedPosition, onMissing]);
 
   const clearAway = () => {
-    if (!workspaceId || !position) return;
+    if (!workspaceId || !position) return false;
     // A hold may span a viewport change; do not clear a point that is now visible.
-    if (visibleGalleryTiles(containerRef.current).some(tile => tile.assetId === position.assetId)) return;
+    if (visibleGalleryTiles(containerRef.current).some(tile => tile.assetId === position.assetId)) return false;
     writeGalleryPosition(workspaceId, null);
     setStoredPosition(null);
+    return true;
   };
 
   const activate = () => {

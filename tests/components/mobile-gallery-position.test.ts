@@ -3,6 +3,8 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readGalleryPosition } from '@/lib/mobile/galleryPosition';
+import { pulseHapticFeedback } from '@/lib/mobile/hapticFeedback';
+vi.mock('@/lib/mobile/hapticFeedback', () => ({ pulseHapticFeedback: vi.fn() }));
 
 const mock = vi.hoisted(() => ({ workspaceId: 'ws-1', scroll: 0, selected: 'asset-0', restore: vi.fn(), toast: vi.fn(), result: null as unknown }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -33,7 +35,7 @@ function scrollTo(offset: number) {
 }
 beforeEach(() => {
   localStorage.clear(); mock.workspaceId = 'ws-1'; mock.scroll = 0; mock.selected = 'asset-0'; mock.result = null;
-  mock.restore.mockReset(); mock.toast.mockReset();
+  mock.restore.mockReset(); mock.toast.mockReset(); vi.mocked(pulseHapticFeedback).mockReset();
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
     const id = this.dataset.galleryAssetId;
     const top = id ? 100 + Math.floor(Number(id.split('-')[1]) / 3) * 100 - mock.scroll : 100;
@@ -119,7 +121,10 @@ describe('mobile gallery hold-to-clear', () => {
   it('clears on hold without returning, consumes the trailing click, and accepts a new tap', () => {
     const { button } = savedOffscreen();
     fireEvent.pointerDown(button, touch);
-    act(() => vi.advanceTimersByTime(600));
+    act(() => vi.advanceTimersByTime(599));
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(pulseHapticFeedback).toHaveBeenCalledTimes(1);
     expect(readGalleryPosition('ws-1')).toBeNull();
     expect(mock.restore).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save position' })).toBe(button);
@@ -127,6 +132,7 @@ describe('mobile gallery hold-to-clear', () => {
     expect(readGalleryPosition('ws-1')).toBeNull();
     fireEvent.pointerDown(button, touch); fireEvent.pointerUp(button, touch); fireEvent.click(button);
     expect(readGalleryPosition('ws-1')?.assetId).toBe('asset-3');
+    expect(pulseHapticFeedback).toHaveBeenCalledTimes(1);
   });
   it('keeps short tap as return', () => {
     const { button } = savedOffscreen();
@@ -135,6 +141,7 @@ describe('mobile gallery hold-to-clear', () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(readGalleryPosition('ws-1')?.assetId).toBe('asset-0');
     expect(mock.restore).toHaveBeenCalledTimes(1);
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it('cancels movement so scrolling does not clear or return', () => {
     const { button } = savedOffscreen();
@@ -143,32 +150,38 @@ describe('mobile gallery hold-to-clear', () => {
     act(() => vi.advanceTimersByTime(1000));
     fireEvent.pointerUp(button, touch); fireEvent.click(button);
     expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it.each(['pointerCancel', 'pointerLeave'] as const)('cancels on %s', event => {
     const { button } = savedOffscreen();
     fireEvent.pointerDown(button, touch); fireEvent[event](button, touch);
     act(() => vi.advanceTimersByTime(1000)); fireEvent.click(button);
     expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it('does not clear a different workspace after a workspace change during hold', () => {
     const { button, view } = savedOffscreen(); fireEvent.pointerDown(button, touch);
     mock.workspaceId = 'ws-2'; view.rerender(React.createElement(MobileGalleryScreen));
     act(() => vi.advanceTimersByTime(1000));
     expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(readGalleryPosition('ws-2')).toBeNull();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it('cancels a pending hold on unmount', () => {
     const { button, view } = savedOffscreen(); fireEvent.pointerDown(button, touch); view.unmount();
     act(() => vi.advanceTimersByTime(1000)); expect(readGalleryPosition('ws-1')).not.toBeNull();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it('rechecks actual item visibility even before a scroll event updates the icon', () => {
     const { button } = savedOffscreen(); fireEvent.pointerDown(button, touch);
     mock.scroll = 0;
     act(() => vi.advanceTimersByTime(600)); fireEvent.pointerUp(button, touch); fireEvent.click(button);
     expect(readGalleryPosition('ws-1')).not.toBeNull(); expect(mock.restore).not.toHaveBeenCalled();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
   it('keeps keyboard activation as the normal return action', () => {
     const { button } = savedOffscreen();
     fireEvent.keyDown(button, { key: 'Enter' }); fireEvent.click(button);
     expect(mock.restore).toHaveBeenCalledTimes(1); expect(readGalleryPosition('ws-1')).not.toBeNull();
+    expect(pulseHapticFeedback).not.toHaveBeenCalled();
   });
 });
