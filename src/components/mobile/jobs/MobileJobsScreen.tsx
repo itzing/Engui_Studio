@@ -5,10 +5,11 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clapperboard, FolderPlus, Image as ImageIcon, Loader2, PenSquare, RefreshCw, Rows3, Sparkles, Wand2, X, Ban, RotateCcw } from 'lucide-react';
+import { Clapperboard, Image as ImageIcon, Loader2, RefreshCw, Rows3, Sparkles, Wand2, X, Ban, RotateCcw } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getModelById } from '@/lib/models/modelConfig';
 import MobileScreen from '@/components/mobile/MobileScreen';
+import MobileJobGalleryActions, { useMobileJobGalleryActions } from './MobileJobGalleryActions';
 import { Button } from '@/components/ui/button';
 import { GalleryFullscreenViewer } from '@/components/workspace/GalleryFullscreenViewer';
 import { InlineConfirmDeleteButton } from '@/components/jobs/InlineConfirmDeleteButton';
@@ -249,8 +250,18 @@ export default function MobileJobsScreen() {
   } = useMobileJobsScreen();
 
   const [viewerJobDetailsById, setViewerJobDetailsById] = useState<Record<string, MobileJobDetail>>({});
+  const viewerDetailRevisionRef = useRef<Record<string, number>>({});
   const [viewerJobDetailLoadingId, setViewerJobDetailLoadingId] = useState<string | null>(null);
   const [openingImg2VidJobId, setOpeningImg2VidJobId] = useState<string | null>(null);
+
+  const galleryActions = useMobileJobGalleryActions((jobId, outputId, update) => {
+    viewerDetailRevisionRef.current[jobId] = (viewerDetailRevisionRef.current[jobId] || 0) + 1;
+    setViewerJobDetailsById((current) => {
+      const detail = current[jobId];
+      if (!detail) return current;
+      return { ...current, [jobId]: { ...detail, outputs: detail.outputs.map((output) => output.outputId === outputId ? update(output) : output) } };
+    });
+  });
 
   const rowVirtualizer = useVirtualizer({
     count: totalCount,
@@ -284,6 +295,7 @@ export default function MobileJobsScreen() {
   const activeViewerItemId = (selectedLoadedViewerIndex >= 0 ? loadedViewerItems[selectedLoadedViewerIndex]?.id : loadedViewerItems[viewerIndex]?.id) || null;
 
   const patchViewerJobDetail = useCallback((jobId: string, updater: (job: MobileJobDetail) => MobileJobDetail) => {
+    viewerDetailRevisionRef.current[jobId] = (viewerDetailRevisionRef.current[jobId] || 0) + 1;
     setViewerJobDetailsById((prev) => {
       const current = prev[jobId];
       if (!current) return prev;
@@ -315,13 +327,14 @@ export default function MobileJobsScreen() {
     }
 
     let cancelled = false;
+    const revision = viewerDetailRevisionRef.current[activeViewerItemId] || 0;
     setViewerJobDetailLoadingId(activeViewerItemId);
 
     const loadViewerJobDetail = async () => {
       try {
         const response = await fetch(`/api/jobs/${activeViewerItemId}`, { cache: 'no-store' });
         const data = await response.json();
-        if (cancelled) return;
+        if (cancelled || (viewerDetailRevisionRef.current[activeViewerItemId] || 0) !== revision) return;
         if (response.ok && data.success && data.job) {
           setViewerJobDetailsById((prev) => ({ ...prev, [activeViewerItemId]: data.job }));
         }
@@ -442,8 +455,6 @@ export default function MobileJobsScreen() {
         renderFooterActions={(item, meta) => {
           const viewerJobDetail = viewerJobDetailsById[item.id] || null;
           const viewerOutput = viewerJobDetail?.outputs?.[0] || null;
-          const canAddToGallery = !!viewerOutput && !viewerOutput.savedBuckets.includes('common');
-          const canSaveDraft = !!viewerOutput && !viewerOutput.savedBuckets.includes('draft') && !viewerOutput.savedBuckets.includes('upscale');
           const canMarkUpscale = !!viewerOutput && viewerJobDetail?.type === 'image' && !viewerOutput.savedBuckets.includes('upscale');
           const canUpscale = item.type === 'image' || item.type === 'video';
           const isDetailLoading = viewerJobDetailLoadingId === item.id && !viewerJobDetail;
@@ -457,73 +468,14 @@ export default function MobileJobsScreen() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
               ) : null}
-              {canSaveDraft ? (
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                  onClick={async () => {
-                    const response = await fetch('/api/gallery/assets/from-job-output', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ jobId: item.id, outputId: viewerOutput.outputId, bucket: 'draft' }),
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                      patchViewerJobDetail(item.id, (prev) => ({
-                        ...prev,
-                        outputs: prev.outputs.map((output, index) => index === 0 ? {
-                          ...output,
-                          alreadyInGallery: true,
-                          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
-                          savedBuckets: output.savedBuckets.includes('draft') ? output.savedBuckets : [...output.savedBuckets, 'draft'],
-                          galleryAssetIdsByBucket: data.asset?.id ? {
-                            ...output.galleryAssetIdsByBucket,
-                            draft: [...(output.galleryAssetIdsByBucket.draft || []), data.asset.id],
-                          } : output.galleryAssetIdsByBucket,
-                        } : output),
-                      }));
-                    }
-                  }}
-                  aria-label="Save output as draft"
-                  title="Save Draft"
-                >
-                  <PenSquare className="w-5 h-5" />
-                </Button>
-              ) : null}
-              {canAddToGallery ? (
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-10 w-10 rounded-full bg-black/70 hover:bg-black/85 text-white border border-white/10"
-                  onClick={async () => {
-                    const response = await fetch('/api/gallery/assets/from-job-output', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ jobId: item.id, outputId: viewerOutput.outputId, bucket: 'common' }),
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                      patchViewerJobDetail(item.id, (prev) => ({
-                        ...prev,
-                        outputs: prev.outputs.map((output, index) => index === 0 ? {
-                          ...output,
-                          alreadyInGallery: true,
-                          galleryAssetId: output.galleryAssetId || data.asset?.id || null,
-                          savedBuckets: output.savedBuckets.includes('common') ? output.savedBuckets : [...output.savedBuckets, 'common'],
-                          galleryAssetIdsByBucket: data.asset?.id ? {
-                            ...output.galleryAssetIdsByBucket,
-                            common: [...(output.galleryAssetIdsByBucket.common || []), data.asset.id],
-                          } : output.galleryAssetIdsByBucket,
-                        } : output),
-                      }));
-                    }
-                  }}
-                  aria-label="Add job output to gallery"
-                  title="Add to Gallery"
-                >
-                  <FolderPlus className="w-5 h-5" />
-                </Button>
+              {viewerOutput ? (
+                <MobileJobGalleryActions
+                  key={`${item.id}:${viewerOutput.outputId}`}
+                  jobId={item.id}
+                  output={viewerOutput}
+                  actions={galleryActions}
+                  disabled={viewerJobDetailLoadingId === item.id}
+                />
               ) : null}
               {canMarkUpscale && meta.canMarkUpscale ? (
                 <Button
