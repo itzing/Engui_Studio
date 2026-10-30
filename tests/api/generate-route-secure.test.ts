@@ -17,6 +17,7 @@ const {
   mockGetModelById,
 } = vi.hoisted(() => ({
   mockPrisma: {
+    vibePreset: { findFirst: vi.fn() },
     job: {
       create: vi.fn(),
       update: vi.fn(),
@@ -41,6 +42,18 @@ const {
   mockEnsureStudioSessionMaterializationTaskForJob: vi.fn(),
   mockUuid: vi.fn(),
   mockGetModelById: vi.fn(),
+}));
+
+// This suite exercises submission; workspace authorization has separate route tests.
+vi.mock('@/lib/workspaces/route', () => ({ withWorkspaceRoute: (handler: unknown) => handler }));
+vi.mock('@/lib/defaultWorkspace', () => ({ resolveJobWorkspaceId: async () => 'workspace-default' }));
+vi.mock('@/lib/workspaces/references', () => ({ validateContentReferences: async () => {} }));
+vi.mock('@/lib/workspaces/storage', () => ({ storageTarget: async () => ({ fingerprint: 'fixture' }) }));
+vi.mock('@/lib/workspaces/files', () => ({ registerWorkspaceFile: async () => {} }));
+vi.mock('@/lib/workspaces/loraAccess', () => ({
+  validateGenerationLoras: async () => {},
+  withGenerationLoraPins: async (_form: unknown, run: () => unknown) => run(),
+  resolveLoraReference: async (path: string) => ({ path, relative: path.replace('/runpod-volume/loras/', ''), row: { id: 'fixture-lora' } }),
 }));
 
 vi.mock('@prisma/client', () => ({
@@ -806,4 +819,37 @@ slowly turns left with a soft smile
     expect(payload.task_type).toBe('image_to_image');
     expect(payload.__encryptSensitiveZImage).toBe(true);
   });
+  it('prepends the active image Vibe before variants and persists reusable source metadata', async () => {
+    mockGetModelById.mockReturnValue({ id: 'krea2-turbo', name: 'Krea', type: 'image', inputs: ['text'], parameters: [{ name: 'seed', type: 'number', default: 42 }], api: { type: 'runpod', endpoint: 'image-endpoint' } });
+    mockPrisma.vibePreset.findFirst.mockResolvedValue({ id: 'v1', name: 'Calm', baseDescription: '{soft|bright} lighting' });
+    mockGetSettings.mockResolvedValue({ settings: {
+      runpod: { apiKey: 'test', endpoints: { 'krea2-turbo': 'image-endpoint' }, fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64') },
+      s3: { endpointUrl: 'https://s3.local', accessKeyId: 'key', secretAccessKey: 'secret', bucketName: 'bucket', region: 'us-east-1' },
+    } });
+    mockDecodeMasterKey.mockReturnValue(Buffer.alloc(32, 1));
+    const form = new FormData(); form.set('modelId', 'krea2-turbo'); form.set('prompt', 'A {red|blue} chair'); form.set('selectedVibeId', 'v1'); form.set('seed', '42');
+    const response = await POST(buildRequest(form) as any);
+    const data = await response.json();
+    expect(response.status, JSON.stringify(data)).toBe(200);
+    const template = '{soft|bright} lighting\n\nA {red|blue} chair';
+    expect(data.prompt).toBe(template);
+    expect(data.resolvedPrompt).toBe(resolvePromptVariants(template, 42));
+    expect(data.sourceVibe).toEqual({ id: 'v1', name: 'Calm', baseDescription: '{soft|bright} lighting', basePrompt: 'A {red|blue} chair' });
+    const created = mockPrisma.job.create.mock.calls[0][0].data;
+    const updated = mockPrisma.job.update.mock.calls.at(-1)![0].data;
+    expect(JSON.parse(created.options).sourceVibe).toEqual(data.sourceVibe);
+    expect(JSON.parse(updated.options).sourceVibe).toEqual(data.sourceVibe);
+    expect(mockPrisma.vibePreset.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'v1', status: 'active', workspaceId: 'workspace-default' } }));
+  });
+
+  it('rejects missing Vibes before creating a job and rejects Vibes for video', async () => {
+    const form = new FormData(); form.set('modelId', 'wan22'); form.set('prompt', 'chair'); form.set('selectedVibeId', 'v1');
+    expect((await POST(buildRequest(form) as any)).status).toBe(400);
+    mockGetModelById.mockReturnValue({ id: 'image', name: 'Image', type: 'image', inputs: ['text'], parameters: [], api: { type: 'runpod' } });
+    mockPrisma.vibePreset.findFirst.mockResolvedValue(null);
+    expect((await POST(buildRequest(form) as any)).status).toBe(400);
+    expect(mockPrisma.job.create).not.toHaveBeenCalled();
+    expect(mockSubmitJob).not.toHaveBeenCalled();
+  });
+
 });

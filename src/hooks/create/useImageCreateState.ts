@@ -56,6 +56,8 @@ export function useImageCreateState() {
 
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_IMAGE_MODEL);
   const [prompt, setPrompt] = useState('');
+  const [selectedVibeId, setSelectedVibeId] = useState('');
+  const [isStrippingVibe, setIsStrippingVibe] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [randomizeSeed, setRandomizeSeed] = useState(false);
   const [parameterValues, setParameterValues] = useState<Record<string, any>>({});
@@ -142,6 +144,7 @@ export function useImageCreateState() {
 
   const currentSnapshot = useMemo((): ImageCreateDraftSnapshot => createImageDraftSnapshot({
     prompt,
+    selectedVibeId,
     showAdvanced,
     randomizeSeed,
     parameterValues,
@@ -154,7 +157,7 @@ export function useImageCreateState() {
       primary: primaryInputRef,
       secondary: secondaryInputRef,
     },
-  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, sceneSnapshot, secondaryInputRef, prompt, randomizeSeed, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
+  }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, sceneSnapshot, secondaryInputRef, prompt, selectedVibeId, randomizeSeed, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
 
   const applySnapshot = useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
     const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
@@ -164,6 +167,7 @@ export function useImageCreateState() {
     });
 
     setPrompt(normalizedSnapshot.prompt || '');
+    setSelectedVibeId(normalizedSnapshot.selectedVibeId || '');
     setShowAdvanced(normalizedSnapshot.showAdvanced === true);
     setRandomizeSeed(normalizeRandomizeSeed(normalizedSnapshot.randomizeSeed));
     setParameterValues(mergedParameterValues);
@@ -481,6 +485,7 @@ export function useImageCreateState() {
   }, [handleParameterChange]);
 
   const submitBatch = useCallback(async (count: number) => {
+    if (isStrippingVibe || isGenerating) return false;
     if (!currentModel) {
       setTimedMessage({ type: 'error', text: 'Model is not ready yet' });
       return false;
@@ -544,6 +549,7 @@ export function useImageCreateState() {
       const result = await submitImageGeneration({
         currentModel,
         prompt: promptForSubmit,
+        selectedVibeId,
         parameterValues: runParameterValues,
         randomizeSeed: shouldForceUniqueSeeds ? false : randomizeSeed,
         activeWorkspaceId,
@@ -608,7 +614,7 @@ export function useImageCreateState() {
     setIsGenerating(false);
     setBatchProgress(null);
     return started === normalizedCount;
-  }, [activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, promptWildcardSelections, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
+  }, [selectedVibeId, isStrippingVibe, isGenerating, activeWorkspaceId, addJob, currentModel, imageFile, imageFile2, isPromptDraftSelected, parameterValues, previewUrl, previewUrl2, prompt, promptWildcardSelections, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, setTimedMessage, settings, syncSelectedPromptDraft]);
 
   const submit = useCallback(async () => submitBatch(1), [submitBatch]);
 
@@ -680,6 +686,22 @@ export function useImageCreateState() {
 
   return {
     imageModels,
+    selectedVibeId,
+    setSelectedVibeId,
+    isStrippingVibe,
+    setIsStrippingVibe,
+    applyStrippedPrompt: (text: string) => {
+      setPrompt(text);
+      setSelectedPromptDocumentId('');
+      setSelectedPromptDocumentTitle('');
+      setSceneSnapshot(null);
+      return () => {
+        setPrompt(prompt);
+        setSelectedPromptDocumentId(selectedPromptDocumentId);
+        setSelectedPromptDocumentTitle(selectedPromptDocumentTitle);
+        setSceneSnapshot(sceneSnapshot);
+      };
+    },
     currentModel,
     selectedModel: currentModel?.id || DEFAULT_IMAGE_MODEL,
     prompt,

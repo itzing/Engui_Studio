@@ -10,6 +10,7 @@ import type { PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selectio
 export type SubmitImageGenerationParams = {
   currentModel: ModelConfig;
   prompt: string;
+  selectedVibeId?: string;
   parameterValues: Record<string, any>;
   randomizeSeed: boolean;
   activeWorkspaceId: string | null;
@@ -50,6 +51,7 @@ export type SubmitImageGenerationResult =
 export const submitImageGeneration = async ({
   currentModel,
   prompt,
+  selectedVibeId,
   parameterValues,
   randomizeSeed,
   activeWorkspaceId,
@@ -100,6 +102,7 @@ export const submitImageGeneration = async ({
     formData.append('userId', 'user-with-settings');
     formData.append('modelId', currentModel.id);
     formData.append('prompt', prompt);
+    if (selectedVibeId) formData.append('selectedVibeId', selectedVibeId);
     if (promptWildcardSelections && Object.keys(promptWildcardSelections).length > 0) {
       formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));
     }
@@ -226,6 +229,7 @@ export const submitImageGeneration = async ({
         options: {
           ...parameterValues,
           randomizeSeed,
+          ...(data.sourceVibe ? { sourceVibe: data.sourceVibe } : {}),
           ...(nextPromptWildcardSelections ? { promptWildcardSelections: nextPromptWildcardSelections } : {}),
           ...(resolvedPrompt !== storedPrompt ? { promptTemplate: storedPrompt, resolvedPrompt, resolvedPromptSeed: nextSeed } : {}),
         },

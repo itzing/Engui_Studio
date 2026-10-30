@@ -8,6 +8,7 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio } from '@/lib/context/StudioContext';
 import { getModelsByType, getModelById, isInputVisible } from '@/lib/models/modelConfig';
+import ImageVibeControls from '@/components/create/ImageVibeControls';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,8 @@ export default function ImageGenerationForm() {
     const { settings, addJob, activeWorkspaceId } = useStudio();
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [prompt, setPrompt] = useState('');
+    const [selectedVibeId, setSelectedVibeId] = useState('');
+    const [isStrippingVibe, setIsStrippingVibe] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -123,6 +126,7 @@ export default function ImageGenerationForm() {
 
     const currentSnapshot = useMemo(() => createImageDraftSnapshot({
         prompt,
+        selectedVibeId,
         showAdvanced,
         randomizeSeed,
         parameterValues,
@@ -131,12 +135,13 @@ export default function ImageGenerationForm() {
         sceneSnapshot,
         sourcePromptDocumentId: selectedPromptDocumentId,
         sourcePromptDocumentTitle: selectedPromptDocumentTitle,
-    }), [parameterValues, previewUrl, previewUrl2, prompt, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
+    }), [parameterValues, previewUrl, previewUrl2, prompt, selectedVibeId, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
 
     const applySnapshot = React.useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
         const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
 
         setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
+        setSelectedVibeId(snapshot?.selectedVibeId || '');
         setShowAdvanced(typeof snapshot?.showAdvanced === 'boolean' ? snapshot.showAdvanced : false);
         setRandomizeSeed(normalizeRandomizeSeed(snapshot?.randomizeSeed));
         setParameterValues(mergedParameterValues);
@@ -1022,6 +1027,7 @@ export default function ImageGenerationForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isStrippingVibe || isGenerating) return;
         setMessage(null);
 
         if (currentModel.inputs.includes('text') && !prompt && !isPromptDraftSelected) {
@@ -1064,6 +1070,7 @@ export default function ImageGenerationForm() {
         const result = await submitImageGeneration({
             currentModel,
             prompt: promptForSubmit,
+            selectedVibeId,
             parameterValues,
             randomizeSeed,
             activeWorkspaceId,
@@ -1122,7 +1129,7 @@ export default function ImageGenerationForm() {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isGenerating, isPromptHelperOpen, promptHelperInstruction, isPromptHelperLoading, prompt, currentModel.id, currentNegativePrompt, negativePromptParameterName]);
+    }, [selectedVibeId, isStrippingVibe, isGenerating, isPromptHelperOpen, promptHelperInstruction, isPromptHelperLoading, prompt, currentModel.id, currentNegativePrompt, negativePromptParameterName]);
 
     if (!currentModel) return <div>{t('generationForm.loading')}</div>;
 
@@ -1411,6 +1418,25 @@ export default function ImageGenerationForm() {
                                 </div>
                             </div>
                         )}
+                        <ImageVibeControls
+                            prompt={prompt} selectedVibeId={selectedVibeId} onSelect={setSelectedVibeId}
+                            scopeKey={JSON.stringify([activeWorkspaceId, currentModel.id])}
+                            sourceKey={selectedPromptDocumentId}
+                            disabled={isGenerating || isPromptDraftSyncing || isPromptHelperLoading || isVisionPromptLoading || isZImageRewriteLoading || isPromptEditorOpen}
+                            onBusyChange={setIsStrippingVibe}
+                            onApplyPrompt={(text) => {
+                                setPrompt(text);
+                                setSelectedPromptDocumentId('');
+                                setSelectedPromptDocumentTitle('');
+                                setSceneSnapshot(null);
+                                return () => {
+                                    setPrompt(prompt);
+                                    setSelectedPromptDocumentId(selectedPromptDocumentId);
+                                    setSelectedPromptDocumentTitle(selectedPromptDocumentTitle);
+                                    setSceneSnapshot(sceneSnapshot);
+                                };
+                            }}
+                        />
                         <div className="relative">
                             <textarea
                                 className={`w-full min-h-[120px] p-3 rounded-lg border text-base md:text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${(isPromptHelperLoading || isPromptDraftSyncing || isPromptDraftSelected) ? 'opacity-70 cursor-not-allowed' : ''}`}
@@ -1797,7 +1823,7 @@ export default function ImageGenerationForm() {
                     )}
                     <Button
                         type="submit"
-                        disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
+                        disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing || isStrippingVibe}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-2.5"
                     >
                         {isLoadingMedia ? t('generationForm.loadingMedia') : isGenerating ? t('generationForm.generating') : isPromptDraftSyncing ? 'Syncing prompt draft...' : t('generationForm.generate')}

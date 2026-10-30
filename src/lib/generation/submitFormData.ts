@@ -1,3 +1,4 @@
+import { resolveImageVibe } from '@/lib/vibes/resolveImageVibe';
 import { WorkspaceError } from '@/lib/workspaces/context';
 import { generationErrorMessage } from '@/lib/generation/imageModelPolicy';
 import { validateContentReferences } from '@/lib/workspaces/references';
@@ -154,7 +155,18 @@ async function submitOwnedGenerationFormData(formData: FormData) {
         console.log(`🎬 Processing ${model.name} generation request...`);
 
         // Extract prompt
-        const rawPrompt = formData.get('prompt') as string;
+        const basePrompt = typeof formData.get('prompt') === 'string' ? formData.get('prompt') as string : '';
+        const selectedVibeId = typeof formData.get('selectedVibeId') === 'string' ? (formData.get('selectedVibeId') as string).trim() : '';
+        if (selectedVibeId && (model.type !== 'image' || !model.inputs.includes('text'))) {
+            return NextResponse.json({ success: false, error: 'Vibes are supported only for image prompts' }, { status: 400 });
+        }
+        let vibeResolution;
+        try {
+            vibeResolution = await resolveImageVibe(basePrompt, selectedVibeId, resolvedWorkspaceId);
+        } catch {
+            return NextResponse.json({ success: false, error: 'Selected Vibe is unavailable. Choose another Vibe or None.' }, { status: 400 });
+        }
+        const { prompt: rawPrompt, sourceVibe } = vibeResolution;
         const sceneSnapshot = parseSceneSnapshot(formData.get('sceneSnapshot'));
         const sourceImageGenerationSnapshot = parseSourceImageGenerationSnapshot(formData.get('sourceImageGenerationSnapshot'));
         const sourcePromptDocumentId = typeof formData.get('sourcePromptDocumentId') === 'string' ? (formData.get('sourcePromptDocumentId') as string).trim() : '';
@@ -524,7 +536,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
         }
 
         const buildPersistedOptions = (params: Record<string, any>, input: Record<string, any>, extra: Record<string, any> = {}) => {
-            const merged = { ...params, ...input, ...extra } as Record<string, any>;
+            const merged = { ...params, ...input, ...extra, ...(sourceVibe ? { sourceVibe } : {}) } as Record<string, any>;
 
             if (!secureModelIds.includes(modelId)) {
                 return merged;
@@ -829,6 +841,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
                     status: 'IN_QUEUE',
                     prompt: promptTemplate,
                     resolvedPrompt: prompt,
+                    sourceVibe,
                     seed: parameters.seed,
                     promptWildcardSelections: wildcardExpansion.selections,
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),

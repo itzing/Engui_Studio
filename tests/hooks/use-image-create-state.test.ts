@@ -23,6 +23,11 @@ const { mockAddJob, mockSubmitImageGeneration, mockSwitchModel } = vi.hoisted(()
   mockSwitchModel: vi.fn(),
 }));
 
+vi.mock('@/lib/workspaces/useWorkspaceFetch', () => {
+  const scopedFetch = (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init);
+  return { useWorkspaceFetch: () => scopedFetch };
+});
+
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => ({
     settings: {
@@ -181,6 +186,7 @@ function Harness() {
     React.createElement('div', { 'data-testid': 'selected-title' }, state.selectedPromptDocumentTitle),
     React.createElement('button', { type: 'button', onClick: () => state.selectPromptDocument('draft-1') }, 'Select draft'),
     React.createElement('button', { type: 'button', onClick: () => state.setPrompt('Batch prompt') }, 'Set prompt'),
+    React.createElement('button', { type: 'button', onClick: () => state.setSelectedVibeId('v1') }, 'Select vibe'),
     React.createElement('button', {
       type: 'button',
       onClick: () => state.setPromptWildcardSelections({
@@ -439,4 +445,18 @@ describe('useImageCreateState mobile prompt draft flow', () => {
 
     expect(mockAddJob).toHaveBeenCalledTimes(1);
   });
+  it('submits a selected Vibe separately for every batch item without modifying the prompt', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ success: true, documents: [] })));
+    render(React.createElement(Harness));
+    fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select vibe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Batch 3' }));
+    await waitFor(() => expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(3));
+    for (const [params] of mockSubmitImageGeneration.mock.calls) {
+      expect(params.prompt).toBe('Batch prompt');
+      expect(params.selectedVibeId).toBe('v1');
+    }
+    expect(screen.getByTestId('prompt').textContent).toBe('Batch prompt');
+  });
+
 });

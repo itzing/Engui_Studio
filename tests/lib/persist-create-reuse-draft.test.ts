@@ -464,4 +464,14 @@ describe('persistCreateReuseDraft', () => {
       selectedPresetId: 'preset-keep',
     });
   });
+  it('restores the Vibe and unprefixed prompt when reusing a generated image', async () => {
+    getModelById.mockReturnValue({ id: 'krea2-turbo', parameters: [] });
+    isInputVisible.mockReturnValue(false);
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+    const result = persistCreateReuseDraft({ type: 'image', modelId: 'krea2-turbo', prompt: 'Soft light.\n\nA chair.', options: JSON.stringify({ sourceVibe: { id: 'v1', name: 'Calm', baseDescription: 'Soft light.', basePrompt: 'A chair.' } }) });
+    expect(result?.snapshot).toMatchObject({ prompt: 'A chair.', selectedVibeId: 'v1' });
+    const plain = persistCreateReuseDraft({ type: 'image', modelId: 'krea2-turbo', prompt: 'Another prompt', options: {} });
+    expect(plain?.snapshot).toMatchObject({ prompt: 'Another prompt', selectedVibeId: '' });
+  });
+
 });

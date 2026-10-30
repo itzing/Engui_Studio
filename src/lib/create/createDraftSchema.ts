@@ -41,6 +41,7 @@ export type CommonCreateDraftFields = {
 };
 
 export type ImageCreateDraftV2 = CommonCreateDraftFields & {
+  selectedVibeId?: string;
   randomizeSeed?: boolean | string | number;
   selectedSceneId?: string;
   inputs?: {

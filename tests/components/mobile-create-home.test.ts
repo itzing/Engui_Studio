@@ -30,7 +30,9 @@ vi.mock('@/components/ui/toast', () => ({
   useToast: () => ({ showToast: mockToast }),
 }));
 
-vi.mock('@/lib/context/StudioContext', () => ({ useStudio: () => ({ activeWorkspaceId: mobileCreateState.workspaceId }) }));
+vi.mock('@/lib/context/StudioContext', () => ({ useStudio: () => ({ activeWorkspaceId: mobileCreateState.workspaceId, settings: {} }) }));
+
+vi.mock('@/components/create/ImageVibeControls', () => ({ default: () => null }));
 
 import MobileCreateHome from '@/components/mobile/create/MobileCreateHome';
 
@@ -39,6 +41,7 @@ function buildState(overrides: Record<string, any> = {}) {
     currentModel: {
       id: 'mock-image',
       name: 'Z-Image',
+      inputs: ['text'],
       parameters: [
         { name: 'seed', default: 1920494315 },
         { name: 'width', default: 1024 },
@@ -47,6 +50,10 @@ function buildState(overrides: Record<string, any> = {}) {
     },
     prompt: 'A cinematic portrait prompt',
     setPrompt: vi.fn(),
+    selectedVibeId: '',
+    setSelectedVibeId: vi.fn(),
+    setIsStrippingVibe: vi.fn(),
+    applyStrippedPrompt: vi.fn(),
     previewUrl: '',
     previewUrl2: '',
     primaryImageVisible: false,

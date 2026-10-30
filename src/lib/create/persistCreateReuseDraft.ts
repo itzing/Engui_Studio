@@ -1,5 +1,7 @@
 'use client';
 
+import { imageVibeReuse } from '@/lib/vibes/imageVibe';
+
 import { createImageDraftSnapshot, normalizeImageDraftForModel, normalizeRandomizeSeed, type ImageCreateDraftSnapshot } from '@/lib/create/imageDraft';
 import { announceCreateReuseDraft } from '@/lib/create/createModeEvents';
 import { getWorkflowActiveModel, getWorkflowDraft, saveWorkflowDraft, setActiveMode, setWorkflowActiveModel } from '@/lib/createDrafts';
@@ -161,7 +163,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const shouldReuseSecondaryImage = !!(model && isInputVisible(model, 'image2', parameterValues));
 
     const snapshot = normalizeImageDraftForModel(modelId, createImageDraftSnapshot({
-      prompt: detail.prompt || '',
+      ...imageVibeReuse(detail.prompt || '', parsedOptions),
       showAdvanced: true,
       randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
       parameterValues,

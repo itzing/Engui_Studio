@@ -22,6 +22,11 @@ const { mockAddJob, mockSubmitImageGeneration } = vi.hoisted(() => ({
   })),
 }));
 
+vi.mock('@/lib/workspaces/useWorkspaceFetch', () => {
+  const scopedFetch = (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init);
+  return { useWorkspaceFetch: () => scopedFetch };
+});
+
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => ({
     settings: {
@@ -201,6 +206,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
     mockModel.optionalInputs = ['image'];
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/api/vibes?')) return jsonResponse({ success: true, vibes: [] });
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
       }
@@ -241,6 +247,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
   it('opens a large desktop prompt editor on focus and saves with Ctrl+Enter', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/api/vibes?')) return jsonResponse({ success: true, vibes: [] });
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
       }
@@ -271,6 +278,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
   it('does not apply browser step or range validation to Create Image dimensions', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/api/vibes?')) return jsonResponse({ success: true, vibes: [] });
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({ success: true, documents: [] });
       }
@@ -299,6 +307,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
     let detailFetchCount = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/api/vibes?')) return jsonResponse({ success: true, vibes: [] });
       if (url.includes('/api/prompt-documents?workspaceId=ws-1')) {
         return jsonResponse({
           success: true,

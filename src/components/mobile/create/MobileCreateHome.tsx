@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardPaste, ImagePlus, Loader2, Sparkles, WandSparkles, X } from 'lucide-react';
+import ImageVibeControls from '@/components/create/ImageVibeControls';
 import MobileScreen from '@/components/mobile/MobileScreen';
 import MobileCreateModeBar from '@/components/mobile/create/MobileCreateModeBar';
 import type { CreateMode } from '@/lib/createDrafts';
@@ -37,6 +38,12 @@ export default function MobileCreateHome({
     currentModel,
     prompt,
     setPrompt,
+    selectedVibeId,
+    setSelectedVibeId,
+    isStrippingVibe,
+    setIsStrippingVibe,
+    applyStrippedPrompt,
+    isPromptHelperLoading,
     previewUrl,
     previewUrl2,
     primaryImageVisible,
@@ -199,6 +206,13 @@ export default function MobileCreateHome({
               </Button>
             </Card>
           ) : null}
+
+          {currentModel?.inputs.includes('text') && (
+            <ImageVibeControls prompt={prompt} selectedVibeId={selectedVibeId} onSelect={setSelectedVibeId}
+              scopeKey={JSON.stringify([activeWorkspaceId, currentModel.id])} sourceKey={selectedPromptDocumentId}
+              disabled={isGenerating || isPromptDraftSyncing || isPromptHelperLoading || isPasting}
+              onBusyChange={setIsStrippingVibe} onApplyPrompt={applyStrippedPrompt} />
+          )}
 
           {(primaryImageVisible || secondaryImageVisible) && (
             <div className="grid gap-4">
@@ -402,7 +416,7 @@ export default function MobileCreateHome({
                 key={count}
                 className="min-w-0 px-2"
                 size="lg"
-                disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing}
+                disabled={isGenerating || isLoadingMedia || isPromptDraftSyncing || isStrippingVibe}
                 onClick={async () => {
                   await submitBatch(count);
                 }}

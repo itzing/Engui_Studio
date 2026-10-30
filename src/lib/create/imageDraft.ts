@@ -3,6 +3,7 @@ import { getModelById, isInputVisible } from '@/lib/models/modelConfig';
 
 export type ImageCreateDraftSnapshot = {
   prompt?: string;
+  selectedVibeId?: string;
   showAdvanced?: boolean;
   randomizeSeed?: boolean | string | number;
   parameterValues?: Record<string, any>;
@@ -47,6 +48,7 @@ export const mergeImageDraftParameterValues = (
 
 export const createImageDraftSnapshot = (snapshot: ImageCreateDraftSnapshot): ImageCreateDraftSnapshot => ({
   prompt: snapshot.prompt || '',
+  selectedVibeId: typeof snapshot.selectedVibeId === 'string' ? snapshot.selectedVibeId : '',
   showAdvanced: snapshot.showAdvanced === true,
   randomizeSeed: normalizeRandomizeSeed(snapshot.randomizeSeed),
   parameterValues: snapshot.parameterValues || {},
@@ -83,6 +85,7 @@ export const normalizeImageDraftForModel = (
 
   return createImageDraftSnapshot({
     prompt: snapshot?.prompt || '',
+    selectedVibeId: snapshot?.selectedVibeId || '',
     showAdvanced: snapshot?.showAdvanced === true,
     randomizeSeed: snapshot?.randomizeSeed,
     parameterValues,
