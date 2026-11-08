@@ -16,6 +16,10 @@ const mockCarousel = vi.hoisted(() => ({
   props: null as Record<string, unknown> | null,
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 vi.mock('@/lib/context/StudioContext', () => ({
   useStudio: () => mockStudio.current,
 }));

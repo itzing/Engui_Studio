@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Film, Heart, Image as ImageIcon, Play, RotateCcw, Smartphone, X } from 'lucide-react';
 import MobileHeader from '@/components/mobile/MobileHeader';
@@ -44,6 +45,7 @@ const SWIPE_CLOSE_THRESHOLD_PX = 56;
 const SWIPE_CLOSE_DOMINANCE = 1.25;
 
 export default function MobileGalleryCarouselScreen() {
+  const router = useRouter();
   const { activeWorkspaceId, workspaces } = useStudio();
   const workspaceId = activeWorkspaceId || workspaces[0]?.id || null;
   const [videosEnabled, setVideosEnabled] = useState(true);
@@ -349,6 +351,7 @@ export default function MobileGalleryCarouselScreen() {
             >
               <GalleryVideoCarousel
                 workspaceId={workspaceId}
+                onOpenAssetInfo={tiktokMode ? (assetId) => router.push(`/m/gallery/${encodeURIComponent(assetId)}`) : undefined}
                 initialVideosEnabled={playerVideosEnabled}
                 initialImagesEnabled={playerImagesEnabled}
                 initialOnlyFavorites={onlyFavorites}

@@ -11,6 +11,14 @@ const pushMock = vi.hoisted(() => vi.fn());
 const persistCreateReuseDraftMock = vi.hoisted(() => vi.fn());
 const shareGalleryAssetMock = vi.hoisted(() => vi.fn(async () => 'url'));
 
+vi.mock('@/lib/workspaces/client', () => ({
+  workspaceFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
+}));
+
+vi.mock('@/lib/workspaces/useWorkspaceFetch', () => ({
+  useWorkspaceFetch: () => globalThis.fetch,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
 }));

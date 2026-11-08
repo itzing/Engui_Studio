@@ -4,7 +4,7 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Clapperboard, Film, Heart, Image as ImageIcon, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, SlidersHorizontal, Type, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Film, Heart, Image as ImageIcon, Info, Loader2, Pause, Play, RefreshCw, Share2, Shuffle, SlidersHorizontal, Type, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -342,6 +342,7 @@ function releaseVideoElementSource(video: HTMLVideoElement | null | undefined) {
 type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
+  onOpenAssetInfo?: (assetId: string) => void;
   initialVideosEnabled?: boolean;
   initialImagesEnabled?: boolean;
   initialIncludeLandscape?: boolean;
@@ -361,6 +362,7 @@ type GalleryVideoCarouselProps = {
 export function GalleryVideoCarousel({
   workspaceId,
   onClose,
+  onOpenAssetInfo,
   initialVideosEnabled = true,
   initialImagesEnabled = false,
   initialIncludeLandscape = true,
@@ -2694,6 +2696,17 @@ export function GalleryVideoCarousel({
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             >
+              {onOpenAssetInfo ? (
+                <button
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:bg-black/75"
+                  aria-label="Open asset details"
+                  title="Info"
+                  onClick={() => onOpenAssetInfo(activeTikTokActionAsset.id)}
+                >
+                  <Info className="h-5 w-5" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors ${activeTikTokActionAsset.favorited ? 'border-pink-300/55 bg-pink-500/35' : 'border-white/15 bg-black/55 hover:bg-black/75'}`}
