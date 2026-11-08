@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ManagedVideo } from '@/components/media/ManagedVideo';
+import { requestVideoPlayback } from '@/lib/media/videoLifecycle';
 import Lightbox from 'yet-another-react-lightbox';
 import type { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
@@ -33,6 +35,7 @@ interface GalleryFullscreenViewerProps {
   renderHeaderActions?: (itemId: string) => React.ReactNode;
   renderFooterActions?: (item: GalleryFullscreenViewerItem, meta: { canMarkUpscale: boolean }) => React.ReactNode;
   enableTouchSwipeNavigation?: boolean;
+  manageVideoLifecycle?: boolean;
 }
 
 type SlideshowMode = 'stop' | 'loop' | 'random';
@@ -65,6 +68,7 @@ export function GalleryFullscreenViewer({
   renderHeaderActions,
   renderFooterActions,
   enableTouchSwipeNavigation = false,
+  manageVideoLifecycle = false,
 }: GalleryFullscreenViewerProps) {
   const previousOpenRef = useRef(false);
   const singleTapTimeoutRef = useRef<number | null>(null);
@@ -78,6 +82,8 @@ export function GalleryFullscreenViewer({
   const zoomRef = useRef<ZoomRef | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(shouldUseDesktopViewerLayout);
+  const mobileVideoLifecycle = manageVideoLifecycle || !isDesktop;
+  const VideoElement = mobileVideoLifecycle ? ManagedVideo : 'video';
   const [showControls, setShowControls] = useState(true);
   const [favoriteOverlay, setFavoriteOverlay] = useState<'added' | 'removed' | null>(null);
   const [currentImageLoaded, setCurrentImageLoaded] = useState(false);
@@ -139,7 +145,7 @@ export function GalleryFullscreenViewer({
 
   const playVideoElement = useCallback((video: HTMLVideoElement | null) => {
     if (!video) return;
-    void video.play().catch(() => {});
+    void requestVideoPlayback(video).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -280,7 +286,7 @@ export function GalleryFullscreenViewer({
       event.stopPropagation();
 
       if (video.paused) {
-        void video.play().catch(() => {});
+        void requestVideoPlayback(video).catch(() => {});
       } else {
         video.pause();
       }
@@ -610,7 +616,7 @@ export function GalleryFullscreenViewer({
         className="engui-yarl-root"
         carousel={{
           finite: true,
-          preload: isDesktop ? 2 : 0,
+          preload: mobileVideoLifecycle ? 0 : 2,
           padding: isDesktop ? '16px' : '0px',
           spacing: isDesktop ? '16px' : '0px',
           imageFit: 'contain',
@@ -668,7 +674,7 @@ export function GalleryFullscreenViewer({
             if (customSlide.type === 'video') {
               const isActiveVideo = customSlide.id === currentItem?.id;
               const showNativeVideoControls = isActiveVideo && videoControlsItemId === customSlide.id;
-              if (!isDesktop && !isActiveVideo) {
+              if (mobileVideoLifecycle && !isActiveVideo) {
                 return (
                   <div className="flex h-full w-full items-center justify-center bg-black p-0">
                     {customSlide.poster ? (
@@ -687,6 +693,17 @@ export function GalleryFullscreenViewer({
                   </div>
                 );
               }
+              const registerVideo = (element: HTMLVideoElement | null) => {
+                if (element) {
+                  videoRefsRef.current.set(customSlide.id, element);
+                } else {
+                  videoRefsRef.current.delete(customSlide.id);
+                }
+                if (customSlide.id === currentItem?.id) {
+                  activeVideoRef.current = element;
+                  if (open && element) playVideoElement(element);
+                }
+              };
               return (
                 <div
                   className="flex h-full w-full items-center justify-center p-0"
@@ -697,22 +714,10 @@ export function GalleryFullscreenViewer({
                     }
                   }}
                 >
-                  <video
+                  <VideoElement
+                    key={mobileVideoLifecycle ? customSlide.id : undefined}
                     data-testid="gallery-fullscreen-video"
-                    ref={(element) => {
-                      if (element) {
-                        videoRefsRef.current.set(customSlide.id, element);
-                      } else {
-                        videoRefsRef.current.delete(customSlide.id);
-                      }
-
-                      if (customSlide.id === currentItem?.id) {
-                        activeVideoRef.current = element;
-                        if (open && element) {
-                          playVideoElement(element);
-                        }
-                      }
-                    }}
+                    {...(mobileVideoLifecycle ? { onElement: registerVideo } : { ref: registerVideo })}
                     src={customSlide.src}
                     poster={customSlide.poster}
                     className="block h-full w-full object-contain"

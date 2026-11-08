@@ -1,4 +1,5 @@
 'use client';
+import { ManagedVideo } from '@/components/media/ManagedVideo';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -210,7 +211,7 @@ export default function MobilePreviewScreen() {
               <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-border bg-black/30">
                 {preview.url ? (
                   preview.type === 'video' ? (
-                    <video src={preview.url} controls playsInline className="max-h-[70vh] w-full object-contain" />
+                    <ManagedVideo src={preview.url} controls playsInline className="max-h-[70vh] w-full object-contain" />
                   ) : preview.type === 'image' ? (
                     <img src={preview.url} alt={preview.prompt || preview.title || preview.id} className="max-h-[70vh] w-full object-contain" />
                   ) : (

@@ -563,6 +563,7 @@ export default function MobileGalleryScreen() {
       </div>
 
       <GalleryFullscreenViewer
+        manageVideoLifecycle
         open={viewerOpen}
         items={loadedViewerItems.map((asset) => ({
           id: asset.id,

@@ -350,6 +350,7 @@ export default function MobileGalleryCarouselScreen() {
               onPointerCancel={handleLandscapePointerEnd}
             >
               <GalleryVideoCarousel
+                manageVideoLifecycle
                 workspaceId={workspaceId}
                 onOpenAssetInfo={tiktokMode ? (assetId) => router.push(`/m/gallery/${encodeURIComponent(assetId)}`) : undefined}
                 initialVideosEnabled={playerVideosEnabled}

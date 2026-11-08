@@ -1,4 +1,6 @@
 'use client';
+import { ManagedVideo } from '@/components/media/ManagedVideo';
+import { canRequestVideoPlayback, requestVideoPlayback as playOwnedVideo } from '@/lib/media/videoLifecycle';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -343,6 +345,7 @@ type GalleryVideoCarouselProps = {
   workspaceId: string | null;
   onClose?: () => void;
   onOpenAssetInfo?: (assetId: string) => void;
+  manageVideoLifecycle?: boolean;
   initialVideosEnabled?: boolean;
   initialImagesEnabled?: boolean;
   initialIncludeLandscape?: boolean;
@@ -363,6 +366,7 @@ export function GalleryVideoCarousel({
   workspaceId,
   onClose,
   onOpenAssetInfo,
+  manageVideoLifecycle = false,
   initialVideosEnabled = true,
   initialImagesEnabled = false,
   initialIncludeLandscape = true,
@@ -380,6 +384,8 @@ export function GalleryVideoCarousel({
 }: GalleryVideoCarouselProps) {
   const fetch = useWorkspaceFetch();
   const router = useRouter();
+  const VideoElement = manageVideoLifecycle ? ManagedVideo : 'video';
+  const [isMediaPageVisible, setMediaPageVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
   const stageRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
   const preloadRequestedVideoInstanceIdsRef = useRef<Set<string>>(new Set());
@@ -1344,6 +1350,7 @@ export function GalleryVideoCarousel({
   }, [router]);
 
   const requestVideoPlayback = useCallback((instanceId: string, video: HTMLVideoElement, forceInteractionRetry = false) => {
+    if (!canRequestVideoPlayback(video)) return;
     video.muted = true;
     video.loop = !(flowModeRef.current && instanceId.startsWith('flow-'));
     video.playsInline = true;
@@ -1355,7 +1362,7 @@ export function GalleryVideoCarousel({
     if (forceInteractionRetry) {
       playInteractionRetryVideoInstanceIdsRef.current.add(instanceId);
     }
-    const result = video.play();
+    const result = playOwnedVideo(video);
     if (result && typeof result.catch === 'function') {
       void result.catch(() => {
         playRequestedVideoInstanceIdsRef.current.delete(instanceId);
@@ -1365,9 +1372,9 @@ export function GalleryVideoCarousel({
   }, []);
 
   const restartFlowVideoAfterEnded = useCallback((instanceId: string, video: HTMLVideoElement) => {
-    if (!flowModeRef.current || !instanceId.startsWith('flow-')) return;
+    if (!flowModeRef.current || !instanceId.startsWith('flow-') || !canRequestVideoPlayback(video)) return;
     window.setTimeout(() => {
-      if (!flowModeRef.current) return;
+      if (!flowModeRef.current || !canRequestVideoPlayback(video)) return;
       if (videoRefs.current[instanceId] !== video || !video.isConnected) return;
       try {
         video.currentTime = 0;
@@ -1436,12 +1443,39 @@ export function GalleryVideoCarousel({
     });
   }, []);
 
+  useEffect(() => {
+    if (!manageVideoLifecycle) return;
+    const hide = () => {
+      setMediaPageVisible(false);
+      if (flowAdvanceTimeoutRef.current !== null) {
+        window.clearTimeout(flowAdvanceTimeoutRef.current);
+        flowAdvanceTimeoutRef.current = null;
+      }
+      if (tiktokCurrentVideoRetryTimeoutRef.current !== null) {
+        window.clearTimeout(tiktokCurrentVideoRetryTimeoutRef.current);
+        tiktokCurrentVideoRetryTimeoutRef.current = null;
+      }
+    };
+    const show = () => setMediaPageVisible(document.visibilityState !== 'hidden');
+    const visibility = () => document.visibilityState === 'hidden' ? hide() : show();
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('pagehide', hide);
+    window.addEventListener('pageshow', show);
+    return () => {
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('pagehide', hide);
+      window.removeEventListener('pageshow', show);
+    };
+  }, [manageVideoLifecycle]);
+
   const retryCurrentTikTokVideo = useCallback((options: { manual?: boolean } = {}) => {
     if (!tiktokModeRef.current) return;
     const currentSlot = getCurrentTikTokSlot();
     if (!currentSlot || currentSlot.entry.kind !== 'video') return;
 
     const instanceId = currentSlot.instanceId;
+    const video = videoRefs.current[instanceId];
+    if (manageVideoLifecycle && (document.visibilityState === 'hidden' || (video && !canRequestVideoPlayback(video)))) return;
     const retryCount = tiktokVideoRetryCountsRef.current[instanceId] || 0;
     if (!options.manual && retryCount >= TIKTOK_CURRENT_VIDEO_MAX_AUTO_RETRIES) {
       setTiktokVideoRetryExhaustedInstanceIds((current) => {
@@ -1481,7 +1515,7 @@ export function GalleryVideoCarousel({
       ...current,
       [instanceId]: (current[instanceId] || 0) + 1,
     }));
-  }, [getCurrentTikTokSlot]);
+  }, [getCurrentTikTokSlot, manageVideoLifecycle]);
 
   const requestTikTokPosterBackfill = useCallback((assetIds: string[]) => {
     if (!workspaceId || assetIds.length === 0) return;
@@ -1566,6 +1600,7 @@ export function GalleryVideoCarousel({
         return;
       }
 
+      if (!canRequestVideoPlayback(video)) return;
       video.preload = 'auto';
       if (video.readyState === 0 && !preloadRequestedVideoInstanceIdsRef.current.has(instanceId)) {
         preloadRequestedVideoInstanceIdsRef.current.add(instanceId);
@@ -1616,7 +1651,7 @@ export function GalleryVideoCarousel({
       window.clearTimeout(tiktokCurrentVideoRetryTimeoutRef.current);
       tiktokCurrentVideoRetryTimeoutRef.current = null;
     }
-    if (!tiktokModeRef.current) return;
+    if (!tiktokModeRef.current || (manageVideoLifecycle && !isMediaPageVisible)) return;
     const currentSlot = getCurrentTikTokSlot();
     if (!currentSlot || currentSlot.entry.kind !== 'video') return;
     if (videoReadyInstanceIds.has(currentSlot.instanceId)) {
@@ -1636,7 +1671,7 @@ export function GalleryVideoCarousel({
         tiktokCurrentVideoRetryTimeoutRef.current = null;
       }
     };
-  }, [activeSlots, getCurrentTikTokSlot, retryCurrentTikTokVideo, tiktokVideoRetryExhaustedInstanceIds, videoLoadProgress, videoReadyInstanceIds]);
+  }, [activeSlots, getCurrentTikTokSlot, retryCurrentTikTokVideo, tiktokVideoRetryExhaustedInstanceIds, videoLoadProgress, videoReadyInstanceIds, manageVideoLifecycle, isMediaPageVisible]);
 
   useEffect(() => {
     return () => {
@@ -1652,7 +1687,7 @@ export function GalleryVideoCarousel({
 
   useEffect(() => {
     clearFlowAdvanceTimer();
-    if (!flowMode || paused || isLoading || feedRef.current.length <= 1) return;
+    if (!flowMode || paused || isLoading || feedRef.current.length <= 1 || (manageVideoLifecycle && !isMediaPageVisible)) return;
 
     const latestInstanceId = flowLastActivatedInstanceIdRef.current;
     const latestSlot = latestInstanceId
@@ -1668,7 +1703,7 @@ export function GalleryVideoCarousel({
     }, delayMs);
 
     return () => clearFlowAdvanceTimer();
-  }, [activateFlowRelative, activeFlowProfile.slotActivationSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, isLoading, paused]);
+  }, [activateFlowRelative, activeFlowProfile.slotActivationSeconds, activeSlots, clearFlowAdvanceTimer, flowMode, isLoading, paused, manageVideoLifecycle, isMediaPageVisible]);
 
   const handleFlowVideoEnded = useCallback((instanceId: string, video: HTMLVideoElement) => {
     if (!flowModeRef.current) return;
@@ -1776,6 +1811,7 @@ export function GalleryVideoCarousel({
   }, [animateTikTokSnap, getCurrentTikTokSlot]);
 
   useEffect(() => {
+    if (manageVideoLifecycle && !isMediaPageVisible) return;
     const frame = (timestamp: number) => {
       const lastTimestamp = lastFrameTimestampRef.current ?? timestamp;
       const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - lastTimestamp) / 1000));
@@ -1842,7 +1878,7 @@ export function GalleryVideoCarousel({
         window.cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [fillAdjacentSlots, trimDistantSlots]);
+  }, [fillAdjacentSlots, trimDistantSlots, manageVideoLifecycle, isMediaPageVisible]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2506,9 +2542,17 @@ export function GalleryVideoCarousel({
               {slot.entry.kind === 'video' ? (
                 <>
                   {shouldRenderVideo ? (
-                    <video
+                    <VideoElement
                       key={isTikTokSlot ? `${slot.instanceId}:${tiktokVideoRetryVersions[slot.instanceId] || 0}` : slot.instanceId}
-                      ref={(node) => {
+                      {...(manageVideoLifecycle
+                        ? { onElement: (node: HTMLVideoElement | null) => {
+                          if (node) {
+                            videoRefs.current[slot.instanceId] = node;
+                          } else {
+                            delete videoRefs.current[slot.instanceId];
+                          }
+                        } }
+                        : { ref: (node: HTMLVideoElement | null) => {
                         if (node) {
                           videoRefs.current[slot.instanceId] = node;
                           if ((isTikTokSlot || isFlowSlot) && node.preload !== 'auto') {
@@ -2532,7 +2576,7 @@ export function GalleryVideoCarousel({
                           }
                           delete videoRefs.current[slot.instanceId];
                         }
-                      }}
+                      } })}
                       src={slot.entry.asset.previewUrl || slot.entry.asset.originalUrl}
                       poster={posterUrl || undefined}
                       muted

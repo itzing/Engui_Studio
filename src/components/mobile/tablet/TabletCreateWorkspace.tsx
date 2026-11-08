@@ -1,4 +1,5 @@
 'use client';
+import { ManagedVideo } from '@/components/media/ManagedVideo';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -1146,7 +1147,7 @@ function TabletJobPreviewPanel({
               </div>
             ) : mediaUrl ? (
               previewType === 'video' ? (
-                <video src={mediaUrl} poster={output?.thumbnailUrl || job.thumbnailUrl || undefined} controls autoPlay loop muted playsInline className="max-h-full max-w-full object-contain" />
+                <ManagedVideo src={mediaUrl} poster={output?.thumbnailUrl || job.thumbnailUrl || undefined} controls autoPlay loop muted playsInline className="max-h-full max-w-full object-contain" />
             ) : previewType === 'audio' ? (
               <audio src={mediaUrl} controls className="w-full" />
             ) : (

@@ -1,4 +1,5 @@
 'use client';
+import { ManagedVideo } from '@/components/media/ManagedVideo';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -428,7 +429,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                   <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-border bg-black/30">
                     {selectedOutput?.url ? (
                       selectedOutput.type === 'video' ? (
-                        <video src={selectedOutput.url} controls playsInline className="max-h-[70vh] w-full object-contain" onLoadedMetadata={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.videoWidth, event.currentTarget.videoHeight)} />
+                        <ManagedVideo src={selectedOutput.url} controls playsInline className="max-h-[70vh] w-full object-contain" onLoadedMetadata={(event) => rememberOutputResolution(selectedOutput.outputId, event.currentTarget.videoWidth, event.currentTarget.videoHeight)} />
                       ) : selectedOutput.type === 'audio' ? (
                         <audio src={selectedOutput.url} controls className="w-full" />
                       ) : (

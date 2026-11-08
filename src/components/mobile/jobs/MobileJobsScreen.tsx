@@ -444,6 +444,7 @@ export default function MobileJobsScreen() {
       </div>
 
       <GalleryFullscreenViewer
+        manageVideoLifecycle
         open={viewerOpen}
         items={loadedViewerItems.map((item) => ({ id: item.id, url: item.url, posterUrl: item.posterUrl, favorited: false, type: item.type }))}
         currentIndex={selectedLoadedViewerIndex >= 0 ? selectedLoadedViewerIndex : viewerIndex}
