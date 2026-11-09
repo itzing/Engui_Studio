@@ -160,3 +160,7 @@ body.engui-mobile-shell {
     display: none !important;
   }
 }
+/* Keep posters visible without flashing loading feedback for brief video startup. */
+@keyframes engui-video-loading-appear {
+  to { opacity: 1; }
+}

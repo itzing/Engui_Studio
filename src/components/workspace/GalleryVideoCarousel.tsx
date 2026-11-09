@@ -2036,7 +2036,8 @@ export function GalleryVideoCarousel({
   const persistentTikTokSource = settledTikTokAsset?.previewUrl || settledTikTokAsset?.originalUrl;
   const onPersistentTikTokReady = (video: HTMLVideoElement) => {
     if (!settledTikTokSlot || !persistentTikTokSource || video.readyState < 2) return;
-    if (video.currentSrc && video.currentSrc !== new URL(persistentTikTokSource, document.baseURI).href) return;
+    if (video.dataset.mediaSource !== persistentTikTokSource) return;
+    if (video.currentSrc && video.currentSrc !== video.src) return;
     updateVideoLoadProgress(settledTikTokSlot.instanceId, video);
     markVideoReady(settledTikTokSlot.instanceId);
   };
@@ -2556,6 +2557,11 @@ export function GalleryVideoCarousel({
                 data-testid="persistent-tiktok-video"
                 onElement={(element) => { persistentTikTokRef.current = element; }}
                 src={persistentTikTokSource}
+                prefetchScope={workspaceId ?? undefined}
+                prefetchUrls={[1, -1].map((offset) => {
+                  const neighbor = activeSlots.find((slot) => slot.feedIndex === (settledTikTokSlot?.feedIndex ?? -10) + offset);
+                  return neighbor?.entry.kind === 'video' ? neighbor.entry.asset.previewUrl || neighbor.entry.asset.originalUrl : '';
+                })}
                 poster={settledTikTokAsset ? readTikTokVideoPosterUrl(settledTikTokAsset) || settledTikTokAsset.thumbnailUrl || undefined : undefined}
                 muted loop autoPlay playsInline preload="auto"
                 className={`h-full w-full object-contain ${settledTikTokSlot && videoReadyInstanceIds.has(settledTikTokSlot.instanceId) ? '' : 'opacity-0'}`}
@@ -2696,6 +2702,7 @@ export function GalleryVideoCarousel({
                   {shouldShowLoadingSpinner ? (
                     <div
                       className={`absolute inset-0 z-20 flex items-center justify-center bg-black/15 ${shouldShowManualRetry ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                      style={shouldShowManualRetry ? undefined : { opacity: 0, animation: 'engui-video-loading-appear 0s linear 250ms forwards' }}
                       data-testid="gallery-tiktok-video-loading"
                     >
                       {shouldShowManualRetry ? (

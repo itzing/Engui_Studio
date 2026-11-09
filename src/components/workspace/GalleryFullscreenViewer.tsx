@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ManagedVideo } from '@/components/media/ManagedVideo';
 import { requestVideoPlayback } from '@/lib/media/videoLifecycle';
+import { currentBrowserWorkspaceId } from '@/lib/workspaces/client';
 import Lightbox from 'yet-another-react-lightbox';
 import type { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
@@ -767,6 +768,11 @@ export function GalleryFullscreenViewer({
                     data-testid="gallery-fullscreen-video"
                     onElement={(element) => { activeVideoRef.current = element; }}
                     src={currentItem.type === 'video' ? currentItem.url : undefined}
+                    prefetchScope={currentBrowserWorkspaceId() ?? undefined}
+                    prefetchUrls={[1, -1].map((offset) => {
+                      const neighbor = items[safeIndex + offset];
+                      return neighbor?.type === 'video' ? neighbor.url : '';
+                    })}
                     poster={currentItem.posterUrl || undefined}
                     controls={currentItem.type === 'video' && videoControlsItemId === currentItem.id}
                     autoPlay={currentItem.type === 'video'}
