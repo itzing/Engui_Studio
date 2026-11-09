@@ -2140,4 +2140,33 @@ describe('GalleryVideoCarousel', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('No selected gallery media in this workspace.')).toBeTruthy());
   });
+  it('keeps one owned TikTok player, commits only settled swipes and requires explicit retry', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, width: 390, height: 844, top: 0, right: 390, bottom: 844, left: 0, toJSON: () => ({}) } as DOMRect);
+    const assets = [1, 2, 3].map((id) => ({ id: `stable-${id}`, workspaceId: 'ws-1', type: 'video', originalUrl: `/stable-${id}.mp4`, previewUrl: `/stable-${id}.mp4`, thumbnailUrl: `/stable-${id}.jpg`, derivativeStatus: 'ready', mediaWidth: 720, mediaHeight: 1280, addedToGalleryAt: '2026-11-09T00:00:00Z' }));
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => makeCarouselWindowResponse(assets, 1) })));
+    HTMLMediaElement.prototype.play = vi.fn(function (this: HTMLMediaElement) { Object.defineProperty(this, 'paused', { configurable: true, value: false }); return Promise.resolve(); });
+    try {
+      render(React.createElement(GalleryVideoCarousel, { workspaceId: 'ws-1', manageVideoLifecycle: true, movementAxis: 'vertical', initialTiktokMode: true, initialImagesEnabled: false }));
+      const stage = screen.getByTestId('gallery-video-carousel');
+      await waitFor(() => expect(stage.querySelector('video')?.getAttribute('src')).toBe('/stable-2.mp4'));
+      const video = stage.querySelector('video')!;
+      expect(HTMLMediaElement.prototype.load).not.toHaveBeenCalled();
+      const pauseCalls = vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length;
+      fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 700 });
+      fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 150 });
+      expect(video.getAttribute('src')).toBe('/stable-2.mp4');
+      expect(vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length).toBe(pauseCalls);
+      fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 150 });
+      await waitFor(() => expect(video.getAttribute('src')).toBe('/stable-3.mp4'));
+      expect(stage.querySelector('video')).toBe(video);
+      expect(stage.querySelectorAll('video')).toHaveLength(1);
+      const loadsBeforeError = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
+      fireEvent.error(video);
+      expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBe(loadsBeforeError);
+      fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
+      expect(stage.querySelector('video')).toBe(video);
+      expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBe(loadsBeforeError + 1);
+    } finally { rectSpy.mockRestore(); }
+  });
+
 });

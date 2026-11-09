@@ -1,3 +1,5 @@
+import { observeVideoDiagnostics } from './videoDiagnostics';
+
 type VideoOptions = { src?: string; autoPlay?: boolean };
 
 type VideoLifecycle = {
@@ -5,6 +7,7 @@ type VideoLifecycle = {
   play: () => Promise<void>;
   dispose: () => void;
   canPlay: () => boolean;
+  retry: () => void;
 };
 
 const owners = new WeakMap<HTMLVideoElement, VideoLifecycle>();
@@ -30,10 +33,14 @@ export function requestVideoPlayback(video: HTMLVideoElement): Promise<void> {
   try { return Promise.resolve(video.play()); } catch (error) { return Promise.reject(error); }
 }
 
+/** Explicit user recovery keeps the same media element; never used as an automatic loop. */
+export function retryVideoPlayback(video: HTMLVideoElement) { owners.get(video)?.retry(); }
+
 /** Own a mobile media element until synchronous ref detachment. */
 export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
   const doc = video.ownerDocument;
   const win = doc.defaultView;
+  const diagnostics = observeVideoDiagnostics(video);
   let disposed = false;
   let suspended = doc.visibilityState === 'hidden';
   let source: string | undefined;
@@ -49,6 +56,7 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
     if (!allowed() || !video.paused) return Promise.resolve();
     if (pendingPlay) return pendingPlay;
     const version = generation;
+    diagnostics.record('play-request');
     let result: Promise<void>;
     try { result = Promise.resolve(video.play()); } catch (error) { return Promise.reject(error); }
     const pending = result.then(() => {
@@ -82,6 +90,7 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
     savedTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
     resumePlayback = !video.paused && !video.ended;
     restoreTime = savedTime > 0;
+    diagnostics.record('suspend');
     suspended = true;
     generation += 1;
     pendingPlay = null;
@@ -89,6 +98,7 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
   };
   const resume = () => {
     if (disposed || !suspended || doc.visibilityState === 'hidden') return;
+    diagnostics.record('resume');
     suspended = false;
     attachSource();
   };
@@ -100,6 +110,15 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
   const owner: VideoLifecycle = {
     canPlay: allowed,
     play,
+    retry() {
+      if (!allowed()) return;
+      diagnostics.record('manual-retry');
+      generation += 1;
+      pendingPlay = null;
+      releaseVideoSource(video);
+      savedTime = 0; restoreTime = false; resumePlayback = true;
+      attachSource();
+    },
     update(options) {
       if (disposed) return;
       const nextAutoplay = Boolean(options.autoPlay);
@@ -111,6 +130,7 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
         pendingPlay = null;
         releaseVideoSource(video);
         source = options.src;
+        diagnostics.sourceChanged();
         savedTime = 0;
         restoreTime = false;
         resumePlayback = autoplay;
@@ -122,6 +142,7 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
     },
     dispose() {
       if (disposed) return;
+      diagnostics.dispose();
       disposed = true;
       generation += 1;
       pendingPlay = null;

@@ -216,4 +216,20 @@ describe('GalleryFullscreenViewer touch swipe navigation', () => {
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Share gallery item' })).toBeNull());
   });
+  it('retains one mobile player across many videos and an intervening image', async () => {
+    const mixed = [{ id: 'a', url: '/a.mp4', type: 'video' as const }, { id: 'b', url: '/b.mp4', type: 'video' as const }, { id: 'c', url: '/c.jpg', type: 'image' as const }];
+    const props = { open: true, manageVideoLifecycle: true, items: mixed, onIndexChange: vi.fn(), onClose: vi.fn() };
+    const view = render(React.createElement(GalleryFullscreenViewer, { ...props, currentIndex: 0 }));
+    const player = await screen.findByTestId('gallery-fullscreen-video');
+    for (let index = 0; index < 30; index++) {
+      const currentIndex = index % 3;
+      view.rerender(React.createElement(GalleryFullscreenViewer, { ...props, currentIndex }));
+      expect(screen.getByTestId('gallery-fullscreen-video')).toBe(player);
+      expect(player.getAttribute('src')).toBe(currentIndex === 2 ? null : mixed[currentIndex].url);
+      expect(view.container.querySelectorAll('video')).toHaveLength(1);
+    }
+    view.unmount();
+    expect(player.getAttribute('src')).toBeNull();
+  });
+
 });

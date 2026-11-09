@@ -138,10 +138,10 @@ export function GalleryFullscreenViewer({
   }, [resetVideoElement]);
 
   const resetCurrentVideo = useCallback((options: { releaseSource?: boolean } = {}) => {
-    if (currentItem?.type !== 'video') return;
+    if (mobileVideoLifecycle || currentItem?.type !== 'video') return;
     resetVideoByItemId(currentItem.id, options);
     resetVideoElement(activeVideoRef.current, options);
-  }, [currentItem?.id, currentItem?.type, resetVideoByItemId, resetVideoElement]);
+  }, [currentItem?.id, currentItem?.type, mobileVideoLifecycle, resetVideoByItemId, resetVideoElement]);
 
   const playVideoElement = useCallback((video: HTMLVideoElement | null) => {
     if (!video) return;
@@ -221,7 +221,7 @@ export function GalleryFullscreenViewer({
     if (currentItem.type && currentItem.type !== 'image') {
       setCurrentImageLoaded(true);
       setImageNaturalSize(null);
-      if (currentItem.type !== 'video') {
+      if (currentItem.type !== 'video' && !mobileVideoLifecycle) {
         activeVideoRef.current = null;
       }
       return;
@@ -255,14 +255,14 @@ export function GalleryFullscreenViewer({
   }, [currentItem, open]);
 
   useEffect(() => {
-    if (!open || currentItem?.type !== 'video') return;
+    if (mobileVideoLifecycle || !open || currentItem?.type !== 'video') return;
 
     const frameId = window.requestAnimationFrame(() => {
       playVideoElement(videoRefsRef.current.get(currentItem.id) || activeVideoRef.current);
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [currentItem?.id, currentItem?.type, open, playVideoElement]);
+  }, [currentItem?.id, currentItem?.type, open, mobileVideoLifecycle, playVideoElement]);
 
   useEffect(() => {
     if (!open || !isDesktop || currentItem?.type !== 'video') return;
@@ -674,7 +674,7 @@ export function GalleryFullscreenViewer({
             if (customSlide.type === 'video') {
               const isActiveVideo = customSlide.id === currentItem?.id;
               const showNativeVideoControls = isActiveVideo && videoControlsItemId === customSlide.id;
-              if (mobileVideoLifecycle && !isActiveVideo) {
+              if (mobileVideoLifecycle) {
                 return (
                   <div className="flex h-full w-full items-center justify-center bg-black p-0">
                     {customSlide.poster ? (
@@ -754,6 +754,27 @@ export function GalleryFullscreenViewer({
           ),
           controls: () => (
             <>
+              {mobileVideoLifecycle ? (
+                <div
+                  key="persistent-mobile-video"
+                  className={`absolute inset-0 z-[5] bg-black ${currentItem.type === 'video' ? '' : 'hidden'}`}
+                  onTouchStart={handleMobileGestureStart}
+                  onTouchMove={handleMobileGestureMove}
+                  onTouchEnd={handleMobileGestureEnd}
+                  onClick={(event) => { event.stopPropagation(); setVideoControlsItemId(currentItem.id); }}
+                >
+                  <ManagedVideo
+                    data-testid="gallery-fullscreen-video"
+                    onElement={(element) => { activeVideoRef.current = element; }}
+                    src={currentItem.type === 'video' ? currentItem.url : undefined}
+                    poster={currentItem.posterUrl || undefined}
+                    controls={currentItem.type === 'video' && videoControlsItemId === currentItem.id}
+                    autoPlay={currentItem.type === 'video'}
+                    muted loop playsInline preload="auto"
+                    className="block h-full w-full object-contain"
+                  />
+                </div>
+              ) : null}
               {!isDesktop && !currentImageLoaded ? (
                 <div
                   key={currentItem.id}
