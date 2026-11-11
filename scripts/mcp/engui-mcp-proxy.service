@@ -1,0 +1,27 @@
+[Unit]
+Description=Engui MCP-only public ingress
+After=network.target engui-studio.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/usr/bin/node /usr/local/lib/engui-mcp/public-proxy.mjs
+EnvironmentFile=/etc/engui-mcp-proxy.conf
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=128M
+TasksMax=32
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
