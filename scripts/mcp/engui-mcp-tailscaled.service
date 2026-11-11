@@ -1,0 +1,26 @@
+[Unit]
+Description=Isolated Tailscale node for public Engui MCP HTTPS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+DynamicUser=yes
+StateDirectory=engui-mcp-tailscale
+StateDirectoryMode=0700
+RuntimeDirectory=engui-mcp-tailscale
+RuntimeDirectoryMode=0700
+CacheDirectory=engui-mcp-tailscale
+CacheDirectoryMode=0700
+ExecStart=/usr/sbin/tailscaled --tun=userspace-networking --statedir=/var/lib/engui-mcp-tailscale --state=/var/lib/engui-mcp-tailscale/tailscaled.state --socket=/run/engui-mcp-tailscale/tailscaled.sock --port=0
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

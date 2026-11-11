@@ -23,7 +23,8 @@ const upstream = http.createServer(async (request, response) => {
 });
 upstream.listen(0, "127.0.0.1");
 await once(upstream, "listening");
-const proxy = createPublicMcpProxy({ authority, upstreamPort: upstream.address().port });
+const standardAuthority = "mcp.example.ts.net";
+const proxy = createPublicMcpProxy({ authority, aliases: [standardAuthority], upstreamPort: upstream.address().port });
 proxy.listen(0, "127.0.0.1");
 await once(proxy, "listening");
 const send = (path, { method = "POST", headers = {}, body = "{}" } = {}) => new Promise((resolve, reject) => {
@@ -39,6 +40,28 @@ const send = (path, { method = "POST", headers = {}, body = "{}" } = {}) => new 
   request.end(body);
 });
 try {
+  await test("standard HTTPS authority is accepted only when explicitly configured", async () => {
+    const response = await send("/api/mcp", { headers: { host: standardAuthority } });
+    assert.equal(response.status, 200);
+    assert.equal(received.at(-1).headers.host, standardAuthority);
+    assert.equal((await send("/api/mcp", { headers: { host: "other.example.ts.net" } })).status, 403);
+    received.length = 0;
+  });
+  await test("diagnostics never contain header values, paths or bodies", async () => {
+    const messages = [];
+    const original = console.info;
+    console.info = (...args) => messages.push(args.join(" "));
+    try {
+      await send("/api/mcp?secret=never-log-this-query", { headers: { authorization: "Bearer never-log-this-token", "x-workspace-id": "never-log-this-workspace" }, body: "never-log-this-body" });
+    } finally { console.info = original; }
+    assert.equal(messages.length, 1);
+    assert.ok(!messages.join(" ").includes("never-log-this"));
+    const entry = JSON.parse(messages[0].slice("MCP ingress ".length));
+    assert.equal(entry.hasAuthorization, true);
+    assert.equal(entry.hasWorkspace, true);
+    assert.equal(entry.status, 404);
+    assert.equal(entry.route, "rejected");
+  });
   await test("unrelated, encoded, traversal and query targets never reach the application", async () => {
     for (const path of ["/", "/openclaw", "/api/workspaces", "/api/mcp/", "/api/mcp/../../api/workspaces", "/api/mcp/%2e%2e/x", "/api%2fmcp", "//api/mcp", "/api/mcp?token=secret", "http://127.0.0.1:3010/api/mcp"]) {
       assert.equal((await send(path)).status, 404, path);

@@ -11,12 +11,23 @@ const RESPONSE_HEADERS = [
   "mcp-protocol-version",
 ];
 
-export function createPublicMcpProxy({ authority, upstreamPort = 3010 }) {
-  if (!authority || !/^[a-z0-9.-]+:\d+$/.test(authority)) {
-    throw new Error("An exact public hostname:port is required.");
+export function createPublicMcpProxy({ authority, aliases = [], upstreamPort = 3010 }) {
+  const authorities = new Set([authority, ...aliases]);
+  if ([...authorities].some((value) => !value || !/^[a-z0-9.-]+(?::\d+)?$/.test(value))) {
+    throw new Error("Exact public hostnames with optional ports are required.");
   }
   let active = 0;
   const server = http.createServer({ maxHeaderSize: 16384 }, (request, response) => {
+    const started = Date.now();
+    response.once("finish", () => console.info("MCP ingress", JSON.stringify({
+      at: new Date().toISOString(),
+      method: ["POST", "GET", "DELETE", "OPTIONS", "HEAD"].includes(request.method) ? request.method : "other",
+      route: request.url === "/api/mcp" ? "mcp" : "rejected",
+      status: response.statusCode,
+      hasAuthorization: Boolean(request.headers.authorization),
+      hasWorkspace: Boolean(request.headers["x-workspace-id"]),
+      durationMs: Date.now() - started,
+    })));
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     const reject = (status, message) => {
@@ -27,7 +38,7 @@ export function createPublicMcpProxy({ authority, upstreamPort = 3010 }) {
     };
     // Compare raw request targets: do not normalize or decode attacker-controlled paths.
     if (request.url !== "/api/mcp") return reject(404, "Not found.");
-    if (request.headers.host !== authority) return reject(403, "Host is not allowed.");
+    if (!authorities.has(request.headers.host)) return reject(403, "Host is not allowed.");
     if (!["POST", "GET", "DELETE"].includes(request.method)) {
       response.setHeader("Allow", "POST, GET, DELETE");
       return reject(405, "Method not allowed.");
@@ -62,7 +73,7 @@ export function createPublicMcpProxy({ authority, upstreamPort = 3010 }) {
     request.once("end", () => {
       if (rejected || response.destroyed) return;
       const headers = {
-        host: authority,
+        host: request.headers.host,
         "x-forwarded-proto": "https",
         "content-length": String(size),
       };
@@ -102,7 +113,10 @@ export function createPublicMcpProxy({ authority, upstreamPort = 3010 }) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const server = createPublicMcpProxy({ authority: process.env.ENGUI_MCP_PUBLIC_AUTHORITY });
+  const server = createPublicMcpProxy({
+    authority: process.env.ENGUI_MCP_PUBLIC_AUTHORITY,
+    aliases: (process.env.ENGUI_MCP_PUBLIC_ALIASES || "").split(",").filter(Boolean),
+  });
   server.listen(3011, "127.0.0.1", () => console.log("MCP ingress listening on loopback:3011"));
   process.once("SIGTERM", () => {
     server.close(() => process.exit(0));
