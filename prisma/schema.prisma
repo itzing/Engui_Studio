@@ -472,6 +472,7 @@ model Character {
 model CharacterVersion {
   id                  String   @id @default(uuid())
   characterId         String
+  identitySnapshot    String?
   traitsSnapshot      String   @default("{}")
   editorStateSnapshot String   @default("{}")
   versionNumber       Int

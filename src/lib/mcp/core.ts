@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { authoringInputSchemas } from "./authoring-schemas";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 
@@ -116,10 +117,11 @@ function boundedEnv(key: string, fallback: number, min: number, max: number) {
   return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
 }
 export const inputSchemas = {
+  ...authoringInputSchemas,
   engui_get_context: z.object({}).strict(),
   engui_list_models: z.object({}).strict(),
   engui_list_characters: z.object(page).strict(),
-  engui_get_character: z.object({ characterId: id }).strict(),
+  engui_get_character: z.object({ characterId: id, characterVersionId: id.optional() }).strict(),
   engui_list_presets: z
     .object({
       ...page,
@@ -175,7 +177,8 @@ export function scopeFor(name: ToolName): string {
     ? "generate"
     : name === "engui_cancel_batch"
       ? "cancel"
-      : name === "engui_save_output" || name === "engui_record_concept_review"
+      : name === "engui_save_output" || name === "engui_record_concept_review" ||
+        ["engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
         ? "curate"
         : "read";
 }

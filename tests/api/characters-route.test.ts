@@ -26,6 +26,16 @@ const {
   mockQueueCharacterPreviewGeneration: vi.fn(),
 }));
 
+// Workspace authentication/isolation is exercised by the real MCP integration suite.
+vi.mock('@/lib/workspaces/route', () => ({
+  withWorkspaceRoute: (fn: any) => async (...args: any[]) => {
+    const { workspaceContext } = await import('@/lib/workspaces/context');
+    return workspaceContext.run({ kind: 'workspace', workspaceId: 'fixture-workspace' }, () => fn(...args));
+  },
+}));
+vi.mock('@/lib/outfits/server', () => ({ resolveCharacterLook: vi.fn(async () => ({ mode: 'default', name: 'Default' })) }));
+vi.mock('@/lib/outfits/previewPrompt', () => ({ buildLookPreviewPrompt: vi.fn(() => 'portrait prompt') }));
+
 vi.mock('@/lib/prisma', () => ({
   prisma: mockPrisma,
 }));
@@ -50,6 +60,7 @@ import { POST as queueCharacterPreview } from '@/app/api/characters/[id]/preview
 function buildCharacterRecord(overrides: Record<string, any> = {}) {
   return {
     id: 'character-1',
+    workspaceId: 'fixture-workspace',
     name: 'Mira',
     gender: 'female',
     traits: JSON.stringify({ hair_color: 'silver' }),
@@ -78,7 +89,7 @@ describe('characters routes', () => {
         update: vi.fn().mockResolvedValue(createdRecord),
       },
       characterVersion: {
-        create: vi.fn().mockResolvedValue({ id: 'version-1' }),
+        create: mockPrisma.characterVersion.create.mockResolvedValue({ id: 'version-1' }),
       },
     }));
 
@@ -98,13 +109,17 @@ describe('characters routes', () => {
     expect(response.status).toBe(201);
     expect(payload.success).toBe(true);
     expect(payload.character.gender).toBe('female');
+    expect(JSON.parse(mockPrisma.characterVersion.create.mock.calls[0][0].data.identitySnapshot)).toEqual({ schemaVersion: 1, name: 'Mira', gender: 'female' });
   });
 
-  it('persists a gender-only update without creating a new version', async () => {
+  it('captures a new identity version for a gender-only update', async () => {
     const existing = buildCharacterRecord({ gender: 'male' });
     const updated = buildCharacterRecord({ gender: 'female' });
     mockPrisma.character.findUnique.mockResolvedValue(existing);
     mockPrisma.character.update.mockResolvedValue(updated);
+    mockPrisma.characterVersion.findFirst.mockResolvedValue({ versionNumber: 1 });
+    mockPrisma.characterVersion.create.mockResolvedValue({ id: 'version-2' });
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
 
     const request = new Request('http://localhost/api/characters/character-1', {
       method: 'PUT',
@@ -128,7 +143,22 @@ describe('characters routes', () => {
       where: { id: 'character-1' },
       data: expect.objectContaining({ gender: 'female' }),
     }));
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockPrisma.$transaction).toHaveBeenCalledOnce();
+    expect(mockPrisma.characterVersion.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ versionNumber: 2, identitySnapshot: JSON.stringify({ schemaVersion: 1, name: 'Mira', gender: 'female' }) }) }));
+  });
+
+  it('captures a new identity version for a name-only update', async () => {
+    const existing = buildCharacterRecord();
+    mockPrisma.character.findUnique.mockResolvedValue(existing);
+    mockPrisma.characterVersion.findFirst.mockResolvedValue({ versionNumber: 1 });
+    mockPrisma.characterVersion.create.mockResolvedValue({ id: 'version-2' });
+    mockPrisma.character.update.mockResolvedValue(buildCharacterRecord({ name: 'New name', currentVersionId: 'version-2' }));
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+    const response = await updateCharacter(new Request('http://localhost/api/characters/character-1', {
+      method: 'PUT', body: JSON.stringify({ name: 'New name', gender: 'female', traits: { hair_color: 'silver' }, editorState: {} }),
+    }) as any, { params: Promise.resolve({ id: 'character-1' }) });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(mockPrisma.characterVersion.create.mock.calls[0][0].data.identitySnapshot).name).toBe('New name');
   });
 
   it('queues a durable character preview job for a saved slot', async () => {
@@ -190,6 +220,7 @@ describe('characters routes', () => {
         findUnique: vi.fn().mockResolvedValue(existing),
         update: vi.fn().mockResolvedValue(existing),
       },
+      characterLookPreview: { create: vi.fn().mockResolvedValue({ id: "look-preview-1" }) },
       jobMaterializationTask: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({ id: 'task-1' }),
@@ -237,7 +268,7 @@ describe('characters routes', () => {
       jobId: 'job-preview-1',
       targetType: 'character_preview',
       targetId: 'character-1',
-      payload: { slot: 'portrait' },
+      payload: { slot: 'portrait', lookPreviewId: 'look-preview-1', updateDefaultCover: true },
     }), expect.anything());
     expect(mockQueueCharacterPreviewGeneration).toHaveBeenCalledWith(expect.objectContaining({
       characterId: 'character-1',

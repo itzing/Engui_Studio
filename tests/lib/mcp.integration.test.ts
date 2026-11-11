@@ -150,10 +150,10 @@ afterAll(async () => {
 });
 
 describe("workspace-bound MCP integration", () => {
-  it("official SDK initializes and discovers 15 strict typed tools without an agent connection", async () => {
+  it("official SDK initializes and discovers 23 strict typed tools without an agent connection", async () => {
     const f = await fixture();
     const list = await f.client.listTools();
-    expect(list.tools).toHaveLength(15);
+    expect(list.tools).toHaveLength(23);
     expect(
       list.tools.every(
         (t) => t.inputSchema.additionalProperties === false && t.outputSchema,
@@ -161,7 +161,7 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
     const c = await f.call("engui_get_context");
     expect(c.limits.maxVariants).toBe(3);
-    expect(c.operations).toHaveLength(15);
+    expect(c.operations).toHaveLength(23);
     await f.client.close();
   });
   it("rejects invalid, missing, revoked and swapped-scope credentials and wrong hosts", async () => {
@@ -213,7 +213,7 @@ describe("workspace-bound MCP integration", () => {
   });
   it("read-only discovery excludes mutations and direct calls cannot escalate", async () => {
     const f = await fixture(["read"]);
-    expect((await f.client.listTools()).tools).toHaveLength(10);
+    expect((await f.client.listTools()).tools).toHaveLength(13);
     await expect(plan(f)).rejects.toThrow();
   });
   it("bounds requests, enforces strict nested inputs and rejects query selectors", async () => {
@@ -877,4 +877,169 @@ describe("workspace-bound MCP integration", () => {
       "needs_attention",
     );
   });
+  it("creates one character/version across retries and keeps partial edits and editor state", async () => {
+    const f = await fixture();
+    const args = { name: "Mira", gender: "female", traits: { hair_color: "black", eye_color: "green", height: "tall" }, requestKey: randomUUID() };
+    const [created, replay] = await Promise.all([f.call("engui_create_character", args), f.call("engui_create_character", args)]);
+    expect(replay).toEqual(created);
+    const id = created.characterId;
+    await scope(f.ws.id, () => prisma.character.update({ where: { id }, data: { editorState: JSON.stringify({ groupLocks: { face: true }, expandedGroups: ["hair"] }) } }));
+    const before = await f.call("engui_get_character", { characterId: id });
+    const patch = { characterId: id, expectedRevision: before.editRevision, changes: { traits: { hair_color: "silver", height: null } }, requestKey: randomUUID() };
+    const edited = await f.call("engui_update_character", patch);
+    expect(await f.call("engui_update_character", patch)).toEqual(edited);
+    expect(edited.characterVersionId).not.toBe(created.characterVersionId);
+    const after = await f.call("engui_get_character", { characterId: id });
+    expect(after.traits).toEqual({ hair_color: "silver", eye_color: "green" });
+    const row = await scope(f.ws.id, () => prisma.character.findFirst({ where: { id } }));
+    expect(JSON.parse(row!.editorState)).toEqual({ groupLocks: { face: true }, expandedGroups: ["hair"] });
+    expect((await f.call("engui_list_character_versions", { characterId: id })).items).toHaveLength(2);
+    expect(await prisma.job.count({ where: { workspaceId: f.ws.id } })).toBe(0);
+    await expect(f.call("engui_create_character", { ...args, name: "Other" })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(f.call("engui_update_character", { ...patch, changes: { name: "Other" } })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  });
+  it("rejects stale and concurrent character updates and does not version no-ops", async () => {
+    const f = await fixture();
+    const c = await f.call("engui_create_character", { name: "One", requestKey: randomUUID() });
+    const base = { characterId: c.characterId, expectedRevision: c.editRevision };
+    const results = await Promise.allSettled([
+      f.call("engui_update_character", { ...base, changes: { name: "Two" }, requestKey: randomUUID() }),
+      f.call("engui_update_character", { ...base, changes: { name: "Three" }, requestKey: randomUUID() }),
+    ]);
+    expect(results.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    expect((results.find((x) => x.status === "rejected") as PromiseRejectedResult).reason.code).toBe("REVISION_CONFLICT");
+    const now = await f.call("engui_get_character", { characterId: c.characterId });
+    const noOp = await f.call("engui_update_character", { ...base, expectedRevision: now.editRevision, changes: { name: now.characterName }, requestKey: randomUUID() });
+    expect(noOp.changed).toBe(false);
+    expect((await f.call("engui_list_character_versions", { characterId: c.characterId })).items).toHaveLength(2);
+    await expect(f.call("engui_update_character", { ...base, changes: { name: "Stale" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+  });
+  it("preserves historical name/gender and immutable plans across identity edits", async () => {
+    const f = await fixture();
+    const created = await f.call("engui_create_character", { name: "Original", gender: "female", traits: { hair_color: "red" }, requestKey: randomUUID() });
+    const originalPlan = await plan(f, { characterId: created.characterId });
+    const edited = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: created.editRevision,
+      changes: { name: "Updated", gender: "male", traits: { hair_color: "blue" } }, requestKey: randomUUID() });
+    const old = await f.call("engui_get_character", { characterId: created.characterId, characterVersionId: created.characterVersionId });
+    expect(old.characterName).toBe("Original"); expect(old.gender).toBe("female"); expect(old.editRevision).toBeNull();
+    const historical = await plan(f, { characterId: created.characterId, characterVersionId: created.characterVersionId });
+    expect(historical.snapshot.character.characterName).toBe("Original");
+    expect(historical.snapshot.variants[0].prompt).toContain("Adult woman");
+    const fresh = await plan(f, { characterId: created.characterId });
+    expect(fresh.snapshot.character.characterVersionId).toBe(edited.characterVersionId);
+    expect(fresh.snapshot.variants[0].prompt).toContain("blue");
+    expect((await f.call("engui_get_plan", { planId: originalPlan.planId })).snapshot).toEqual(originalPlan.snapshot);
+    await expect(start(f, originalPlan)).rejects.toMatchObject({ code: "PLAN_STALE" });
+    const history = await f.call("engui_list_character_versions", { characterId: created.characterId, limit: 1 });
+    expect(history.items).toHaveLength(1); expect(history.nextCursor).toBeTruthy();
+    const next = await f.call("engui_list_character_versions", { characterId: created.characterId, limit: 1, cursor: history.nextCursor });
+    expect(next.items[0].characterVersionId).not.toBe(history.items[0].characterVersionId);
+    expect(next.items[0].identityComplete).toBe(true);
+  });
+  it("invalidates stale identity parts and accepts region-classified cropped prompts", async () => {
+    const f = await fixture();
+    const created = await f.call("engui_create_character", { name: "Portrait", gender: "female", traits: { hair_color: "black" },
+      identityParts: [{ region: "identity", text: "Adult woman" }, { region: "hair", text: "Black hair" }], requestKey: randomUUID() });
+    const p = await plan(f, { characterId: created.characterId, framing: "portrait" });
+    expect(p.snapshot.variants[0].prompt).toContain("Black hair");
+    const edit = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: created.editRevision,
+      changes: { traits: { hair_color: "red" } }, requestKey: randomUUID() });
+    const c = await f.call("engui_get_character", { characterId: created.characterId });
+    expect(c.identityParts).toBeNull();
+    expect((await plan(f, { characterId: created.characterId })).snapshot.variants[0].prompt).not.toContain("Black hair");
+    await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: edit.editRevision,
+      changes: { identityParts: [{ region: "identity", text: "Adult woman" }, { region: "hair", text: "Red hair" }] }, requestKey: randomUUID() });
+    expect((await plan(f, { characterId: created.characterId, framing: "portrait" })).snapshot.variants[0].prompt).toContain("Red hair");
+  });
+  it("blocks authoring through read-only credentials and foreign workspace IDs", async () => {
+    const a = await fixture(), b = await fixture(), read = await fixture(["read"]);
+    await expect(read.call("engui_create_character", { name: "Denied", requestKey: randomUUID() })).rejects.toThrow();
+    const foreign = await b.call("engui_get_character", { characterId: b.character.id });
+    await expect(a.call("engui_update_character", { characterId: b.character.id, expectedRevision: foreign.editRevision,
+      changes: { name: "Denied" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(a.call("engui_list_character_versions", { characterId: b.character.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(a.call("engui_get_wardrobe", { characterId: b.character.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(a.call("engui_create_outfit", { ownerCharacterId: b.character.id, name: "Denied", description: "Jacket", requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const own = await a.call("engui_get_character", { characterId: a.character.id });
+    await expect(a.call("engui_update_character", { characterId: a.character.id, expectedRevision: own.editRevision,
+      changes: { workspaceId: b.ws.id }, requestKey: randomUUID() })).rejects.toThrow();
+    await scope(a.ws.id, () => prisma.character.update({ where: { id: a.character.id }, data: { deletedAt: new Date() } }));
+    await expect(a.call("engui_update_character", { characterId: a.character.id, expectedRevision: own.editRevision,
+      changes: { name: "Deleted" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+  it("creates and revises outfits, assigns defaults and fences wardrobe conflicts", async () => {
+    const f = await fixture();
+    const args = { name: "Uniform", description: "Blue coat and boots", ownerCharacterId: f.character.id,
+      visibleParts: [{ region: "torso", text: "Blue coat" }, { region: "feet", text: "Black boots" }], requestKey: randomUUID() };
+    const outfit = await f.call("engui_create_outfit", args);
+    expect(await f.call("engui_create_outfit", args)).toEqual(outfit);
+    let wardrobe = await f.call("engui_get_wardrobe", { characterId: f.character.id });
+    expect(wardrobe.defaultOutfitId).toBeNull(); expect(wardrobe.items[0].linked).toBe(true);
+    const select = { characterId: f.character.id, expectedRevision: wardrobe.editRevision, action: "default", outfitId: outfit.outfitId, requestKey: randomUUID() };
+    const chosen = await f.call("engui_update_wardrobe", select);
+    expect(await f.call("engui_update_wardrobe", select)).toEqual(chosen);
+    expect((await plan(f)).snapshot.variants[0].prompt).toContain("Blue coat");
+    await expect(f.call("engui_update_wardrobe", { ...select, requestKey: randomUUID() })).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    const updated = await f.call("engui_update_outfit", { outfitId: outfit.outfitId, expectedRevision: 1, changes: { description: "Red coat and boots" }, requestKey: randomUUID() });
+    expect(updated.revision).toBe(2); expect(updated.visibleParts).toBeNull();
+    expect((await plan(f)).snapshot.variants[0].prompt).toContain("Red coat");
+    await expect(f.call("engui_update_outfit", { outfitId: outfit.outfitId, expectedRevision: 1, changes: { name: "Stale" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    wardrobe = await f.call("engui_get_wardrobe", { characterId: f.character.id });
+    await f.call("engui_update_wardrobe", { characterId: f.character.id, expectedRevision: wardrobe.editRevision, action: "unlink", outfitId: outfit.outfitId, requestKey: randomUUID() });
+    wardrobe = await f.call("engui_get_wardrobe", { characterId: f.character.id });
+    expect(wardrobe.defaultOutfitId).toBeNull(); expect(wardrobe.items[0].linked).toBe(false);
+    expect((await f.call("engui_get_outfit", { outfitId: outfit.outfitId })).name).toBe("Uniform");
+  });
+  it("does not transfer personal or foreign outfits and validates wardrobe arguments", async () => {
+    const a = await fixture(), b = await fixture();
+    const personal = await a.call("engui_create_outfit", { name: "Personal", description: "Coat", ownerCharacterId: a.character.id, requestKey: randomUUID() });
+    const other = await a.call("engui_create_character", { name: "Other", requestKey: randomUUID() });
+    await expect(a.call("engui_update_wardrobe", { characterId: other.characterId, expectedRevision: other.editRevision, action: "default", outfitId: personal.outfitId, requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(b.call("engui_get_outfit", { outfitId: personal.outfitId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(b.call("engui_update_outfit", { outfitId: personal.outfitId, expectedRevision: 1, changes: { name: "Denied" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(a.call("engui_update_wardrobe", { characterId: other.characterId, expectedRevision: other.editRevision, action: "default", requestKey: randomUUID() })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(a.call("engui_update_wardrobe", { characterId: other.characterId, expectedRevision: other.editRevision, action: "clearDefault", outfitId: personal.outfitId, requestKey: randomUUID() })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  });
+  it("reports incomplete historical identity instead of borrowing current name or gender", async () => {
+    const f = await fixture();
+    const version = await scope(f.ws.id, () => prisma.characterVersion.create({ data: { characterId: f.character.id, versionNumber: 1, changeSummary: "Older version", traitsSnapshot: "{}", editorStateSnapshot: "{}" } }));
+    const list = await f.call("engui_list_character_versions", { characterId: f.character.id });
+    expect(list.items[0].identityComplete).toBe(false);
+    await expect(f.call("engui_get_character", { characterId: f.character.id, characterVersionId: version.id })).rejects.toMatchObject({ code: "VERSION_INCOMPLETE" });
+    await expect(plan(f, { characterVersionId: version.id })).rejects.toMatchObject({ code: "VERSION_INCOMPLETE" });
+  });
+  it("completes create/generate/review/edit/regenerate with a fake provider and immutable evidence", async () => {
+    const f = await fixture();
+    const created = await f.call("engui_create_character", { name: "Iterated", gender: "female", traits: { hair_color: "black" }, requestKey: randomUUID() });
+    const p = await plan(f, { characterId: created.characterId, variantCount: 1 });
+    const batch = await start(f, p), asset = await imageAsset(f.ws.id), original = providerAdapter.submit;
+    const prompts: string[] = [];
+    providerAdapter.submit = async (form, hooks) => {
+      prompts.push(String(form.get("prompt")));
+      const jobId = String(form.get("jobId"));
+      await prisma.job.create({ data: { id: jobId, workspaceId: f.ws.id, userId: "user-with-settings", type: "image", status: "queueing_up", modelId: "krea2-turbo", options: JSON.stringify({ mcpProvenance: hooks.metadata }) } });
+      await hooks.beforeProviderSubmit({ endpointId: "fake", secureState: {} });
+      await hooks.afterProviderAccepted("fake-iteration-" + prompts.length);
+      await prisma.job.update({ where: { id: jobId }, data: { status: "completed", resultUrl: asset.originalUrl } });
+      return Response.json({ success: true });
+    };
+    try {
+      await processMcpWorkspace(f.ws.id); await processMcpWorkspace(f.ws.id);
+      const done = await f.call("engui_get_batch", { batchId: batch.batchId });
+      expect(done.state).toBe("completed");
+      await f.call("engui_record_concept_review", { characterId: created.characterId, assetId: done.variants[0].assetId, decision: "approved", expectedRevision: 0, requestKey: randomUUID() });
+      const before = await f.call("engui_get_character", { characterId: created.characterId });
+      const edit = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: before.editRevision,
+        changes: { traits: { hair_color: "silver" } }, changeSummary: "Review: change hair to silver", requestKey: randomUUID() });
+      expect((await f.call("engui_get_concept_reference", { characterId: created.characterId })).reference.stale).toBe(true);
+      const next = await plan(f, { characterId: created.characterId, variantCount: 1, parentBatchId: batch.batchId });
+      expect(next.snapshot.character.characterVersionId).toBe(edit.characterVersionId);
+      const nextBatch = await start(f, next);
+      await processMcpWorkspace(f.ws.id); await processMcpWorkspace(f.ws.id);
+      expect((await f.call("engui_get_batch", { batchId: nextBatch.batchId })).state).toBe("completed");
+      expect(prompts).toHaveLength(2); expect(prompts[0]).toContain("black"); expect(prompts[1]).toContain("silver");
+      expect((await f.call("engui_get_plan", { planId: p.planId })).snapshot).toEqual(p.snapshot);
+    } finally { providerAdapter.submit = original; }
+  });
+
 });

@@ -343,3 +343,8 @@ Rollback: disable MCP admission and revoke credentials; fence queued dispatch an
 ## 14. Decisions still belonging to art production
 
 The transport and workspace-binding decisions are settled for this specification. Exact art style, first fighter, game camera, target sprite dimensions, palette restrictions and animation frame conventions are not yet selected. They are not blockers for implementing the concept MCP and must not be invented as application defaults. Sprite/animation tooling will receive a separate specification after a concept-to-key-pose trial establishes feasibility.
+
+
+## Implemented authoring extension
+
+ENGUI-589 extends the initial 15-tool scope to 23 tools, adding character creation/partial editing, version reads and outfit/wardrobe authoring. See [the authoring contract](engui-mcp-character-authoring.md). This closes the create/generate/review/edit/regenerate loop without adding a concept UI entity.

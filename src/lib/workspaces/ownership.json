@@ -2141,6 +2141,12 @@
         "type": "Character",
         "list": true,
         "optional": false
+      },
+      {
+        "name": "identitySnapshot",
+        "type": "String",
+        "list": false,
+        "optional": true
       }
     ],
     "relations": [

@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { readVersionIdentity } from "@/lib/characters/versionIdentity";
+import { readPartDocument } from "@/lib/looks/parts";
+import { characterState } from "./authoring-state";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import SettingsService from "@/lib/settingsService";
 import { getModelById, validateParameter } from "@/lib/models/modelConfig";
@@ -150,8 +153,9 @@ export async function characterSnapshot(
   characterId: string,
   versionId?: string,
   outfitId?: string,
+  db: any = prisma,
 ) {
-  const row = await prisma.character.findFirst({
+  const row = await db.character.findFirst({
     where: {
       id: characterId,
       workspaceId: requireWorkspaceId(),
@@ -161,12 +165,16 @@ export async function characterSnapshot(
   if (!row) fail("NOT_FOUND", "Character not found.");
   let selected = row;
   if (versionId) {
-    const v = await prisma.characterVersion.findFirst({
+    const v = await db.characterVersion.findFirst({
       where: { id: versionId, characterId },
     });
     if (!v) fail("NOT_FOUND", "Character version not found.");
+    const identity = readVersionIdentity(v.identitySnapshot);
+    if (!identity && v.id !== row.currentVersionId)
+      fail("VERSION_INCOMPLETE", "This historical version has no name/gender snapshot. Use an existing generation plan for exact provenance.");
     selected = {
       ...row,
+      ...(identity || {}),
       traits: v.traitsSnapshot,
       editorState: v.editorStateSnapshot,
       currentVersionId: v.id,
@@ -175,10 +183,10 @@ export async function characterSnapshot(
   const selection = outfitId
     ? { mode: "outfit" as const, outfitId }
     : { mode: "default" as const };
-  let look = await resolveCharacterLook(characterId, selection);
+  let look = await resolveCharacterLook(characterId, selection, db);
   if (versionId) {
     const outfit = look.outfitId
-      ? await prisma.outfit.findFirst({
+      ? await db.outfit.findFirst({
           where: { id: look.outfitId, deletedAt: null },
         })
       : null;
@@ -191,7 +199,7 @@ export async function characterSnapshot(
   const { resolvedAt, ...stableLook } = look;
   const snapshot = {
     characterId: row.id,
-    characterName: row.name,
+    characterName: selected.name,
     characterVersionId: selected.currentVersionId,
     traits: parse(selected.traits),
     gender: selected.gender,
@@ -258,27 +266,23 @@ export async function selectedLoras(
   }
   return found;
 }
-export async function characterDetail(characterId: string) {
-  const c = await characterSnapshot(characterId);
-  const outfits = await prisma.outfit.findMany({
-    where: {
-      deletedAt: null,
-      OR: [{ ownerCharacterId: null }, { ownerCharacterId: characterId }],
-    },
-    select: { id: true, name: true, revision: true },
-    take: 50,
+export async function characterDetail(characterId: string, versionId?: string) {
+  return prisma.$transaction(async (tx) => {
+    const c = await characterSnapshot(characterId, versionId, undefined, tx);
+    const state = await characterState(characterId, tx);
+    const outfits = await tx.outfit.findMany({
+      where: { deletedAt: null, OR: [{ ownerCharacterId: null }, { ownerCharacterId: characterId }] },
+      select: { id: true, name: true, revision: true }, orderBy: { id: "asc" }, take: 50,
+    });
+    const reference = await tx.characterConceptReference.findFirst({ where: { characterId } });
+    const selectedVersion = versionId ? await tx.characterVersion.findFirst({ where: { id: versionId, characterId } }) : null;
+    return { ...c.snapshot, digest: c.digest, outfits,
+      editRevision: versionId ? null : state.editRevision,
+      defaultOutfitId: state.row.defaultOutfitId,
+      identityParts: readPartDocument(parse(selectedVersion?.editorStateSnapshot || state.row.editorState).promptParts)?.parts || null,
+      reference: reference ? { assetId: reference.assetId, revision: reference.revision } : null,
+    };
   });
-  const reference = await prisma.characterConceptReference.findFirst({
-    where: { characterId },
-  });
-  return {
-    ...c.snapshot,
-    digest: c.digest,
-    outfits,
-    reference: reference
-      ? { assetId: reference.assetId, revision: reference.revision }
-      : null,
-  };
 }
 export async function listRecords(kind: string, args: any) {
   const filter = {

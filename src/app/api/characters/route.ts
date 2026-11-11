@@ -1,3 +1,4 @@
+import { serializeVersionIdentity } from "@/lib/characters/versionIdentity";
 import {readPartDocument} from '@/lib/looks/parts';
 import { requireWorkspaceId } from '@/lib/workspaces/context';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
@@ -88,6 +89,7 @@ async function POSTImpl(request: NextRequest) {
         data: {
           characterId: character.id,
           traitsSnapshot: serializedTraits,
+          identitySnapshot: serializeVersionIdentity(name, gender),
           editorStateSnapshot: serializedEditorState,
           versionNumber: 1,
           changeSummary,

@@ -15,6 +15,8 @@ import {
 } from "./core";
 import { characterDetail, listModels, listRecords } from "./catalog";
 import { imagePreview } from "./media";
+import { visibleParts } from "./authoring-schemas";
+import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
 import { cancelBatch, getBatch, startGeneration } from "./batches";
 import { getReference, recordReview, saveOutput } from "./curation";
@@ -22,7 +24,17 @@ import { getReference, recordReview, saveOutput } from "./curation";
 const nullable = z.string().nullable(),
   json = z.record(z.unknown());
 const list = z.object({ items: z.array(json), nextCursor: nullable });
+const characterWrite = z.object({ characterId: z.string(), characterVersionId: nullable, editRevision: z.string(), changed: z.boolean() });
+const outfitRead = z.object({ outfitId: z.string(), ownerCharacterId: nullable, name: z.string(), description: z.string(), constraints: z.string(), coversFace: z.boolean(), revision: z.number(), visibleParts: visibleParts.nullable() });
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
+  engui_create_character: characterWrite,
+  engui_update_character: characterWrite,
+  engui_list_character_versions: z.object({ characterId: z.string(), currentVersionId: nullable, items: z.array(json), nextCursor: nullable }),
+  engui_get_outfit: outfitRead,
+  engui_create_outfit: outfitRead,
+  engui_update_outfit: outfitRead,
+  engui_get_wardrobe: z.object({ characterId: z.string(), defaultOutfitId: nullable, editRevision: z.string(), items: z.array(json), nextCursor: nullable }),
+  engui_update_wardrobe: characterWrite,
   engui_get_context: z.object({
     scopes: z.array(z.string()),
     serverVersion: z.string(),
@@ -48,6 +60,9 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     characterId: z.string(),
     characterName: z.string(),
     characterVersionId: nullable,
+    editRevision: nullable,
+    defaultOutfitId: nullable,
+    identityParts: visibleParts.nullable(),
     traits: json,
     gender: nullable,
     look: json,
@@ -128,13 +143,21 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
 };
 const descriptions: Record<ToolName, string> = {
+  engui_create_character: "Create an ordinary workspace Character and its first identity version. Optional identityParts classify visible details by body region. Local write only; no generation. Reuse requestKey for retries.",
+  engui_update_character: "Partially edit a character and append an identity version. Use editRevision from a fresh engui_get_character as expectedRevision. changes.traits merges keys; null deletes a key; omitted values/UI state are preserved. Identity changes clear old classification unless identityParts are supplied. Never generates; prepare a new plan after editing. Retry with the same requestKey.",
+  engui_list_character_versions: "List immutable identity versions and traits, paginated by opaque cursor. identityComplete=false means historical name/gender were not captured; never invent them. Read a captured version with engui_get_character(characterVersionId).",
+  engui_get_outfit: "Read an outfit, its visible parts and revision before editing. Workspace-scoped; no generation.",
+  engui_create_outfit: "Create a workspace outfit or a personal outfit with ownerCharacterId. Personal outfits are linked to their owner, not automatically made default. visibleParts classify clothing by body region for cropped prompts. No generation.",
+  engui_update_outfit: "Partially update an outfit using expectedRevision from engui_get_outfit. Omitted fields stay unchanged. Changed clothing text clears outdated classification unless visibleParts are supplied. Shared workspace outfits affect every character using them. No generation.",
+  engui_get_wardrobe: "Read available outfits with linked/default flags and current character editRevision. Follow nextCursor for further outfits.",
+  engui_update_wardrobe: "Link, select default, unlink or clear a character's default outfit using current editRevision as expectedRevision. clearDefault omits outfitId; other actions require it. Unlinking the default clears that selection, never deletes the outfit. No generation.",
   engui_get_context:
     "Inspect the fixed workspace, permissions and limits. No generation.",
   engui_list_models:
     "List supported image models and configured capabilities. Configured is not a health or quality guarantee.",
   engui_list_characters: "List active workspace characters.",
   engui_get_character:
-    "Read character identity, outfit options and reference summary.",
+    "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
   engui_list_presets: "List visible outfits, Vibes or model-compatible LoRAs.",
   engui_search_gallery: "Search active workspace images without enrichment.",
   engui_get_image: "Inspect actual bounded image bytes, not just an image URL.",
@@ -160,11 +183,19 @@ async function execute(
   auth: Authority,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
+    case "engui_create_character": return { result: await createCharacter(auth, args) };
+    case "engui_update_character": return { result: await updateCharacter(auth, args) };
+    case "engui_list_character_versions": return { result: await listCharacterVersions(args) };
+    case "engui_get_outfit": return { result: await getOutfit(args.outfitId) };
+    case "engui_create_outfit": return { result: await createOutfit(auth, args) };
+    case "engui_update_outfit": return { result: await updateOutfit(auth, args) };
+    case "engui_get_wardrobe": return { result: await getWardrobe(args) };
+    case "engui_update_wardrobe": return { result: await updateWardrobe(auth, args) };
     case "engui_get_context":
       return {
         result: {
           scopes: auth.scopes,
-          serverVersion: "1.0.0",
+          serverVersion: "1.1.0",
           limits: limits(),
           operations: Object.keys(inputSchemas).filter((n) =>
             auth.scopes.includes(scopeFor(n as ToolName)),
@@ -176,7 +207,7 @@ async function execute(
     case "engui_list_characters":
       return { result: await listRecords("characters", args) };
     case "engui_get_character":
-      return { result: await characterDetail(args.characterId) };
+      return { result: await characterDetail(args.characterId, args.characterVersionId) };
     case "engui_list_presets":
       return { result: await listRecords(args.kind, args) };
     case "engui_search_gallery":
@@ -205,7 +236,7 @@ async function execute(
 }
 export function createMcpServer(auth: Authority) {
   const server = new McpServer(
-    { name: "engui", version: "1.0.0" },
+    { name: "engui", version: "1.1.0" },
     { capabilities: { tools: {} } },
   );
   for (const name of Object.keys(inputSchemas) as ToolName[]) {
@@ -223,7 +254,7 @@ export function createMcpServer(auth: Authority) {
         }),
         annotations: {
           readOnlyHint: scope === "read",
-          destructiveHint: scope === "generate" || scope === "cancel",
+          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_update_character", "engui_update_outfit", "engui_update_wardrobe"].includes(name),
           idempotentHint: true,
           openWorldHint:
             name === "engui_start_generation" || name === "engui_cancel_batch",

@@ -1,3 +1,4 @@
+import { serializeVersionIdentity } from "@/lib/characters/versionIdentity";
 import { readPartDocument } from '@/lib/looks/parts';
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
@@ -46,7 +47,7 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
     if (nextEditorState.promptParts && !readPartDocument(nextEditorState.promptParts)) return NextResponse.json({success:false,error:'Invalid identity visible-detail parts.'},{status:400});
     const compositionChanged = JSON.stringify(nextEditorState.promptParts) !== JSON.stringify(JSON.parse(existing.editorState||'{}').promptParts)
       || gender !== existing.gender;
-    const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits) || compositionChanged;
+    const traitsChanged = JSON.stringify(previousTraits) !== JSON.stringify(nextTraits) || compositionChanged || name !== existing.name;
     const basicsChanged = name !== existing.name
       || gender !== normalizeCharacterGender(existing.gender, 'female')
       || previewStatusSummary !== existing.previewStatusSummary
@@ -103,6 +104,7 @@ async function PUTImpl(request: NextRequest, context: { params: Promise<{ id: st
         data: {
           characterId: id,
           traitsSnapshot: serializedTraits,
+          identitySnapshot: serializeVersionIdentity(name, gender),
           editorStateSnapshot: serializedEditorState,
           versionNumber: nextVersionNumber,
           changeSummary,

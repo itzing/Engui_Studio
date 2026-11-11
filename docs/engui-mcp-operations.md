@@ -2,9 +2,9 @@
 
 ## Scope
 
-Implementation: ENGUI-582 through ENGUI-586. The owner explicitly excluded connecting OpenClaw or another agent. No client configuration, persistent client connection or paid generation is part of deployment. The SDK test client is used only with isolated fixtures and a mocked provider.
+Original implementation: ENGUI-582 through ENGUI-586. Subsequent owner-approved Claude ingress: ENGUI-587/588. Character authoring: ENGUI-589. OpenClaw remains unconnected. Paid generation is never part of deployment validation; tests use isolated fixtures and a mocked provider. See [character authoring](engui-mcp-character-authoring.md) and [public HTTPS](engui-mcp-public-https.md).
 
-The server implements 15 workspace-bound concept-generation tools at `POST /api/mcp`. It is stateless Streamable HTTP using pinned `@modelcontextprotocol/sdk` 1.32.2. MCP sessions are not a workspace-selection mechanism. GET/DELETE are unsupported. This is a backend change, with no desktop/mobile UI additions.
+The server implements 23 workspace-bound character-authoring and concept-generation tools at `POST /api/mcp`. It is stateless Streamable HTTP using pinned `@modelcontextprotocol/sdk` 1.32.2. MCP sessions are not a workspace-selection mechanism. GET/DELETE are unsupported. This is a backend change, with no desktop/mobile UI additions.
 
 ## Admission and credentials
 
@@ -12,7 +12,7 @@ The server implements 15 workspace-bound concept-generation tools at `POST /api/
 - `ENGUI_MCP_ALLOWED_HOSTS`: comma-separated non-loopback host values, including port when present. Literal loopback is permitted. Configure the trusted TLS reverse proxy before remote access; no wildcard CORS is enabled.
 - `ENGUI_MCP_ALLOWED_ORIGINS`: optional exact allowed browser origins. Native clients may omit Origin. No client is configured automatically.
 - Every request requires `Authorization: Bearer <token>` and `X-Workspace-Id: <UUID>`. Cookies, tool arguments and query selectors cannot select scope. Tokens belong to exactly one workspace.
-- Token generation uses 256 random bits and stores only a SHA-256 hash. Each token includes `read`; `generate`, `curate`, `cancel` are explicit. No production token is created during this delivery.
+- Token generation uses 256 random bits and stores only a SHA-256 hash. Each token includes `read`; `generate`, `curate`, `cancel` are explicit. `curate` covers character/outfit/wardrobe authoring as well as image saving and reviews. The existing owner-authorized Fairy Tale credential remains valid; authoring deployment does not rotate it.
 
 Run the CLI locally as the Engui service user, from the repository root:
 
@@ -46,6 +46,7 @@ Plans expire after 24 hours if not started. Durable operation receipts are not a
 
 ```sh
 python3 scripts/mcp/migrate.py --database /absolute/path/database.db --backup /private/path/pre-mcp.db
+python3 scripts/mcp/migrate-character-authoring.py --database /absolute/path/database.db --backup /private/path/pre-character-authoring.db
 npm run db:generate
 npm run build
 sudo -n systemctl restart engui-studio.service
@@ -64,7 +65,7 @@ Disable admission (`ENGUI_MCP_ENABLED=0`) and revoke relevant credentials to sto
 
 If no work has been submitted, restoring the prior build is safe after disabling admission. Leave the additive schema in place. Once paid work exists, do not restore an old database over accepted jobs and do not drop receipt/variant tables. Rollback never deletes generated originals.
 
-## Delivered validation and deployment state (2026-11-11)
+## Original v1 delivery evidence (historical, before Claude ingress and authoring)
 
 - 68 focused tests passed, including 27 database-backed MCP integration scenarios and existing image/Gallery/RunPod regressions.
 - Built Next.js HTTP endpoint passed official SDK initialization/discovery, context/model reads, actual image content, wrong-workspace rejection and token revocation using a copied database and synthetic media. The fixture credential was revoked and the temporary server stopped.
@@ -74,3 +75,10 @@ If no work has been submitted, restoring the prior build is safe after disabling
 - No OpenClaw/agent connection was configured and no paid generation, helper inference or Studio Session run was launched.
 - Repository-wide TypeScript checking still reports pre-existing unrelated errors; the new MCP modules, shared gallery service and changed provider path have no remaining focused diagnostics. The production build follows the existing repository configuration.
 - Previous build: /home/engui/engui-runs/engui-mcp-20261111/previous.next. Consistent database backup: production-before-mcp.db in the same private run directory. Do not restore that database over any subsequently accepted work.
+
+
+## Character authoring delivery (ENGUI-589, 2026-11-11)
+
+The server is now v1.1.0 with 23 tools; the owner has confirmed Claude connection on the isolated standard-HTTPS ingress. Authoring uses the existing curate scope and token. Read [the authoring guide](engui-mcp-character-authoring.md) for partial edits, optimistic revisions, history and wardrobe semantics.
+
+71 focused tests and production build passed. Copied-database HTTP SDK authoring checks passed; public production validation performed only discovery and context reads, with 23 tools and the expected Fairy Tale workspace. No production characters, versions or generation batches were created during validation. Additive migration002 preserved existing rows; backup and previous build are retained in /home/engui/engui-runs/engui-mcp-authoring-20261111/.

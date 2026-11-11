@@ -1,7 +1,7 @@
 ---
 id: ENGUI-588
 title: Diagnose Claude connection failure with credential-safe ingress telemetry
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-11 20:46'
 labels: [mcp, infrastructure]
@@ -15,9 +15,9 @@ Owner reports Claude connector fails despite both fixed request headers being co
 ## Acceptance Criteria
 
 - [x] Observe an actual Claude reconnect attempt using sanitized ingress metadata.
-- [ ] Resolve the evidenced failure or report the precise external blocker.
-- [ ] Preserve private routing, workspace authentication and zero paid generation calls.
-- [ ] Validate, document, commit and push any changes under the owner identity.
+- [x] Resolve the evidenced failure or report the precise external blocker.
+- [x] Preserve private routing, workspace authentication and zero paid generation calls.
+- [x] Validate, document, commit and push any changes under the owner identity.
 
 ## Evidence and chosen correction
 
@@ -28,3 +28,7 @@ Use a separate userspace Tailscale node named engui-mcp with its own state/socke
 ## Standard-port validation
 
 Owner authorized the isolated node. Ten proxy tests and isolated production build pass. Explicit --statedir fixed certificate provisioning for the DynamicUser daemon; ACME certificate issued. Official SDK passed public relay176.58.90.46 on standard443:15tools, Fairy Tale context,401missing token,403wrong workspace and404unrelated paths. Existing credential retained. Main private443/8443 route objects unchanged. Awaiting owner retry on the new URL to prove the consumer Claude integration; do not claim that UI connection is established yet.
+
+## Owner verification
+
+Owner confirmed at20:54UTC that Claude connects and tools are visible. Standard-HTTPS ingress delivery bc6d57c is complete; no paid validation jobs.
