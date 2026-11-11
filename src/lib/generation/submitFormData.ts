@@ -105,6 +105,16 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
     };
 }
 
+// Internal-only hooks: never populated from public form fields.
+export type PreparedSubmission = {
+  prompt: string;
+  metadata: Record<string, unknown>;
+  beforeProviderSubmit: (evidence: { endpointId: string; secureState: unknown }) => Promise<void>;
+  afterProviderAccepted: (runpodJobId: string) => Promise<void>;
+};
+export async function submitPreparedGeneration(formData: FormData, prepared: PreparedSubmission) {
+  return withGenerationLoraPins(formData, () => submitOwnedGenerationFormData(formData, prepared));
+}
 export async function submitGenerationFormData(formData: FormData) {
     try {
         return await withGenerationLoraPins(formData, () => submitOwnedGenerationFormData(formData));
@@ -119,7 +129,7 @@ export async function submitGenerationFormData(formData: FormData) {
     }
 }
 
-async function submitOwnedGenerationFormData(formData: FormData) {
+async function submitOwnedGenerationFormData(formData: FormData, prepared?: PreparedSubmission) {
     try {
 
         // Extract basic info
@@ -162,7 +172,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
         }
         let vibeResolution;
         try {
-            vibeResolution = await resolveImageVibe(basePrompt, selectedVibeId, resolvedWorkspaceId);
+            vibeResolution = prepared ? { prompt: prepared.prompt, sourceVibe: undefined } : await resolveImageVibe(basePrompt, selectedVibeId, resolvedWorkspaceId);
         } catch {
             return NextResponse.json({ success: false, error: 'Selected Vibe is unavailable. Choose another Vibe or None.' }, { status: 400 });
         }
@@ -396,11 +406,11 @@ async function submitOwnedGenerationFormData(formData: FormData) {
 
         const promptTemplate = rawPrompt || '';
         const submittedPromptWildcardSelections = parsePromptWildcardSelections(formData.get('promptWildcardSelections'));
-        const wildcardExpansion = await expandPromptWildcards(promptTemplate, resolvedWorkspaceId, {
+        const wildcardExpansion = prepared ? { prompt: prepared.prompt, replacements: [], selections: {} } : await expandPromptWildcards(promptTemplate, resolvedWorkspaceId, {
             selections: submittedPromptWildcardSelections,
         });
         const expandedPromptTemplate = wildcardExpansion.prompt;
-        const prompt = resolvePromptVariants(expandedPromptTemplate, parameters.seed);
+        const prompt = prepared ? prepared.prompt : resolvePromptVariants(expandedPromptTemplate, parameters.seed);
         const hasWildcardExpansion = expandedPromptTemplate !== promptTemplate;
         const promptVariantMetadata = hasResolvedPromptVariants(expandedPromptTemplate, prompt) || hasWildcardExpansion
             ? {
@@ -536,7 +546,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
         }
 
         const buildPersistedOptions = (params: Record<string, any>, input: Record<string, any>, extra: Record<string, any> = {}) => {
-            const merged = { ...params, ...input, ...extra, ...(sourceVibe ? { sourceVibe } : {}) } as Record<string, any>;
+            const merged = { ...params, ...input, ...extra, ...(sourceVibe ? { sourceVibe } : {}), ...(prepared ? { mcpProvenance: prepared.metadata } : {}) } as Record<string, any>;
 
             if (!secureModelIds.includes(modelId)) {
                 return merged;
@@ -799,7 +809,9 @@ async function submitOwnedGenerationFormData(formData: FormData) {
             });
 
             try {
-                const runpodJobId = await runpodService.submitJob(runpodInput, modelId);
+                if (prepared) await prepared.beforeProviderSubmit({ endpointId, secureState });
+                const runpodJobId = await runpodService.submitJob(runpodInput, modelId, prepared ? { noRetry: true } : undefined);
+                if (prepared) await prepared.afterProviderAccepted(runpodJobId);
 
                 console.log('✅ RunPod job started:', runpodJobId);
 
@@ -847,12 +859,12 @@ async function submitOwnedGenerationFormData(formData: FormData) {
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
                 });
             } catch (error: any) {
-                console.error('❌ RunPod API error:', error);
+                console.error('RunPod submission failed', prepared ? { jobId: job.id, code: 'MCP_SUBMISSION_ERROR' } : error);
 
                 await prisma.job.update({
                     where: { id: job.id },
                     data: {
-                        status: 'failed',
+                        status: prepared && error?.code !== 'PROVIDER_REJECTED' ? 'submission_unknown' : 'failed',
                         options: JSON.stringify(buildPersistedOptions(parameters, inputData, {
                             prompt: promptTemplate,
                             randomizeSeed,
@@ -868,6 +880,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
 
                 return NextResponse.json({
                     error: generationErrorMessage(error.message || getApiMessage('RUNPOD', 'API_ERROR', language)),
+                    ...(prepared && error?.code === 'PROVIDER_REJECTED' ? { code: 'PROVIDER_REJECTED' } : {}),
                     requiresSetup: false,
                 }, { status: 500 });
             }
@@ -995,7 +1008,7 @@ async function submitOwnedGenerationFormData(formData: FormData) {
         }, { status: 500 });
 
     } catch (error: any) {
-        console.error('❌ Generation API error:', error);
+        console.error('Generation API error:', prepared ? { code: 'MCP_PREPARATION_ERROR' } : error);
         return NextResponse.json({
             error: error.message || 'Internal server error',
         }, { status: 500 });

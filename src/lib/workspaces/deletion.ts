@@ -39,12 +39,17 @@ export async function beginWorkspaceDeletion(id: string, confirmName: string) {
       const operation = await tx.workspaceDeletion.upsert({
         where: { workspaceId: id }, create: { workspaceId: id, userId: row.userId, name: row.name }, update: { status: 'pending', error: null },
       });
+      await tx.mcpCredential.updateMany({ where: { workspaceId: id }, data: { revokedAt: new Date() } });
+      await tx.mcpGenerationBatch.updateMany({ where: { workspaceId: id }, data: { cancelledAt: new Date() } });
+      await tx.mcpGenerationVariant.updateMany({ where: { workspaceId: id, state: 'queued' }, data: { state: 'cancelled' } });
       if (row.lifecycle === 'active') await tx.workspace.update({ where: { id }, data: { lifecycle: 'deleting', revision: { increment: 1 } } });
       return operation;
     });
   });
 }
 async function drainProviderJobs(id: string): Promise<boolean> {
+  const uncertain = await prisma.mcpGenerationVariant.count({ where: { workspaceId: id, state: { in: ['submitting', 'submission_unknown'] } } });
+  if (uncertain) throw new WorkspaceError('MCP dispatch acceptance must be reconciled before workspace deletion can finish.', 409);
   const jobs = await prisma.job.findMany({ where: { workspaceId: id } });
   const { settings } = await new SettingsService().getSettings('user-with-settings');
   for (const job of jobs) {

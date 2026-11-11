@@ -135,6 +135,14 @@ model Workspace {
   isProtected           Boolean                @default(false)
   lifecycle             String                 @default("active")
   revision              Int                    @default(0)
+  mcpCredentials        McpCredential[]
+  mcpPlans              McpGenerationPlan[]
+  mcpBatches            McpGenerationBatch[]
+  mcpVariants           McpGenerationVariant[]
+  mcpReceipts           McpOperationReceipt[]
+  mcpReferences         CharacterConceptReference[]
+  mcpReviews            CharacterConceptReview[]
+  mcpLimits             McpRateLimit[]
   presets               Preset[]
   outfits               Outfit[]
   characterOutfits      CharacterOutfit[]
@@ -191,6 +199,7 @@ model PromptWildcard {
 }
 
 model GalleryAsset {
+  membershipKey      String?
   id                 String   @id @default(uuid())
   workspaceId        String
   type               String
@@ -219,6 +228,7 @@ model GalleryAsset {
   @@index([workspaceId, bucket, addedToGalleryAt(sort: Desc)])
   @@index([workspaceId, bucket, trashed, addedToGalleryAt(sort: Desc)])
   @@index([workspaceId, contentHash])
+  @@unique([workspaceId, bucket, membershipKey])
   @@index([sourceJobId])
   @@map("gallery_assets")
 }
@@ -1190,4 +1200,130 @@ model CharacterLookPreview {
 
   @@index([workspaceId, characterId, createdAt])
   @@map("character_look_previews")
+}
+
+
+// MCP secrets never leave their provisioning command; hashes only are persisted.
+model McpCredential {
+  id          String    @id @default(uuid())
+  workspaceId String
+  ownerId     String
+  secretHash  String
+  scopesJson  String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("mcp_credentials")
+}
+
+model McpGenerationPlan {
+  id           String @id @default(uuid())
+  workspaceId  String
+  credentialId String
+  inputDigest  String
+  digest       String
+  snapshotJson String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch        McpGenerationBatch?
+  @@unique([id, workspaceId])
+  @@index([workspaceId, createdAt])
+  @@map("mcp_generation_plans")
+}
+
+model McpGenerationBatch {
+  id           String @id @default(uuid())
+  workspaceId  String
+  planId       String @unique
+  credentialId String
+  cancelledAt  DateTime?
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan         McpGenerationPlan @relation(fields: [planId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  variants     McpGenerationVariant[]
+  @@unique([planId, workspaceId])
+  @@unique([id, workspaceId])
+  @@index([workspaceId, createdAt])
+  @@map("mcp_generation_batches")
+}
+
+model McpGenerationVariant {
+  id             String @id @default(uuid())
+  workspaceId    String
+  batchId        String
+  index          Int
+  jobId          String @unique
+  state          String @default("queued")
+  dispatchToken  String?
+  leaseUntil     DateTime?
+  boundaryAt     DateTime?
+  providerJobId  String?
+  errorCode      String?
+  assetId        String?
+  preservationState String @default("pending")
+  cancelSentAt   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch          McpGenerationBatch @relation(fields: [batchId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@unique([batchId, index])
+  @@index([workspaceId, state])
+  @@map("mcp_generation_variants")
+}
+
+model McpOperationReceipt {
+  id           String @id @default(uuid())
+  workspaceId  String
+  operation    String
+  requestKey   String
+  inputDigest  String
+  resultJson   String
+  retiredAt    DateTime?
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, operation, requestKey])
+  @@map("mcp_operation_receipts")
+}
+
+model CharacterConceptReference {
+  id           String @id @default(uuid())
+  workspaceId  String
+  characterId  String
+  assetId      String?
+  revision     Int @default(0)
+  snapshotJson String @default("{}")
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, characterId])
+  @@map("character_concept_references")
+}
+
+model CharacterConceptReview {
+  id           String @id @default(uuid())
+  workspaceId  String
+  characterId  String
+  assetId      String
+  decision     String
+  revision     Int
+  notes        String
+  snapshotJson String
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, characterId, createdAt])
+  @@map("character_concept_reviews")
+}
+
+model McpRateLimit {
+  id           String @id
+  workspaceId  String
+  credentialId String
+  bucket       String
+  window       Int
+  count        Int @default(1)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, window])
+  @@map("mcp_rate_limits")
 }

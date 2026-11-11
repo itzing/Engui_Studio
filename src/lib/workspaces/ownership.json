@@ -5584,5 +5584,637 @@
     ],
     "parent": null,
     "operational": false
+  },
+  "McpCredential": {
+    "table": "mcp_credentials",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "ownerId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "secretHash",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "scopesJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revokedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "McpGenerationPlan": {
+    "table": "mcp_generation_plans",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "credentialId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "inputDigest",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "digest",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "snapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "batch",
+        "type": "McpGenerationBatch",
+        "list": false,
+        "optional": true
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "McpGenerationBatch": {
+    "table": "mcp_generation_batches",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "planId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "credentialId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "cancelledAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "plan",
+        "type": "McpGenerationPlan",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "variants",
+        "type": "McpGenerationVariant",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "plan",
+        "model": "McpGenerationPlan",
+        "fields": [
+          "planId",
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "McpGenerationVariant": {
+    "table": "mcp_generation_variants",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "batchId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "index",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "dispatchToken",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "leaseUntil",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "boundaryAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "providerJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "errorCode",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "assetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "preservationState",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "cancelSentAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "batch",
+        "type": "McpGenerationBatch",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "batch",
+        "model": "McpGenerationBatch",
+        "fields": [
+          "batchId",
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "McpOperationReceipt": {
+    "table": "mcp_operation_receipts",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "operation",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "requestKey",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "inputDigest",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "resultJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "retiredAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "CharacterConceptReference": {
+    "table": "character_concept_references",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "assetId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "revision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "snapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "CharacterConceptReview": {
+    "table": "character_concept_reviews",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "characterId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "assetId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "decision",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "snapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "McpRateLimit": {
+    "table": "mcp_rate_limits",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "credentialId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "bucket",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "window",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "count",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
   }
 }

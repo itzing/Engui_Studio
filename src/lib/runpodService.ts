@@ -486,7 +486,7 @@ class RunPodService {
     console.log(`Payload summary for ${modelId}:`, summary);
   }
 
-  async submitJob(input: RunPodInput, modelId?: string): Promise<string> {
+  async submitJob(input: RunPodInput, modelId?: string, policy?: { noRetry: boolean }): Promise<string> {
     console.log('Submitting job to RunPod', {
       modelId: modelId || 'unknown',
       endpointId: this.endpointId,
@@ -506,11 +506,15 @@ class RunPodService {
         method: 'POST',
         headers: this.getHeaders(),
         body: requestBody,
-      });
+        ...(policy?.noRetry ? { signal: AbortSignal.timeout(60000) } : {}),
+      }, policy?.noRetry ? 1 : 3);
 
       const responseText = await response.text();
 
       if (!response.ok) {
+        if (policy?.noRetry && [400, 401, 403, 404, 422, 429].includes(response.status)) {
+          throw Object.assign(new Error('RunPod rejected the submission before acceptance.'), { code: 'PROVIDER_REJECTED' });
+        }
         throw new Error(`RunPod API error: ${response.status} - ${responseText}`);
       }
 
@@ -525,7 +529,7 @@ class RunPodService {
 
       return data.id;
     } catch (error) {
-      console.error('❌ RunPod API call failed:', error);
+      console.error('RunPod submission failed:', policy?.noRetry ? { code: (error as any)?.code === 'PROVIDER_REJECTED' ? 'PROVIDER_REJECTED' : 'SUBMISSION_UNKNOWN' } : error);
       throw error;
     }
   }

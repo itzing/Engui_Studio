@@ -1,6 +1,6 @@
 # Engui MCP v1: workspace-bound character concepts
 
-Status: specification; implementation is not authorized by this document.
+Status: v1 implemented under ENGUI-582 through ENGUI-586 on 2026-11-11; client connection setup explicitly excluded by owner14303. See [operations](engui-mcp-operations.md).
 Date: 2026-11-11. Tracking: [ENGUI-581](../backlog/tasks/ENGUI-581.md).
 Owner authorization: Telegram message 14297, following workspace-scoping discussion 14295.
 
@@ -29,7 +29,7 @@ The initial client is OpenClaw, using a connection named `engui-showdown`. The s
 - Character/wardrobe CRUD, arbitrary external-image downloads, new desktop/mobile screens or full application authentication migration.
 - Automated visual approval, unbounded generate-until-good loops, or replacing the owner's chosen reference silently.
 
-**This change request is documentation only.** Future implementation needs a separate instruction and local implementation tickets. No paid generation is authorized for development or validation. No UI surface selection is needed for this backend-only scope; future UI additions require explicit desktop/mobile scope.
+**Implementation authorized on 2026-11-11 (owner14303), tracked in ENGUI-582 through ENGUI-586.** Do not configure or connect OpenClaw or another agent as part of this task; validate transport using an isolated SDK test client instead. No paid generation is authorized for development or validation. No UI surface selection is needed for this backend-only scope; future UI additions require explicit desktop/mobile scope.
 
 ## 2. Verified baseline and gaps
 
@@ -312,7 +312,7 @@ Do not assume a chat attachment is automatically available as an Engui reference
 
 Automated verification uses synthetic data, local image fixtures and a mock provider. All paid model/helper/Studio Session calls are disabled. Read-only production discovery is allowed; any actual generation needs a separate explicit owner authorization.
 
-- **Protocol:** official MCP client initializes, discovers typed tools, calls read/write tools, handles errors and renders actual image content; OpenClaw/Codex forwards headers for initialization and subsequent calls. SDK version pinned. No unsupported capability advertised.
+- **Protocol:** official MCP client initializes, discovers typed tools, calls read/write tools, handles errors and renders actual image content; An isolated SDK client forwards headers for initialization and subsequent calls; real OpenClaw/Codex connection testing is excluded by owner14303. SDK version pinned. No unsupported capability advertised.
 - **Authentication:** missing/invalid/expired/revoked credentials fail; secrets absent from logs/output; read-only token cannot prepare/start/curate/cancel; swapping header cannot change credential scope.
 - **Isolation:** concurrent A/B operations, every direct-ID access, job output, gallery byte read and review reject cross-workspace references; unknown inputs cannot inject workspace/user/endpoint IDs. No fallback to Default. Shared Default LoRA works only while explicitly visible.
 - **Lifecycle:** deletion/revocation between prepare/start/dispatch blocks new work; late completion cannot recreate a deleted workspace; rename is harmless; pending receipts survive restart.
@@ -329,12 +329,12 @@ Automated verification uses synthetic data, local image fixtures and a mock prov
 
 Create local backlog implementation tickets only after the owner authorizes implementation. Suggested bounded slices:
 
-1. SDK/Next transport spike with mock tools, token administration, fixed workspace context and read-only get_context. Prove actual OpenClaw client compatibility before adding mutations.
+1. SDK/Next transport spike with mock tools, token administration, fixed workspace context and read-only get_context. Prove SDK client compatibility in isolation before adding mutations; do not connect OpenClaw in this implementation task.
 2. Scoped character/library/gallery adapters and actual image delivery; map all ownership checks, shared-LoRA exception and media limits.
 3. Persisted immutable plans and shared deterministic prompt/model/reference resolution. No paid operations yet.
 4. Durable batches/dispatch, provider acceptance reconciliation, cancellation, supervisor integration and mocked crash/idempotency tests.
 5. Atomic gallery preservation, review history and approved-reference versioning; finalize contract docs and example client config.
-6. Integration/regression checks, additive migration on a copied database, production build and deployment. Enable read-only connection first; enable mutation scopes after verification. Live image trial remains separately owner-authorized.
+6. Integration/regression checks, additive migration on a copied database, production build and deployment. Leave client connections unconfigured; provide operator instructions for a future separately requested connection. Live image trial remains separately owner-authorized.
 
 Rollout behind `ENGUI_MCP_ENABLED`, default false. Back up SQLite consistently and retain the previous production build before schema/runtime changes. No workspace/media backfill or relocation is required for this feature; new records are additive. Review cleanup/index migrations separately, especially existing gallery duplicates.
 

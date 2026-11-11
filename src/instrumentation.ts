@@ -8,4 +8,6 @@ export async function register() {
   startRunPodSupervisor();
   const { startWorkspaceDeletionWorker } = await import('@/lib/workspaces/deletion');
   startWorkspaceDeletionWorker();
+  const { startMcpWorker } = await import('@/lib/mcp/worker');
+  startMcpWorker();
 }

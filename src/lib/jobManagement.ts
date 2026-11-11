@@ -257,6 +257,10 @@ export async function deleteFinishedJob(job: any) {
     throw new Error('Cannot delete active job, cancel it first');
   }
 
+  const mcp = await prisma.mcpGenerationVariant.findFirst({ where: { jobId: job.id } });
+  if (mcp && (!['succeeded', 'failed', 'cancelled'].includes(mcp.state) || (mcp.state === 'succeeded' && !mcp.assetId))) {
+    throw new Error('Cannot delete MCP job before acceptance reconciliation and original preservation finish');
+  }
   await assertStudioSessionJobDeletionAllowed(job);
 
   const cleanup = await cleanupJobArtifacts(job);
@@ -267,4 +271,11 @@ export async function deleteFinishedJob(job: any) {
     deletedFiles: cleanup.deletedFiles,
     keptFiles: cleanup.keptFiles,
   };
+}
+
+/** MCP cancellation requests do not claim remote completion or delete local evidence. */
+export async function requestJobCancellation(job: any): Promise<void> {
+  const { runpodApiKey, endpointId, runpodJobId } = await resolveRunPodDeletionContext(job);
+  if (!runpodApiKey || !endpointId || !runpodJobId) throw new Error('Provider acceptance is not confirmed.');
+  await new RunPodService(runpodApiKey, endpointId).cancelJob(runpodJobId);
 }

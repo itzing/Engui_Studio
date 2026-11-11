@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockPrisma, queueGalleryEnrichmentMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
   mockPrisma: {
-    job: { findUnique: vi.fn() },
+    job: { findFirst: vi.fn() },
+    $transaction: vi.fn(),
     galleryAsset: { findFirst: vi.fn(), create: vi.fn() },
   },
   queueGalleryEnrichmentMock: vi.fn(),
@@ -10,6 +11,11 @@ const { mockPrisma, queueGalleryEnrichmentMock, queueGalleryDerivativesMock } = 
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
+vi.mock('@/lib/workspaces/route', async () => {
+  const { workspaceContext } = await import('@/lib/workspaces/context');
+  return { withWorkspaceRoute: (handler:any) => (request:any) => workspaceContext.run({kind:'workspace',workspaceId:'ws-1'},()=>handler(request)) };
+});
+vi.mock('@/lib/workspaces/files', () => ({ registerWorkspaceFile: vi.fn() }));
 vi.mock('@/lib/galleryEnrichment', () => ({ queueGalleryEnrichment: queueGalleryEnrichmentMock }));
 vi.mock('@/lib/galleryDerivatives', () => ({ queueGalleryDerivatives: queueGalleryDerivativesMock }));
 vi.mock('fs', () => ({
@@ -26,10 +32,11 @@ import { POST } from '@/app/api/gallery/assets/from-job-output/route';
 describe('POST /api/gallery/assets/from-job-output', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation((work:any)=>work(mockPrisma));
   });
 
   it('returns existing asset for duplicate workspace content hash', async () => {
-    mockPrisma.job.findUnique.mockResolvedValue({
+    mockPrisma.job.findFirst.mockResolvedValue({
       id: 'job-1', workspaceId: 'ws-1', type: 'image', resultUrl: '/generations/test.png', options: null, thumbnailUrl: null,
     });
     mockPrisma.galleryAsset.findFirst.mockResolvedValue({ id: 'asset-existing', workspaceId: 'ws-1' });
@@ -47,7 +54,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
   });
 
   it('creates a new asset and queues async enrichment/derivatives when duplicate is absent', async () => {
-    mockPrisma.job.findUnique.mockResolvedValue({
+    mockPrisma.job.findFirst.mockResolvedValue({
       id: 'job-1', workspaceId: 'ws-1', type: 'image', resultUrl: '/generations/test.png', options: JSON.stringify({ stylePreset: 'studio' }), thumbnailUrl: '/thumb.png',
       prompt: 'portrait client-a', modelId: 'flux-dev', endpointId: 'endpoint-1',
     });
@@ -72,7 +79,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
   });
 
   it('preserves brace prompt templates in gallery snapshots', async () => {
-    mockPrisma.job.findUnique.mockResolvedValue({
+    mockPrisma.job.findFirst.mockResolvedValue({
       id: 'job-template-1',
       workspaceId: 'ws-1',
       type: 'image',
@@ -105,7 +112,7 @@ describe('POST /api/gallery/assets/from-job-output', () => {
   });
 
   it('carries WAN22 source image metadata into gallery video snapshots', async () => {
-    mockPrisma.job.findUnique.mockResolvedValue({
+    mockPrisma.job.findFirst.mockResolvedValue({
       id: 'job-video-1',
       workspaceId: 'ws-1',
       type: 'video',
