@@ -357,6 +357,35 @@ describe('persistCreateReuseDraft', () => {
     }));
   });
 
+  it.each([
+    [true, true], ['true', true], [1, true], ['1', true],
+    [false, false], ['false', false], [0, false], [undefined, false],
+  ])('restores video Random Seed %s independently of the current draft and source image', async (stored, expected) => {
+    getWorkflowDraft.mockReturnValue({ randomizeSeed: !expected, parameterValues: { seed: 999 } });
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+    const result = persistCreateReuseDraft({
+      action: 'img2vid', type: 'video', modelId: 'wan22', prompt: 'Camera moves forward',
+      options: JSON.stringify({ randomizeSeed: stored, seed: 314159, image_path: '/frame.png',
+        sourceImageGenerationSnapshot: { modelId: 'z-image', randomizeSeed: !expected, seed: 42 } }),
+    });
+    expect(result?.snapshot).toMatchObject({ randomizeSeed: expected,
+      parameterValues: { seed: 314159, sourceImageGenerationSnapshot: { randomizeSeed: !expected, seed: 42 } } });
+    expect(saveWorkflowDraft).toHaveBeenCalledWith('video', 'wan22', expect.objectContaining({ randomizeSeed: expected }));
+    expect(announceCreateReuseDraft).toHaveBeenCalledWith('video', 'wan22');
+  });
+
+  it.each([true, false])('preserves video Random Seed %s on an image-only handoff', async (randomizeSeed) => {
+    getWorkflowDraft.mockReturnValue({ prompt: 'Keep video', randomizeSeed, parameterValues: { seed: 777 } });
+    const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
+    const result = persistCreateReuseDraft({ action: 'img2vid', type: 'video', modelId: 'wan22',
+      preserveVideoDraftFields: true, imageInputPath: '/new-frame.png',
+      options: { randomizeSeed: !randomizeSeed, seed: 42 },
+      sourceImageGenerationSnapshot: { randomizeSeed: !randomizeSeed, seed: 42 },
+    });
+    expect(result?.snapshot).toMatchObject({ prompt: 'Keep video', randomizeSeed,
+      parameterValues: { seed: 777, sourceImageGenerationSnapshot: { randomizeSeed: !randomizeSeed } } });
+  });
+
   it('writes txt2vid payloads into the WAN22 T2V video workflow draft before navigation', async () => {
     const { persistCreateReuseDraft } = await import('@/lib/create/persistCreateReuseDraft');
 

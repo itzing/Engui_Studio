@@ -690,6 +690,29 @@ slowly turns left with a soft smile
     expect(updateOptions.resolvedVideoPrompt).toBe(expectedPrompt);
   });
 
+  it.each([true, false])('persists video Random Seed=%s and the actual provider seed', async (randomizeSeed) => {
+    const model = mockGetModelById();
+    mockGetModelById.mockReturnValue({ ...model, parameters: [...model.parameters, { name: 'seed', type: 'number', default: 777 }] });
+    mockGetSettings.mockResolvedValue({ settings: { runpod: {
+      apiKey: 'fixture', endpoints: { wan22: 'endpoint-1' }, fieldEncKeyB64: Buffer.alloc(32, 9).toString('base64'),
+    } } });
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    try {
+      const form = new FormData();
+      form.set('modelId', 'wan22'); form.set('prompt', 'Animate a camera move');
+      form.set('seed', '777'); form.set('randomizeSeed', String(randomizeSeed));
+      form.set('image', new File([Buffer.from('image-bytes')], 'frame.png', { type: 'image/png' }));
+      const response = await POST(buildRequest(form) as any);
+      expect(response.status).toBe(200);
+      const seed = randomizeSeed ? Math.floor(0.2 * 2147483647) + 1 : 777;
+      expect(JSON.parse(mockPrisma.job.create.mock.calls[0][0].data.options)).toMatchObject({ randomizeSeed, seed });
+      for (const [arg] of mockPrisma.job.update.mock.calls) {
+        if (arg.data.options) expect(JSON.parse(arg.data.options)).toMatchObject({ randomizeSeed, seed });
+      }
+      expect(mockSubmitJob.mock.calls[0][0].seed).toBe(seed);
+    } finally { random.mockRestore(); }
+  });
+
   it('persists source image generation metadata on WAN22 jobs', async () => {
     mockGetSettings.mockResolvedValue({
       settings: {

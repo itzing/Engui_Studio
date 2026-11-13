@@ -5,6 +5,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREATE_DRAFT_STATE_STORAGE_KEY } from '@/lib/create/createDraftSchema';
+import { chooseBrowserWorkspace, workspaceStorage } from '@/lib/workspaces/client';
 
 const { mockAddJob, mockSetSelectedModel, mockVirtualRows } = vi.hoisted(() => ({
   mockAddJob: vi.fn(),
@@ -86,19 +87,14 @@ import { saveWorkflowDraft, setWorkflowActiveModel } from '@/lib/createDrafts';
 import { getModelById } from '@/lib/models/modelConfig';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
-  return Promise.resolve({
-    ok,
-    status,
-    json: async () => body,
-  } as Response);
+  return Promise.resolve(new Response(JSON.stringify(body), {
+    status: ok ? status : status === 200 ? 400 : status,
+    headers: { 'Content-Type': 'application/json' },
+  }));
 }
 
 function textResponse(body: string, ok = true, status = 200) {
-  return Promise.resolve({
-    ok,
-    status,
-    text: async () => body,
-  } as Response);
+  return Promise.resolve(new Response(body, { status: ok ? status : status === 200 ? 400 : status }));
 }
 
 function blobResponse(body: Blob, ok = true, status = 200) {
@@ -116,6 +112,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     vi.clearAllMocks();
     mockLoadFileFromPath.mockResolvedValue(null);
     window.localStorage.clear();
+    chooseBrowserWorkspace('ws-1');
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation(() => ({
@@ -158,7 +155,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     fireEvent.change(lowInputs[0], { target: { value: '1' } });
 
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts.wan22.draft.parameterValues).toMatchObject({
         lora_high_1_weight: '1',
         lora_low_1_weight: '1',
@@ -189,7 +186,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(randomSeedCheckbox.checked).toBe(true);
 
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts.wan22.draft.randomizeSeed).toBe(true);
     });
 
@@ -534,7 +531,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     fireEvent.change(promptTextarea, { target: { value: 'wide cinematic establishing shot' } });
 
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts['wan22-t2v'].draft).toMatchObject({
         prompt: 'wide cinematic establishing shot',
         parameterValues: {
@@ -558,7 +555,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
     await screen.findByTestId('video-create-prompt-textarea');
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues.width).toBe(832);
     });
 
@@ -573,7 +570,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
     firstRender.unmount();
 
-    const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+    const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
     expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).toMatchObject({
       width: 1024,
       steps: 8,
@@ -602,7 +599,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
     await screen.findByTestId('video-create-prompt-textarea');
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues.width).toBe(832);
     });
 
@@ -610,7 +607,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(widthInput).toBeTruthy();
     fireEvent.change(widthInput!, { target: { value: '1024' } });
 
-    const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+    const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
     expect(stored.workflows.video.drafts['wan22-t2v'].draft.parameterValues).toMatchObject({
       width: 1024,
       height: 480,
@@ -687,10 +684,9 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   });
 
   it('opens and closes the image reference preview fullscreen', async () => {
-    vi.stubGlobal('URL', {
-      ...URL,
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, {
       createObjectURL: vi.fn(() => 'blob:video-reference-preview'),
-    });
+    }));
 
     const { container } = render(React.createElement(VideoGenerationForm));
 
@@ -715,10 +711,9 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
   it('contains uploaded Wan Animate source video previews instead of cropping them', async () => {
     setWorkflowActiveModel('video', 'wan-animate');
-    vi.stubGlobal('URL', {
-      ...URL,
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, {
       createObjectURL: vi.fn(() => 'blob:wan-animate-source-video'),
-    });
+    }));
 
     const { container } = render(React.createElement(VideoGenerationForm));
 
@@ -736,10 +731,9 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
 
   it('sets Wan Animate output dimensions from source video metadata and scales them without changing ratio', async () => {
     setWorkflowActiveModel('video', 'wan-animate');
-    vi.stubGlobal('URL', {
-      ...URL,
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, {
       createObjectURL: vi.fn(() => 'blob:wan-animate-source-video'),
-    });
+    }));
 
     const { container } = render(React.createElement(VideoGenerationForm));
 
@@ -832,7 +826,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect((await screen.findByAltText('Reference') as HTMLImageElement).getAttribute('src')).toBe('/generations/gallery/ws-1/ref.png');
 
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts['wan-animate'].draft.imagePreviewUrl).toBe('/generations/gallery/ws-1/ref.png');
       expect(stored.workflows.video.drafts['wan-animate'].draft.parameterValues.sourceImageGenerationSnapshot).toMatchObject({
         galleryAssetId: 'gallery-ref-1',
@@ -1001,7 +995,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   });
 
   it('sends an empty prompt when the WAN22 Prompt Helper empty-prompt option is enabled', async () => {
-    window.localStorage.setItem('engui:video-prompt-helper:instruction', 'make it cinematic');
+    workspaceStorage()!.setItem('engui:video-prompt-helper:instruction', 'make it cinematic');
 
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1054,7 +1048,7 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(emptyPromptCheckbox.checked).toBe(true);
 
     await waitFor(() => {
-      expect(window.localStorage.getItem('engui:video-prompt-helper:empty-prompt')).toBe('true');
+      expect(workspaceStorage()!.getItem('engui:video-prompt-helper:empty-prompt')).toBe('true');
     });
 
     firstRender.unmount();
@@ -1066,10 +1060,9 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
   });
 
   it('caches source image context before applying WAN22 Prompt Helper again', async () => {
-    vi.stubGlobal('URL', {
-      ...URL,
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, {
       createObjectURL: vi.fn(() => 'blob:video-reference-preview'),
-    });
+    }));
 
     let visionRequestCount = 0;
     let promptRequestCount = 0;
@@ -1144,20 +1137,20 @@ describe('VideoGenerationForm WAN22 LoRA weight persistence', () => {
     expect(promptRequestCount).toBe(2);
 
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+      const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
       expect(stored.workflows.video.drafts.wan22.draft.imagePreviewUrl).toBeTruthy();
     });
 
-    const stored = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
+    const stored = JSON.parse(workspaceStorage()!.getItem(CREATE_DRAFT_STATE_STORAGE_KEY) || '{}');
     stored.workflows.video.drafts.wan22.draft.imagePreviewUrl = 'data:image/png;base64,aW1hZ2U=';
-    window.localStorage.setItem(CREATE_DRAFT_STATE_STORAGE_KEY, JSON.stringify(stored));
+    workspaceStorage()!.setItem(CREATE_DRAFT_STATE_STORAGE_KEY, JSON.stringify(stored));
 
     firstRender.unmount();
     render(React.createElement(VideoGenerationForm));
 
     const restoredPromptTextarea = await screen.findByPlaceholderText('generationForm.describeYourVideo') as HTMLTextAreaElement;
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png/));
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png/), undefined);
     });
 
     fireEvent.change(restoredPromptTextarea, { target: { value: 'make her dance' } });

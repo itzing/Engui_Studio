@@ -258,6 +258,7 @@ export function persistCreateReuseDraft(detail: ReuseDetail, defaults = { imageM
     const snapshot = {
       prompt: detail.prompt || '',
       showAdvanced: true,
+      randomizeSeed: normalizeRandomizeSeed(parsedOptions.randomizeSeed),
       parameterValues: Object.fromEntries(
         Object.entries(parsedOptions).filter(([key]) => !key.includes('_path') && key !== 'runpodJobId' && key !== 'error')
       ),

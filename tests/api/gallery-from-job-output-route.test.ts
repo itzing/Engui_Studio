@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockPrisma, queueGalleryEnrichmentMock, queueGalleryDerivativesMock } = vi.hoisted(() => ({
   mockPrisma: {
-    job: { findFirst: vi.fn() },
+    job: { findFirst: vi.fn(), findUnique: vi.fn() },
     $transaction: vi.fn(),
     galleryAsset: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
   },
@@ -157,30 +157,33 @@ describe('Randomize gallery metadata round trip', () => {
 
   for (const randomizeSeed of [true, false]) {
     for (const bucket of ['common', 'draft']) {
-      it(`saves and reuses Randomize=${randomizeSeed} with the used seed in ${bucket}`, async () => {
-        mockPrisma.job.findFirst.mockResolvedValue({
-          id: 'audit-job', workspaceId: 'ws-1', type: 'image', modelId: 'z-image',
-          prompt: 'Audit source', resultUrl: '/generations/audit.png',
-          options: JSON.stringify({randomizeSeed, seed: 314159, width: 1024, height: 1024}),
+      for (const type of ['image', 'video']) {
+        it(`saves and reuses Randomize=${randomizeSeed} with the used seed in ${bucket} for ${type}`, async () => {
+          mockPrisma.job.findFirst.mockResolvedValue({
+            id: 'audit-job', workspaceId: 'ws-1', type, modelId: type === 'image' ? 'z-image' : 'wan22',
+            prompt: 'Audit source', resultUrl: type === 'image' ? '/generations/audit.png' : '/generations/audit.mp4',
+            options: JSON.stringify({randomizeSeed, seed: 314159, width: 1024, height: 1024, ...(type === 'video' ? {image_path: '/generations/frame.png'} : {})}),
+          });
+          mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
+          mockPrisma.galleryAsset.create.mockImplementation(async ({data}: any) => ({id: 'audit-asset', ...data}));
+          const saved = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({jobId: 'audit-job', outputId: 'output-1', bucket}),
+          }) as any);
+          expect(saved.status).toBe(200);
+          const asset = mockPrisma.galleryAsset.create.mock.calls[0][0].data;
+          expect(JSON.parse(asset.generationSnapshot)).toMatchObject({randomizeSeed, seed: 314159});
+          mockPrisma.galleryAsset.findUnique.mockResolvedValue({id: 'audit-asset', ...asset});
+          mockPrisma.job.findFirst.mockRejectedValue(new Error('Source job is no longer available'));
+          mockPrisma.job.findUnique.mockResolvedValue(null);
+          const reused = await reuseGallery(new Request('http://localhost/api/gallery/assets/audit-asset/reuse', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: type === 'image' ? 'txt2img' : 'img2vid'}),
+          }) as any, {params: Promise.resolve({id: 'audit-asset'})});
+          expect(reused.status).toBe(200);
+          expect((await reused.json()).payload.options).toMatchObject({randomizeSeed, seed: 314159});
         });
-        mockPrisma.galleryAsset.findFirst.mockResolvedValue(null);
-        mockPrisma.galleryAsset.create.mockImplementation(async ({data}: any) => ({id: 'audit-asset', ...data}));
-        const saved = await POST(new Request('http://localhost/api/gallery/assets/from-job-output', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({jobId: 'audit-job', outputId: 'output-1', bucket}),
-        }) as any);
-        expect(saved.status).toBe(200);
-        const asset = mockPrisma.galleryAsset.create.mock.calls[0][0].data;
-        expect(JSON.parse(asset.generationSnapshot)).toMatchObject({randomizeSeed, seed: 314159});
-        mockPrisma.galleryAsset.findUnique.mockResolvedValue({id: 'audit-asset', ...asset});
-        mockPrisma.job.findFirst.mockRejectedValue(new Error('Source job is no longer available'));
-        const reused = await reuseGallery(new Request('http://localhost/api/gallery/assets/audit-asset/reuse', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({action: 'txt2img'}),
-        }) as any, {params: Promise.resolve({id: 'audit-asset'})});
-        expect(reused.status).toBe(200);
-        expect((await reused.json()).payload.options).toMatchObject({randomizeSeed, seed: 314159});
-      });
+      }
     }
   }
 });
