@@ -17,3 +17,7 @@ The eight new draft assertions fail on the original code and pass with the one-l
 The isolated production build passes. Preview browser evidence includes 36 passing checks across Chromium/WebKit: true/false restoration via phone/tablet Gallery details, desktop Gallery dialog with an already-mounted form, direct phone TikTok reuse and TikTok Info/details; image-only handoff preserving the current video draft; and phone/desktop video submission. API calls are intercepted, with unknown writes blocked. No physical iPhone or paid-provider execution is claimed.
 
 A read-only sample of 200 recent saved videos contains 192 true and eight false video flags, with none missing. Existing saved videos with a valid flag benefit from corrected reuse without metadata changes.
+
+## Deployed result
+
+Code commit `1d2ffc5` was pushed under the owner identity and deployed on 2026-11-13 at 20:49 UTC. Service and HTTP health checks pass. All 36 production browser checks pass in Chromium/WebKit, matching the 36 preview checks (72 total). WebKit logged one aborted-navigation request message during the run; all UI and seed assertions passed. The previous production build remains available for rollback.
