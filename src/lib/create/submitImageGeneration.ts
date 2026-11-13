@@ -13,6 +13,8 @@ export type SubmitImageGenerationParams = {
   selectedVibeId?: string;
   parameterValues: Record<string, any>;
   randomizeSeed: boolean;
+  /** Keep a client-selected batch seed without changing the saved Randomize preference. */
+  seedIsPreselected?: boolean;
   activeWorkspaceId: string | null;
   settings: StudioSettings;
   imageFile: File | null;
@@ -54,6 +56,7 @@ export const submitImageGeneration = async ({
   selectedVibeId,
   parameterValues,
   randomizeSeed,
+  seedIsPreselected = false,
   activeWorkspaceId,
   settings,
   imageFile,
@@ -94,7 +97,7 @@ export const submitImageGeneration = async ({
     return { success: false, error: 'Please upload the second image', nextSeed: null };
   }
 
-  const shouldRandomizeSeed = randomizeSeed && currentModel.parameters.some(param => param.name === 'seed');
+  const shouldRandomizeSeed = randomizeSeed && !seedIsPreselected && currentModel.parameters.some(param => param.name === 'seed');
   const fallbackNextSeed = shouldRandomizeSeed ? generateRandomSeed() : null;
 
   try {
@@ -165,6 +168,7 @@ export const submitImageGeneration = async ({
     }
 
     formData.append('randomizeSeed', randomizeSeed ? 'true' : 'false');
+    if (seedIsPreselected) formData.append('seedIsPreselected', 'true');
 
     if (dimensions) {
       formData.append('dimensions', dimensions);

@@ -852,4 +852,51 @@ slowly turns left with a soft smile
     expect(mockSubmitJob).not.toHaveBeenCalled();
   });
 
+
+  describe('image Randomize preference with preselected batch seeds', () => {
+    beforeEach(() => {
+      mockGetModelById.mockReturnValue({
+        id: 'flux-dev', name: 'Flux', type: 'image', api: { type: 'runpod', endpoint: 'flux-dev' },
+        inputs: ['text'], parameters: [{ name: 'seed', type: 'number', default: 42 }],
+      });
+      mockGetSettings.mockResolvedValue({settings: {runpod: {apiKey: 'fixture', endpoints: {'flux-dev': 'fixture-endpoint'}}}});
+    });
+
+    it.each([[true, true], [false, true], [true, false], [false, false]])(
+      'saves Randomize=%s independently of preselected=%s', async (randomizeSeed, seedIsPreselected) => {
+        vi.spyOn(Math, 'random').mockReturnValue(0.2);
+        const form = new FormData();
+        form.set('modelId', 'flux-dev'); form.set('prompt', 'Batch regression'); form.set('seed', '777');
+        form.set('randomizeSeed', String(randomizeSeed));
+        if (seedIsPreselected) form.set('seedIsPreselected', 'true');
+        const response = await POST(buildRequest(form) as any);
+        const body = await response.json();
+        expect(response.status, JSON.stringify(body)).toBe(200);
+        const expectedSeed = randomizeSeed && !seedIsPreselected ? Math.floor(0.2 * 2147483647) + 1 : 777;
+        expect(body.seed).toBe(expectedSeed);
+        const created = JSON.parse(mockPrisma.job.create.mock.calls[0][0].data.options);
+        expect(created).toMatchObject({randomizeSeed, seed: expectedSeed});
+        expect(created).not.toHaveProperty('seedIsPreselected');
+        const providerInput = mockSubmitJob.mock.calls[0][0];
+        expect(providerInput.seed).toBe(expectedSeed);
+        expect(providerInput).not.toHaveProperty('seedIsPreselected');
+        for (const [arg] of mockPrisma.job.update.mock.calls) {
+          if (arg.data.options) expect(JSON.parse(arg.data.options)).toMatchObject({randomizeSeed, seed: expectedSeed});
+        }
+      },
+    );
+
+    it.each(['0', '-1', '2147483648', '1.5', 'NaN', '12oops', ''])(
+      'rejects invalid preselected seed %s before a job/provider call', async (seed) => {
+        const form = new FormData();
+        form.set('modelId', 'flux-dev'); form.set('prompt', 'Batch regression'); form.set('seed', seed);
+        form.set('randomizeSeed', 'true'); form.set('seedIsPreselected', 'true');
+        const response = await POST(buildRequest(form) as any);
+        expect(response.status).toBe(400);
+        expect((await response.json()).error).toContain('preselected seed');
+        expect(mockPrisma.job.create).not.toHaveBeenCalled();
+        expect(mockSubmitJob).not.toHaveBeenCalled();
+      },
+    );
+  });
 });

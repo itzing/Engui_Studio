@@ -380,6 +380,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
         }
 
         const randomizeSeed = formData.get('randomizeSeed') === 'true';
+        const seedIsPreselected = model.type === 'image' && formData.get('seedIsPreselected') === 'true';
         const generateRandomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
         // Collect all parameters from formData
@@ -400,7 +401,13 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             }
         });
 
-        if (randomizeSeed && model.parameters.some(param => param.name === 'seed')) {
+        // Batch seeds are already unique; preserve them independently of the saved UI preference.
+        if (seedIsPreselected && (!model.parameters.some(param => param.name === 'seed')
+            || !Number.isInteger(parameters.seed) || parameters.seed < 1 || parameters.seed > 2147483647
+            || Number(formData.get('seed')) !== parameters.seed)) {
+            return NextResponse.json({ error: 'A preselected seed must be an integer between 1 and 2147483647.' }, { status: 400 });
+        }
+        if (randomizeSeed && !seedIsPreselected && model.parameters.some(param => param.name === 'seed')) {
             parameters.seed = generateRandomSeed();
         }
 

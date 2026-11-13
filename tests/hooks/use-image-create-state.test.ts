@@ -186,6 +186,7 @@ function Harness() {
     React.createElement('div', { 'data-testid': 'selected-title' }, state.selectedPromptDocumentTitle),
     React.createElement('button', { type: 'button', onClick: () => state.selectPromptDocument('draft-1') }, 'Select draft'),
     React.createElement('button', { type: 'button', onClick: () => state.setPrompt('Batch prompt') }, 'Set prompt'),
+    React.createElement('button', { type: 'button', onClick: () => state.setRandomizeSeed(true) }, 'Enable Randomize'),
     React.createElement('button', { type: 'button', onClick: () => state.setSelectedVibeId('v1') }, 'Select vibe'),
     React.createElement('button', {
       type: 'button',
@@ -259,7 +260,7 @@ describe('useImageCreateState mobile prompt draft flow', () => {
     expect(mockSubmitImageGeneration.mock.calls[0]?.[0]?.sourcePromptDocumentTitle).toBe('Scene Draft');
   });
 
-  it('submits mobile batches sequentially with unique explicit seeds', async () => {
+  it.each([true, false])('submits unique-seed batches while preserving Randomize=%s', async (randomizeSeed) => {
     const randomSpy = vi.spyOn(Math, 'random')
       .mockReturnValueOnce(0.1)
       .mockReturnValueOnce(0.2)
@@ -277,13 +278,15 @@ describe('useImageCreateState mobile prompt draft flow', () => {
     render(React.createElement(Harness));
 
     fireEvent.click(screen.getByRole('button', { name: 'Set prompt' }));
+    if (randomizeSeed) fireEvent.click(screen.getByRole('button', { name: 'Enable Randomize' }));
     fireEvent.click(screen.getByRole('button', { name: 'Batch 3' }));
 
     await waitFor(() => {
       expect(mockSubmitImageGeneration).toHaveBeenCalledTimes(3);
     });
 
-    expect(mockSubmitImageGeneration.mock.calls.map((call) => call[0].randomizeSeed)).toEqual([false, false, false]);
+    expect(mockSubmitImageGeneration.mock.calls.map((call) => call[0].randomizeSeed)).toEqual([randomizeSeed, randomizeSeed, randomizeSeed]);
+    expect(mockSubmitImageGeneration.mock.calls.every((call) => call[0].seedIsPreselected === true)).toBe(true);
     const seeds = mockSubmitImageGeneration.mock.calls.map((call) => call[0].parameterValues.seed);
     expect(new Set(seeds).size).toBe(3);
     expect(seeds).toEqual([
