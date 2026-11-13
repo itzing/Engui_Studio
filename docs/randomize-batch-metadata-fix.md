@@ -21,3 +21,7 @@ Use fake-provider backend tests and intercepted browser submissions only. Verify
 - Production build passes in an isolated staging directory.
 - 36 browser checks pass against that build: 32 restoration checks and four single/batch submission checks across Chromium and WebKit. All API requests are intercepted; no provider jobs are launched.
 - Historical images are unchanged: an existing false flag cannot reliably reveal whether the original UI checkbox was enabled.
+
+## Production verification
+
+Code commit `958150a` was pushed under the owner identity and deployed on 2026-11-13. The restarted service is active; root and mobile Create/Gallery/Jobs return HTTP 200. The same 36 browser checks pass against the deployed build in Chromium and WebKit. Preview and production together provide 72 passing browser checks, without provider execution. The previous build is retained for rollback. These are emulated browser checks, not physical iPhone testing.
