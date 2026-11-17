@@ -1,11 +1,13 @@
 'use client';
 
+import { useUnreadQueueOutcome } from './MobileQueueNotifications';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getMobileTabForPathname, mobileNavItems } from './mobileNavigation';
 
 export default function MobileBottomNav({ onCreateReselect }: { onCreateReselect?: () => void }) {
   const pathname = usePathname();
+  const unreadQueue = useUnreadQueueOutcome();
   const activeTab = getMobileTabForPathname(pathname);
   const canReselectCreate = pathname === '/m/create' && !!onCreateReselect;
 
@@ -30,7 +32,12 @@ export default function MobileBottomNav({ onCreateReselect }: { onCreateReselect
               }}
               className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs transition-colors ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
             >
-              <Icon className="h-4 w-4" />
+              <span className="relative">
+                <Icon className="h-4 w-4" />
+                {id === 'jobs' && unreadQueue && (
+                  <span aria-label="New queue outcome" className="absolute -right-1.5 -top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+                )}
+              </span>
               <span>{label}</span>
             </Link>
           );

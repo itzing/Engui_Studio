@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
+import MobileQueueNotifications from './MobileQueueNotifications';
 import MobileRouteEventBridge from './MobileRouteEventBridge';
 import { installStandalonePhoneHeight } from '@/lib/mobile/standalonePhoneHeight';
 
@@ -15,9 +16,9 @@ export default function MobileAppProviders({ children }: { children: ReactNode }
   }, []);
 
   return (
-    <>
+    <MobileQueueNotifications>
       <MobileRouteEventBridge />
       {children}
-    </>
+    </MobileQueueNotifications>
   );
 }

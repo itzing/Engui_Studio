@@ -172,6 +172,8 @@ interface StudioContextType {
 
     // Jobs
     jobs: Job[];
+    jobsLoaded: boolean;
+    jobsSyncVersion: number;
     addJob: (job: Job) => void;
     addCompletedJob: (job: Job) => void;
     updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => void;
@@ -251,6 +253,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
     // Jobs should always come from DB, not localStorage
     const [jobs, setJobs] = useState<Job[]>([]);
+    const [jobsLoaded, setJobsLoaded] = useState(false);
+    const [jobsSyncVersion, setJobsSyncVersion] = useState(0);
 
     const [settings, setSettings] = useState<StudioSettings>(() => {
         if (typeof window !== 'undefined') {
@@ -376,6 +380,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
     const resetWorkspaceView = (id: string | null) => {
         chooseBrowserWorkspace(id);
+        setJobsLoaded(false);
         setJobs([]); setProjects([]); setCurrentProject(null); setTracks([]); setKeyframes({});
         setActiveArtifactId(null); setSelectedModel(null); setSelectedKeyframeIds([]); setPlayerState('paused');
         setActiveWorkspaceId(id);
@@ -445,9 +450,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             console.log('🔄 Fetching jobs for workspace:', activeWorkspaceId);
             const response = await fetch(`/api/jobs?userId=user-with-settings&workspaceId=${activeWorkspaceId}&limit=50&page=1`);
             const data = await response.json();
-            if (data.success) {
+            if (response.ok && data.success && Array.isArray(data.jobs)) {
                 console.log('✅ Fetched jobs:', data.jobs.length, 'jobs for workspace:', activeWorkspaceId);
                 setJobs(data.jobs);
+                setJobsLoaded(true);
+                setJobsSyncVersion(version => version + 1);
             }
         } catch (error) {
             console.error('Failed to fetch jobs:', error);
@@ -738,6 +745,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
             if (activeJobs.length === 0) return;
 
+            let synchronized = true;
             for (const job of activeJobs) {
                 try {
                     const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`);
@@ -750,6 +758,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                     const data = await response.json().catch(() => ({}));
 
                     if (!response.ok || !data.success) {
+                        synchronized = false;
                         continue;
                     }
 
@@ -802,10 +811,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                             error: data.error || 'RunPod job failed',
                             ...(executionMs !== undefined ? { executionMs } : {}),
                         } : j));
+                    } else {
+                        synchronized = false;
                     }
                 } catch (error) {
+                    synchronized = false;
                     console.error('Polling error for job', job.id, error);
                 }
+            }
+            if (synchronized && currentBrowserWorkspaceId() === activeWorkspaceId) {
+                setJobsSyncVersion(version => version + 1);
             }
         }, 5000);
 
@@ -1393,6 +1408,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
             // Jobs
             jobs,
+            jobsLoaded,
+            jobsSyncVersion,
             addJob,
             addCompletedJob,
             updateJobStatus,
