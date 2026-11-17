@@ -19,3 +19,7 @@ Pure queue-state reducer + one provider/observer in MobileAppProviders. Add fron
 ## Validation and rollback
 Unit tests cover lifecycle, aggregation, errors/cancel/removal, debounce, historical baseline and storage. Rendered integration tests cover navigation, hidden/offline/resume, reload/workspace switches, display actions and unread state. Intercept all browser API requests for Chromium/WebKit checks of mobile routes, fullscreen layering, narrow widths and desktop exclusion; no real jobs.
 Build in isolated staging with ENGUI_ISOLATED_VALIDATION=1. Commit/push as owner, preserve previous.next, promote candidate and restart engui-studio.service. Rollback restores previous.next and reverts feature commit; no database changes.
+
+## Delivered verification
+
+ENGUI-592 shipped in fa4743d. All 63 focused tests and isolated production build pass. The deployed UI passes 19 intercepted browser checks in each of Chromium and WebKit, including queued-to-running, new jobs joining, finalizing, final success/failure, reload dedupe, background coalescing, fullscreen/Carousel actions, 320px layout and desktop exclusion. No page errors or production writes/jobs. The service is active after deployment at 2026-11-17 12:31:50 UTC. Prior build retained at /home/engui/engui-runs/engui-592-20261117/previous.next. No physical iPhone claim. Full-repo TypeScript diagnostics remain outside changed files.
