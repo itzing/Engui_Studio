@@ -1,7 +1,7 @@
 ---
 id: ENGUI-593
 title: Preserve saved image Prompt Helper instructions across desktop remounts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-19 15:07'
 labels: [desktop, create, bug, persistence]
@@ -21,7 +21,7 @@ Reproduce a desktop reload with saved Video mode: Image initially mounts, reads 
 - [x] User edits persist immediately; explicit clearing still works.
 - [x] Reload, Image/Video switching, reuse remount and workspace isolation preserve the intended value.
 - [x] Desktop and mobile focused tests and browser checks pass without live API mutations or paid generations.
-- [ ] Isolated build, owner commit/push and deployment verified.
+- [x] Isolated build, owner commit/push and deployment verified.
 
 ## Rollback
 Build outside the live .next; preserve the previous build in /home/engui/engui-runs/engui-593-20261119/previous.next before promotion. Restore it and restart engui-studio.service if post-deployment health fails. No server or database changes.
@@ -39,3 +39,10 @@ A shared image instruction hook now reads on mount/workspace change and writes s
 - Browser fixture corrections (legacy-import marker filtering and complete video-project data) are retained in private evidence; final runs have zero page errors.
 - Repository-wide tsc has existing errors, including unchanged generation-result typing. New hook/tests diagnostics checked separately; build succeeds under the existing project configuration.
 - Evidence: workspace runs/engui-593-20261119/.
+
+## Deployment verification
+- Fix d64e000 authored/committed as Artem Ovechkin, pushed via owner itzing to main.
+- Deployed 2026-11-19 15:17:17 UTC, build YTUU4IfzSxH-boErSaF_U. Service active; root and mobile Create/Gallery/Jobs HTTP 200; Tailscale HTTPS HTTP 200.
+- Production browser suite: 13 Chromium + 13 WebKit checks pass, zero page errors or unexpected API writes. Screenshots retained and desktop saved-instruction display reviewed.
+- Previous build ieMUljEFnNzZxkfYiDPdY retained in /home/engui/engui-runs/engui-593-20261119/previous.next. Isolated preview stopped after verification.
+- Full tsc still reports pre-existing project errors; no diagnostics in the new hook or new tests after the selector correction. No physical iPhone test claimed.
