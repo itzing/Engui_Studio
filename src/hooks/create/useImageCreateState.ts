@@ -1,5 +1,5 @@
 'use client';
-import { workspaceStorage } from '@/lib/workspaces/client';
+import { useImagePromptHelperInstruction } from '@/hooks/create/useImagePromptHelperInstruction';
 
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
@@ -27,8 +27,6 @@ import type { PromptDocument, PromptDocumentSummary } from '@/lib/prompt-constru
 import { documentUsesRandomCharacterAppearance, renderPromptDocumentForCreate } from '@/lib/prompt-constructor/renderForCreate';
 import type { CharacterSummary } from '@/lib/characters/types';
 import { normalizePromptWildcardSelections, type PromptWildcardSelectionMap } from '@/lib/prompt-wildcards/selections';
-
-const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
 type FlashMessage = {
   type: 'success' | 'error';
@@ -79,7 +77,7 @@ export function useImageCreateState() {
   const [selectedPromptDocumentId, setSelectedPromptDocumentId] = useState('');
   const [selectedPromptDocumentTitle, setSelectedPromptDocumentTitle] = useState('');
   const [sceneSnapshot, setSceneSnapshot] = useState<Record<string, any> | null>(null);
-  const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+  const [promptHelperInstruction, setPromptHelperInstruction] = useImagePromptHelperInstruction(activeWorkspaceId);
   const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
   const [isPromptHelperLoading, setIsPromptHelperLoading] = useState(false);
 
@@ -215,30 +213,6 @@ export function useImageCreateState() {
       setSelectedModel(DEFAULT_IMAGE_MODEL);
     }
   }, [DEFAULT_IMAGE_MODEL, imageModels, selectedModel]);
-
-  useEffect(() => {
-    try {
-      const storedInstruction = workspaceStorage()?.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-      if (typeof storedInstruction === 'string') {
-        setPromptHelperInstruction(storedInstruction);
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      if (promptHelperInstruction.trim()) {
-        workspaceStorage()?.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
-      } else {
-        workspaceStorage()?.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, [promptHelperInstruction]);
-
 
   useEffect(() => {
     let cancelled = false;

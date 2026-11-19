@@ -1,5 +1,5 @@
 'use client';
-import { workspaceStorage } from '@/lib/workspaces/client';
+import { useImagePromptHelperInstruction } from '@/hooks/create/useImagePromptHelperInstruction';
 
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
@@ -83,7 +83,7 @@ export default function ImageGenerationForm() {
         return () => mediaQuery.removeListener(updateLayout);
     }, []);
     const [isPromptHelperOpen, setIsPromptHelperOpen] = useState(false);
-    const [promptHelperInstruction, setPromptHelperInstruction] = useState('');
+    const [promptHelperInstruction, setPromptHelperInstruction] = useImagePromptHelperInstruction(activeWorkspaceId);
     const [promptHelperChangeNegative, setPromptHelperChangeNegative] = useState(false);
     const [promptHelperError, setPromptHelperError] = useState<string | null>(null);
     const [promptHelperDebug, setPromptHelperDebug] = useState<{ content?: string; reasoningContent?: string } | null>(null);
@@ -115,8 +115,6 @@ export default function ImageGenerationForm() {
 
     const imageModels = getModelsByType('image');
     const DEFAULT_IMAGE_MODEL = imageModels[0]?.id || 'flux-krea';
-
-    const PROMPT_HELPER_INSTRUCTION_STORAGE_KEY = 'engui:prompt-helper:instruction';
 
     const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType = 'application/octet-stream') => {
         const response = await fetch(dataUrl);
@@ -172,29 +170,6 @@ export default function ImageGenerationForm() {
         snapshot: currentSnapshot,
         applySnapshot,
     });
-
-    useEffect(() => {
-        try {
-            const storedInstruction = workspaceStorage()?.getItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-            if (typeof storedInstruction === 'string') {
-                setPromptHelperInstruction(storedInstruction);
-            }
-        } catch (error) {
-            console.warn('Failed to restore prompt helper instruction', error);
-        }
-    }, []);
-
-    useEffect(() => {
-        try {
-            if (promptHelperInstruction.trim()) {
-                workspaceStorage()?.setItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY, promptHelperInstruction);
-            } else {
-                workspaceStorage()?.removeItem(PROMPT_HELPER_INSTRUCTION_STORAGE_KEY);
-            }
-        } catch (error) {
-            console.warn('Failed to persist prompt helper instruction', error);
-        }
-    }, [promptHelperInstruction]);
 
     // Keep selected model valid after draft hydration, but do not override store-restored reuse targets.
     useEffect(() => {
