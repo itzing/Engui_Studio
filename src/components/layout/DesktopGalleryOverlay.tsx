@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
+import { ArrowLeftToLine, ArrowRightToLine, AudioLines, Check, Clapperboard, Heart, Image as ImageIcon, Info, Loader2, PenSquare, Play, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -13,6 +13,8 @@ import { useMobileGalleryScreen, type MobileGalleryAsset } from '@/hooks/gallery
 import type { GalleryViewerBucket } from '@/components/workspace/GalleryFullscreenViewer';
 import { useToast } from '@/components/ui/toast';
 import { prepareCreateReuseDraft } from '@/lib/create/reuseToCreate';
+import { useGallerySelection } from '@/hooks/gallery/useGallerySelection';
+import { runGalleryBulkAction, type GalleryBulkAction } from '@/lib/gallery/bulkActions';
 
 function TileOverlayActions({
   asset,
@@ -108,6 +110,9 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
   const gridWrapRef = useRef<HTMLDivElement | null>(null);
   const restoreHandledTickRef = useRef<number>(0);
   const [columns, setColumns] = useState(6);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkBusyRef = useRef(false);
+  const [bulkMessage, setBulkMessage] = useState('');
   const [sidebarSide, setSidebarSide] = useState<'left' | 'right'>('right');
   const [gridWidth, setGridWidth] = useState(1200);
   const [detailsAsset, setDetailsAsset] = useState<MobileGalleryAsset | null>(null);
@@ -186,33 +191,6 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     window.localStorage.setItem('engui.desktop.gallery.sidebarSide', sidebarSide);
   }, [sidebarSide]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-
-      if (viewerOpen) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        closeViewer();
-        return;
-      }
-
-      if (carouselOpen) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setCarouselOpen(false);
-        return;
-      }
-
-      if (!detailsOpen) {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [carouselOpen, closeViewer, detailsOpen, onClose, open, viewerOpen]);
 
   useEffect(() => {
     if (!open) setCarouselOpen(false);
@@ -233,6 +211,36 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
 
   const gap = 0;
   const rowHeight = Math.max(120, gridWidth / columns);
+  const selectionScope = JSON.stringify([workspaceId, query, selectedFilters, semanticFilter, favoritesOnly, showTrashed]);
+  const selection = useGallerySelection({
+    scope: selectionScope, enabled: open, busy: bulkBusy || isLoading || !!error,
+    items: itemsByAbsoluteIndex, total: totalCount, columns, rowHeight, scrollRef: parentRef, ensureRangeLoaded,
+  });
+  const actionScopeRef = useRef(selectionScope);
+  actionScopeRef.current = selectionScope;
+  useEffect(() => { setBulkMessage(''); }, [selectionScope, open]);
+
+  const applySelectionAction = async (action: GalleryBulkAction) => {
+    if (!workspaceId || bulkBusyRef.current || selection.pending || selection.dragging || !selection.ids.size) return;
+    const ids = Array.from(selection.ids);
+    const scope = selectionScope;
+    bulkBusyRef.current = true; setBulkBusy(true); setBulkMessage('');
+    try {
+      const result = await runGalleryBulkAction(workspaceId, ids, action);
+      if (actionScopeRef.current === scope) {
+        selection.replace(result.failed);
+        const verb = { favorite: 'added to favorites', unfavorite: 'removed from favorites', trash: 'moved to trash', restore: 'restored' }[action];
+        setBulkMessage(result.failed.length
+          ? `${result.succeeded.length} ${verb}. ${result.failed.length} failed — still selected for retry.`
+          : `${result.succeeded.length} ${result.succeeded.length === 1 ? 'item' : 'items'} ${verb}.`);
+      }
+      if (result.succeeded.length) {
+        window.dispatchEvent(new CustomEvent('galleryAssetChanged', { detail: { workspaceId, reason: 'bulk-updated' } }));
+      }
+    } finally { bulkBusyRef.current = false; setBulkBusy(false); }
+  };
+  const actionsDisabled = bulkBusy || isLoading || !!error || selection.pending || selection.dragging || !selection.ids.size;
+
   const rowCount = Math.ceil(totalCount / columns);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -240,6 +248,41 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
     estimateSize: () => rowHeight,
     overscan: 6,
   });
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      if (viewerOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeViewer();
+        return;
+      }
+
+      if (carouselOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setCarouselOpen(false);
+        return;
+      }
+
+      if (selection.active) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!bulkBusy) selection.done();
+        return;
+      }
+
+      if (!detailsOpen) {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [carouselOpen, closeViewer, detailsOpen, onClose, open, viewerOpen, selection.active, selection.done, bulkBusy]);
+
   const virtualRows = rowVirtualizer.getVirtualItems();
   const isAllFilterActive = selectedFilters.length === 3;
 
@@ -297,6 +340,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
             size="icon"
             className="h-8 w-8 rounded-md border border-white/10 text-white/70 hover:text-white hover:bg-white/5"
             onClick={onClose}
+            disabled={bulkBusy}
             aria-label="Close gallery"
             title="Close gallery"
           >
@@ -305,10 +349,20 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         </div>
       </div>
 
+      <Button
+        variant={selection.active ? 'default' : 'outline'}
+        disabled={bulkBusy}
+        onClick={() => { setBulkMessage(''); if (selection.active) selection.done(); else selection.start(); }}
+        aria-pressed={selection.active}
+      >
+        {selection.active ? 'Done' : 'Select'}
+      </Button>
+
+      <fieldset disabled={bulkBusy} className="contents disabled:opacity-50">
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <button
           type="button"
-          onClick={() => setCarouselOpen(true)}
+          onClick={() => { selection.done(); setCarouselOpen(true); }}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded border border-emerald-400/30 bg-emerald-500/10 px-3 text-xs text-emerald-100 transition-colors hover:bg-emerald-500/15 hover:text-white"
           aria-label="Open video carousel"
         >
@@ -391,7 +445,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
             size="icon"
             className="ml-auto h-8 w-8 rounded border border-white/10 text-white/70 hover:text-white hover:bg-white/5 shrink-0"
             aria-label="Refresh gallery"
-            onClick={() => void refresh()}
+            onClick={() => { selection.clear(); void refresh(); }}
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
@@ -402,6 +456,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tags or asset id..." className="pl-9 bg-white/[0.03] border-white/10 text-white placeholder:text-white/35" />
       </div>
+      </fieldset>
     </aside>
   );
 
@@ -412,6 +467,22 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
       <div className="flex h-full w-full">
         {sidebarSide === 'left' ? sidebar : null}
         <div ref={gridWrapRef} className="min-w-0 flex-1 flex flex-col">
+          {selection.active ? (
+            <div className="shrink-0 border-b border-white/15 bg-zinc-950 px-4 py-3" data-testid="gallery-selection-toolbar">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-auto text-sm font-medium" aria-live="polite">{selection.pending ? 'Loading selection…' : `${selection.ids.size} selected`}</span>
+                <Button size="sm" variant="outline" disabled={actionsDisabled} onClick={() => void applySelectionAction('favorite')}>Add to favorites</Button>
+                <Button size="sm" variant="outline" disabled={actionsDisabled} onClick={() => void applySelectionAction('unfavorite')}>Remove from favorites</Button>
+                <Button size="sm" variant="outline" disabled={actionsDisabled} onClick={() => void applySelectionAction(showTrashed ? 'restore' : 'trash')}>
+                  {showTrashed ? 'Restore' : 'Move to trash'}
+                </Button>
+                <Button size="sm" variant="ghost" disabled={bulkBusy || selection.dragging} onClick={selection.clear}>Clear</Button>
+              </div>
+              <p className="mt-2 text-xs text-white/60" role="status">
+                {bulkBusy ? 'Updating selected items…' : bulkMessage || 'Click to select. Drag across items or Shift-click to select a range.'}
+              </p>
+            </div>
+          ) : null}
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-6 text-sm text-white/65">
@@ -424,7 +495,16 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
           ) : totalCount === 0 ? (
             <div className="m-6 rounded-lg border border-dashed border-white/10 px-4 py-8 text-sm text-white/50">No gallery assets yet for the current workspace.</div>
           ) : (
-            <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
+            <div
+              ref={parentRef}
+              data-testid="desktop-gallery-scroll"
+              className={`min-h-0 flex-1 overflow-auto ${selection.active ? 'select-none touch-none' : ''}`}
+              onPointerMove={selection.pointerMove}
+              onPointerUp={selection.pointerUp}
+              onPointerCancel={selection.pointerCancel}
+              onLostPointerCapture={selection.pointerUp}
+              onDragStart={(event) => { if (selection.active) event.preventDefault(); }}
+            >
               <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
                 {virtualRows.map((virtualRow) => {
                   const rowStart = virtualRow.index * columns;
@@ -445,7 +525,7 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                           return <PlaceholderTile key={`placeholder-${absoluteIndex}`} />;
                         }
 
-                        const isSelected = selectedAbsoluteIndex === absoluteIndex || selectedAssetId === asset.id;
+                        const isSelected = selection.active ? selection.ids.has(asset.id) : selectedAbsoluteIndex === absoluteIndex || selectedAssetId === asset.id;
                         const mediaUrl = asset.thumbnailUrl || asset.previewUrl || asset.originalUrl;
 
                         return (
@@ -453,8 +533,15 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
                             key={asset.id}
                             type="button"
                             data-gallery-asset-id={asset.id}
-                            onClick={() => handleTilePress(asset, absoluteIndex)}
-                            className="relative block aspect-square w-full overflow-hidden bg-black"
+                            data-gallery-index={absoluteIndex}
+                            aria-label={selection.active ? `Select item ${absoluteIndex + 1}` : undefined}
+                            aria-pressed={selection.active ? isSelected : undefined}
+                            onPointerDown={(event) => selection.pointerDown(event, absoluteIndex)}
+                            onClick={(event) => {
+                              if (!selection.active) handleTilePress(asset, absoluteIndex);
+                              else if (event.detail === 0) selection.keyboardToggle(absoluteIndex, event.shiftKey);
+                            }}
+                            className="relative block aspect-square w-full overflow-hidden bg-black focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
                           >
                             {asset.type === 'video' ? (
                               <>
@@ -471,15 +558,20 @@ export function DesktopGalleryOverlay({ open, onClose }: { open: boolean; onClos
 
                             <TileStatusBadges favorited={asset.favorited} bucket={asset.bucket} />
 
+                            {selection.active ? (
+                              <span className={`pointer-events-none absolute right-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 ${isSelected ? 'border-sky-400 bg-sky-500 text-white' : 'border-white/80 bg-black/40'}`}>
+                                {isSelected ? <Check className="h-4 w-4" /> : null}
+                              </span>
+                            ) : null}
                             {isSelected ? (
                               <>
                                 <div className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-primary/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" />
-                                <TileOverlayActions
+                                {!selection.active ? <TileOverlayActions
                                   asset={asset}
                                   onOpenInfo={(entry) => { setDetailsAsset(entry); setDetailsOpen(true); }}
                                   onToggleFavorite={(entry) => void toggleFavorite(entry.id)}
                                   onToggleTrash={(entry) => void toggleTrash(entry.id)}
-                                />
+                                /> : null}
                               </>
                             ) : null}
                           </button>

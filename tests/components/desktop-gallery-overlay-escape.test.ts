@@ -7,6 +7,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+
 const closeViewerMock = vi.fn();
 
 let viewerOpen = false;
@@ -87,6 +89,18 @@ describe('DesktopGalleryOverlay Escape handling', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(closeViewerMock).not.toHaveBeenCalled();
+  });
+
+  it('exits selection before closing the gallery on Escape', () => {
+    const onClose = vi.fn();
+    render(React.createElement(DesktopGalleryOverlay, { open: true, onClose }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByTestId('gallery-selection-toolbar')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('gallery-selection-toolbar')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('closes only the viewer when a viewer is open', () => {
