@@ -1,7 +1,7 @@
 ---
 id: ENGUI-598
 title: Delete and replace entire Batch Cards batches
-status: In Progress
+status: Done
 created_date: '2026-11-22 19:36'
 labels: [batch, cards, lifecycle]
 ---
@@ -19,3 +19,6 @@ Owner14687: delete existing batches or overwrite them with new JSON; replacement
 
 ## Validation
 34 isolated tests pass, including atomic/stale replacement, preserved settings, full Pick reset, late completion, pre/post-provider-boundary deletion and workspace/revision API checks. Production build succeeds; no type diagnostics in changed files (repository retains pre-existing tsc failures). Additive migration rehearsed against a private online snapshot with row counts, integrity and foreign keys verified. Chromium + WebKit: 64 workflow checks passed, including named confirmations/cancel, invalid/stale/error replacement, full reset/reload, failed-delete retry, switching to another batch and stable last-batch empty state.
+
+## Release
+Commit 8b495a3 pushed under owner identity. Additive nullable deletion marker migrated with online backup; integrity and foreign keys verified. Build ac7T3FpMSgDcuuKnZ7y3h deployed 2026-11-22 19:42 UTC, service active. Root/Batch Cards/mobile smoke routes 200; scoped list/detail API verified directly and through Tailscale HTTPS, missing batch404. No live user batch replaced or deleted during tests. Previous build FDg0pH981SF-1C-MXvXJS and private DB backup retained in engui-runs/engui-598-20261122. Full evidence in workspace runs/engui-598-20261122.
