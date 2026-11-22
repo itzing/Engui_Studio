@@ -1,7 +1,7 @@
 ---
 id: ENGUI-595
 title: Batch Cards JSON import, generation review and Pick export
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-22 18:36'
 labels: [gallery, generation, batch, cards]
@@ -20,7 +20,7 @@ Workspace-persistent batches + dedicated generation tasks, using the existing im
 - [x] One/multiple variant generation and safe per-card replacement.
 - [x] Workspace persistence/isolation, durable tasks, idempotency and stale-result rejection.
 - [x] Isolated service/unit/browser tests; no paid generations.
-- [ ] Additive migration with DB backup, isolated production build, commit/push/deploy and health checks.
+- [x] Additive migration with DB backup, isolated production build, commit/push/deploy and health checks.
 
 ## Rollback
 Retain previous .next and pre-migration SQLite backup in the task run directory. Added tables are compatible with the previous application; prefer reverting the build over overwriting a DB with newer job activity.
@@ -30,3 +30,8 @@ Retain previous .next and pre-migration SQLite backup in the task run directory.
 - 40 browser checks passed (20 Chromium + 20 WebKit), all API writes mocked.
 - Production candidate `Tf3mvqSQ7PWlFuQYvOhgm`; additive migration rehearsed on snapshot, integrity OK, zero foreign-key violations.
 - Existing repository-wide TypeScript diagnostics remain; no diagnostics in changed source or new tests.
+
+## Production verification
+Feature commit `40bbbba` pushed to origin/main. Deployed 2026-11-22 19:06 UTC, build `Tf3mvqSQ7PWlFuQYvOhgm`. Service active; root, new desktop page and existing mobile routes return HTTP 200. New page, transparent icon and scoped read-only API also verified over Tailscale HTTPS. The same 40 mocked browser workflow checks passed on the deployed build. Production batch-task count remains zero (no paid test submissions).
+
+Rollback artifacts: `/home/engui/engui-runs/engui-595-20261122/previous.next` and `database.before-batch-cards.db`. Validation logs/reports: `/var/lib/openclaw/.openclaw/workspace/runs/engui-595-20261122/`. Isolated preview server stopped.
