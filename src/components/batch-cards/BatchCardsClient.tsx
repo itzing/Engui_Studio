@@ -7,7 +7,7 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 import WorkspaceManager from '@/components/workspaces/WorkspaceManager';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { batchImageModels, validateBatchSettings } from '@/lib/batch-cards/settings';
-import { cardIsReady, parseCardRows, type BatchView, type BatchSettings, type TaskView } from '@/lib/batch-cards/types';
+import { cardIsReady, parseCardRows, missingVariantKeys, type BatchView, type BatchSettings, type TaskView } from '@/lib/batch-cards/types';
 import { filterLorasForModel, type LoraFileLike } from '@/lib/lora/modelFilters';
 import styles from './batch-cards.module.css';
 
@@ -124,6 +124,16 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
     const a = document.createElement('a'); a.href = url; a.download = `${batch.title.replace(/[^a-z0-9_-]+/gi, '-').slice(0,100) || 'cards'}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     setNotice('JSON exported with current Picks.');
   }
+  async function exportZip() {
+    if (!batch) return;
+    const response = await fetch(`/api/batch-cards/${batch.id}/zip`, { cache: 'no-store' });
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || 'Could not export picked images.'); }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = `${batch.title.replace(/[^a-z0-9_-]+/gi, '-').slice(0,100) || 'cards'}-picks.zip`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice('ZIP exported with all picked original images.');
+  }
   async function copyName() {
     if (!card) return;
     try { await navigator.clipboard.writeText(card.rows[0].card); }
@@ -140,6 +150,7 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
       <select className={styles.batchSelect} aria-label="Batch" value={id} disabled={busy} onChange={e => setId(e.target.value)}><option value="" disabled>Choose a batch</option>{batches.map(b => <option value={b.id} key={b.id}>{b.title} · {b.cardCount} cards</option>)}</select>
       <button onClick={() => openImport('new')} disabled={busy}><Plus size={16} /> Import JSON</button>
       <button onClick={() => void run(exportJson)} disabled={!batch || busy}><Download size={16} /> Export JSON</button>
+      <button onClick={() => void run(exportZip)} disabled={!batch || busy || !cards.some(card => card.rows.some(row => row.pick))}><Download size={16} /> Export ZIP</button>
       <button onClick={() => void run(openSettings)} disabled={!batch || busy}><Settings size={16} /> Settings</button>
       <div className={styles.workspace}><WorkspaceManager /></div>
     </header>
@@ -168,7 +179,7 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
           <p className={styles.effect}>{card.rows[0].effect}</p>
           <div className={styles.selectionBar}>
             <button onClick={() => setSelected(old => new Set([...old, ...card.rows.filter(r => !active(r.key)).map(r => r.key)]))}>Select this card’s variants</button>
-            <button onClick={() => setSelected(old => new Set([...old, ...visible.flatMap(c => c.rows.filter(r => !c.tasks[r.key]).map(r => r.key))]))}>Select missing in view</button>
+            <button onClick={() => setSelected(old => new Set([...old, ...missingVariantKeys(batch.document)]))}>Select missing in batch</button>
             {!!selected.size && <button onClick={() => setSelected(new Set())}>Clear selection</button>}
             <span>{selected.size ? `${selected.size} selected across cards` : 'Select variants to generate. Pick chooses the final result.'}</span>
             <button className={styles.primary} disabled={busy || !canGenerate.length} onClick={() => void run(() => generate(canGenerate))}><RefreshCw size={16} /> Generate selected{canGenerate.length ? ` (${canGenerate.length})` : ''}</button>

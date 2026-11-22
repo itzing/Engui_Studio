@@ -23,3 +23,11 @@ Chromium and WebKit workflow checks intercept all API requests and external requ
 
 ## Deployment and rollback
 Additive SQL is `prisma/migrations/20261122_batch_cards.sql` (deliberately tracked despite the legacy migrations ignore rule). Rehearse on an online snapshot, verify integrity and foreign keys, then take a fresh online production backup and run in an explicit transaction. Build separately from the live `.next`, retain previous build, promote and restart `engui-studio.service`. A previous build tolerates the extra tables. Roll back the build rather than restoring an old DB over newer job activity.
+
+## Pick ZIP export — ENGUI-596
+- The updated source row accepts an optional `id`, identical across a card's variants and unique across cards (case-insensitive). Allowed: Unicode letters/numbers, underscores, hyphens; maximum 120 characters. Legacy imports without it remain readable; ZIP asks for an id rather than inventing a filename.
+- `Export ZIP` downloads all current Picks in the entire batch, independent of current card, search and readiness/class filters. Files use the source `id` plus the preserved original extension, e.g. `ante_up.png`. JSON export keeps the id and current lowercase pick.
+- GET `/api/batch-cards/:id/zip` uses the existing workspace guard and export activity lease. Only current completed task originals from the workspace-owned preserved folder are accepted, never thumbnails, stale attempts or arbitrary URLs.
+- Validation completes before download. Missing/unfinished Picks, unsafe/duplicate ids or missing originals return actionable errors instead of silently omitting a card. Snapshot copies and a temporary STORE ZIP are built privately, then streamed; temporary files are removed on completion, cancellation or error. No database migration.
+- `Select missing in batch` selects never-generated variants across the whole batch even when the list is filtered; generation selection is distinct from Pick.
+- Archive tests verify real PNG/WebP bytes, CRC and names; API tests cover foreign owners and cleanup on cancellation. Browser tests cover ZIP download while the picked card is hidden, error rendering and whole-batch missing selection.

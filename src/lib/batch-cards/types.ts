@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
+export const cardIdSchema = z.string().min(1).max(120).regex(/^[\p{L}\p{N}_-]+$/u, 'Card id must use letters, numbers, underscores or hyphens.');
+
 export const rowSchema = z.object({
+  id: cardIdSchema.optional(),
   key: z.string().min(1).max(160).refine(key => !Object.prototype.hasOwnProperty.call(Object.prototype, key) && key !== 'prototype', 'Reserved key'), n: z.number().int().positive().max(2147483647),
   card: z.string().min(1).max(300).refine(value => value.trim().length > 0, 'Must not be blank'), class: z.string().min(1).max(100).refine(value => value.trim().length > 0, 'Must not be blank'),
   effect: z.string().max(8000), variant: z.string().min(1).max(40).refine(value => value.trim().length > 0, 'Must not be blank'),
@@ -41,7 +44,14 @@ export function parseCardRows(input: unknown): CardRow[] {
     const group = groups.get(row.n) || [];
     group.push(row); groups.set(row.n, group);
   }
+  const cardIds = new Set<string>();
   for (const [n, rows] of groups) {
+    if (rows.some(row => row.id !== rows[0].id)) throw new Error(`Card ${n} has inconsistent id values.`);
+    if (rows[0].id) {
+      const name = rows[0].id.normalize('NFC').toLowerCase();
+      if (cardIds.has(name)) throw new Error(`Duplicate card id: ${rows[0].id}`);
+      cardIds.add(name);
+    }
     if (rows.length < 3 || rows.length > 5) throw new Error(`Card ${n} needs 3–5 variants (received ${rows.length}).`);
     if (new Set(rows.map(row => row.variant)).size !== rows.length) throw new Error(`Card ${n} has duplicate variant labels.`);
     if (rows.some(row => row.card !== rows[0].card || row.class !== rows[0].class || row.effect !== rows[0].effect)) throw new Error(`Card ${n} has inconsistent name, class or effect.`);
@@ -66,6 +76,7 @@ export function replaceCard(document: BatchDocument, number: number, rows: CardR
   if (!old || rows.some(row => row.n !== number)) throw new Error('Replacement JSON must contain only the selected card number.');
   const otherKeys = new Set(document.cards.filter(card => card.n !== number).flatMap(card => card.rows.map(row => row.key)));
   if (rows.some(row => otherKeys.has(row.key))) throw new Error('A replacement key belongs to another card.');
+  if (rows[0]?.id && document.cards.some(card => card.n !== number && card.rows[0].id?.normalize('NFC').toLowerCase() === rows[0].id!.normalize('NFC').toLowerCase())) throw new Error('This card id belongs to another card.');
   const oldKeys = new Set(old.rows.map(row => row.key));
   const first = document.order.findIndex(key => oldKeys.has(key));
   const order = document.order.filter(key => !oldKeys.has(key));
@@ -75,4 +86,8 @@ export function replaceCard(document: BatchDocument, number: number, rows: CardR
 export function cardIsReady(card: BatchCard, tasks: TaskView[]): boolean {
   const picked = card.rows.find(row => row.pick);
   return !!picked && tasks.some(task => task.id === card.tasks[picked.key] && task.state === 'completed' && !!task.resultUrl);
+}
+
+export function missingVariantKeys(document: BatchDocument): string[] {
+  return document.cards.flatMap(card => card.rows.filter(row => !card.tasks[row.key]).map(row => row.key));
 }
