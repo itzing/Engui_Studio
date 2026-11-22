@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ManagedVideo } from '@/components/media/ManagedVideo';
+import { RecoverableVideo } from '@/components/media/RecoverableVideo';
 import { requestVideoPlayback } from '@/lib/media/videoLifecycle';
 import { currentBrowserWorkspaceId } from '@/lib/workspaces/client';
 import Lightbox from 'yet-another-react-lightbox';
@@ -764,7 +765,7 @@ export function GalleryFullscreenViewer({
                   onTouchEnd={handleMobileGestureEnd}
                   onClick={(event) => { event.stopPropagation(); setVideoControlsItemId(currentItem.id); }}
                 >
-                  <ManagedVideo
+                  <RecoverableVideo
                     data-testid="gallery-fullscreen-video"
                     onElement={(element) => { activeVideoRef.current = element; }}
                     src={currentItem.type === 'video' ? currentItem.url : undefined}

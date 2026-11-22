@@ -4,7 +4,7 @@ import React, { useCallback, useLayoutEffect, useRef } from 'react';
 import { ownVideoElement } from '@/lib/media/videoLifecycle';
 import { createVideoPrefetch } from '@/lib/media/videoPrefetch';
 
-type ManagedVideoProps = Omit<React.VideoHTMLAttributes<HTMLVideoElement>, 'src'> & {
+export type ManagedVideoProps = Omit<React.VideoHTMLAttributes<HTMLVideoElement>, 'src'> & {
   src?: string;
   prefetchUrls?: readonly string[];
   prefetchScope?: string;

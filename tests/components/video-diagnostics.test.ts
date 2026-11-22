@@ -19,3 +19,17 @@ it('bounds local records, excludes URLs and detects stalled progress without res
   vi.advanceTimersByTime(60000); expect(getVideoDiagnostics()).toHaveLength(length);
   delete (document as unknown as { visibilityState?: string }).visibilityState;
 });
+
+it('observes available audio-session state without setting its policy and removes its listener on dispose', () => {
+  const session = Object.assign(new EventTarget(), { state: 'inactive', type: 'auto' });
+  Object.defineProperty(navigator, 'audioSession', { configurable: true, value: session });
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true;
+  const observer = observeVideoDiagnostics(video);
+  session.state = 'interrupted'; session.dispatchEvent(new Event('statechange'));
+  const entry = getVideoDiagnostics().at(-1)!;
+  expect(entry.event).toBe('audio-session-state'); expect(entry.audioSessionState).toBe('interrupted');
+  expect(entry.audioSessionType).toBe('auto'); expect(entry.muted).toBe(true); expect(entry.inline).toBe(true);
+  observer.dispose(); const length = getVideoDiagnostics().length;
+  session.dispatchEvent(new Event('statechange')); expect(getVideoDiagnostics()).toHaveLength(length);
+  delete (navigator as unknown as { audioSession?: unknown }).audioSession;
+});

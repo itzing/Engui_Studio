@@ -1,5 +1,7 @@
 import { observeVideoDiagnostics } from './videoDiagnostics';
 
+export const VIDEO_PLAYBACK_REJECTED_EVENT = 'engui:video-play-rejected';
+
 type VideoOptions = { src?: string; autoPlay?: boolean };
 
 type VideoLifecycle = {
@@ -57,9 +59,15 @@ export function ownVideoElement(video: HTMLVideoElement): VideoLifecycle {
     if (pendingPlay) return pendingPlay;
     const version = generation;
     diagnostics.record('play-request');
+    const rejected = (error: unknown) => {
+      if (version === generation && allowed()) {
+        diagnostics.playRejected(error);
+        video.dispatchEvent(new Event(VIDEO_PLAYBACK_REJECTED_EVENT));
+      }
+    };
     let result: Promise<void>;
-    try { result = Promise.resolve(video.play()); } catch (error) { return Promise.reject(error); }
-    const pending = result.then(() => {
+    try { result = Promise.resolve(video.play()); } catch (error) { rejected(error); return Promise.reject(error); }
+    const pending = result.catch((error) => { rejected(error); throw error; }).then(() => {
       if (version !== generation && (disposed || suspended)) releaseVideoSource(video);
     }).finally(() => {
       if (pendingPlay === pending) pendingPlay = null;
