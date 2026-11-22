@@ -1,7 +1,7 @@
 ---
 id: ENGUI-599
 title: Recover stalled mobile Gallery and Jobs video without leaving the viewer
-status: In Progress
+status: Done
 created_date: '2026-11-22 20:23'
 labels: [mobile, video, ios, recovery]
 ---
@@ -18,3 +18,6 @@ Owner14705 approved recovery after read-only Showdown investigation. Keep the ex
 
 ## Validation before release
 72 targeted tests pass (32 lifecycle/cache/diagnostics/recovery + 40 fullscreen/carousel regressions). Isolated production build c75JRcdCDsomyd2PrTFK0 passes. Candidate browser verification: Chromium26 including real Showdown playback and same-player manual recovery; Linux WebKit10 UI/lifecycle assertions (H264 decoding unavailable there). No attempted server writes or page exceptions. Existing repository TypeScript debt, including unchanged ZoomRef import, remains; additions have no new type diagnostics. See docs/mobile-video-recovery.md.
+
+## Release
+Feature 1e9a2c0 pushed under owner identity. Build c75JRcdCDsomyd2PrTFK0 deployed 2026-11-22 20:35 UTC; engui-studio.service active, direct and Tailscale Gallery/Jobs routes HTTP200. Deployed Chromium26 and WebKit10 checks also pass, with zero page errors or attempted server writes. Candidate and live each pass 36 assertions. Previous build ac7T3FpMSgDcuuKnZ7y3h retained with rollback.py. Isolated preview stopped. No database migration, media rewrite or live generation was performed. Physical iPhone + background YouTube acceptance remains to be checked by owner; not claimed resolved.

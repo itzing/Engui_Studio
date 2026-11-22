@@ -19,3 +19,6 @@ Full repository TypeScript still reports existing errors, including the unchange
 
 ## Release / rollback
 Frontend-only; no database migration, model/provider changes or media rewriting. Build candidate in an isolated staging directory with background services disabled, validate, commit/push under the repository owner's identity, preserve the currently serving `.next`, promote candidate and restart `engui-studio.service`. Roll back by restoring the retained build and restarting, then revert the feature commit if needed. Logs and builds: `/home/engui/engui-runs/engui-599-20261122`; browser evidence: workspace `runs/engui-599-20261122`.
+
+## Deployed verification
+Feature commit `1e9a2c0`, deployed build `c75JRcdCDsomyd2PrTFK0` at 20:35 UTC on 2026-11-22. The same Chromium26/WebKit10 assertions pass against the deployed Tailscale frontend; no page exceptions or attempted server writes. Gallery and Jobs routes return HTTP200 locally and over HTTPS. Previous build `ac7T3FpMSgDcuuKnZ7y3h` retained for rollback; isolated candidate preview stopped after validation.
