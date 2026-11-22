@@ -10,4 +10,6 @@ export async function register() {
   startWorkspaceDeletionWorker();
   const { startMcpWorker } = await import('@/lib/mcp/worker');
   startMcpWorker();
+  const { startCardBatchWorker } = await import('@/lib/batch-cards/worker');
+  startCardBatchWorker();
 }

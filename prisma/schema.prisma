@@ -135,6 +135,8 @@ model Workspace {
   isProtected           Boolean                @default(false)
   lifecycle             String                 @default("active")
   revision              Int                    @default(0)
+  cardBatches           CardBatch[]
+  cardBatchTasks        CardBatchTask[]
   mcpCredentials        McpCredential[]
   mcpPlans              McpGenerationPlan[]
   mcpBatches            McpGenerationBatch[]
@@ -1327,4 +1329,48 @@ model McpRateLimit {
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   @@index([workspaceId, window])
   @@map("mcp_rate_limits")
+}
+
+
+model CardBatch {
+  id           String @id @default(uuid())
+  workspaceId  String
+  title        String
+  revision     Int @default(0)
+  documentJson String
+  settingsJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks        CardBatchTask[]
+  @@unique([id, workspaceId])
+  @@index([workspaceId, updatedAt])
+  @@map("card_batches")
+}
+
+model CardBatchTask {
+  id            String @id @default(uuid())
+  workspaceId   String
+  batchId       String
+  cardNumber    Int
+  cardRevision  Int
+  variantKey    String
+  requestKey    String
+  jobId         String @unique
+  snapshotJson  String
+  state         String @default("queued")
+  dispatchToken String?
+  leaseUntil    DateTime?
+  boundaryAt    DateTime?
+  providerJobId String?
+  resultUrl String?
+  thumbnailUrl String?
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch         CardBatch @relation(fields: [batchId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@unique([batchId, requestKey, variantKey])
+  @@index([workspaceId, state, createdAt])
+  @@map("card_batch_tasks")
 }

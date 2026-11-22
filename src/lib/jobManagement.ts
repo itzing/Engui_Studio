@@ -261,6 +261,8 @@ export async function deleteFinishedJob(job: any) {
   if (mcp && (!['succeeded', 'failed', 'cancelled'].includes(mcp.state) || (mcp.state === 'succeeded' && !mcp.assetId))) {
     throw new Error('Cannot delete MCP job before acceptance reconciliation and original preservation finish');
   }
+  const cardTask = await prisma.cardBatchTask.findFirst({ where: { jobId: job.id } });
+  if (cardTask && (['submitting', 'submission_unknown'].includes(cardTask.state) || (status === 'completed' && !cardTask.resultUrl))) throw new Error('Wait until Batch Cards result preservation finishes before deleting this job.');
   await assertStudioSessionJobDeletionAllowed(job);
 
   const cleanup = await cleanupJobArtifacts(job);

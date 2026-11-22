@@ -219,6 +219,7 @@ export default function LeftPanel({ mobile = false }: { mobile?: boolean }) {
                                     <RectangleStackIcon className="w-4 h-4" />
                                     Studio
                                 </button>
+                                {!mobile && <button type="button" onClick={() => router.push('/batch-cards')} className="flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"><RectangleStackIcon className="w-4 h-4" />Batch Cards</button>}
                             </>
                         )}
                     </div>

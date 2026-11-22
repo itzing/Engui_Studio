@@ -750,6 +750,18 @@
         "type": "PromptWildcard",
         "list": true,
         "optional": false
+      },
+      {
+        "name": "cardBatches",
+        "type": "CardBatch",
+        "list": true,
+        "optional": false
+      },
+      {
+        "name": "cardBatchTasks",
+        "type": "CardBatchTask",
+        "list": true,
+        "optional": false
       }
     ],
     "relations": [],
@@ -6218,6 +6230,234 @@
         "field": "workspace",
         "model": "Workspace",
         "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "CardBatch": {
+    "table": "card_batches",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "revision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "documentJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "settingsJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "tasks",
+        "type": "CardBatchTask",
+        "list": true,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      }
+    ]
+  },
+  "CardBatchTask": {
+    "table": "card_batch_tasks",
+    "owned": true,
+    "parent": null,
+    "operational": false,
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspaceId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "batchId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "cardNumber",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "cardRevision",
+        "type": "Int",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "variantKey",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "requestKey",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "jobId",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "snapshotJson",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "dispatchToken",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "leaseUntil",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "boundaryAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "providerJobId",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "resultUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "thumbnailUrl",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "error",
+        "type": "String",
+        "list": false,
+        "optional": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "workspace",
+        "type": "Workspace",
+        "list": false,
+        "optional": false
+      },
+      {
+        "name": "batch",
+        "type": "CardBatch",
+        "list": false,
+        "optional": false
+      }
+    ],
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "fields": [
+          "workspaceId"
+        ]
+      },
+      {
+        "field": "batch",
+        "model": "CardBatch",
+        "fields": [
+          "batchId",
           "workspaceId"
         ]
       }
