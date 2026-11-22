@@ -7,7 +7,7 @@ import { activeTaskStates, defaultBatchSettings, documentFromRows, exportCardRow
 
 export const decodeDocument = (value: string): BatchDocument => JSON.parse(value);
 export async function readBatch(id: string): Promise<BatchView> {
-  const row = await prisma.cardBatch.findFirst({ where: { id } });
+  const row = await prisma.cardBatch.findFirst({ where: { id, deletedAt: null } });
   if (!row) throw new WorkspaceError('Batch not found.', 404);
   const document = decodeDocument(row.documentJson);
   const ids = document.cards.flatMap(card => Object.values(card.tasks));
@@ -22,7 +22,7 @@ export async function readBatch(id: string): Promise<BatchView> {
   }) };
 }
 export async function listBatches() {
-  const rows = await prisma.cardBatch.findMany({ orderBy: { updatedAt: 'desc' }, select: { id: true, title: true, updatedAt: true, documentJson: true } });
+  const rows = await prisma.cardBatch.findMany({ where: { deletedAt: null }, orderBy: { updatedAt: 'desc' }, select: { id: true, title: true, updatedAt: true, documentJson: true } });
   return rows.map(row => ({ id: row.id, title: row.title, updatedAt: row.updatedAt, cardCount: decodeDocument(row.documentJson).cards.length }));
 }
 export async function createBatch(title: string, input: unknown) {
@@ -32,7 +32,7 @@ export async function createBatch(title: string, input: unknown) {
   return readBatch(row.id);
 }
 async function editable(tx: any, id: string, revision: number) {
-  const batch = await tx.cardBatch.findFirst({ where: { id } });
+  const batch = await tx.cardBatch.findFirst({ where: { id, deletedAt: null } });
   if (!batch) throw new WorkspaceError('Batch not found.', 404);
   if (batch.revision !== revision) throw new WorkspaceError('This batch changed in another tab. Refresh and try again.', 409);
   return batch;
@@ -41,15 +41,35 @@ async function saveDocument(tx: any, id: string, revision: number, document: Bat
   const changed = await tx.cardBatch.updateMany({ where: { id, revision }, data: { ...extra, documentJson: JSON.stringify(document), revision: { increment: 1 } } });
   if (changed.count !== 1) throw new WorkspaceError('This batch changed. Refresh and try again.', 409);
 }
+async function cancelUnsubmittedTasks(tx: any, batchId: string, reason: string, cardNumber?: number) {
+  const where = { batchId, ...(cardNumber === undefined ? {} : { cardNumber }), OR: [{ state: 'queued' }, { state: 'submitting', boundaryAt: null, providerJobId: null }] };
+  const tasks = await tx.cardBatchTask.findMany({ where, select: { jobId: true } });
+  await tx.cardBatchTask.updateMany({ where, data: { state: 'cancelled', error: reason, dispatchToken: null, leaseUntil: null } });
+  if (tasks.length) await tx.job.updateMany({ where: { id: { in: tasks.map((t: { jobId: string }) => t.jobId) }, runpodJobId: null, status: { in: ['queueing_up', 'queued'] } }, data: { status: 'failed', error: 'cancelled' } });
+}
+export async function deleteBatch(id: string, revision: number) {
+  await prisma.$transaction(async tx => {
+    await editable(tx, id, revision);
+    await cancelUnsubmittedTasks(tx, id, 'Batch was deleted.');
+    const changed = await tx.cardBatch.updateMany({ where: { id, revision, deletedAt: null }, data: { deletedAt: new Date(), revision: { increment: 1 } } });
+    if (changed.count !== 1) throw new WorkspaceError('This batch changed. Refresh and try again.', 409);
+  });
+  return { deletedBatchId: id };
+}
 export async function updateBatch(id: string, revision: number, action: { kind: string; cardNumber?: number; key?: string; rows?: unknown; settings?: unknown }) {
-  const rows = action.kind === 'replace' ? parseCardRows(action.rows) : null;
+  const rows = ['replace', 'replace_batch'].includes(action.kind) ? parseCardRows(action.rows) : null;
   const settings = action.kind === 'settings' ? validateBatchSettings(action.settings) : null;
   await prisma.$transaction(async tx => {
     const batch = await editable(tx, id, revision);
     let document = decodeDocument(batch.documentJson);
-    if (action.kind === 'replace' && rows && action.cardNumber !== undefined) {
+    if (action.kind === 'replace_batch' && rows) {
+      const revision = Math.max(batch.revision, ...document.cards.map(card => card.revision)) + 1;
+      document = documentFromRows(rows.map(row => ({ ...row, pick: false })));
+      for (const card of document.cards) card.revision = revision;
+      await cancelUnsubmittedTasks(tx, id, 'Batch JSON was replaced.');
+    } else if (action.kind === 'replace' && rows && action.cardNumber !== undefined) {
       document = replaceCard(document, action.cardNumber, rows);
-      await tx.cardBatchTask.updateMany({ where: { batchId: id, cardNumber: action.cardNumber, state: 'queued' }, data: { state: 'cancelled', error: 'Card JSON was replaced.' } });
+      await cancelUnsubmittedTasks(tx, id, 'Card JSON was replaced.', action.cardNumber);
     } else if (action.kind === 'pick') {
       const card = document.cards.find(card => card.n === action.cardNumber);
       const row = card?.rows.find(row => row.key === action.key);

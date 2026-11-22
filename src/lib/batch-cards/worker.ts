@@ -78,7 +78,7 @@ async function dispatch(t: NonNullable<Awaited<ReturnType<typeof claim>>>) {
         prompt: snap.prompt, metadata: { kind: 'card_batch', batchId: t.batchId, taskId: t.id, cardNumber: t.cardNumber, cardRevision: t.cardRevision, variantKey: t.variantKey },
         beforeProviderSubmit: async evidence => {
           await prisma.$transaction(async tx => {
-            const b = await tx.cardBatch.findFirst({ where: { id: t.batchId } });
+            const b = await tx.cardBatch.findFirst({ where: { id: t.batchId, deletedAt: null } });
             const card = b && decodeDocument(b.documentJson).cards.find(c => c.n === t.cardNumber);
             if (!card || card.revision !== t.cardRevision || card.tasks[t.variantKey] !== t.id) throw Error('Card was replaced before dispatch.');
             const changed = await tx.cardBatchTask.updateMany({ where: { id: t.id, state: 'submitting', dispatchToken: t.dispatchToken, boundaryAt: null, leaseUntil: { gt: new Date() } }, data: { boundaryAt: new Date(), leaseUntil: new Date(Date.now() + 180000) } });
@@ -102,6 +102,7 @@ async function dispatch(t: NonNullable<Awaited<ReturnType<typeof claim>>>) {
   } catch (error: any) {
     const current = await prisma.cardBatchTask.findFirst({ where: { id: t.id } });
     if (!current || current.providerJobId) return; // Accepted requests are reconciled, never resubmitted.
+    if (current.state === 'cancelled') { await prisma.job.updateMany({ where: { id: t.jobId, runpodJobId: null }, data: { status: 'failed', error: 'cancelled' } }); return; }
     const unknown = !!current.boundaryAt && error?.code !== 'PROVIDER_REJECTED';
     const state = unknown ? 'submission_unknown' : 'failed';
     const message = unknown ? 'Submission acceptance unknown. Check the provider before retrying.' : 'Generation could not start. Check model settings and selected LoRAs, then regenerate.';

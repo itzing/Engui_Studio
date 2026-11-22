@@ -1337,6 +1337,7 @@ model CardBatch {
   workspaceId  String
   title        String
   revision     Int @default(0)
+  deletedAt    DateTime?
   documentJson String
   settingsJson String
   createdAt    DateTime @default(now())

@@ -32,7 +32,9 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [replaceNumber, setReplaceNumber] = useState<number | null>(null);
-  const [importMode, setImportMode] = useState<'new' | 'replace' | null>(null), [json, setJson] = useState(''), [title, setTitle] = useState('');
+  const [importMode, setImportMode] = useState<'new' | 'replace' | 'overwrite' | null>(null), [json, setJson] = useState(''), [title, setTitle] = useState('');
+  const [importTarget, setImportTarget] = useState<{ id: string; title: string; revision: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; revision: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false), [settings, setSettings] = useState<BatchSettings | null>(null);
   const [loras, setLoras] = useState<(LoraFileLike & { id: string; lifecycle?: string })[]>([]);
   const [viewer, setViewer] = useState<{ url: string; title: string } | null>(null);
@@ -41,7 +43,7 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
   const request = useCallback(async (path: string, options?: RequestInit) => {
     const response = await fetch(path, { cache: 'no-store', ...options });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Could not complete this action.');
+    if (!response.ok) throw Object.assign(new Error(data.error || 'Could not complete this action.'), { status: response.status });
     return data;
   }, [fetch]);
   const accept = useCallback((view: BatchView) => {
@@ -59,14 +61,14 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
   }, [request, workspaceId]);
   useEffect(() => { mounted.current = true; void loadList().catch(e => setError(e.message)); return () => { mounted.current = false; }; }, [loadList]);
   useEffect(() => {
-    setBatch(null); setSelected(new Set()); setCardNumber(null); setError(''); setSearch(''); setClassFilter('all'); setFilter('all');
+    setBatch(null); setSelected(new Set()); setCardNumber(null); setImportMode(null); setDeleteTarget(null); setViewer(null); setError(''); setSearch(''); setClassFilter('all'); setFilter('all');
     if (!id) return;
     localStorage.setItem(`engui.batch-cards.${workspaceId}`, id);
     let stopped = false;
-    const refresh = async () => { if (lock.current || stopped) return; try { const view = await request(`/api/batch-cards/${id}`); if (!stopped && !lock.current) accept(view); } catch (e) { if (!stopped) setError((e as Error).message); } };
+    const refresh = async () => { if (lock.current || stopped) return; try { const view = await request(`/api/batch-cards/${id}`); if (!stopped && !lock.current) accept(view); } catch (e) { if (!stopped) { if ((e as Error & { status?: number }).status === 404 && currentId.current === id) { currentId.current = ''; setId(''); localStorage.removeItem(`engui.batch-cards.${workspaceId}`); void loadList().catch(e => setError(e.message)); } else setError((e as Error).message); } } };
     void refresh(); const timer = setInterval(() => void refresh(), 3000);
     return () => { stopped = true; clearInterval(timer); };
-  }, [id, request, accept, workspaceId]);
+  }, [id, request, accept, workspaceId, loadList]);
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 4000); return () => clearTimeout(timer); }, [notice]);
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
@@ -97,25 +99,34 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
   function changeCard(delta: number) { const next = visible[index + delta]; if (next) setCardNumber(next.n); }
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => {
-      if (importMode || settingsOpen || viewer || (e.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]')) return;
+      if (importMode || deleteTarget || settingsOpen || viewer || (e.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]')) return;
       if (e.key === 'ArrowLeft' && index > 0) { e.preventDefault(); setCardNumber(visible[index - 1].n); }
       if (e.key === 'ArrowRight' && index < visible.length - 1) { e.preventDefault(); setCardNumber(visible[index + 1].n); }
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
-  }, [index, visible, importMode, settingsOpen, viewer]);
+  }, [index, visible, importMode, deleteTarget, settingsOpen, viewer]);
   function toggle(key: string) { setSelected(old => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; }); }
   async function generate(keys: string[]) {
     await mutate({ kind: 'generate', keys, requestKey: crypto.randomUUID() });
     setSelected(old => new Set([...old].filter(key => !keys.includes(key))));
     setNotice(`${keys.length} variant${keys.length === 1 ? '' : 's'} added to the queue.`);
   }
-  function openImport(mode: 'new' | 'replace') { setJson(''); setTitle(''); setError(''); setReplaceNumber(mode === 'replace' ? card?.n ?? null : null); setImportMode(mode); }
+  function openImport(mode: 'new' | 'replace' | 'overwrite') { setJson(''); setTitle(''); setError(''); setImportTarget(batch ? { id: batch.id, title: batch.title, revision: batch.revision } : null); setReplaceNumber(mode === 'replace' ? card?.n ?? null : null); setImportMode(mode); }
   const importPreview = useMemo(() => { if (!json.trim()) return null; try { const rows = parseCardRows(json); if (importMode === 'replace' && (replaceNumber === null || rows.some(r => r.n !== replaceNumber))) throw Error('Paste only variants for this card number.'); return { rows, text: `${new Set(rows.map(r => r.n)).size} cards · ${rows.length} variants`, error: '' }; } catch (e) { return { rows: null, text: '', error: (e as Error).message }; } }, [json, importMode, replaceNumber]);
   async function importJson() {
     if (!importPreview?.rows) return;
-    if (importMode === 'replace' && replaceNumber !== null) { const replaced = cards.find(c => c.n === replaceNumber); await mutate({ kind: 'replace', cardNumber: replaceNumber, rows: importPreview.rows }); setSelected(old => new Set([...old].filter(k => !replaced?.rows.some(r => r.key === k)))); setNotice('Card replaced. Previous results and Pick are no longer current.'); }
+    if (importMode === 'overwrite' && importTarget) {
+      const result = await request(`/api/batch-cards/${importTarget.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'replace_batch', revision: importTarget.revision, rows: importPreview.rows }) });
+      accept(result); setSelected(new Set()); setCardNumber(null); setFilter('all'); setSearch(''); setClassFilter('all'); setViewer(null); await loadList(); setNotice('Batch replaced. All previous results and Picks have been reset.');
+    } else if (importMode === 'replace' && replaceNumber !== null) { const replaced = cards.find(c => c.n === replaceNumber); await mutate({ kind: 'replace', cardNumber: replaceNumber, rows: importPreview.rows }); setSelected(old => new Set([...old].filter(k => !replaced?.rows.some(r => r.key === k)))); setNotice('Card replaced. Previous results and Pick are no longer current.'); }
     else { const result = await request('/api/batch-cards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: title.trim(), rows: importPreview.rows }) }); setId(result.id); await loadList(); setNotice('Batch imported. Choose variants to generate.'); }
     setImportMode(null);
+  }
+  async function removeBatch() {
+    if (!deleteTarget) return;
+    await request(`/api/batch-cards/${deleteTarget.id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revision: deleteTarget.revision }) });
+    currentId.current = ''; currentBatch.current = null; setId(''); setBatch(null); setSelected(new Set()); setViewer(null); setDeleteTarget(null);
+    localStorage.removeItem(`engui.batch-cards.${workspaceId}`); await loadList(); setNotice('Batch deleted. Existing jobs remain in history.');
   }
   async function exportJson() {
     if (!batch) return;
@@ -169,6 +180,7 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
           </button>;
         })}</nav>
         {batch && !visible.length && <p className={styles.hint}>No cards match these filters.</p>}
+        {batch && <div className={styles.batchActions}><button disabled={busy} onClick={() => openImport('overwrite')}>Replace batch JSON</button><button className={styles.danger} disabled={busy} onClick={() => { setError(''); setDeleteTarget({ id: batch.id, title: batch.title, revision: batch.revision }); }}>Delete batch</button></div>}
       </aside>
       <section className={styles.content}>
         {!batch ? <div className={styles.empty}><Images size={48} /><h2>{id ? 'Loading batch…' : 'Your card collection starts here'}</h2><p>Import a JSON array with 3–5 prompt variants per card.<br />Nothing is generated until you choose to start.</p>{!id && <button className={styles.primary} onClick={() => openImport('new')}>Import JSON</button>}</div> : !card ? <div className={styles.empty}><h2>No matching cards</h2><button onClick={() => { setFilter('all'); setSearch(''); setClassFilter('all'); }}>Clear filters</button></div> : <>
@@ -200,12 +212,13 @@ function BatchWorkspace({ workspaceId }: { workspaceId: string }) {
         </>}
       </section>
     </div>
-    <Dialog open={!!importMode} onOpenChange={open => { if (!open && !busy) setImportMode(null); }}><DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{importMode === 'replace' ? `Replace ${cards.find(c => c.n === replaceNumber)?.rows[0].card}` : 'Import card batch'}</DialogTitle><DialogDescription>{importMode === 'replace' ? 'Paste variants for this card only. Its current results and Pick will be reset; other cards stay unchanged. Old jobs remain in history.' : 'Paste the complete JSON array. Original fields are preserved on export. Importing does not start generation.'}</DialogDescription></DialogHeader>
+    <Dialog open={!!importMode} onOpenChange={open => { if (!open && !busy) setImportMode(null); }}><DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{importMode === 'overwrite' ? `Replace batch “${importTarget?.title}”` : importMode === 'replace' ? `Replace ${cards.find(c => c.n === replaceNumber)?.rows[0].card}` : 'Import card batch'}</DialogTitle><DialogDescription>{importMode === 'overwrite' ? 'Replace every card with this JSON. All current results and Picks will be reset, even if the JSON contains Picks. The batch name and generation settings stay unchanged. Unsent tasks are cancelled; submitted jobs remain in history.' : importMode === 'replace' ? 'Paste variants for this card only. Its current results and Pick will be reset; other cards stay unchanged. Old jobs remain in history.' : 'Paste the complete JSON array. Original fields are preserved on export. Importing does not start generation.'}</DialogDescription></DialogHeader>
       <div className={styles.modalForm}>{importMode === 'new' && <label>Batch name<input autoFocus aria-label="Batch name" value={title} maxLength={160} onChange={e => setTitle(e.target.value)} placeholder="My card collection" /></label>}
       <label>Card JSON<textarea aria-label="Card JSON" value={json} onChange={e => setJson(e.target.value)} placeholder='[{"key":"ante_up-A", "n":1, …}]' rows={13} spellCheck={false} /></label>
       {importPreview && <p role={importPreview.error ? 'alert' : 'status'} className={importPreview.error ? styles.taskError : styles.hint}>{importPreview.error || importPreview.text}</p>}{error && <p role="alert" className={styles.taskError}>{error}</p>}
-      <div className={styles.actions}><button disabled={busy} onClick={() => setImportMode(null)}>Cancel</button><button className={styles.primary} disabled={busy || !importPreview?.rows || (importMode === 'new' && !title.trim())} onClick={() => void run(importJson)}>{importMode === 'replace' ? 'Replace and reset card' : 'Import batch'}</button></div></div>
+      <div className={styles.actions}><button disabled={busy} onClick={() => setImportMode(null)}>Cancel</button><button className={styles.primary} disabled={busy || !importPreview?.rows || (importMode === 'new' && !title.trim())} onClick={() => void run(importJson)}>{importMode === 'overwrite' ? 'Replace and reset batch' : importMode === 'replace' ? 'Replace and reset card' : 'Import batch'}</button></div></div>
     </DialogContent></Dialog>
+    <Dialog open={!!deleteTarget} onOpenChange={open => { if (!open && !busy) setDeleteTarget(null); }}><DialogContent><DialogHeader><DialogTitle>Delete batch “{deleteTarget?.title}”?</DialogTitle><DialogDescription>Remove this batch and its Picks from Batch Cards. Unsent tasks will be cancelled. Existing jobs and generated files remain in history; they cannot bring this batch back.</DialogDescription></DialogHeader><div className={styles.modalForm}>{error && <p role="alert" className={styles.taskError}>{error}</p>}<div className={styles.actions}><button disabled={busy} onClick={() => setDeleteTarget(null)}>Cancel</button><button className={styles.danger} disabled={busy} onClick={() => void run(removeBatch)}>Delete batch</button></div></div></DialogContent></Dialog>
     <Dialog open={settingsOpen} onOpenChange={open => { if (!busy) setSettingsOpen(open); }}><DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Batch generation settings</DialogTitle><DialogDescription>Used for new attempts in this batch. Existing and queued results keep their original settings.</DialogDescription></DialogHeader>{settings && <div className={styles.modalForm}>
       <label>Model<select aria-label="Generation model" value={settings.modelId} onChange={e => { const m = models.find(m => m.id === e.target.value)!; setSettings({ ...settings, modelId: m.id, parameters: {}, loras: [] }); }}>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
       <div className={styles.parameterGrid}>{parameters.map(p => <label key={p.name}>{p.label}{p.type === 'select' ? <select aria-label={p.label} value={String(settings.parameters[p.name] ?? p.default ?? '')} onChange={e => setSettings({ ...settings, parameters: { ...settings.parameters, [p.name]: e.target.value } })}>{p.options?.map(o => <option key={o}>{o}</option>)}</select> : p.type === 'boolean' ? <input type="checkbox" checked={Boolean(settings.parameters[p.name] ?? p.default)} onChange={e => setSettings({ ...settings, parameters: { ...settings.parameters, [p.name]: e.target.checked } })} /> : <input aria-label={p.label} type={p.type === 'number' ? 'number' : 'text'} min={p.min} max={p.max} step={p.validation?.multipleOf || p.step || 'any'} value={String(settings.parameters[p.name] ?? p.default ?? '')} onChange={e => setSettings({ ...settings, parameters: { ...settings.parameters, [p.name]: p.type === 'number' ? Number(e.target.value) : e.target.value } })} />}</label>)}</div>
