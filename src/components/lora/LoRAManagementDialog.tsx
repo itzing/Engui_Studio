@@ -54,6 +54,15 @@ interface LoRAPair {
   isComplete: boolean;
 }
 
+type LoraUploadContext = {
+  aborted: boolean;
+  requests: Set<XMLHttpRequest>;
+  volume?: string;
+  key?: string;
+  uploadId?: string;
+  cleanup?: Promise<void>;
+};
+
 type UploadStatus = 'idle' | 'initializing' | 'uploading' | 'completing' | 'failed';
 type LoraTargetFilter = 'all' | 'image' | 'video';
 type LoraBaseModelFilter = 'all' | LoraBaseModel;
@@ -122,13 +131,19 @@ export function LoRAManagementDialog({
   const [loraNameSort, setLoraNameSort] = useState<LoraNameSort>('asc');
   const [uploadBaseModel, setUploadBaseModel] = useState<LoraBaseModel>('z-image');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeUploadRef = useRef<{
-    aborted: boolean;
-    requests: Set<XMLHttpRequest>;
-    volume?: string;
-    key?: string;
-    uploadId?: string;
-  } | null>(null);
+  const activeUploadRef = useRef<LoraUploadContext | null>(null);
+  const uploadQueueRef = useRef(0);
+  const [pendingUploadRevision, setPendingUploadRevision] = useState(0);
+
+  useEffect(() => () => {
+    uploadQueueRef.current += 1;
+    const current = activeUploadRef.current;
+    activeUploadRef.current = null;
+    if (current) {
+      current.aborted = true;
+      for (const request of current.requests) request.abort();
+    }
+  }, []);
 
   async function toggleSharing(lora: LoRAFile) {
     setError(null);
@@ -249,11 +264,12 @@ export function LoRAManagementDialog({
     }
   }, [error]);
 
-  async function postJson<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  async function postJson<T>(url: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const data = await response.json().catch(() => ({}));
 
@@ -264,23 +280,20 @@ export function LoRAManagementDialog({
     return data as T;
   }
 
-  async function abortActiveUpload(uploadContext: NonNullable<typeof activeUploadRef.current>) {
+  function abortActiveUpload(uploadContext: LoraUploadContext) {
     uploadContext.aborted = true;
-    for (const request of uploadContext.requests) {
-      request.abort();
-    }
+    for (const request of uploadContext.requests) request.abort();
 
     if (uploadContext.volume && uploadContext.key && uploadContext.uploadId) {
-      try {
-        await postJson('/api/lora/multipart/abort', {
-          volume: uploadContext.volume,
-          key: uploadContext.key,
-          uploadId: uploadContext.uploadId,
-        });
-      } catch {
-        // Best-effort cleanup only. Keep the original upload failure visible.
-      }
+      uploadContext.cleanup ??= postJson('/api/lora/multipart/abort', {
+        volume: uploadContext.volume,
+        key: uploadContext.key,
+        uploadId: uploadContext.uploadId,
+      }, 15_000).then(() => undefined).catch(() => {
+        // Failed cleanup stays in Pending server uploads; never hide the original error.
+      }).finally(() => setPendingUploadRevision(value => value + 1));
     }
+    return uploadContext.cleanup || Promise.resolve();
   }
 
   function uploadPartWithProgress(input: {
@@ -289,7 +302,7 @@ export function LoRAManagementDialog({
     partNumber: number;
     partProgress: number[];
     totalBytes: number;
-    uploadContext: NonNullable<typeof activeUploadRef.current>;
+    uploadContext: LoraUploadContext;
   }): Promise<MultipartUploadPart> {
     return new Promise((resolve, reject) => {
       if (input.uploadContext.aborted) {
@@ -299,60 +312,93 @@ export function LoRAManagementDialog({
 
       const xhr = new XMLHttpRequest();
       input.uploadContext.requests.add(xhr);
-
+      let settled = false;
+      let loaded = 0;
+      let waitingForResponse = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const cleanup = () => {
+        settled = true;
+        clearTimeout(timer);
+        input.uploadContext.requests.delete(xhr);
+        xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
+        xhr.upload.onprogress = xhr.upload.onload = null;
+      };
+      const fail = (error: Error) => {
+        if (settled) return;
+        cleanup();
+        reject(error);
+      };
+      const armDeadline = (ms: number) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (settled) return;
+          fail(new Error(`Part ${input.partNumber} upload timed out. Retrying this part.`));
+          xhr.abort();
+        }, ms);
+      };
+      const waitForResponse = () => {
+        if (settled || waitingForResponse) return;
+        waitingForResponse = true;
+        armDeadline(120_000);
+      };
       xhr.upload.onprogress = (event) => {
+        if (settled) return;
+        if (event.loaded > loaded) {
+          loaded = event.loaded;
+          if (!waitingForResponse) armDeadline(60_000);
+        }
+        if (event.lengthComputable && event.loaded >= event.total) waitForResponse();
         if (!event.lengthComputable) return;
-        input.partProgress[input.partNumber - 1] = event.loaded;
+        input.partProgress[input.partNumber - 1] = Math.min(event.loaded, input.blob.size);
         const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
         setUploadUploadedBytes(uploadedBytes);
         setUploadProgress(Math.min(100, Math.round((uploadedBytes / input.totalBytes) * 100)));
       };
-
+      xhr.upload.onload = waitForResponse;
       xhr.onload = () => {
-        input.uploadContext.requests.delete(xhr);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const responseBody = (() => {
-            try {
-              return xhr.responseText ? JSON.parse(xhr.responseText) as { eTag?: string | null } : {};
-            } catch {
-              return {};
-            }
-          })();
-          input.partProgress[input.partNumber - 1] = input.blob.size;
-          const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
-          setUploadUploadedBytes(uploadedBytes);
-          setUploadProgress(Math.min(100, Math.round((uploadedBytes / input.totalBytes) * 100)));
-          resolve({
-            partNumber: input.partNumber,
-            eTag: responseBody.eTag || xhr.getResponseHeader('ETag'),
-          });
+        if (settled) return;
+        if (xhr.status < 200 || xhr.status >= 300) {
+          fail(new Error(`Part ${input.partNumber} upload failed with HTTP ${xhr.status}.`));
           return;
         }
-        reject(new Error(`Part ${input.partNumber} upload failed with HTTP ${xhr.status}.`));
+        const responseBody = (() => {
+          try {
+            return xhr.responseText ? JSON.parse(xhr.responseText) as { eTag?: string | null } : {};
+          } catch { return {}; }
+        })();
+        const eTag = responseBody.eTag || xhr.getResponseHeader('ETag');
+        if (!eTag) {
+          fail(new Error(`Part ${input.partNumber} was not acknowledged by storage.`));
+          return;
+        }
+        cleanup();
+        input.partProgress[input.partNumber - 1] = input.blob.size;
+        const uploadedBytes = input.partProgress.reduce((sum, value) => sum + value, 0);
+        setUploadUploadedBytes(uploadedBytes);
+        setUploadProgress(Math.min(100, Math.round((uploadedBytes / input.totalBytes) * 100)));
+        resolve({ partNumber: input.partNumber, eTag });
       };
-
-      xhr.onerror = () => {
-        input.uploadContext.requests.delete(xhr);
-        reject(new Error(`Part ${input.partNumber} upload failed.`));
-      };
-
-      xhr.onabort = () => {
-        input.uploadContext.requests.delete(xhr);
-        reject(new Error('Upload cancelled.'));
-      };
-
-      xhr.open('PUT', input.url);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.send(input.blob);
+      xhr.onerror = () => fail(new Error(`Part ${input.partNumber} upload failed.`));
+      xhr.onabort = () => fail(new Error('Upload cancelled.'));
+      xhr.ontimeout = () => fail(new Error(`Part ${input.partNumber} upload timed out.`));
+      try {
+        xhr.open('PUT', input.url);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        armDeadline(60_000);
+        xhr.send(input.blob);
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error('Could not send upload part.'));
+      }
     });
   }
 
-  async function handleFileUpload(file: File) {
+  async function handleFileUpload(file: File): Promise<boolean> {
+    if (activeUploadRef.current) return false;
     // Validate file
     const validation = validateLoRAFileClient(file);
     if (!validation.valid) {
       setError(validation.error || 'Invalid file');
-      return;
+      return false;
     }
 
     setIsUploading(true);
@@ -364,7 +410,8 @@ export function LoRAManagementDialog({
     setError(null);
     setSuccessMessage(null);
 
-    let uploadContext: NonNullable<typeof activeUploadRef.current> | null = null;
+    const uploadContext: LoraUploadContext = { aborted: false, requests: new Set<XMLHttpRequest>() };
+    activeUploadRef.current = uploadContext;
     let keepTerminalState = false;
 
     try {
@@ -375,14 +422,11 @@ export function LoRAManagementDialog({
         contentType: file.type || 'application/octet-stream',
       });
 
-      uploadContext = {
-        aborted: false,
-        requests: new Set<XMLHttpRequest>(),
-        volume: init.volume,
-        key: init.key,
-        uploadId: init.uploadId,
-      };
-      activeUploadRef.current = uploadContext;
+      Object.assign(uploadContext, { volume: init.volume, key: init.key, uploadId: init.uploadId });
+      if (uploadContext.aborted || activeUploadRef.current !== uploadContext) {
+        void abortActiveUpload(uploadContext);
+        return false;
+      }
       setUploadStatus('uploading');
 
       const totalParts = Math.ceil(file.size / init.partSize);
@@ -419,6 +463,7 @@ export function LoRAManagementDialog({
             });
             break;
           } catch (partError) {
+            if (uploadContext.aborted || activeUploadRef.current !== uploadContext) throw partError;
             lastPartError = partError;
             partProgress[partNumber - 1] = 0;
             const uploadedBytes = partProgress.reduce((sum, value) => sum + value, 0);
@@ -440,6 +485,7 @@ export function LoRAManagementDialog({
         completedParts.push(part);
       }
 
+      if (uploadContext.aborted || activeUploadRef.current !== uploadContext) return false;
       setUploadUploadedBytes(file.size);
       setUploadProgress(100);
       setUploadStatus('completing');
@@ -453,7 +499,8 @@ export function LoRAManagementDialog({
         baseModel: uploadBaseModel,
         workspaceId,
         parts: completedParts.sort((a, b) => a.partNumber - b.partNumber),
-      });
+      }, 120_000);
+      if (uploadContext.aborted || activeUploadRef.current !== uploadContext) return false;
 
       if (!finalized.success) {
         throw new Error(finalized.error || 'Upload failed');
@@ -462,58 +509,57 @@ export function LoRAManagementDialog({
       setSuccessMessage(`✓ ${file.name} ${t('loraManagement.messages.uploadSuccess')}`);
       await fetchLoras();
       onLoRAUploaded?.();
+      setPendingUploadRevision(value => value + 1);
+      return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload file';
 
-      if (uploadContext && !errorMessage.includes('cancelled')) {
-        await abortActiveUpload(uploadContext);
-      }
-
-      setUploadStatus(errorMessage.includes('cancelled') ? 'idle' : 'failed');
-      keepTerminalState = !errorMessage.includes('cancelled');
-      setError(errorMessage.includes('cancelled') ? 'Upload cancelled.' : `Upload failed: ${errorMessage}. Please try again.`);
-      console.error('Error uploading LoRA:', err);
+      if (uploadContext.aborted || activeUploadRef.current !== uploadContext) return false;
+      void abortActiveUpload(uploadContext);
+      if (!uploadContext.uploadId) setPendingUploadRevision(value => value + 1);
+      setUploadStatus('failed');
+      keepTerminalState = true;
+      setError(`Upload failed: ${errorMessage}. Please try again.`);
+      return false;
     } finally {
       if (activeUploadRef.current === uploadContext) {
         activeUploadRef.current = null;
-      }
-      setIsUploading(false);
-      if (!keepTerminalState) {
-        setUploadProgress(0);
-        setUploadStatus('idle');
-        setUploadFileName('');
-        setUploadUploadedBytes(0);
-        setUploadTotalBytes(0);
+        setIsUploading(false);
+        if (!keepTerminalState) {
+          setUploadProgress(0);
+          setUploadStatus('idle');
+          setUploadFileName('');
+          setUploadUploadedBytes(0);
+          setUploadTotalBytes(0);
+        }
       }
     }
   }
 
-  const handleCancelUpload = async () => {
+  const handleCancelUpload = () => {
     const uploadContext = activeUploadRef.current;
     if (!uploadContext) return;
-    await abortActiveUpload(uploadContext);
+    uploadQueueRef.current += 1;
+    activeUploadRef.current = null;
+    void abortActiveUpload(uploadContext);
     setIsUploading(false);
     setUploadProgress(0);
     setUploadStatus('idle');
     setUploadFileName('');
     setUploadUploadedBytes(0);
     setUploadTotalBytes(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setError('Upload cancelled.');
   };
 
   // Handle file input change (supports multiple files)
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      // Upload all selected files
-      for (let i = 0; i < files.length; i++) {
-        await handleFileUpload(files[i]);
-      }
+    const files = Array.from(e.target.files || []);
+    const queue = ++uploadQueueRef.current;
+    for (const file of files) {
+      if (queue !== uploadQueueRef.current || !await handleFileUpload(file)) break;
     }
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (queue === uploadQueueRef.current && fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Handle drag and drop
@@ -531,6 +577,8 @@ export function LoRAManagementDialog({
     e.preventDefault();
     setIsDragging(false);
 
+    if (activeUploadRef.current) return;
+    uploadQueueRef.current += 1;
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileUpload(file);
@@ -917,7 +965,7 @@ export function LoRAManagementDialog({
             </div>
           )}
 
-          <PendingLoraUploads onChange={() => fetchLoras()} />
+          <PendingLoraUploads refreshKey={pendingUploadRevision} onChange={() => fetchLoras()} />
 
           {/* Upload Section */}
           <div className="mb-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
@@ -941,7 +989,7 @@ export function LoRAManagementDialog({
               isDragging
                 ? 'border-primary bg-primary/10 scale-[1.02]'
                 : 'border-muted-foreground/25 hover:border-muted-foreground/40 hover:bg-muted/30'
-            } ${isUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}
+            } ${isUploading ? 'opacity-80' : 'cursor-pointer'}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -949,6 +997,7 @@ export function LoRAManagementDialog({
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 if (!isUploading) {
@@ -996,6 +1045,9 @@ export function LoRAManagementDialog({
                   onClick={(event) => {
                     event.stopPropagation();
                     void handleCancelUpload();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
                   }}
                   className="h-8 px-2"
                 >

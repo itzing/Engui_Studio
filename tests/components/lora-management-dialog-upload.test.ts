@@ -27,6 +27,8 @@ vi.mock('@/lib/i18n/context', () => ({
   }),
 }));
 
+vi.mock('@/lib/workspaces/useWorkspaceFetch', () => ({ useWorkspaceFetch: () => globalThis.fetch }));
+
 import { LoRAManagementDialog } from '@/components/lora/LoRAManagementDialog';
 
 class MockXMLHttpRequest {
@@ -76,6 +78,8 @@ describe('LoRAManagementDialog upload progress', () => {
     MockXMLHttpRequest.instances = [];
     vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest);
     vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/api/lora/uploads') return { ok: true, json: async () => ({ uploads: [] }) } as Response;
+      if (url === '/api/lora/multipart/abort') return { ok: true, json: async () => ({ success: true }) } as Response;
       if (url.startsWith('/api/lora?')) {
         return {
           ok: true,
@@ -155,6 +159,8 @@ describe('LoRAManagementDialog upload progress', () => {
 
   it('searches, filters by target, and sorts LoRA manager entries by name', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/api/lora/uploads') return { ok: true, json: async () => ({ uploads: [] }) } as Response;
+      if (url === '/api/lora/multipart/abort') return { ok: true, json: async () => ({ success: true }) } as Response;
       if (url.startsWith('/api/lora?')) {
         return {
           ok: true,
@@ -234,6 +240,8 @@ describe('LoRAManagementDialog upload progress', () => {
   it('saves base model changes immediately from the dropdown and keeps the saved value after reload', async () => {
     let savedBaseModel = 'z-image';
     const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/api/lora/uploads') return { ok: true, json: async () => ({ uploads: [] }) } as Response;
+      if (url === '/api/lora/multipart/abort') return { ok: true, json: async () => ({ success: true }) } as Response;
       if (url.startsWith('/api/lora?')) {
         return {
           ok: true,

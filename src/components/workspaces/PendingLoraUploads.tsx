@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 import { Button } from '@/components/ui/button';
-export default function PendingLoraUploads({ onChange }: { onChange: () => unknown }) {
+export default function PendingLoraUploads({ onChange, refreshKey = 0 }: { onChange: () => unknown; refreshKey?: number }) {
   const fetch = useWorkspaceFetch();
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState('');
@@ -13,7 +13,7 @@ export default function PendingLoraUploads({ onChange }: { onChange: () => unkno
     if (!response.ok) throw new Error(data.error || 'Could not load pending uploads.');
     setRows(data.uploads || []);
   }
-  useEffect(() => { void refresh().catch(e => setError(e.message)); }, []);
+  useEffect(() => { void refresh().catch(e => setError(e.message)); }, [refreshKey]);
   async function recover(row: any, action: 'finalize' | 'abort') {
     setBusy(true); setError('');
     try {
