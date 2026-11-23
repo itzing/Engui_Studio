@@ -19,3 +19,6 @@ No resume across page reloads, part-size changes, provider changes, published-Lo
 - Build/rollback evidence: `/home/engui/engui-runs/engui-600-20261123`.
 - Browser evidence: `/var/lib/openclaw/.openclaw/workspace/runs/engui-lora-upload-20261123`.
 
+
+## Deployment
+Feature c4f775c, production build mmNaSExIIdruz_nD0DWyd, 2026-11-23 14:21 UTC. Both direct HTTP and Tailscale HTTPS pass. Chromium11/WebKit11 pass on both candidate and installed build with no page exceptions. Prior build c75JRcdCDsomyd2PrTFK0 retained; `rollback.py` restores it before a service restart.

@@ -1,7 +1,7 @@
 # ENGUI-600 — Recover stalled LoRA uploads and make Cancel reachable
 
 ## Status
-In progress
+Done
 
 ## Request
 Owner14721: Cancel cannot be clicked while a LoRA upload is stuck. Investigation found pointer-events-none on the upload area containing Cancel, no part inactivity timeout, and cancellation waiting on remote cleanup before releasing UI.
@@ -22,3 +22,8 @@ Owner attempted to cancel snofs_krea_v1_6.safetensors. Scoped abort of pending u
 
 ## Rollback
 Restore retained previous .next build and restart engui-studio.service; revert feature commit. No schema change. Cancelled unpublished multipart data is intentionally discarded; user must choose original file again.
+
+## Delivery
+Feature commit c4f775c. Live build mmNaSExIIdruz_nD0DWyd at 2026-11-23 14:21 UTC; previous c75JRcdCDsomyd2PrTFK0 retained in engui-runs/engui-600-20261123/previous.next. Local HTTP and Tailscale HTTPS return 200; service active.
+
+18 focused tests passed. Chromium and WebKit each passed 11 checks against both candidate and installed build. The browser fixture blocked background editor autosave and intercepted all multipart writes; no real test uploads/jobs. No page errors. Full repository type check and two legacy API tests retain documented pre-existing failures; no changed-file type diagnostics.
