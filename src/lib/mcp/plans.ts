@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { resolveImageVibe } from "@/lib/vibes/resolveImageVibe";
-import { expandMcpPrompt, hasExplicitCharacterReferences, characterReferencesFor, renderMcpVariant } from "./prompt";
+import { expandMcpPrompt, characterReferencesFor, renderMcpVariant } from "./prompt";
 import {
   type GenerationDraft,
   type Authority,
@@ -20,14 +20,7 @@ import {
 } from "./catalog";
 import { readMedia } from "./media";
 import { assertCredential } from "./auth";
-export async function currentDependencies(d: GenerationDraft, explicitCharacters = false) {
-  const character = await characterSnapshot(
-    d.characterId,
-    d.characterVersionId,
-    d.outfitId,
-    prisma,
-    explicitCharacters,
-  );
+export async function currentDependencies(d: GenerationDraft) {
   const loras = await selectedLoras(d.loras, d.modelId);
   const config = await modelConfiguration(d.modelId);
   if (!config.configured)
@@ -59,8 +52,6 @@ export async function currentDependencies(d: GenerationDraft, explicitCharacters
     orderBy: { key: "asc" },
   });
   return {
-    character: character.snapshot,
-    characterDigest: character.digest,
     loras,
     references,
     modelFingerprint: config.fingerprint,
@@ -72,9 +63,8 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
   const existing = await findReceipt("prepare", d.requestKey, d);
   if (existing) return existing;
   const settings = effectiveSettings(d);
-  const explicitCharacters = await hasExplicitCharacterReferences(d);
-  const dep = await currentDependencies(d, explicitCharacters);
-  const rendering = await expandMcpPrompt(d, dep.character, explicitCharacters);
+  const dep = await currentDependencies(d);
+  const rendering = await expandMcpPrompt(d);
   const { composition, vibe, expanded, characterReferences } = rendering;
   const seeds = d.seeds ? [...d.seeds] : [];
   while (seeds.length < d.variantCount) {
@@ -92,7 +82,7 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
   if (variants.some((v) => v.prompt.length > 64000))
     fail("INVALID_ARGUMENT", "Composed prompt is too large.");
   const snapshot = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     draft: d,
     ...dep,
     characterReferences,
@@ -101,7 +91,7 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
       identityPrompt: composition.prompt,
       vibePrompt: vibe.prompt,
       expandedPrompt: expanded.prompt,
-      characterMode: rendering.explicitCharacters ? "inline" : "structured",
+      characterMode: rendering.explicitCharacters ? "inline" : "plain",
       characterReferences,
       wildcardReplacements: expanded.replacements,
       wildcardSelections: expanded.selections,
@@ -178,9 +168,17 @@ export async function validatePlan(p: any, checkExpiry = true) {
     if (digest(references) !== digest(p.snapshot.characterReferences))
       fail("PLAN_STALE", "A referenced character or default outfit changed. Prepare a new plan.");
   }
-  const current = await currentDependencies(p.snapshot.draft, p.snapshot.stages?.characterMode === "inline" && Array.isArray(p.snapshot.characterReferences));
+  // Legacy plans retain their original selection/freshness rules without rewriting snapshots.
+  // New plans never load a primary Character; their tag snapshots above are the only identities.
+  if (p.snapshot.schemaVersion === 1 && p.snapshot.draft.characterId) {
+    const d = p.snapshot.draft;
+    const character = await characterSnapshot(d.characterId, d.characterVersionId, d.outfitId, prisma,
+      p.snapshot.stages?.characterMode === "inline" && Array.isArray(p.snapshot.characterReferences));
+    if (character.digest !== p.snapshot.characterDigest)
+      fail("PLAN_STALE", "A legacy Character source changed. Prepare a new plan using Character tags.");
+  }
+  const current = await currentDependencies(p.snapshot.draft);
   for (const k of [
-    "characterDigest",
     "loras",
     "references",
     "modelFingerprint",

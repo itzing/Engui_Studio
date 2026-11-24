@@ -10,7 +10,6 @@ import { resolveCharacterLook, outfitSummary } from "@/lib/outfits/server";
 import { composeCharacterLook } from "@/lib/outfits/compose";
 import { toCharacterSummary } from "@/lib/characters/utils";
 import { FRAMING_TEXT } from "@/lib/looks/parts";
-import { compileVisibleLook } from "@/lib/looks/compiler";
 import {
   type GenerationDraft,
   digest,
@@ -213,32 +212,16 @@ export async function characterSnapshot(
   };
   return { snapshot, digest: digest(snapshot) };
 }
-export function composePrompt(snapshot: any, d: GenerationDraft, explicitCharacters = false) {
-  const composition = explicitCharacters ? {
+export function composePrompt(d: GenerationDraft) {
+  const composition = {
     identity: "", outfit: "", warnings: [] as string[],
-    framingPrompt: FRAMING_TEXT[d.framing === "portrait" ? "portrait" : "full_body"],
-  } : compileVisibleLook(
-    snapshot.look,
-    d.framing === "portrait" ? "portrait" : "full_body",
-  );
-  const view =
-    d.view && d.view !== "custom"
-      ? {
-          front: "Front view.",
-          three_quarter: "Three-quarter view.",
-          side: "Side view.",
-        }[d.view]
-      : "";
+    framingPrompt: d.framing === "custom" ? "" : FRAMING_TEXT[d.framing],
+  };
+  const view = d.view && d.view !== "custom" ? {
+    front: "Front view.", three_quarter: "Three-quarter view.", side: "Side view.",
+  }[d.view] : "";
   return {
-    prompt: [
-      composition.identity,
-      composition.outfit,
-      d.framing === "custom" ? "" : composition.framingPrompt,
-      view,
-      d.prompt,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
+    prompt: [composition.framingPrompt, view, d.prompt].filter(Boolean).join("\n\n"),
     composition,
   };
 }

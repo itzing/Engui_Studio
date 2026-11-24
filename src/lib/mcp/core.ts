@@ -60,16 +60,13 @@ export const page = {
 };
 export const draftSchema = z
   .object({
-    characterId: id.describe("Primary Character for batch/review tracking. With inline tags, tag every visible person; no implicit identity is prepended."),
-    characterVersionId: id.optional(),
     parentBatchId: id.optional(),
     mode: z.enum(["text_to_image", "image_to_image", "image_edit"]),
     modelId,
-    prompt: z.string().min(1).max(16000).describe("Scene text. Supports {character:UUID}, {character:UUID:withOutfit}, stored {key} wildcards and seeded {a|b} choices. Read engui_get_prompt_guide. Inline tags replace automatic identity/outfit composition."),
+    prompt: z.string().min(1).max(16000).describe("Generation text. No Character selection or implicit identity/outfit. Supports {character:UUID}, {character:UUID:withOutfit}, stored {key} wildcards and seeded {a|b} choices. Read engui_get_prompt_guide."),
     negativePrompt: z.string().max(16000).optional(),
-    framing: z.enum(["full_body", "portrait", "custom"]).default("full_body"),
+    framing: z.enum(["full_body", "portrait", "custom"]).default("custom"),
     view: z.enum(["front", "three_quarter", "side", "custom"]).optional(),
-    outfitId: id.optional(),
     vibeId: id.optional(),
     references: z.array(mediaRef).max(2).default([]),
     width: z.number().int().default(1024),

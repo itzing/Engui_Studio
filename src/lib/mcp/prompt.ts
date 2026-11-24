@@ -20,27 +20,16 @@ function protect(template: string) {
   try { return protectCharacterReferences(template); }
   catch (error) { fail("INVALID_CHARACTER_REFERENCE", (error as Error).message); }
 }
-export async function hasExplicitCharacterReferences(d: GenerationDraft) {
+export async function expandMcpPrompt(d: GenerationDraft) {
   if (d.negativePrompt?.includes("{character:"))
     fail("INVALID_CHARACTER_REFERENCE", "Character tags are supported only in the positive prompt, not negativePrompt.");
   const workspaceId = requireWorkspaceId();
-  // Inspect the user template plus Vibe/wildcards before deciding whether to prepend identity.
-  const bodyVibe = await resolveImageVibe(d.prompt, d.vibeId || "", workspaceId);
-  const body = await expandPromptWildcards(bodyVibe.prompt, workspaceId, { preserveCharacterReferences: true });
-  const explicitCharacters = protect(body.prompt).references.length > 0;
-  if (explicitCharacters && (d.characterVersionId || d.outfitId))
-    fail("INVALID_ARGUMENT", "Character tags use current identities and current default outfits. Omit characterVersionId and outfitId, or remove the tags to use structured selection.");
-  return explicitCharacters;
-}
-export async function expandMcpPrompt(d: GenerationDraft, character: any, explicitCharacters: boolean) {
-  const workspaceId = requireWorkspaceId();
-  const composition = composePrompt(character, d, explicitCharacters);
-  // Retain the existing composition -> Vibe -> wildcard ordering for untagged requests.
+  const composition = composePrompt(d);
+  // Only explicit framing/view, Vibe, wildcards and Character tags change the input text.
   const vibe = await resolveImageVibe(composition.prompt, d.vibeId || "", workspaceId);
   const expanded = await expandPromptWildcards(vibe.prompt, workspaceId, { preserveCharacterReferences: true });
-  const protectedText = explicitCharacters ? protect(expanded.prompt) : {
-    prompt: expanded.prompt, references: [], restore: (text: string) => text,
-  };
+  const protectedText = protect(expanded.prompt);
+  const explicitCharacters = protectedText.references.length > 0;
   // One workspace-scoped read resolves all references once for every variant in this plan.
   const characterReferences = await characterReferencesFor(
     protectedText.references.map(ref => ref.token).join("\n"),

@@ -98,10 +98,9 @@ async function fixture(scopes = ["read", "generate", "curate", "cancel"]) {
 }
 async function plan(f: Awaited<ReturnType<typeof fixture>>, extra: any = {}) {
   return f.call("engui_prepare_generation", {
-    characterId: f.character.id,
     modelId: "krea2-turbo",
     mode: "text_to_image",
-    prompt: "Fighting game concept. {red|blue} jacket.",
+    prompt: `{character:${f.character.id}}. Fighting game concept. {red|blue} jacket.`,
     requestKey: randomUUID(),
     ...extra,
   });
@@ -263,7 +262,6 @@ describe("workspace-bound MCP integration", () => {
     ).rejects.toThrow();
     expect(() =>
       draftSchema.parse({
-        characterId: f.character.id,
         modelId: "krea2-turbo",
         mode: "text_to_image",
         prompt: "x",
@@ -335,7 +333,6 @@ describe("workspace-bound MCP integration", () => {
   });
   it("validates model, parameter and reference capabilities before any provider work", () => {
     const base = {
-      characterId: randomUUID(),
       prompt: "x",
       requestKey: randomUUID(),
       mode: "text_to_image",
@@ -522,6 +519,7 @@ describe("workspace-bound MCP integration", () => {
     ]);
     expect(a.assetId).toBe(b.assetId);
     const p = await plan(f, {
+      prompt: "Use the supplied picture as a visual reference",
       modelId: "qwen-image-edit",
       mode: "image_edit",
       references: [source],
@@ -537,6 +535,10 @@ describe("workspace-bound MCP integration", () => {
     };
     const approved = await f.call("engui_record_concept_review", review);
     expect(approved.revision).toBe(1);
+    const reference = await f.call("engui_get_concept_reference", { characterId: f.character.id });
+    expect(reference.reference.snapshot.reviewCharacter.snapshot.characterId).toBe(f.character.id);
+    expect(reference.reference.snapshot.draft).not.toHaveProperty("characterId");
+    expect((await f.call("engui_get_plan", { planId: p.planId })).snapshot).toEqual(p.snapshot);
     expect(await f.call("engui_record_concept_review", review)).toEqual(
       approved,
     );
@@ -568,6 +570,25 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
   });
 
+  it("requires a trusted asset association for plain review and supports multiple explicit Character assignments", async () => {
+    const f = await fixture(), foreign = await fixture();
+    const asset = await imageAsset(f.ws.id), otherAsset = await imageAsset(f.ws.id);
+    const review = { characterId: f.character.id, assetId: asset.id, decision: "approved", expectedRevision: 0, requestKey: randomUUID() };
+    await expect(f.call("engui_record_concept_review", review)).rejects.toMatchObject({ code: "SNAPSHOT_ASSOCIATION_REQUIRED" });
+    const wrong = await plan(f, { prompt: "Plain reference plan", modelId: "qwen-image-edit", mode: "image_edit", references: [{ kind: "gallery_asset", assetId: otherAsset.id }] });
+    await expect(f.call("engui_record_concept_review", { ...review, snapshotPlanId: wrong.planId })).rejects.toMatchObject({ code: "SNAPSHOT_ASSOCIATION_REQUIRED" });
+    const second = await f.call("engui_create_character", { name: "Second", traits: { hair_color: "green" }, requestKey: randomUUID() });
+    const p = await plan(f, { prompt: `{character:${f.character.id}} faces {character:${second.characterId}}`, modelId: "qwen-image-edit", mode: "image_edit", references: [{ kind: "gallery_asset", assetId: asset.id }] });
+    for (const characterId of [f.character.id, second.characterId]) {
+      await f.call("engui_record_concept_review", { ...review, characterId, snapshotPlanId: p.planId, requestKey: randomUUID() });
+      expect((await f.call("engui_get_concept_reference", { characterId })).reference.stale).toBe(false);
+    }
+    await expect(f.call("engui_record_concept_review", { ...review, characterId: foreign.character.id, snapshotPlanId: p.planId, requestKey: randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const current = await f.call("engui_get_character", { characterId: second.characterId });
+    await f.call("engui_update_character", { characterId: second.characterId, expectedRevision: current.editRevision, changes: { traits: { hair_color: "purple" } }, requestKey: randomUUID() });
+    expect((await f.call("engui_get_concept_reference", { characterId: second.characterId })).reference.stale).toBe(true);
+    expect((await f.call("engui_get_concept_reference", { characterId: f.character.id })).reference.stale).toBe(false);
+  }, 15000);
   it("shared submission preserves a frozen literal prompt and passes single-attempt policy", async () => {
     const f = await fixture();
     const jobId = randomUUID();
@@ -622,9 +643,9 @@ describe("workspace-bound MCP integration", () => {
       vi.unstubAllGlobals();
     }
   });
-  it("successful mock batch archives exact originals and approvals survive source-job cleanup", async () => {
+  it("successful plain-text batch archives exact originals and explicit approvals survive source-job cleanup", async () => {
     const f = await fixture(),
-      p = await plan(f),
+      p = await plan(f, { prompt: "A wandering adventurer in an empty courtyard" }),
       b = await start(f, p),
       original = providerAdapter.submit;
     const a = await imageAsset(f.ws.id);
@@ -1093,16 +1114,16 @@ describe("workspace-bound MCP integration", () => {
   it("preserves historical name/gender and immutable plans across identity edits", async () => {
     const f = await fixture();
     const created = await f.call("engui_create_character", { name: "Original", gender: "female", traits: { hair_color: "red" }, requestKey: randomUUID() });
-    const originalPlan = await plan(f, { characterId: created.characterId });
+    const originalPlan = await plan(f, { prompt: `{character:${created.characterId}}` });
     const edited = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: created.editRevision,
       changes: { name: "Updated", gender: "male", traits: { hair_color: "blue" } }, requestKey: randomUUID() });
     const old = await f.call("engui_get_character", { characterId: created.characterId, characterVersionId: created.characterVersionId });
     expect(old.characterName).toBe("Original"); expect(old.gender).toBe("female"); expect(old.editRevision).toBeNull();
-    const historical = await plan(f, { characterId: created.characterId, characterVersionId: created.characterVersionId });
-    expect(historical.snapshot.character.characterName).toBe("Original");
-    expect(historical.snapshot.variants[0].prompt).toContain("Adult woman");
-    const fresh = await plan(f, { characterId: created.characterId });
-    expect(fresh.snapshot.character.characterVersionId).toBe(edited.characterVersionId);
+    await expect(plan(f, { characterVersionId: created.characterVersionId })).rejects.toThrow();
+    expect(originalPlan.snapshot.characterReferences[0].characterName).toBe("Original");
+    expect(originalPlan.snapshot.variants[0].prompt).toContain("female");
+    const fresh = await plan(f, { prompt: `{character:${created.characterId}}` });
+    expect(fresh.snapshot.characterReferences[0].characterVersionId).toBe(edited.characterVersionId);
     expect(fresh.snapshot.variants[0].prompt).toContain("blue");
     expect((await f.call("engui_get_plan", { planId: originalPlan.planId })).snapshot).toEqual(originalPlan.snapshot);
     await expect(start(f, originalPlan)).rejects.toMatchObject({ code: "PLAN_STALE" });
@@ -1112,20 +1133,20 @@ describe("workspace-bound MCP integration", () => {
     expect(next.items[0].characterVersionId).not.toBe(history.items[0].characterVersionId);
     expect(next.items[0].identityComplete).toBe(true);
   });
-  it("invalidates stale identity parts and accepts region-classified cropped prompts", async () => {
+  it("keeps identity-part authoring while tags use current full identity with explicit framing", async () => {
     const f = await fixture();
     const created = await f.call("engui_create_character", { name: "Portrait", gender: "female", traits: { hair_color: "black" },
       identityParts: [{ region: "identity", text: "Adult woman" }, { region: "hair", text: "Black hair" }], requestKey: randomUUID() });
-    const p = await plan(f, { characterId: created.characterId, framing: "portrait" });
-    expect(p.snapshot.variants[0].prompt).toContain("Black hair");
+    const p = await plan(f, { prompt: `{character:${created.characterId}}`, framing: "portrait" });
+    expect(p.snapshot.variants[0].prompt.toLowerCase()).toContain("black");
     const edit = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: created.editRevision,
       changes: { traits: { hair_color: "red" } }, requestKey: randomUUID() });
     const c = await f.call("engui_get_character", { characterId: created.characterId });
     expect(c.identityParts).toBeNull();
-    expect((await plan(f, { characterId: created.characterId })).snapshot.variants[0].prompt).not.toContain("Black hair");
+    expect((await plan(f, { prompt: `{character:${created.characterId}}` })).snapshot.variants[0].prompt).not.toContain("Black hair");
     await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: edit.editRevision,
       changes: { identityParts: [{ region: "identity", text: "Adult woman" }, { region: "hair", text: "Red hair" }] }, requestKey: randomUUID() });
-    expect((await plan(f, { characterId: created.characterId, framing: "portrait" })).snapshot.variants[0].prompt).toContain("Red hair");
+    expect((await plan(f, { prompt: `{character:${created.characterId}}`, framing: "portrait" })).snapshot.variants[0].prompt.toLowerCase()).toContain("red");
   });
   it("blocks authoring through read-only credentials and foreign workspace IDs", async () => {
     const a = await fixture(), b = await fixture(), read = await fixture(["read"]);
@@ -1154,11 +1175,11 @@ describe("workspace-bound MCP integration", () => {
     const select = { characterId: f.character.id, expectedRevision: wardrobe.editRevision, action: "default", outfitId: outfit.outfitId, requestKey: randomUUID() };
     const chosen = await f.call("engui_update_wardrobe", select);
     expect(await f.call("engui_update_wardrobe", select)).toEqual(chosen);
-    expect((await plan(f)).snapshot.variants[0].prompt).toContain("Blue coat");
+    expect((await plan(f, { prompt: `{character:${f.character.id}:withOutfit}` })).snapshot.variants[0].prompt).toContain("Blue coat");
     await expect(f.call("engui_update_wardrobe", { ...select, requestKey: randomUUID() })).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
     const updated = await f.call("engui_update_outfit", { outfitId: outfit.outfitId, expectedRevision: 1, changes: { description: "Red coat and boots" }, requestKey: randomUUID() });
     expect(updated.revision).toBe(2); expect(updated.visibleParts).toBeNull();
-    expect((await plan(f)).snapshot.variants[0].prompt).toContain("Red coat");
+    expect((await plan(f, { prompt: `{character:${f.character.id}:withOutfit}` })).snapshot.variants[0].prompt).toContain("Red coat");
     await expect(f.call("engui_update_outfit", { outfitId: outfit.outfitId, expectedRevision: 1, changes: { name: "Stale" }, requestKey: randomUUID() })).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
     wardrobe = await f.call("engui_get_wardrobe", { characterId: f.character.id });
     await f.call("engui_update_wardrobe", { characterId: f.character.id, expectedRevision: wardrobe.editRevision, action: "unlink", outfitId: outfit.outfitId, requestKey: randomUUID() });
@@ -1182,12 +1203,12 @@ describe("workspace-bound MCP integration", () => {
     const list = await f.call("engui_list_character_versions", { characterId: f.character.id });
     expect(list.items[0].identityComplete).toBe(false);
     await expect(f.call("engui_get_character", { characterId: f.character.id, characterVersionId: version.id })).rejects.toMatchObject({ code: "VERSION_INCOMPLETE" });
-    await expect(plan(f, { characterVersionId: version.id })).rejects.toMatchObject({ code: "VERSION_INCOMPLETE" });
+    await expect(plan(f, { characterVersionId: version.id })).rejects.toThrow();
   });
   it("completes create/generate/review/edit/regenerate with a fake provider and immutable evidence", async () => {
     const f = await fixture();
     const created = await f.call("engui_create_character", { name: "Iterated", gender: "female", traits: { hair_color: "black" }, requestKey: randomUUID() });
-    const p = await plan(f, { characterId: created.characterId, variantCount: 1 });
+    const p = await plan(f, { prompt: `{character:${created.characterId}}`, variantCount: 1 });
     const batch = await start(f, p), asset = await imageAsset(f.ws.id), original = providerAdapter.submit;
     const prompts: string[] = [];
     providerAdapter.submit = async (form, hooks) => {
@@ -1208,8 +1229,8 @@ describe("workspace-bound MCP integration", () => {
       const edit = await f.call("engui_update_character", { characterId: created.characterId, expectedRevision: before.editRevision,
         changes: { traits: { hair_color: "silver" } }, changeSummary: "Review: change hair to silver", requestKey: randomUUID() });
       expect((await f.call("engui_get_concept_reference", { characterId: created.characterId })).reference.stale).toBe(true);
-      const next = await plan(f, { characterId: created.characterId, variantCount: 1, parentBatchId: batch.batchId });
-      expect(next.snapshot.character.characterVersionId).toBe(edit.characterVersionId);
+      const next = await plan(f, { prompt: `{character:${created.characterId}}`, variantCount: 1, parentBatchId: batch.batchId });
+      expect(next.snapshot.characterReferences[0].characterVersionId).toBe(edit.characterVersionId);
       const nextBatch = await start(f, next);
       await processMcpWorkspace(f.ws.id); await processMcpWorkspace(f.ws.id);
       expect((await f.call("engui_get_batch", { batchId: nextBatch.batchId })).state).toBe("completed");

@@ -16,6 +16,7 @@ import { workspaceContext } from "@/lib/workspaces/context";
 import { provisionCredential } from "@/lib/mcp/auth";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import { digest } from "@/lib/mcp/core";
+import { characterSnapshot } from "@/lib/mcp/catalog";
 import { processMcpWorkspace } from "@/lib/mcp/worker";
 import { decryptStructuredEnvelope } from "@/lib/secureTransport";
 const scope = <T>(workspaceId: string, work: () => T) => workspaceContext.run({ kind: "workspace", workspaceId }, async () => await work());
@@ -49,7 +50,7 @@ async function fixture(scopes = ["read", "generate", "curate", "cancel"]) {
     return (r.structuredContent as any).result;
   };
   const tag = (withOutfit = false) => `{character:${character.id}${withOutfit ? ":withOutfit" : ""}}`;
-  const plan = (extra: any = {}) => call("engui_prepare_generation", { characterId: character.id, mode: "text_to_image", modelId: "krea2-turbo", prompt: tag(), requestKey: randomUUID(), seeds: [11, 22, 33], ...extra });
+  const plan = (extra: any = {}) => call("engui_prepare_generation", { mode: "text_to_image", modelId: "krea2-turbo", prompt: tag(), requestKey: randomUUID(), seeds: [11, 22, 33], ...extra });
   const start = (p: any) => call("engui_start_generation", { planId: p.planId, planDigest: p.planDigest, requestKey: randomUUID() });
   return { ws, character, outfit, client, call, tag, plan, start };
 }
@@ -69,6 +70,50 @@ describe("MCP Character reference plans", () => {
     const r = await f.client.readResource({ uri: guide.uri });
     expect("text" in r.contents[0] ? r.contents[0].text : null).toBe(guide.markdown);
     await expect(f.plan()).rejects.toThrow();
+  });
+  it("has no primary Character selectors in discovery and rejects them instead of ignoring them", async () => {
+    const f = await fixture();
+    const t = (await f.client.listTools()).tools.find(t => t.name === "engui_prepare_generation")!;
+    for (const key of ["characterId", "characterVersionId", "outfitId"]) {
+      expect(t.inputSchema.properties).not.toHaveProperty(key);
+      expect(t.inputSchema.required || []).not.toContain(key);
+      await expect(f.plan({ [key]: f.character.id })).rejects.toThrow();
+    }
+    expect(await scope(f.ws.id, () => prisma.mcpGenerationPlan.count())).toBe(0);
+    expect(provider.submit).not.toHaveBeenCalled();
+  });
+  it("prepares and submits unchanged plain text in a workspace with zero Characters", async () => {
+    const f = await fixture();
+    await scope(f.ws.id, () => prisma.character.delete({ where: { id: f.character.id } }));
+    expect(await scope(f.ws.id, () => prisma.character.count())).toBe(0);
+    const prompt = "Wide cinematic 16:9 empty city.\n\nRain falls on the pavement.";
+    const p = await f.plan({ prompt, variantCount: 1, seeds: [42] });
+    expect(p.snapshot.schemaVersion).toBe(2);
+    expect(p.snapshot).not.toHaveProperty("character");
+    expect(p.snapshot).not.toHaveProperty("characterDigest");
+    expect(p.snapshot.characterReferences).toEqual([]);
+    expect(p.snapshot.stages.characterMode).toBe("plain");
+    expect(p.snapshot.variants[0].prompt).toBe(prompt);
+    await f.start(p); await processMcpWorkspace(f.ws.id);
+    expect(provider.submit).toHaveBeenCalledOnce();
+    const input = provider.submit.mock.calls[0][0];
+    const sent = decryptStructuredEnvelope<any>(Buffer.alloc(32), input._secure, input._secure.binding);
+    expect(sent.prompt).toBe(prompt);
+    expect((await scope(f.ws.id, () => prisma.job.findFirstOrThrow())).prompt).toBe(prompt);
+  }, 15000);
+  it("unrelated Character/outfit edits do not invalidate plain plans or enter their text", async () => {
+    const f = await fixture(), prompt = "A quiet courtyard", p = await f.plan({ prompt });
+    await scope(f.ws.id, () => prisma.character.update({ where: { id: f.character.id }, data: { traits: JSON.stringify({ hair_color: "green" }), deletedAt: new Date() } }));
+    await scope(f.ws.id, () => prisma.outfit.update({ where: { id: f.outfit.id }, data: { description: "red coat", revision: { increment: 1 } } }));
+    expect(p.snapshot.variants.every((v: any) => v.prompt === prompt)).toBe(true);
+    expect((await f.start(p)).accepted).toBe(true);
+  });
+  it("applies framing and view only when explicitly requested", async () => {
+    const f = await fixture(), p = await f.plan({ prompt: "A courier", framing: "portrait", view: "side" });
+    expect(p.snapshot.variants[0].prompt).toContain("Side view.");
+    expect(p.snapshot.variants[0].prompt).not.toContain("copper");
+    expect(p.snapshot.variants[0].prompt).not.toContain("blue velvet coat");
+    expect(p.snapshot.variants[0].prompt.endsWith("A courier")).toBe(true);
   });
   it("lists only active workspace wildcards with pagination/query and no default writes", async () => {
     const f = await fixture(["read"]), other = await fixture();
@@ -154,9 +199,9 @@ describe("MCP Character reference plans", () => {
     await scope(f.ws.id, () => prisma.character.update({ where: { id: rival.id }, data: { deletedAt: new Date() } }));
     await expect(f.plan({ prompt: `{character:${rival.id}}` })).rejects.toMatchObject({ code: "INVALID_CHARACTER_REFERENCE" });
   });
-  it.each(["outfit", "version", "negative"])("rejects contradictory %s options explicitly", async kind => {
+  it.each(["character", "outfit", "version", "negative"])("rejects contradictory %s options explicitly", async kind => {
     const f = await fixture();
-    const extra = kind === "outfit" ? { outfitId: f.outfit.id } : kind === "negative" ? { negativePrompt: f.tag() } : { characterVersionId: f.character.currentVersionId || randomUUID() };
+    const extra = kind === "character" ? { characterId: f.character.id } : kind === "outfit" ? { outfitId: f.outfit.id } : kind === "negative" ? { negativePrompt: f.tag() } : { characterVersionId: f.character.currentVersionId || randomUUID() };
     await expect(f.plan(extra)).rejects.toThrow();
     expect(await scope(f.ws.id, () => prisma.mcpGenerationPlan.count())).toBe(0);
   });
@@ -181,6 +226,12 @@ describe("MCP Character reference plans", () => {
     const f = await fixture();
     for (const unresolved of [false, true]) {
       const p = await f.plan({ prompt: "A quiet courtyard" });
+      const c = await scope(f.ws.id, () => characterSnapshot(f.character.id));
+      p.snapshot.schemaVersion = 1;
+      p.snapshot.draft.characterId = f.character.id;
+      p.snapshot.character = c.snapshot;
+      p.snapshot.characterDigest = c.digest;
+      p.snapshot.stages.characterMode = "structured";
       delete p.snapshot.characterReferences;
       if (unresolved) p.snapshot.variants[0].prompt += " " + f.tag();
       p.planDigest = digest(p.snapshot);
@@ -189,6 +240,24 @@ describe("MCP Character reference plans", () => {
       else expect((await f.start(p)).accepted).toBe(true);
       expect((await f.call("engui_get_plan", { planId: p.planId })).snapshot).toEqual(p.snapshot);
     }
+  });
+  it("retains Character freshness for real legacy structured plans and approved references", async () => {
+    const f = await fixture(), p = await f.plan({ prompt: "Legacy already-composed text", variantCount: 1, seeds: [42] });
+    const c = await scope(f.ws.id, () => characterSnapshot(f.character.id));
+    p.snapshot.schemaVersion = 1;
+    Object.assign(p.snapshot, { character: c.snapshot, characterDigest: c.digest });
+    p.snapshot.draft.characterId = f.character.id;
+    p.snapshot.stages.characterMode = "structured";
+    p.planDigest = digest(p.snapshot);
+    await scope(f.ws.id, async () => {
+      await prisma.mcpGenerationPlan.update({ where: { id: p.planId }, data: { snapshotJson: JSON.stringify(p.snapshot), digest: p.planDigest } });
+      await prisma.characterConceptReference.create({ data: { workspaceId: f.ws.id, characterId: f.character.id, revision: 1, snapshotJson: JSON.stringify(p.snapshot) } });
+    });
+    expect((await f.call("engui_get_concept_reference", { characterId: f.character.id })).reference.stale).toBe(false);
+    await scope(f.ws.id, () => prisma.character.update({ where: { id: f.character.id }, data: { traits: JSON.stringify({ hair_color: "new legacy identity" }) } }));
+    await expect(f.start(p)).rejects.toMatchObject({ code: "PLAN_STALE" });
+    expect((await f.call("engui_get_concept_reference", { characterId: f.character.id })).reference.stale).toBe(true);
+    expect((await f.call("engui_get_plan", { planId: p.planId })).snapshot).toEqual(p.snapshot);
   });
   it("submits exactly the frozen resolved prompt through encrypted provider transport", async () => {
     const f = await fixture(), p = await f.plan({ prompt: f.tag(true) + " in rain", variantCount: 1, seeds: [42] });

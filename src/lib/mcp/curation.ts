@@ -4,10 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { registerWorkspaceFile } from "@/lib/workspaces/files";
 import { createGalleryMembership } from "@/lib/gallery/saveOutput";
-import { type MediaRef, fail, findReceipt, parse, receipt } from "./core";
+import { type MediaRef, digest, fail, findReceipt, parse, receipt } from "./core";
 import { readMedia } from "./media";
 import { characterSnapshot } from "./catalog";
 import { loadPlan, validatePlan } from "./plans";
+import { characterReferencesFor } from "./prompt";
 export async function prepareSavedImage(source: MediaRef, bucket: string) {
   const image = await readMedia(source),
     workspaceId = requireWorkspaceId();
@@ -149,7 +150,7 @@ export async function recordReview(args: any) {
         );
     }
     snapshot = parse(variant.batch.plan.snapshotJson);
-    if (snapshot.draft.characterId !== args.characterId)
+    if (snapshot.schemaVersion === 1 && snapshot.draft.characterId !== args.characterId)
       fail(
         "SNAPSHOT_ASSOCIATION_REQUIRED",
         "Image belongs to a different character snapshot.",
@@ -163,7 +164,7 @@ export async function recordReview(args: any) {
     const p = await loadPlan(args.snapshotPlanId);
     await validatePlan(p);
     if (
-      p.snapshot.draft.characterId !== args.characterId ||
+      (p.snapshot.schemaVersion === 1 && p.snapshot.draft.characterId !== args.characterId) ||
       !p.snapshot.draft.references.some(
         (ref: MediaRef) =>
           ref.kind === "gallery_asset" && ref.assetId === asset.id,
@@ -171,7 +172,7 @@ export async function recordReview(args: any) {
     )
       fail(
         "SNAPSHOT_ASSOCIATION_REQUIRED",
-        "Plan must explicitly reference this character and asset.",
+        "Plan must explicitly reference this asset and, for a legacy plan, its selected character.",
       );
     snapshot = p.snapshot;
   }
@@ -185,6 +186,11 @@ export async function recordReview(args: any) {
       }))
     )
       fail("NOT_FOUND", "Character or image is unavailable.");
+    // Association is an explicit review decision, not a hidden generation input.
+    // Capture it in the review only; the immutable plan and Gallery provenance stay untouched.
+    const reviewSnapshot = snapshot.schemaVersion === 2 ? {
+      ...snapshot, reviewCharacter: await characterSnapshot(args.characterId, undefined, undefined, tx),
+    } : snapshot;
     let current = await tx.characterConceptReference.findFirst({
       where: { characterId: args.characterId },
     });
@@ -204,7 +210,7 @@ export async function recordReview(args: any) {
           data: {
             revision,
             assetId: args.assetId,
-            snapshotJson: JSON.stringify(snapshot),
+            snapshotJson: JSON.stringify(reviewSnapshot),
           },
         });
         if (changed.count !== 1)
@@ -216,7 +222,7 @@ export async function recordReview(args: any) {
             characterId: args.characterId,
             assetId: args.assetId,
             revision,
-            snapshotJson: JSON.stringify(snapshot),
+            snapshotJson: JSON.stringify(reviewSnapshot),
           },
         });
     }
@@ -228,7 +234,7 @@ export async function recordReview(args: any) {
         decision: args.decision,
         revision,
         notes: args.notes,
-        snapshotJson: JSON.stringify(snapshot),
+        snapshotJson: JSON.stringify(reviewSnapshot),
       },
     });
     return {
@@ -259,8 +265,13 @@ export async function getReference(characterId: string) {
       undefined,
       snapshot.draft?.outfitId,
     );
-    stale = now.digest !== snapshot.characterDigest;
-  } catch {}
+    stale = now.digest !== (snapshot.reviewCharacter?.digest || snapshot.characterDigest);
+    const tagged = snapshot.characterReferences?.filter((r: any) => r.characterId === characterId) || [];
+    if (!stale && tagged.length) {
+      const current = await characterReferencesFor(tagged.map((r: any) => r.token).join("\n"));
+      stale = digest(current) !== digest(tagged);
+    }
+  } catch { stale = true; }
   return {
     characterId,
     revision: ref.revision,

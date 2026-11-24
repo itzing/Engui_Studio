@@ -175,7 +175,7 @@ const descriptions: Record<ToolName, string> = {
   engui_search_gallery: "Search active workspace images without enrichment.",
   engui_get_image: "Inspect actual bounded image bytes, not just an image URL.",
   engui_prepare_generation:
-    "Freeze exact prompts, Character references, settings and three seeds by default. Supports {character:UUID} and {character:UUID:withOutfit}; tag mode omits implicit identity/outfit and rejects characterVersionId/outfitId. Inspect snapshot.variants[].prompt and characterReferences (separate from wildcardReplacements). Read engui_get_prompt_guide. Local write only; never runs inference.",
+    "Freeze exact prompts, optional inline Character references, settings and three seeds by default. characterId, characterVersionId and outfitId are not accepted. Plain text requires no Character; identities/outfits are inserted only by {character:UUID} and {character:UUID:withOutfit}. No implicit framing; framing/view/Vibe apply only when selected. Inspect snapshot.variants[].prompt and characterReferences (separate from wildcardReplacements). Read engui_get_prompt_guide. Local write only; never runs inference.",
   engui_get_plan: "Read an immutable plan and its existing batch.",
   engui_start_generation:
     "Start this exact prepared batch. Paid external operation: requires conversation authorization for this generation. Retry using the same requestKey.",

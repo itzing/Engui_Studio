@@ -86,3 +86,6 @@ The server is now v1.1.0 with 23 tools; the owner has confirmed Claude connectio
 ## MCP 1.2.0 prompt capabilities (ENGUI-602)
 
 25 tools (15 for read-only credentials). Startup instructions point to `engui_get_prompt_guide` and the equivalent `engui://guides/prompts` resource; `engui_list_wildcards` provides active workspace keys without writes. See [prompt guide](engui-mcp-prompt-guide.md). Character tags use the same resolver as Create, with frozen provenance and stale-source checks. Explicit-tag mode does not prepend primary identity/outfit. Historical unresolved-tag plans require fresh preparation; untagged plans retain compatibility. No schema or token changes. Reconnect clients to refresh discovery.
+
+## MCP 2.0 generation contract
+engui_prepare_generation no longer accepts characterId, characterVersionId or outfitId. Use a plain prompt or inline Character tags; the default framing is custom with no prefix. Reconnect clients to refresh discovery. New plan snapshots use schemaVersion2; saved legacy snapshots/receipts are not migrated. Concept review still accepts an explicit characterId independently. See [prompt guide](engui-mcp-prompt-guide.md).

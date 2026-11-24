@@ -4,6 +4,8 @@ Status: v1 implemented under ENGUI-582 through ENGUI-586 on 2026-11-11; client c
 Date: 2026-11-11. Tracking: [ENGUI-581](../backlog/tasks/ENGUI-581.md).
 Owner authorization: Telegram message 14297, following workspace-scoping discussion 14295.
 
+> Historical v1 specification. The generation input below is superseded by MCP 2.0: primary Character selectors were removed; use plain text or Character tags. See [current prompt guide](engui-mcp-prompt-guide.md).
+
 ## 1. Product goal and scope
 
 Let an agent help produce fighting-game character concepts through Engui: inspect a character and references, prepare an exact generation, submit an authorized batch, inspect actual images, preserve candidates, and record the owner's chosen reference.
