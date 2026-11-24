@@ -15,6 +15,7 @@ import {
 } from "./core";
 import { characterDetail, listModels, listRecords } from "./catalog";
 import { imagePreview } from "./media";
+import { downloadArtifact } from "./artifacts";
 import { visibleParts } from "./authoring-schemas";
 import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
@@ -91,6 +92,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     height: z.number(),
     byteLength: z.number(),
   }),
+  engui_download_artifact: z.object({ source: json, filename: z.string(), mimeType: z.string(), byteLength: z.number(), sha256: z.string(), downloadUrl: z.string().url(), expiresAt: z.string(), original: z.literal(true) }),
   engui_prepare_generation: z.object({
     planId: z.string(),
     planDigest: z.string(),
@@ -174,7 +176,8 @@ const descriptions: Record<ToolName, string> = {
     "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
   engui_list_presets: "List visible outfits, Vibes or model-compatible LoRAs.",
   engui_search_gallery: "Search active workspace images without enrichment.",
-  engui_get_image: "Inspect actual bounded image bytes, not just an image URL.",
+  engui_get_image: "Inspect a bounded, resized WebP preview (512/1024px). NOT the full original; use engui_download_artifact to download original bytes.",
+  engui_download_artifact: "Download the full original Job output or Gallery artifact, not a preview. Returns an HTTPS downloadUrl (GET, no additional headers required), filename, MIME, byteLength and SHA-256. Link expires in at most10minutes and is private bearer access to this exact file; do not publish it. Download with a file-capable HTTP client, preserve original bytes; never regenerate to get a download. Call again for a fresh expired link. Workspace read scope; no generation or Gallery write.",
   engui_prepare_generation:
     "Freeze exact prompts, optional inline Character references, settings and three seeds by default. characterId, characterVersionId and outfitId are not accepted. Plain text requires no Character; identities/outfits are inserted only by {character:UUID} and {character:UUID:withOutfit}. No implicit framing; framing/view/Vibe apply only when selected. Inspect snapshot.variants[].prompt and characterReferences (separate from wildcardReplacements). Read engui_get_prompt_guide. Local write only; never runs inference.",
   engui_get_plan: "Read an immutable plan and its existing batch.",
@@ -196,6 +199,7 @@ async function execute(
   name: ToolName,
   args: any,
   auth: Authority,
+  origin: string,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
     case "engui_create_character": return { result: await createCharacter(auth, args) };
@@ -235,6 +239,8 @@ async function execute(
       const preview = await imagePreview(args.source, args.maxEdge);
       return { result: preview.metadata, image: preview.content };
     }
+    case "engui_download_artifact":
+      return { result: await downloadArtifact(auth, args.source, origin) };
     case "engui_prepare_generation":
       return { result: await prepareGeneration(auth, args) };
     case "engui_get_plan":
@@ -255,7 +261,7 @@ async function execute(
       return { result: await getReference(args.characterId) };
   }
 }
-export function createMcpServer(auth: Authority) {
+export function createMcpServer(auth: Authority, origin = "http://localhost") {
   const server = new McpServer(
     { name: "engui", version: MCP_VERSION },
     { capabilities: { tools: {}, resources: {} }, instructions: MCP_INSTRUCTIONS },
@@ -292,7 +298,7 @@ export function createMcpServer(auth: Authority) {
           // Repeat strict parsing so SDK coercion cannot silently drop unknown selectors.
           const args = inputSchemas[name].parse(raw);
           await rateLimit(auth, name);
-          const action = () => execute(name, args, auth);
+          const action = () => execute(name, args, auth, origin);
           const value =
             scope === "read"
               ? await action()
@@ -378,7 +384,9 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     if (request.method !== "POST")
       return new Response(null, { status: 405, headers: { Allow: "POST" } });
     return await inAuthority(auth, async () => {
-      const server = createMcpServer(auth),
+      const url = new URL(request.url);
+      const origin = `${request.headers.get("x-forwarded-proto") === "https" ? "https:" : url.protocol}//${request.headers.get("host") || url.host}`;
+      const server = createMcpServer(auth, origin),
         transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
           enableJsonResponse: true,

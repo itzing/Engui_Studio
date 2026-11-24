@@ -62,7 +62,7 @@ describe("MCP Character reference plans", () => {
     const f = await fixture(["read"]);
     expect(f.client.getInstructions()).toContain("engui_get_prompt_guide");
     const tools = (await f.client.listTools()).tools;
-    expect(tools).toHaveLength(15);
+    expect(tools).toHaveLength(16);
     expect(tools.map(t => t.name)).toContain("engui_list_wildcards");
     const guide = await f.call("engui_get_prompt_guide");
     expect(guide.markdown).toContain("{character:UUID:withOutfit}");

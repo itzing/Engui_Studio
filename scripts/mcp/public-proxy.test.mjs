@@ -10,6 +10,10 @@ const upstream = http.createServer(async (request, response) => {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   received.push({ path: request.url, headers: request.headers, body: Buffer.concat(chunks) });
+  if (request.url.startsWith("/api/mcp/artifacts/")) {
+    response.writeHead(200, { "Content-Type": "image/png", "Content-Disposition": 'attachment; filename="original.png"', "Content-Length": "4", "ETag": '"hash"', "Referrer-Policy": "no-referrer", "Set-Cookie": "must-not-escape=1" });
+    return response.end(request.method === "HEAD" ? undefined : Buffer.from([1,2,3,4]));
+  }
   if (!request.headers.authorization) {
     response.writeHead(401, { "WWW-Authenticate": 'Bearer realm="engui-mcp"' });
     return response.end("Unauthorized");
@@ -113,6 +117,16 @@ try {
     const count = received.length;
     assert.equal((await send("/api/mcp", { headers: { authorization: ["Bearer first", "Bearer second"] } })).status, 400);
     assert.equal(received.length, count);
+  });
+  await test("original downloads preserve bytes/headers on exact bounded GET/HEAD routes only", async () => {
+    const route = "/api/mcp/artifacts/abc." + "A".repeat(43);
+    const result = await send(route, { method: "GET", body: "", headers: { authorization: "", "x-workspace-id": "" } });
+    assert.equal(result.status, 200); assert.deepEqual(result.body, Buffer.from([1,2,3,4]));
+    assert.equal(result.headers["content-length"], "4"); assert.equal(result.headers["content-disposition"], 'attachment; filename="original.png"');
+    assert.equal(result.headers["etag"], '"hash"'); assert.equal(result.headers["set-cookie"], undefined);
+    assert.equal((await send(route, { method: "HEAD", body: "" })).body.length, 0);
+    assert.equal((await send(route)).status, 405);
+    for (const target of [route+"?x=1", route+"/", "/api/mcp/artifacts/../private", "/api/mcp/artifacts/"+"a".repeat(2049)+"."+"A".repeat(43)]) assert.equal((await send(target, { method: "GET", body: "" })).status,404);
   });
   await test("unavailable application fails closed", async () => {
     upstream.closeAllConnections();

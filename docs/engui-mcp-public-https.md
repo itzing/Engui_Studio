@@ -89,3 +89,6 @@ Ingress telemetry records timestamp, bounded method/route classifications, HTTP 
 Standard-port evidence: `/home/engui/engui-runs/engui-mcp-claude443-20261111/` and OpenClaw workspace `runs/engui-mcp-claude443-20261111/`. The same Fairy Tale credential is retained; only the endpoint URL changes.
 
 The isolated daemon must set both `--state` and `--statedir` explicitly. Without the latter, this unprivileged deployment initially reported `no TailscaleVarRoot` when requesting its TLS certificate. After correction the same node login was retained, ACME issued the certificate, and the public SDK check passed over validated TLS on443. The owner-side Claude retry remains the final integration check.
+
+## Original-file download route (MCP2.2)
+The ingress now also permits exactly `GET/HEAD /api/mcp/artifacts/<signed-capability>`; no other application/media routes are public. The capability is issued only by the authenticated workspace read tool `engui_download_artifact`, expires within10minutes and is checked again against credential/source state on download. The original long-lived token is not exposed. Keep these URLs private. General diagnostics record `route: artifact`, never the URL. Copy the updated proxy script and restart `engui-mcp-proxy.service` along with the application deployment.

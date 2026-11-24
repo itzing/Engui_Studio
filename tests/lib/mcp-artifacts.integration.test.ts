@@ -1,0 +1,58 @@
+import { beforeAll, afterAll, it, expect, vi } from "vitest";
+import { randomUUID, createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+vi.mock("@/lib/runpodSupervisor", () => ({ startRunPodSupervisor: vi.fn() }));
+vi.mock("@/lib/galleryEnrichment", () => ({ queueGalleryEnrichment: vi.fn() }));
+vi.mock("@/lib/galleryDerivatives", () => ({ queueGalleryDerivatives: vi.fn() }));
+import { prisma } from "@/lib/prisma";
+import { workspaceContext } from "@/lib/workspaces/context";
+import { provisionCredential } from "@/lib/mcp/auth";
+import { handleMcpRequest } from "@/lib/mcp/server";
+import { handleArtifactRequest } from "@/lib/mcp/artifacts";
+vi.setConfig({ testTimeout: 15000 });
+const dirs: string[] = [], clients: Client[] = [];
+const scope = <T>(workspaceId: string, fn: () => T) => workspaceContext.run({kind:"workspace",workspaceId},fn);
+const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+beforeAll(()=>{if(!process.env.ENGUI_DATABASE_URL?.includes("mcp-test"))throw Error("Isolated database required");process.env.ENGUI_MCP_ENABLED="1";});
+afterAll(async()=>{vi.useRealTimers();await Promise.all(clients.map(c=>c.close()));await prisma.$disconnect();for(const d of dirs)await fs.rm(d,{recursive:true,force:true});});
+async function fixture() {
+ const ws=await prisma.workspace.create({data:{id:randomUUID(),userId:"user-with-settings",name:"artifact-test-"+randomUUID()}});
+ const credential=await provisionCredential(ws.id,["read"],1);
+ const headers={Authorization:"Bearer "+credential.token,"X-Workspace-Id":ws.id};
+ const client=new Client({name:"artifact-test-"+randomUUID(),version:"1"});clients.push(client);
+ await client.connect(new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"),{requestInit:{headers},fetch:async(i:any,n:any)=>handleMcpRequest(new Request(i,n))}));
+ const dir=path.join(process.cwd(),"public","generations","artifact-tests-"+ws.id);dirs.push(dir);await fs.mkdir(dir,{recursive:true});
+ const bytes=await sharp({create:{width:1600,height:1200,channels:3,background:"#336699"}}).png().withMetadata().toBuffer();
+ const file=path.join(dir,"original.png");await fs.writeFile(file,bytes);
+ const job=await scope(ws.id,()=>prisma.job.create({data:{id:randomUUID(),workspaceId:ws.id,userId:"user-with-settings",type:"image",status:"completed",modelId:"fixture",resultUrl:"/generations/artifact-tests-"+ws.id+"/original.png"}}));
+ const source={kind:"job_output",jobId:job.id,outputId:"output-1"};
+ const call=async(name:string,args:any)=>{const r=await client.callTool({name,arguments:args});if(r.isError)throw Object.assign(Error((r.content as any)[0].text),JSON.parse((r.content as any)[0].text));return(r.structuredContent as any).result;};
+ const link=()=>call("engui_download_artifact",{source});
+ return{ws,credential,headers,client,dir,file,bytes,job,source,call,link};
+}
+async function download(url:string,init:RequestInit={}) { return handleArtifactRequest(new Request(url,init),new URL(url).pathname.split("/").at(-1)!); }
+it("read-only MCP discovery advertises original downloads and exact dimensions survive while preview shrinks",async()=>{
+ const f=await fixture(),tools=await f.client.listTools();expect(tools.tools.find(t=>t.name==="engui_download_artifact")?.annotations?.readOnlyHint).toBe(true);
+ const preview=await f.call("engui_get_image",{source:f.source});expect(preview.width).toBe(512);expect(preview.mimeType).toBe("image/webp");
+ const out=await f.link();expect(out).toMatchObject({original:true,byteLength:f.bytes.length,sha256:hash(f.bytes),mimeType:"image/png"});expect(out.downloadUrl).not.toContain(f.credential.token);expect(JSON.stringify(out)).not.toContain("/home/");
+ const response=await download(out.downloadUrl);expect(response.status).toBe(200);expect(response.headers.get("content-disposition")).toContain("attachment;");
+ const bytes=Buffer.from(await response.arrayBuffer());expect(bytes.equals(f.bytes)).toBe(true);expect((await sharp(bytes).metadata()).width).toBe(1600);
+ expect(response.headers.get("cache-control")).toContain("no-store");expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+ const head=await download(out.downloadUrl,{method:"HEAD"});expect(head.status).toBe(200);expect(head.headers.get("content-length")).toBe(String(bytes.length));expect((await head.arrayBuffer()).byteLength).toBe(0);
+ expect(await scope(f.ws.id,()=>prisma.job.count({where:{workspaceId:f.ws.id}}))).toBe(1);expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(0);
+});
+it("downloads owned Gallery originals but not a trashed copy",async()=>{const f=await fixture();const a=await scope(f.ws.id,()=>prisma.galleryAsset.create({data:{workspaceId:f.ws.id,type:"image",bucket:"draft",originalUrl:f.job.resultUrl!,contentHash:hash(f.bytes)}}));const out=await f.call("engui_download_artifact",{source:{kind:"gallery_asset",assetId:a.id}});expect(Buffer.from(await(await download(out.downloadUrl)).arrayBuffer()).equals(f.bytes)).toBe(true);await scope(f.ws.id,()=>prisma.galleryAsset.update({where:{id:a.id},data:{trashed:true}}));expect((await download(out.downloadUrl)).status).toBe(404);});
+it("streams a video larger than the preview/reference limit without truncation or re-encoding",async()=>{const f=await fixture(),bytes=Buffer.alloc(26*1024*1024,117);await fs.writeFile(path.join(f.dir,"video.mp4"),bytes);await scope(f.ws.id,()=>prisma.job.update({where:{id:f.job.id},data:{type:"video",resultUrl:f.job.resultUrl!.replace("original.png","video.mp4")}}));const out=await f.link();expect(out.byteLength).toBe(bytes.length);expect(out.mimeType).toBe("video/mp4");const response=await download(out.downloadUrl);expect(response.status).toBe(200);expect(hash(Buffer.from(await response.arrayBuffer()))).toBe(hash(bytes));});
+it("rejects foreign sources and incorrect workspace headers",async()=>{const a=await fixture(),b=await fixture();await expect(b.call("engui_download_artifact",{source:a.source})).rejects.toMatchObject({code:"NOT_FOUND"});const out=await a.link();expect((await download(out.downloadUrl,{headers:b.headers})).status).toBe(403);});
+it("denies tampered signature and signed payload source changes",async()=>{const f=await fixture(),out=await f.link(),url=new URL(out.downloadUrl),token=url.pathname.split("/").at(-1)!,[body,sig]=token.split(".");url.pathname=url.pathname.replace(token,body+"."+(sig[0]==="A"?"B":"A")+sig.slice(1));expect((await download(url.href)).status).toBe(401);const data=JSON.parse(Buffer.from(body,"base64url").toString());data.source.outputId="output-2";url.pathname="/api/mcp/artifacts/"+Buffer.from(JSON.stringify(data)).toString("base64url")+"."+sig;expect((await download(url.href)).status).toBe(401);});
+it("expires temporary links and permits issuing a fresh one",async()=>{const f=await fixture(),out=await f.link();vi.useFakeTimers({toFake:["Date"]});try{vi.setSystemTime(new Date(Date.now()+601000));expect((await download(out.downloadUrl)).status).toBe(401);const next=await f.link();expect((await download(next.downloadUrl,{method:"HEAD"})).status).toBe(200);}finally{vi.useRealTimers();}});
+it.each(["revoke","expire","removeRead","workspace"])("invalidates link after %s",async action=>{const f=await fixture(),out=await f.link();await scope(f.ws.id,async()=>{if(action==="workspace")await prisma.workspace.update({where:{id:f.ws.id},data:{lifecycle:"deleting"}});else await prisma.mcpCredential.update({where:{id:f.credential.id},data:action==="revoke"?{revokedAt:new Date()}:action==="expire"?{expiresAt:new Date(0)}:{scopesJson:"[]"}});});expect([401,404]).toContain((await download(out.downloadUrl)).status);});
+it("rejects stale links after the original changes or disappears",async()=>{const f=await fixture(),out=await f.link();await fs.writeFile(f.file,Buffer.from("changed"));expect((await download(out.downloadUrl)).status).toBe(409);await fs.unlink(f.file);expect((await download(out.downloadUrl)).status).toBe(409);});
+it("does not download pending Jobs or deleted Jobs",async()=>{const f=await fixture(),out=await f.link();await scope(f.ws.id,()=>prisma.job.update({where:{id:f.job.id},data:{status:"processing"}}));await expect(f.link()).rejects.toMatchObject({code:"NOT_FOUND"});await scope(f.ws.id,()=>prisma.job.delete({where:{id:f.job.id}}));expect((await download(out.downloadUrl)).status).toBe(404);});
+it.each(["/generations/../../package.json","/generations/%2e%2e/package.json","https://untrusted.invalid/image.png","@local/tmp/private.png"])("rejects unsafe original %s without fetching",async url=>{const f=await fixture();await scope(f.ws.id,()=>prisma.job.update({where:{id:f.job.id},data:{resultUrl:url}}));await expect(f.link()).rejects.toMatchObject({code:"MEDIA_UNAVAILABLE"});});
+it("rejects an external symlink and an explicitly foreign Gallery path",async()=>{const f=await fixture();await fs.unlink(f.file);await fs.symlink(path.join(process.cwd(),"package.json"),f.file);await expect(f.link()).rejects.toMatchObject({code:"MEDIA_UNAVAILABLE"});await scope(f.ws.id,()=>prisma.job.update({where:{id:f.job.id},data:{resultUrl:"/generations/gallery/"+randomUUID()+"/file.png"}}));await expect(f.link()).rejects.toMatchObject({code:"NOT_FOUND"});});
+it("does not allow query selectors, untrusted hosts or disabled admission",async()=>{const f=await fixture(),out=await f.link();expect((await download(out.downloadUrl+"?workspaceId=other")).status).toBe(400);expect((await download(out.downloadUrl,{headers:{host:"attacker.invalid"}})).status).toBe(403);process.env.ENGUI_MCP_ENABLED="0";try{expect((await download(out.downloadUrl)).status).toBe(404);}finally{process.env.ENGUI_MCP_ENABLED="1";}});

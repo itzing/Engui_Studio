@@ -8,7 +8,7 @@ const REQUEST_HEADERS = [
 ];
 const RESPONSE_HEADERS = [
   "content-type", "www-authenticate", "allow", "retry-after",
-  "mcp-protocol-version",
+  "mcp-protocol-version", "content-length", "content-disposition", "etag", "referrer-policy",
 ];
 
 export function createPublicMcpProxy({ authority, aliases = [], upstreamPort = 3010 }) {
@@ -19,10 +19,11 @@ export function createPublicMcpProxy({ authority, aliases = [], upstreamPort = 3
   let active = 0;
   const server = http.createServer({ maxHeaderSize: 16384 }, (request, response) => {
     const started = Date.now();
+    const artifact = /^\/api\/mcp\/artifacts\/[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{43}$/.test(request.url || "");
     response.once("finish", () => console.info("MCP ingress", JSON.stringify({
       at: new Date().toISOString(),
       method: ["POST", "GET", "DELETE", "OPTIONS", "HEAD"].includes(request.method) ? request.method : "other",
-      route: request.url === "/api/mcp" ? "mcp" : "rejected",
+      route: request.url === "/api/mcp" ? "mcp" : artifact ? "artifact" : "rejected",
       status: response.statusCode,
       hasAuthorization: Boolean(request.headers.authorization),
       hasWorkspace: Boolean(request.headers["x-workspace-id"]),
@@ -37,10 +38,10 @@ export function createPublicMcpProxy({ authority, aliases = [], upstreamPort = 3
       response.end(JSON.stringify({ error: message }));
     };
     // Compare raw request targets: do not normalize or decode attacker-controlled paths.
-    if (request.url !== "/api/mcp") return reject(404, "Not found.");
+    if (request.url !== "/api/mcp" && !artifact) return reject(404, "Not found.");
     if (!authorities.has(request.headers.host)) return reject(403, "Host is not allowed.");
-    if (!["POST", "GET", "DELETE"].includes(request.method)) {
-      response.setHeader("Allow", "POST, GET, DELETE");
+    if (!(artifact ? ["GET", "HEAD"] : ["POST", "GET", "DELETE"]).includes(request.method)) {
+      response.setHeader("Allow", artifact ? "GET, HEAD" : "POST, GET, DELETE");
       return reject(405, "Method not allowed.");
     }
     for (const name of ["authorization", "x-workspace-id", "host"]) {
@@ -82,7 +83,7 @@ export function createPublicMcpProxy({ authority, aliases = [], upstreamPort = 3
       }
       // Never forward cookies, caller-supplied routing headers, or an arbitrary target.
       upstream = http.request({
-        host: "127.0.0.1", port: upstreamPort, path: "/api/mcp",
+        host: "127.0.0.1", port: upstreamPort, path: artifact ? request.url : "/api/mcp",
         method: request.method, headers, timeout: 120000,
       }, (result) => {
         const out = {};

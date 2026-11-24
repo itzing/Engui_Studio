@@ -11,7 +11,7 @@ The server implements 23 workspace-bound character-authoring and concept-generat
 - `ENGUI_MCP_ENABLED=1` admits requests and queued dispatch; absent/other values return 404 and prevent new dispatch. The worker still settles already accepted work and preserves originals.
 - `ENGUI_MCP_ALLOWED_HOSTS`: comma-separated non-loopback host values, including port when present. Literal loopback is permitted. Configure the trusted TLS reverse proxy before remote access; no wildcard CORS is enabled.
 - `ENGUI_MCP_ALLOWED_ORIGINS`: optional exact allowed browser origins. Native clients may omit Origin. No client is configured automatically.
-- Every request requires `Authorization: Bearer <token>` and `X-Workspace-Id: <UUID>`. Cookies, tool arguments and query selectors cannot select scope. Tokens belong to exactly one workspace.
+- Every MCP protocol request requires `Authorization: Bearer <token>` and `X-Workspace-Id: <UUID>`. Cookies, tool arguments and query selectors cannot select scope. Tokens belong to exactly one workspace.
 - Token generation uses 256 random bits and stores only a SHA-256 hash. Each token includes `read`; `generate`, `curate`, `cancel` are explicit. `curate` covers character/outfit/wardrobe authoring as well as image saving and reviews. The existing owner-authorized Fairy Tale credential remains valid; authoring deployment does not rotate it.
 
 Run the CLI locally as the Engui service user, from the repository root:
@@ -89,3 +89,11 @@ The server is now v1.1.0 with 23 tools; the owner has confirmed Claude connectio
 
 ## MCP 2.0 generation contract
 engui_prepare_generation no longer accepts characterId, characterVersionId or outfitId. Use a plain prompt or inline Character tags; the default framing is custom with no prefix. Reconnect clients to refresh discovery. New plan snapshots use schemaVersion2; saved legacy snapshots/receipts are not migrated. Concept review still accepts an explicit characterId independently. See [prompt guide](engui-mcp-prompt-guide.md).
+
+## MCP 2.2 original artifacts (ENGUI-608)
+
+27 tools, including read-scoped `engui_download_artifact`. Generation/model scope is unchanged. `GET/HEAD /api/mcp/artifacts/<capability>` streams an exact owned local original without putting base64 in tool responses. The MCP preview remains bounded. A strictly validated source selector, workspace-owned record, safe local file handle and SHA-256/length binding prevent arbitrary paths, outbound fetching and stale substitution. No schema migration or long-lived credential change.
+
+Capability payload v1 is HMAC-SHA256 authenticated with a domain-separated existing credential secret hash; it binds credential, workspace, source, original SHA-256/length and expiry (at most600seconds, capped by credential expiry). The route rechecks credential revocation/scopes/expiry and workspace/source state. URL possession grants read of that exact file until expiry; the long-lived MCP token is never placed in the URL. Optional supplied MCP authority headers must match. Revocation does not retract bytes already downloaded.
+
+Ingress permits only exact bounded GET/HEAD artifact paths alongside the original MCP route. It passes original MIME/length/attachment/ETag headers, streams with backpressure and retains no-store/nosniff. Logs contain route category/status only, never capability path or file bytes. No cookies or arbitrary routing headers are forwarded. Existing rate limits apply to link issuance and file requests. Both application build and `/usr/local/lib/engui-mcp/public-proxy.mjs` must be deployed; preserve both for rollback. UI, public static exposure and inference endpoints are unchanged.

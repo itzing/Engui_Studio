@@ -58,3 +58,17 @@ This syntax works in MCP and Create Image/Create Video. Prompts/Prompt Construct
 
 ## MaskFlow masked editing
 MCP 2.1 adds `qwen-image-edit-maskflow` / `masked_image_edit`, one source and a separate owned grayscale mask or normalized rectangles. See [Qwen MaskFlow MCP](qwen-maskflow-mcp.md) and `engui_get_prompt_guide` for exact schema. No UI rollout or change to ordinary Qwen.
+
+## MCP 2.2: full original downloads
+
+`engui_get_image` is a resized WebP preview. To retrieve the full artifact call:
+
+```json
+{"name":"engui_download_artifact","arguments":{"source":{"kind":"job_output","jobId":"REAL_JOB_ID","outputId":"output-1"}}}
+```
+
+Use the exact `variants[].source` from `engui_get_batch`. Gallery originals use `{ "kind": "gallery_asset", "assetId": "REAL_ASSET_ID" }`, including after the original Job is deleted.
+
+The result contains `downloadUrl`, `filename`, `mimeType`, `byteLength`, `sha256`, `expiresAt`, `original: true`. GET the URL with a file-capable HTTP client and save response bytes unchanged; no extra headers are needed. Compare size/hash. This is an exact original, preserving resolution, format and metadata; it is not a re-encoded preview. Local image/video/audio originals are supported, with streaming rather than the preview/reference25MiB limit. Missing or remote-only files return an actionable error, never a fallback preview.
+
+The private bearer link lasts at most10minutes and cannot outlive its MCP credential. Never publish it; request a fresh link after expiry. Credential revocation/read-scope removal, inactive workspace, source deletion/trash or changed bytes invalidate it. No paid operation, download copy or Gallery save is performed. A client without an HTTP/file tool must state that limitation and can supply the private temporary link to the owner; it must not claim to have downloaded the file.

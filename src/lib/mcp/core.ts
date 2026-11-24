@@ -113,6 +113,7 @@ export const limits = () => ({
   maxImageBytes: 25 * 1024 * 1024,
   maxImagePixels: 40_000_000,
   maxPreviewBytes: 1024 * 1024,
+  artifactLinkTtlSeconds: 600,
   maxPageSize: 50,
   activeBatches: boundedEnv("ENGUI_MCP_MAX_BATCHES", 2, 1, 10),
   preparePerMinute: boundedEnv("ENGUI_MCP_PREPARE_PER_MINUTE", 10, 1, 120),
@@ -147,6 +148,7 @@ export const inputSchemas = {
       maxEdge: z.union([z.literal(512), z.literal(1024)]).default(512),
     })
     .strict(),
+  engui_download_artifact: z.object({ source: mediaRef }).strict(),
   engui_prepare_generation: draftSchema,
   engui_get_plan: z.object({ planId: id }).strict(),
   engui_start_generation: z

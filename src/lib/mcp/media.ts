@@ -8,11 +8,11 @@ import { localContentPath } from "@/lib/workspaces/files";
 import { type MediaRef, limits, fail, parse } from "./core";
 import { buildNormalizedOutputs } from "@/lib/gallery/saveOutput";
 
-export async function resolveMedia(source: MediaRef) {
+export async function resolveMedia(source: MediaRef, original = false) {
   const workspaceId = requireWorkspaceId();
   if (source.kind === "gallery_asset") {
     const row = await prisma.galleryAsset.findFirst({
-      where: { id: source.assetId, workspaceId, trashed: false, type: "image" },
+      where: { id: source.assetId, workspaceId, trashed: false, type: original ? { in: ["image", "video", "audio"] } : "image" },
     });
     if (!row) fail("NOT_FOUND", "Image not found.");
     return {
@@ -27,7 +27,7 @@ export async function resolveMedia(source: MediaRef) {
     where: {
       id: source.jobId,
       workspaceId,
-      type: "image",
+      type: original ? { in: ["image", "video", "audio", "tts", "music"] } : "image",
       status: "completed",
     },
   });
