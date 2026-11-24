@@ -11,7 +11,8 @@ import {
 } from "./core";
 import { assertCredential } from "./auth";
 import { loadPlan, validatePlan } from "./plans";
-export const terminalVariants = ["succeeded", "failed", "cancelled"];
+import { terminalVariants, batchState, variantStatus, batchCounts, statusMessage } from "./batch-status";
+export { batchState, terminalVariants } from "./batch-status";
 export async function startGeneration(
   auth: Authority,
   args: { planId: string; planDigest: string; requestKey: string },
@@ -99,19 +100,6 @@ export async function cancelBatch(args: {
     return { batchId: batch.id, cancellationRequested: true };
   });
 }
-export function batchState(variants: any[], cancelled: boolean) {
-  const states = variants.map((v) => v.state);
-  if (states.includes("submission_unknown")) return "needs_attention";
-  if (states.every((s) => terminalVariants.includes(s))) {
-    if (states.every((s) => s === "succeeded")) return "completed";
-    if (states.every((s) => s === "cancelled")) return "cancelled";
-    if (states.some((s) => s === "succeeded")) return "partial";
-    return "failed";
-  }
-  if (cancelled) return "cancel_requested";
-  if (states.every((s) => s === "queued")) return "queued";
-  return "running";
-}
 export async function getBatch(batchId: string) {
   const b = await prisma.mcpGenerationBatch.findFirst({
     where: { id: batchId },
@@ -119,6 +107,12 @@ export async function getBatch(batchId: string) {
   });
   if (!b) fail("NOT_FOUND", "Batch not found.");
   const snapshot = parse(b.plan.snapshotJson);
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: b.variants.map((v) => v.jobId) } },
+    select: { id: true, status: true, runpodJobId: true, error: true },
+  });
+  const jobsById = new Map(jobs.map((j) => [j.id, j]));
+  const blocked = b.variants.some((v) => v.state === "submission_unknown");
   const variants = [];
   for (const v of b.variants) {
     const asset = v.assetId
@@ -127,36 +121,39 @@ export async function getBatch(batchId: string) {
           select: { id: true },
         })
       : null;
+    const status = variantStatus(v, jobsById.get(v.jobId), !!b.cancelledAt, blocked);
     variants.push({
       variantId: v.id,
       label: ["A", "B", "C"][v.index],
       jobId: v.jobId,
-      state: v.state,
+      ...status,
       seed: snapshot.variants[v.index].seed,
       modelId: snapshot.draft.modelId,
-      errorCode: v.errorCode,
-      outputId: v.state === "succeeded" ? "output-1" : null,
+      errorCode: ["succeeded", "cancelled"].includes(status.state) ? null : v.errorCode || (status.phase === "failed" ? "PROVIDER_REJECTED" : status.phase === "submission_unknown" ? "SUBMISSION_UNKNOWN" : null),
+      outputId: status.phase === "succeeded" ? "output-1" : null,
       assetId: asset?.id || null,
       preservationState:
         v.assetId && !asset ? "unavailable" : v.preservationState,
       source: asset
         ? { kind: "gallery_asset", assetId: asset.id }
-        : v.state === "succeeded"
+        : status.phase === "succeeded"
           ? { kind: "job_output", jobId: v.jobId, outputId: "output-1" }
           : null,
     });
   }
+  const state = batchState(variants, !!b.cancelledAt);
+  const isTerminal = variants.length > 0 && variants.every((v) => v.isTerminal);
   return {
     batchId: b.id,
     planId: b.planId,
-    state: batchState(variants, !!b.cancelledAt),
-    counts: {
-      total: variants.length,
-      succeeded: variants.filter((v) => v.state === "succeeded").length,
-      failed: variants.filter((v) => v.state === "failed").length,
-    },
+    state,
+    statusMessage: statusMessage(state),
+    isTerminal,
+    cancellationRequested: !!b.cancelledAt,
+    observedAt: new Date().toISOString(),
+    counts: batchCounts(variants),
     variants,
     provenance: snapshot,
-    pollAfterSeconds: 5,
+    pollAfterSeconds: isTerminal ? 0 : 5,
   };
 }

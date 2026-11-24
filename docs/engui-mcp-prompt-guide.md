@@ -7,6 +7,21 @@
 4. Call engui_start_generation only with conversation authorization for this paid generation, the exact planId/planDigest and a UUID requestKey. Retry the SAME operation with the SAME key and payload. Poll engui_get_batch using pollAfterSeconds; never blindly resubmit uncertain work.
 5. Review actual images with engui_get_image. Completed originals are preserved to Draft. Record an approved reference only after the owner selects it.
 
+## Batch status and polling
+engui_get_batch is read-only and uses the latest locally stored Job status; it never polls the provider itself or submits/retries work. observedAt is the time of this read, NOT the timestamp of a fresh provider response. Supervisor polling can lag provider transitions.
+- queued: local Engui dispatch queue; not yet sent.
+- submitting: preparing/sending the provider request; execution not confirmed.
+- provider_queued: provider queue (Job queued/in_queue); NOT running inference.
+- running: Job processing/in_progress/running confirms execution.
+- finalizing: inference finished; retrieving/recovering the output, not another generation.
+- awaiting_status: missing/unknown Job state; neither execution nor failure is confirmed. Do not guess or resubmit.
+- submission_unknown: acceptance uncertain; requires reconciliation, never blind retry. Remaining queued variants are blocked with blockedReason=SUBMISSION_UNKNOWN.
+- cancel_requested: cancellation is requested, not confirmed. phase preserves the last known execution stage; keep polling. Terminal results can still succeed after a cancellation request.
+- succeeded / failed / cancelled: terminal variant outcomes. Batch completed means all succeeded; partial means some succeeded and the rest failed/cancelled; needs_attention means uncertain submission.
+The batch state summarizes remaining work: attention first, then cancellation, running, finalizing, submitting, provider_queued, awaiting_status, queued, blocked. Always inspect variants and counts for mixed batches. Completed siblings do not make a queued batch running.
+counts contains mutually exclusive per-state counts (camelCase names such as providerQueued and submissionUnknown); they sum to total. No invented queue position, ETA or inference percentage is supplied. lifecycleState is internal dispatch bookkeeping retained for diagnostics/compatibility: its running means accepted/in flight, NOT confirmed inference. Use state and phase instead. jobStatus exposes only the stored raw status, not provider secrets.
+When isTerminal=false, wait pollAfterSeconds before polling again. When isTerminal=true, pollAfterSeconds=0 means STOP ordinary execution polling, not immediate retry. Gallery preservation is separate: succeeded can temporarily have preservationState pending/failed; inspect assetId/preservationState or use engui_save_output, never regenerate to obtain a gallery copy.
+
 ## Two prompt modes
 Structured mode (no Character tags): characterId is required; the server prepends its selected identity and outfit. Optional characterVersionId selects captured historical identity; outfitId selects clothing, otherwise current default clothing is used. Put action, camera, environment and style in prompt, not a second hardcoded identity.
 Inline mode (one or more Character tags, including tags from a wildcard or Vibe): descriptions are inserted ONLY at their tag locations. No implicit identity or outfit is prepended. characterId remains required as the primary character for batch/review tracking; tag every person you want visible. Omit characterVersionId and outfitId in this mode; conflicting parameters are rejected rather than ignored.

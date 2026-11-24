@@ -704,11 +704,80 @@ describe("workspace-bound MCP integration", () => {
       await processMcpWorkspace(f.ws.id);
       await processMcpWorkspace(f.ws.id);
       const batch = await f.call("engui_get_batch", { batchId: b.batchId });
-      expect(batch.variants[0].state).toBe("running");
+      expect(batch.variants[0].state).toBe("provider_queued");
+      expect(batch.variants[0].lifecycleState).toBe("running");
+      expect(batch.counts.running).toBe(0);
       expect(calls).toBe(1);
     } finally {
       providerAdapter.submit = original;
     }
+  });
+  it("discovered SDK reports Job queue, execution, finalization and completion without waiting for worker reconciliation", async () => {
+    const f = await fixture(), p = await plan(f, {variantCount:1}), b = await start(f,p);
+    await f.client.listTools();
+    const id=b.variants[0].jobId;
+    const read=()=>f.call("engui_get_batch",{batchId:b.batchId});
+    expect(await read()).toMatchObject({state:"queued",isTerminal:false,counts:{queued:1,running:0}});
+    await scope(f.ws.id, async()=> {
+      await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"running",providerJobId:"fixture-remote"}});
+      await prisma.job.create({data:{id,workspaceId:f.ws.id,userId:"user-with-settings",type:"image",status:"queued",modelId:"krea2-turbo",runpodJobId:"fixture-remote"}});
+    });
+    const submit=vi.spyOn(providerAdapter,"submit"), cancel=vi.spyOn(providerAdapter,"cancel");
+    for(const [jobStatus,state] of [["queued","provider_queued"],["processing","running"],["finalizing","finalizing"],["completed","completed"]]) {
+      await scope(f.ws.id,async()=>await prisma.job.update({where:{id},data:{status:jobStatus}}));
+      const result=await read();
+      expect(result.state).toBe(state);
+      expect(result.variants[0]).toMatchObject({jobStatus,lifecycleState:"running",providerAccepted:true});
+      expect(result.statusMessage).toBeTruthy();
+      expect(Date.parse(result.observedAt)).not.toBeNaN();
+      expect(result.isTerminal).toBe(jobStatus==="completed");
+      expect(result.pollAfterSeconds).toBe(jobStatus==="completed"?0:5);
+      expect(Object.entries(result.counts).filter(([k])=>k!=="total").reduce((n,[,v])=>n+(v as number),0)).toBe(1);
+    }
+    const done=await read();
+    expect(done.variants[0]).toMatchObject({state:"succeeded",outputId:"output-1",preservationState:"pending"});
+    expect(submit).not.toHaveBeenCalled();expect(cancel).not.toHaveBeenCalled();
+    const stored=await scope(f.ws.id,async()=>await prisma.mcpGenerationVariant.findFirst({where:{id:b.variants[0].variantId}}));
+    expect(stored?.state).toBe("running"); // Status reads are projections, not mutations.
+    await f.client.close();
+  });
+  it("SDK mixed completed/local queued batch stays queued and reports blocked siblings explicitly", async()=> {
+    const f=await fixture(),p=await plan(f),b=await start(f,p);
+    await f.client.listTools();
+    await scope(f.ws.id,async()=>await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"succeeded"}}));
+    const read=()=>f.call("engui_get_batch",{batchId:b.batchId});
+    expect(await read()).toMatchObject({state:"queued",counts:{succeeded:1,queued:2,running:0}});
+    await scope(f.ws.id,async()=>await prisma.mcpGenerationVariant.update({where:{id:b.variants[1].variantId},data:{state:"submission_unknown",errorCode:"SUBMISSION_UNKNOWN"}}));
+    const blocked=await read();
+    expect(blocked).toMatchObject({state:"needs_attention",isTerminal:false,counts:{submissionUnknown:1,blocked:1,queued:0}});
+    expect(blocked.variants[2]).toMatchObject({state:"blocked",phase:"queued",blockedReason:"SUBMISSION_UNKNOWN"});
+    await f.client.close();
+  });
+  it("SDK cancellation keeps the provider queue visible until a terminal Job arrives", async()=> {
+    const f=await fixture(),p=await plan(f,{variantCount:1}),b=await start(f,p),id=b.variants[0].jobId;
+    await f.client.listTools();
+    await scope(f.ws.id,async()=> {
+      await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"running",providerJobId:"fixture"}});
+      await prisma.job.create({data:{id,workspaceId:f.ws.id,userId:"user-with-settings",type:"image",status:"queued",modelId:"krea2-turbo"}});
+    });
+    await f.call("engui_cancel_batch",{batchId:b.batchId,requestKey:randomUUID()});
+    const pending=await f.call("engui_get_batch",{batchId:b.batchId});
+    expect(pending).toMatchObject({state:"cancel_requested",isTerminal:false,counts:{cancelRequested:1,running:0}});
+    expect(pending.variants[0]).toMatchObject({state:"cancel_requested",phase:"provider_queued",cancellationRequested:true});
+    await scope(f.ws.id,async()=>await prisma.job.update({where:{id},data:{status:"failed",error:"cancelled"}}));
+    expect(await f.call("engui_get_batch",{batchId:b.batchId})).toMatchObject({state:"cancelled",isTerminal:true,pollAfterSeconds:0,counts:{cancelled:1,failed:0}});
+    await f.client.close();
+  });
+  it("SDK never infers execution from a missing or foreign Job and scopes the batch read",async()=> {
+    const f=await fixture(),other=await fixture(),p=await plan(f,{variantCount:1}),b=await start(f,p);
+    await f.client.listTools();await other.client.listTools();
+    await scope(f.ws.id,async()=>await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"running",providerJobId:"receipt"}}));
+    const read=()=>f.call("engui_get_batch",{batchId:b.batchId});
+    expect(await read()).toMatchObject({state:"awaiting_status",counts:{running:0,awaitingStatus:1}});
+    await scope(other.ws.id,async()=>await prisma.job.create({data:{id:b.variants[0].jobId,workspaceId:other.ws.id,userId:"user-with-settings",type:"image",status:"processing",modelId:"krea2-turbo"}}));
+    expect((await read()).variants[0]).toMatchObject({state:"awaiting_status",jobStatus:null});
+    await expect(other.call("engui_get_batch",{batchId:b.batchId})).rejects.toMatchObject({code:"NOT_FOUND"});
+    await f.client.close();await other.client.close();
   });
   it("a deleting workspace rejects tool traffic and cannot dispatch queued work", async () => {
     const f = await fixture(),

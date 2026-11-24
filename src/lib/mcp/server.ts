@@ -22,6 +22,8 @@ import { cancelBatch, getBatch, startGeneration } from "./batches";
 import { getReference, recordReview, saveOutput } from "./curation";
 import { MCP_VERSION, MCP_INSTRUCTIONS, PROMPT_GUIDE, PROMPT_GUIDE_URI } from "./guide";
 
+import { variantStates, batchStates } from "./batch-status";
+
 const nullable = z.string().nullable(),
   json = z.record(z.unknown());
 const list = z.object({ items: z.array(json), nextCursor: nullable });
@@ -110,17 +112,20 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     accepted: z.boolean(),
   }),
   engui_get_batch: z.object({
-    batchId: z.string(),
-    planId: z.string(),
-    state: z.string(),
+    batchId: z.string(), planId: z.string(), state: z.enum(batchStates),
+    statusMessage: z.string(), isTerminal: z.boolean(), cancellationRequested: z.boolean(), observedAt: z.string(),
     counts: z.object({
-      total: z.number(),
-      succeeded: z.number(),
-      failed: z.number(),
+      total: z.number(), queued: z.number(), blocked: z.number(), submitting: z.number(),
+      providerQueued: z.number(), running: z.number(), finalizing: z.number(), awaitingStatus: z.number(),
+      submissionUnknown: z.number(), cancelRequested: z.number(), succeeded: z.number(), failed: z.number(), cancelled: z.number(),
     }),
-    variants: z.array(json),
-    provenance: json,
-    pollAfterSeconds: z.number(),
+    variants: z.array(z.object({
+      variantId: z.string(), label: z.string(), jobId: z.string(), state: z.enum(variantStates), phase: z.enum(variantStates),
+      lifecycleState: z.string(), jobStatus: nullable, providerAccepted: z.boolean(), cancellationRequested: z.boolean(),
+      blockedReason: nullable, isTerminal: z.boolean(), statusMessage: z.string(), seed: z.number(), modelId: z.string(),
+      errorCode: nullable, outputId: nullable, assetId: nullable, preservationState: z.string(), source: json.nullable(),
+    })),
+    provenance: json, pollAfterSeconds: z.number(),
   }),
   engui_cancel_batch: z.object({
     batchId: z.string(),
@@ -172,7 +177,7 @@ const descriptions: Record<ToolName, string> = {
   engui_start_generation:
     "Start this exact prepared batch. Paid external operation: requires conversation authorization for this generation. Retry using the same requestKey.",
   engui_get_batch:
-    "Read durable batch status. Poll after the returned delay; never submits or retries generation.",
+    "Read detailed Job-derived batch/variant status and phase. queued=local queue; provider_queued=accepted but NOT executing; running=confirmed execution; finalizing=output recovery. Inspect counts, statusMessage, isTerminal and cancellationRequested. lifecycleState is internal dispatch bookkeeping, NOT execution status. Stop normal execution polling when isTerminal=true; otherwise wait pollAfterSeconds. Unknown acceptance must never be blindly retried. Read-only; no provider calls.",
   engui_cancel_batch:
     "Fence queued variants and request cancellation of accepted jobs; cancellation is not proof of remote completion.",
   engui_save_output:
