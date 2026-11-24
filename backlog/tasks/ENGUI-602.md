@@ -1,7 +1,7 @@
 # ENGUI-602 — MCP Character tags and discoverable prompt guidance
 
 ## Status
-In Progress
+Done
 
 ## Request
 Owner14774 approved extending Character references to MCP after a prepared plan retained a literal tag. Make prompt capabilities discoverable to agents. Prompts/Prompt Constructor remains excluded. No paid generation.
@@ -26,3 +26,10 @@ Keep previous .next before promotion; restore and restart engui-studio.service i
 - Test harness uses fresh schema-only databases with synthetic records/settings, no production data or credentials. Operational protected-Default triggers are omitted only in the legacy-suite fixture because it creates a synthetic protected workspace. Initial fixture reuse/name problems corrected; evidence retained in the run directory.
 - Fixed an existing MCP error-format incompatibility exposed by real SDK discovery: error results no longer attach success-schema-incompatible structuredContent.
 - Run artifacts: /home/engui/engui-runs/engui-602-20261124. No paid generation; Prompts unchanged.
+
+## Deployment
+- Feature commit `34ad328` pushed to origin/main; installed MCP 1.2.0 exposes 25 tools, startup instructions and the prompt guide resource.
+- Installed build `zKBv1x5mqrCq4a_IsY0EL`; previous `vtKOsNLXh2Gwtwy5E4i2r` retained under the run directory with rollback.py.
+- Public Showdown SDK: 10 checks passed, including discover-then-call error handling. No production plans or generation batches were created by validation; no paid inference. Existing unresolved job was left unchanged.
+- The first post-restart health probe ran before the listener opened; automatic rollback succeeded. Readiness waiting was corrected, the same candidate was promoted again, and final service/public checks passed. Temporary preview stopped.
+- RULES.md rule37 records the owner's requirement to ask about MCP scope alongside desktop/mobile for future features.
