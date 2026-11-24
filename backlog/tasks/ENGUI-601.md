@@ -1,7 +1,7 @@
 # ENGUI-601 — Live Character references in Create prompts
 
 ## Status
-In Progress
+Done
 
 ## Request
 Owner14732..14746 approved the design: Create Image and Create Video only, desktop/mobile. Support identity-only and identity plus current default outfit; Reuse loads the template and resolves current data. Prompts / Prompt Constructor must not expand these tags or change existing Characters behavior.
@@ -32,3 +32,11 @@ Retain the previous .next build before promotion. Restore it and restart engui-s
 - Production build passed in isolated staging. Full type checking has the same normalized diagnostics as the baseline, no new diagnostics. An existing Prompt Constructor random-character test fails identically on the untouched baseline; the new literal-tag exclusion test passes.
 - No live generation jobs or production fixtures were created. An early integration harness spy was reset by Vitest and sent requests using invalid fixture credentials/endpoints (404 only); the final harness mocks the provider module and forbids network fetches.
 - Run artifacts: /home/engui/engui-runs/engui-601-20261124 and workspace runs/engui-character-tags-20261124.
+
+## Deployment evidence (2026-11-24)
+- Feature commit: `01106da`, pushed to origin/main. Live build: `vtKOsNLXh2Gwtwy5E4i2r`, promoted at 14:11:36 UTC; source/build input hashes match.
+- Service active/running with zero automatic restarts. HTTPS Create, mobile Create, Prompt Constructor and referenced static assets returned 200.
+- Installed UI passed 34 checks in Chromium and 34 in WebKit across desktop/mobile Create Image/Create Video. Fixture-only preview calls used the isolated server and generation requests were intercepted.
+- Separate read-only live API checks passed: identity-only, current default outfit, exact provenance, missing-character 422, and cross-workspace rejection. Existing cards were not changed; no generation was launched. Active jobs remained zero.
+- Previous serving build `mmNaSExIIdruz_nD0DWyd` retained at `/home/engui/engui-runs/engui-601-20261124/previous.next`, with rollback script and validation artifacts alongside it. No schema migration.
+- Temporary isolated preview was stopped after validation. Existing untracked tmp/ remains untouched.
