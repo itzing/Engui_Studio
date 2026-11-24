@@ -1,4 +1,5 @@
 'use client';
+import { useLiveWorkspaceJobs } from '@/hooks/jobs/useLiveWorkspaceJobs';
 import { UNKNOWN_STOP_MESSAGE } from "@/lib/jobControl";
 import { reconcileDeletedWorkspaces } from '@/lib/workspaces/client';
 
@@ -253,9 +254,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
 
     // Jobs should always come from DB, not localStorage
-    const [jobs, setJobs] = useState<Job[]>([]);
-    const [jobsLoaded, setJobsLoaded] = useState(false);
-    const [jobsSyncVersion, setJobsSyncVersion] = useState(0);
+    const { jobs, setJobs, jobsLoaded, setJobsLoaded, jobsSyncVersion, beginJobWrite } = useLiveWorkspaceJobs(activeWorkspaceId);
 
     const [settings, setSettings] = useState<StudioSettings>(() => {
         if (typeof window !== 'undefined') {
@@ -441,27 +440,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
     // --- Job Actions ---
 
-    const fetchJobs = async () => {
-        if (!activeWorkspaceId) {
-            console.log('⚠️ fetchJobs: No active workspace ID');
-            return;
-        }
-
-        try {
-            console.log('🔄 Fetching jobs for workspace:', activeWorkspaceId);
-            const response = await fetch(`/api/jobs?userId=user-with-settings&workspaceId=${activeWorkspaceId}&limit=50&page=1`);
-            const data = await response.json();
-            if (response.ok && data.success && Array.isArray(data.jobs)) {
-                console.log('✅ Fetched jobs:', data.jobs.length, 'jobs for workspace:', activeWorkspaceId);
-                setJobs(data.jobs);
-                setJobsLoaded(true);
-                setJobsSyncVersion(version => version + 1);
-            }
-        } catch (error) {
-            console.error('Failed to fetch jobs:', error);
-        }
-    };
-
     const addJob = async (job: Job) => {
         const jobWithWorkspace = { ...job, workspaceId: job.workspaceId || activeWorkspaceId || undefined };
         if (jobWithWorkspace.workspaceId !== currentBrowserWorkspaceId()) return;
@@ -473,6 +451,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             status: job.status
         });
 
+        const finishWrite = beginJobWrite();
         // Optimistic update
         setJobs(prev => [jobWithWorkspace, ...prev]);
 
@@ -496,6 +475,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             console.error('Failed to save job:', error);
             // Rollback optimistic update on error
             setJobs(prev => prev.filter(j => j.id !== job.id));
+        } finally {
+            finishWrite();
         }
     };
 
@@ -513,8 +494,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     };
 
     const updateJobStatus = async (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => {
-        // Find the job to get its details
-        const job = jobs.find(j => j.id === id);
+        const finishWrite = beginJobWrite();
 
         // Optimistic update
         setJobs(prev => prev.map(job =>
@@ -529,6 +509,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             });
         } catch (error) {
             console.error('Failed to update job:', error);
+        } finally {
+            finishWrite();
         }
     };
 
@@ -731,105 +713,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         fetchWorkspaces();
     }, []);
 
-    // Fetch jobs when workspace changes
+    // Jobs are synchronized by useLiveWorkspaceJobs; load projects on workspace changes.
     useEffect(() => {
         console.log('🔄 Workspace changed:', activeWorkspaceId);
         if (activeWorkspaceId) {
-            fetchJobs();
             fetchProjects();
         } else {
             console.warn('⚠️ No active workspace ID set');
         }
     }, [activeWorkspaceId]);
-
-    // Polling Logic
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            const activeJobs = jobs.filter(job => job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing');
-
-            if (activeJobs.length === 0) return;
-
-            let synchronized = true;
-            for (const job of activeJobs) {
-                try {
-                    const response = await fetch(`/api/generate/status?jobId=${job.id}&userId=user-with-settings`);
-
-                    if (response.status === 404) {
-                        setJobs(prev => prev.filter(j => j.id !== job.id));
-                        continue;
-                    }
-
-                    const data = await response.json().catch(() => ({}));
-
-                    if (!response.ok || !data.success) {
-                        synchronized = false;
-                        continue;
-                    }
-
-                    const rawExec = data.executionTime ?? data.execution_time ?? data?.metrics?.executionTime;
-                    let executionMs: number | undefined;
-                    if (typeof rawExec === 'number' && Number.isFinite(rawExec)) {
-                        executionMs = Math.max(0, Math.round(rawExec));
-                    } else if (typeof rawExec === 'string' && rawExec.trim() !== '' && !Number.isNaN(Number(rawExec))) {
-                        executionMs = Math.max(0, Math.round(Number(rawExec)));
-                    }
-
-                    if (data.status === 'IN_QUEUE') {
-                        setJobs(prev => prev.map(j => j.id === job.id
-                            ? { ...j, status: 'queued', ...(executionMs !== undefined ? { executionMs } : {}) }
-                            : j));
-                        continue;
-                    }
-
-                    if (data.status === 'IN_PROGRESS') {
-                        const nextStatus = data?.meta?.localPhase === 'finalizing' ? 'finalizing' : 'processing';
-                        setJobs(prev => prev.map(j => j.id === job.id
-                            ? { ...j, status: nextStatus, ...(executionMs !== undefined ? { executionMs } : {}) }
-                            : j));
-                        continue;
-                    }
-
-                    if (data.status === 'COMPLETED') {
-                        const resultUrl = typeof data.output === 'string'
-                            ? data.output
-                            : data.output?.url || data.output?.image_url || data.output?.video_url || data.output?.audioUrl || '';
-                        const thumbnailUrl = typeof data.output === 'object' && data.output !== null
-                            ? data.output.thumbnail_url || data.output.preview_url || undefined
-                            : undefined;
-
-                        setJobs(prev => prev.map(j => j.id === job.id ? {
-                            ...j,
-                            status: 'completed',
-                            resultUrl,
-                            ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
-                            error: undefined,
-                            ...(executionMs !== undefined ? { executionMs } : {}),
-                        } : j));
-                        continue;
-                    }
-
-                    if (data.status === 'FAILED') {
-                        setJobs(prev => prev.map(j => j.id === job.id ? {
-                            ...j,
-                            status: 'failed',
-                            error: data.error || 'RunPod job failed',
-                            ...(executionMs !== undefined ? { executionMs } : {}),
-                        } : j));
-                    } else {
-                        synchronized = false;
-                    }
-                } catch (error) {
-                    synchronized = false;
-                    console.error('Polling error for job', job.id, error);
-                }
-            }
-            if (synchronized && currentBrowserWorkspaceId() === activeWorkspaceId) {
-                setJobsSyncVersion(version => version + 1);
-            }
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [jobs, activeWorkspaceId]);
 
     // --- Video Editor Actions ---
 
