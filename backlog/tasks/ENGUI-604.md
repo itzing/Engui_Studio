@@ -1,7 +1,7 @@
 # ENGUI-604 — Cancel/delete uncertain jobs in UI and MCP
 
 ## Status
-In Progress
+Done
 
 ## Request
 Owner14789: explain the two-active-batch limit; repair stuck cancelled Qwen batch82120573/job e986dc8e; allow UI desktop/mobile and agents to cancel/delete such work.
@@ -16,3 +16,9 @@ Keep configurable MCP active-batch default2 (local concurrency guard, not provid
 - Isolated production build passed;125normalized TypeScript baseline/candidate diagnostics, none added. New Job status union integrated with notification types without changing notification behavior.
 - Run artifacts /home/engui/engui-runs/engui-604-20261124; browser evidence workspace runs/engui-job-cancel-20261124. Fixture databases contain synthetic data/settings only, workers disabled.
 - Requested Qwen Job/variant/batch/plan backed up privately before promotion. It has no provider ID and no Gallery copies. Existing cancellation intent confirmed; no other job is targeted.
+
+## Deployment and requested Qwen repair
+- Feature commit `33092d6` pushed; installed MCP1.4.0 exposes26tools. Build `eMgBxMhown1gD6q4qiOnt`, previous `FAGk9XqoocuEcySVZk0oG` retained with rollback.py. No migration/token change.
+- Public Showdown SDK9checks passed. Replayed the existing cancellation intent for batch82120573, then used engui_delete_job for Job e986dc8e; deletion retry returned the same receipt. Job is absent, variant/batch/plan/start tombstones retained as abandoned, provider outcome explicitly unknown. No provider ID exists, so remote cancellation is not claimed.
+- UI Jobs API returns404 for the deleted Job. Other Jobs fingerprint unchanged; Showdown active batch count 0. Default configurable cap2 retained, no generation or duplicate submission.
+- Service active/running,NRestarts0. Candidate preview stopped. Owner should refresh UI and reconnect MCP to load the new tool/schema.
