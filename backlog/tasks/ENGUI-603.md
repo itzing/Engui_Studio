@@ -1,7 +1,7 @@
 # ENGUI-603 — Accurate MCP batch execution status
 
 ## Status
-In Progress
+Done
 
 ## Request
 Owner14786: MCP reports running while the Job is still queued, confusing the connected agent.
@@ -24,3 +24,10 @@ Preserve prior .next under /home/engui/engui-runs/engui-603-20261124; restore an
 - Production build passed. TypeScript diagnostics unchanged: 125 baseline/candidate, no added normalized diagnostics.
 - No production fixtures, generation, token changes or schema migrations. Existing unknown-submission job remains untouched.
 - Evidence: /home/engui/engui-runs/engui-603-20261124. First test run rejected the fixture filename in an existing guard; reran all tests on a fresh schema-only database with the expected guarded name.
+
+## Deployment
+- Feature commit `f1947c6` pushed to origin/main; MCP 1.3.0 installed.
+- Live build `FAGk9XqoocuEcySVZk0oG`; previous `zKBv1x5mqrCq4a_IsY0EL` retained under the run directory with rollback.py.
+- Public Showdown SDK: 10 checks passed on four existing batches, including discoverable schema/guide and accurate terminal/uncertain states. No production plans, batches or paid inference created.
+- Service active/running, NRestarts=0. Existing submission_unknown Job fingerprint unchanged. Isolated preview stopped.
+- Reconnect MCP to refresh cached tool descriptions. Existing batch IDs immediately use the new reporting; no new plan, token or generation required.
