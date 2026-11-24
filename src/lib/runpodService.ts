@@ -386,6 +386,9 @@ class RunPodService {
         return { input: upscaleInput };
       }
 
+      case 'qwen-image-edit-maskflow':
+        return { input: { _secure: input._secure, media_inputs: input.media_inputs, transport_request: input.transport_request } };
+
       case 'qwen-image-edit':
         return {
           input: {

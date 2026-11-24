@@ -19,6 +19,7 @@ import {
   selectedLoras,
 } from "./catalog";
 import { readMedia } from "./media";
+import { readMask } from "./masks";
 import { assertCredential } from "./auth";
 export async function currentDependencies(d: GenerationDraft) {
   const loras = await selectedLoras(d.loras, d.modelId);
@@ -31,6 +32,7 @@ export async function currentDependencies(d: GenerationDraft) {
   const references = [];
   for (const ref of d.references) {
     const image = await readMedia(ref);
+    if (d.mask && image.orientation !== 1) fail("INVALID_MASK", "Normalize source image orientation before masked editing.");
     references.push({
       source: ref,
       sha256: image.hash,
@@ -54,6 +56,7 @@ export async function currentDependencies(d: GenerationDraft) {
   return {
     loras,
     references,
+    ...(d.mask ? { mask: (await readMask(d.mask, references[0].width, references[0].height)).snapshot } : {}),
     modelFingerprint: config.fingerprint,
     vibe: vibe?.sourceVibe || null,
     wildcardsDigest: digest(wildcards),
@@ -184,6 +187,7 @@ export async function validatePlan(p: any, checkExpiry = true) {
     "modelFingerprint",
     "vibe",
     "wildcardsDigest",
+    ...(p.snapshot.draft.mask ? ["mask"] : []),
   ])
     if (digest(current[k as keyof typeof current]) !== digest(p.snapshot[k]))
       fail(

@@ -163,6 +163,13 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             }, { status: 400 });
         }
 
+        if (modelId === 'qwen-image-edit-maskflow' && !prepared) {
+            return NextResponse.json({ error: 'MaskFlow is available through MCP prepared plans only' }, { status: 400 });
+        }
+        const editMask = formData.get('editMask');
+        if (modelId === 'qwen-image-edit-maskflow' && (!(editMask instanceof File) || editMask.size === 0)) {
+            return NextResponse.json({ error: 'MaskFlow requires a prepared edit mask' }, { status: 400 });
+        }
         console.log(`🎬 Processing ${model.name} generation request...`);
 
         // Extract prompt
@@ -192,7 +199,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             })()
             : null;
 
-        const secureModelIds = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'];
+        const secureModelIds = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit', 'qwen-image-edit-maskflow'];
         const usesSecureTransport = secureModelIds.includes(modelId);
 
         // Process input files based on model.inputs
@@ -651,7 +658,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                 }, { status: 400 });
             }
 
-            const requiresSecureKey = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit'].includes(modelId);
+            const requiresSecureKey = ['z-image', 'krea2-turbo', 'upscale', 'video-upscale', 'wan22', 'wan22-t2v', 'wan-animate', 'qwen-image-edit', 'qwen-image-edit-maskflow'].includes(modelId);
             if (requiresSecureKey && !settings.runpod.fieldEncKeyB64?.trim()) {
                 return NextResponse.json({
                     error: 'RunPod field encryption key is not configured',
@@ -736,7 +743,17 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                     }));
                 }
 
+                if (modelId === 'qwen-image-edit-maskflow' && editMask instanceof File) {
+                    mediaInputs.push(await uploadEncryptedMediaInput({
+                        s3: s3Service, masterKey, jobId: job.id, modelId, attemptId,
+                        role: 'edit_mask', kind: 'image', mime: 'image/png',
+                        plaintext: Buffer.from(await editMask.arrayBuffer()), fileName: 'edit_mask.bin',
+                    }));
+                }
                 const securePayload: Record<string, any> = {};
+                if (modelId === 'qwen-image-edit-maskflow') {
+                    securePayload.generation = Object.fromEntries(['width', 'height', 'seed', 'steps', 'guidance'].map(key => [key, Number(runpodInput[key])]));
+                }
                 if (typeof runpodInput.prompt === 'string' && runpodInput.prompt.trim() !== '') {
                     securePayload.prompt = runpodInput.prompt;
                 }

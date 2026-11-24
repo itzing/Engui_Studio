@@ -11,6 +11,7 @@ import { requestJobCancellation } from "@/lib/jobManagement";
 import { assertCredential } from "./auth";
 import { loadPlan, validatePlan } from "./plans";
 import { readMedia } from "./media";
+import { readMask } from "./masks";
 import { preserveVariant } from "./curation";
 import { fail, parse } from "./core";
 
@@ -206,6 +207,12 @@ async function dispatch(v: any) {
           type: image.mime,
         }),
       );
+    }
+    if (d.mask) {
+      const mask = await readMask(d.mask, plan.snapshot.references[0].width, plan.snapshot.references[0].height);
+      if (mask.snapshot.sha256 !== plan.snapshot.mask?.sha256 || mask.snapshot.sourceSha256 !== plan.snapshot.mask?.sourceSha256)
+        fail("PLAN_STALE", "Mask bytes changed.");
+      form.set("editMask", new File([new Uint8Array(mask.bytes)], "edit-mask.png", { type: "image/png" }));
     }
     for (let i = 0; i < d.loras.length; i++) {
       const l = await prisma.loRA.findFirst({

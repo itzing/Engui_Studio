@@ -497,7 +497,19 @@ const ALL_MODELS: ModelConfig[] = [
 ];
 
 export const getModelsByType = (type: ModelType) => ALL_MODELS.filter(m => m.type === type);
-export const getModelById = (id: string) => ALL_MODELS.find(m => m.id === id);
+// Deliberately absent from MODELS/getModelsByType: MCP-only, no UI rollout.
+const MASKFLOW_MODEL: ModelConfig = {
+    id: 'qwen-image-edit-maskflow', name: 'Qwen Image Edit 2511 + MaskFlow', provider: 'Qwen', type: 'image',
+    inputs: ['text', 'image'], api: { type: 'runpod', endpoint: 'qwen-image-edit-maskflow' }, capabilities: {}, imageInputKey: 'image_path',
+    parameters: [
+        { name: 'width', label: 'Width', type: 'number', default: 1024, min: 256, max: 2048, step: 64, validation: { multipleOf: 64 } },
+        { name: 'height', label: 'Height', type: 'number', default: 1024, min: 256, max: 2048, step: 64, validation: { multipleOf: 64 } },
+        { name: 'seed', label: 'Seed', type: 'number', default: 42 },
+        { name: 'steps', label: 'Steps', type: 'number', default: 50, min: 1, max: 50 },
+        { name: 'guidance', label: 'Guidance', type: 'number', default: 4, min: 1, max: 8 },
+    ],
+};
+export const getModelById = (id: string) => id === MASKFLOW_MODEL.id ? MASKFLOW_MODEL : ALL_MODELS.find(m => m.id === id);
 
 // Validation types and functions
 export interface ValidationResult {

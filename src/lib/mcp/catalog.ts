@@ -22,8 +22,10 @@ export const supportedModels = [
   "krea2-turbo",
   "z-image",
   "qwen-image-edit",
+  "qwen-image-edit-maskflow",
 ] as const;
 export function modes(model: string) {
+  if (model === "qwen-image-edit-maskflow") return ["masked_image_edit"];
   return model === "krea2-turbo"
     ? ["text_to_image"]
     : model === "z-image"
@@ -31,7 +33,7 @@ export function modes(model: string) {
       : ["image_edit"];
 }
 export function parameterNames(model: string, mode?: string) {
-  return model === "qwen-image-edit"
+  return model.startsWith("qwen-image-edit")
     ? ["steps", "guidance"]
     : [
         "steps",
@@ -97,13 +99,18 @@ export async function listModels() {
             multipleOf: p.validation?.multipleOf ?? null,
           })),
         maxReferences:
-          modelId === "qwen-image-edit" ? 2 : modelId === "z-image" ? 1 : 0,
-        maxLoras: modelId === "qwen-image-edit" ? 0 : 8,
+          modelId === "qwen-image-edit" ? 2 : ["z-image", "qwen-image-edit-maskflow"].includes(modelId) ? 1 : 0,
+        maxLoras: modelId.startsWith("qwen-image-edit") ? 0 : 8,
+        ...(modelId === "qwen-image-edit-maskflow" ? { mask: { required: true, kinds: ["image", "rectangles"], white: "edit", black: "preserve", coordinateSystem: "normalized_source", maxPixels: 1048576, recommendedSteps: 50, automaticSegmentation: false } } : {}),
       };
     }),
   );
 }
 export function effectiveSettings(d: GenerationDraft) {
+  if (d.modelId === "qwen-image-edit-maskflow") {
+    if (!d.mask || d.references.length !== 1) fail("INVALID_ARGUMENT", "MaskFlow requires one source reference and a separate mask.");
+    if (d.width * d.height > 1048576) fail("INVALID_ARGUMENT", "MaskFlow supports at most 1 megapixel per output.");
+  } else if (d.mask) fail("INVALID_ARGUMENT", "Masks are supported only by qwen-image-edit-maskflow.");
   if (!modes(d.modelId).includes(d.mode))
     fail("UNSUPPORTED_MODE", "Model does not support this mode.");
   if (
@@ -117,7 +124,7 @@ export function effectiveSettings(d: GenerationDraft) {
       "Reference count does not match the selected mode.",
     );
   if (
-    d.modelId === "qwen-image-edit" &&
+    d.modelId.startsWith("qwen-image-edit") &&
     (d.loras.length || d.negativePrompt !== undefined)
   )
     fail(

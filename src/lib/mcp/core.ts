@@ -52,7 +52,15 @@ export const mediaRef = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("job_output"), jobId: id, outputId: id }).strict(),
 ]);
 export type MediaRef = z.infer<typeof mediaRef>;
-export const modelId = z.enum(["krea2-turbo", "z-image", "qwen-image-edit"]);
+export const maskInput = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("image"), source: mediaRef }).strict(),
+  z.object({ kind: z.literal("rectangles"), regions: z.array(z.object({
+    x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1),
+    width: z.number().finite().positive().max(1), height: z.number().finite().positive().max(1),
+  }).strict().refine(r => r.x + r.width <= 1 && r.y + r.height <= 1, "Mask region exceeds source bounds")).min(1).max(32) }).strict(),
+]);
+export type MaskInput = z.infer<typeof maskInput>;
+export const modelId = z.enum(["krea2-turbo", "z-image", "qwen-image-edit", "qwen-image-edit-maskflow"]);
 export const page = {
   query: z.string().max(256).optional(),
   cursor: z.string().max(2048).optional(),
@@ -61,7 +69,7 @@ export const page = {
 export const draftSchema = z
   .object({
     parentBatchId: id.optional(),
-    mode: z.enum(["text_to_image", "image_to_image", "image_edit"]),
+    mode: z.enum(["text_to_image", "image_to_image", "image_edit", "masked_image_edit"]),
     modelId,
     prompt: z.string().min(1).max(16000).describe("Generation text. No Character selection or implicit identity/outfit. Supports {character:UUID}, {character:UUID:withOutfit}, stored {key} wildcards and seeded {a|b} choices. Read engui_get_prompt_guide."),
     negativePrompt: z.string().max(16000).optional(),
@@ -69,6 +77,7 @@ export const draftSchema = z
     view: z.enum(["front", "three_quarter", "side", "custom"]).optional(),
     vibeId: id.optional(),
     references: z.array(mediaRef).max(2).default([]),
+    mask: maskInput.optional().describe("Required only for qwen-image-edit-maskflow. Grayscale aligned mask image (white edits, black preserves), or normalized rectangles in source coordinates. Not a second reference image."),
     width: z.number().int().default(1024),
     height: z.number().int().default(1024),
     variantCount: z

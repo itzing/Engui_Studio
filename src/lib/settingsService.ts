@@ -73,6 +73,7 @@ interface RunPodConfig {
     'wan-animate': string; // WAN Animate endpoint 추가
     'infinite-talk': string; // Infinite Talk endpoint 추가
     upscale: string; // Upscale endpoint
+    'qwen-image-edit-maskflow'?: string; // MCP-only secure masked editing
     'qwen-image-edit': string; // Qwen Image Edit endpoint 추가
     'z-image': string; // Z-Image endpoint 추가
     'krea2-turbo': string; // Krea2 Turbo endpoint
@@ -253,7 +254,7 @@ class SettingsService {
               settings.runpod.apiKey = value;
             } else if (setting.configKey.startsWith('endpoints.')) {
               const endpointType = setting.configKey.split('.')[1];
-              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan22-t2v', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'z-image', 'krea2-turbo', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
+              if (endpointType && ['image', 'video', 'multitalk', 'flux-kontext', 'flux-krea', 'wan22', 'wan22-t2v', 'wan-animate', 'infinite-talk', 'upscale', 'qwen-image-edit', 'qwen-image-edit-maskflow', 'z-image', 'krea2-turbo', 'onetoall', 'video-upscale', 'ltx2'].includes(endpointType)) {
                 settings.runpod.endpoints[endpointType as keyof typeof settings.runpod.endpoints] = value;
               }
             } else if (setting.configKey === 'generateTimeout') {

@@ -135,6 +135,7 @@ export async function readMedia(source: MediaRef) {
     hash,
     width: meta.width,
     height: meta.height,
+    orientation: meta.orientation || 1,
     mime: meta.format === "jpeg" ? "image/jpeg" : `image/${meta.format}`,
   };
 }
