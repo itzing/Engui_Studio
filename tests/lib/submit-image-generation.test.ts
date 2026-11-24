@@ -22,6 +22,7 @@ describe('image submission Randomize preference', () => {
       const [url, request] = mockFetch.mock.calls[0];
       expect(url).toBe('/api/generate');
       expect(request.body.get('randomizeSeed')).toBe(String(randomizeSeed));
+      expect(request.body.get('enableCharacterReferences')).toBe('true');
       expect(request.body.get('seedIsPreselected')).toBe(seedIsPreselected ? 'true' : null);
       expect(request.body.get('seed')).toBe('777');
       if (result.success) {

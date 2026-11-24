@@ -1541,6 +1541,7 @@ export default function VideoGenerationForm() {
             formData.append('userId', 'user-with-settings'); // TODO: Get actual user ID
             formData.append('modelId', currentModel.id);
             if (prompt) formData.append('prompt', prompt);
+            formData.append('enableCharacterReferences', 'true');
             if (Object.keys(promptWildcardSelections).length > 0) {
                 formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));
             }
@@ -2041,6 +2042,7 @@ export default function VideoGenerationForm() {
                             ) : null}
                         </div>
                         <div className="relative">
+                            {isDesktopCreateSurface ? (
                             <textarea
                                 className={`w-full min-h-[120px] p-3 rounded-lg border text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-muted-foreground/50 ${isPromptHelperQuickAnimating ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]' : 'border-border bg-secondary/50'} ${isPromptHelperLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 placeholder={t('generationForm.describeYourVideo')}
@@ -2050,6 +2052,14 @@ export default function VideoGenerationForm() {
                                 disabled={isPromptHelperLoading}
                                 data-testid="video-create-prompt-textarea"
                             />
+                            ) : (
+                              <PromptTemplateTextarea enableCharacterReferences value={prompt} onChange={setPrompt}
+                                workspaceId={activeWorkspaceId} previewSeed={parameterValues.seed} randomizeSeed={randomizeSeed}
+                                promptWildcardSelections={promptWildcardSelections} onPromptWildcardSelectionsChange={setPromptWildcardSelections}
+                                disabled={isPromptHelperLoading} testId="video-create-prompt-textarea"
+                                placeholder={t('generationForm.describeYourVideo')}
+                                className="w-full min-h-[120px] rounded-lg border border-border bg-secondary/50 p-3 text-base" />
+                            )}
                         </div>
                         {isDesktopCreateSurface && (
                             <div className="text-[11px] text-muted-foreground">Focus the prompt to edit it in a larger window. Press Ctrl+Enter there to save.</div>
@@ -2710,6 +2720,9 @@ export default function VideoGenerationForm() {
                             <DialogDescription>Use the larger editor for long prompts. Press Ctrl+Enter to save and close.</DialogDescription>
                         </DialogHeader>
                         <PromptTemplateTextarea
+                            enableCharacterReferences
+                            previewSeed={parameterValues.seed}
+                            randomizeSeed={randomizeSeed}
                             value={promptEditorDraft}
                             onChange={setPromptEditorDraft}
                             workspaceId={activeWorkspaceId}

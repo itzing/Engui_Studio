@@ -1496,6 +1496,10 @@ export default function ImageGenerationForm() {
                                         <DialogDescription>Use the larger editor for long prompts. Press Ctrl+Enter to save and close.</DialogDescription>
                                     </DialogHeader>
                                     <PromptTemplateTextarea
+                            enableCharacterReferences
+                            previewSeed={parameterValues.seed}
+                            randomizeSeed={randomizeSeed}
+                            selectedVibeId={selectedVibeId}
                                         value={promptEditorDraft}
                                         onChange={setPromptEditorDraft}
                                         workspaceId={activeWorkspaceId}

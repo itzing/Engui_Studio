@@ -102,6 +102,7 @@ export async function trashPromptWildcard(id: string) {
 }
 
 type ExpandPromptWildcardsOptions = {
+  preserveCharacterReferences?: boolean;
   selections?: unknown;
 };
 
@@ -157,6 +158,7 @@ export async function expandPromptWildcards(
   let prompt = input;
 
   prompt = prompt.replace(/\{([A-Za-z][A-Za-z0-9_]*):([^{}\n]+)\}/g, (match, key: string, rawVariant: string) => {
+    if (options.preserveCharacterReferences && key === 'character') return match;
     const wildcard = byKey.get(key);
     if (!wildcard) return match;
 

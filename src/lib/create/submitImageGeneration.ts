@@ -105,6 +105,7 @@ export const submitImageGeneration = async ({
     formData.append('userId', 'user-with-settings');
     formData.append('modelId', currentModel.id);
     formData.append('prompt', prompt);
+    formData.append('enableCharacterReferences', 'true');
     if (selectedVibeId) formData.append('selectedVibeId', selectedVibeId);
     if (promptWildcardSelections && Object.keys(promptWildcardSelections).length > 0) {
       formData.append('promptWildcardSelections', JSON.stringify(promptWildcardSelections));

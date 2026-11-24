@@ -3,6 +3,8 @@ import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
 
+import CharacterPromptTools, { type PromptCharacter } from './CharacterPromptTools';
+import { characterReferenceToken } from '@/lib/character-references/tokens';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +19,10 @@ import {
 } from '@/lib/prompt-wildcards/selections';
 
 type PromptTemplateTextareaProps = {
+  enableCharacterReferences?: boolean;
+  previewSeed?: number | string;
+  randomizeSeed?: boolean;
+  selectedVibeId?: string;
   value: string;
   onChange: (value: string) => void;
   workspaceId?: string | null;
@@ -52,14 +58,15 @@ async function readJson<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-function getActiveQuery(value: string, cursor: number): ActiveQuery | null {
+function getActiveQuery(value: string, cursor: number, charactersEnabled = false): ActiveQuery | null {
   const beforeCursor = value.slice(0, cursor);
   const openIndex = beforeCursor.lastIndexOf('{');
   if (openIndex < 0) return null;
 
   const afterOpen = beforeCursor.slice(openIndex + 1);
-  if (afterOpen.includes('}') || afterOpen.includes('\n') || afterOpen.includes(':')) return null;
-  if (!/^[A-Za-z0-9_]*$/.test(afterOpen)) return null;
+  if (afterOpen.includes('}') || afterOpen.includes('\n')) return null;
+  if (!charactersEnabled && !/^[A-Za-z0-9_]*$/.test(afterOpen)) return null;
+  if (charactersEnabled && afterOpen.includes(':') && !afterOpen.startsWith('character:')) return null;
 
   return {
     start: openIndex,
@@ -68,7 +75,7 @@ function getActiveQuery(value: string, cursor: number): ActiveQuery | null {
   };
 }
 
-function findPromptTokens(value: string, wildcards: PromptWildcardSummary[]): PromptToken[] {
+function findPromptTokens(value: string, wildcards: PromptWildcardSummary[], charactersEnabled = false): PromptToken[] {
   const knownKeys = new Set(wildcards.map((wildcard) => wildcard.key));
   const tokens: PromptToken[] = [];
   const matcher = /\{([A-Za-z][A-Za-z0-9_]*)(?::([^{}\n]+))?\}/g;
@@ -76,6 +83,7 @@ function findPromptTokens(value: string, wildcards: PromptWildcardSummary[]): Pr
 
   while ((match = matcher.exec(value)) !== null) {
     const key = match[1];
+    if (charactersEnabled && key === 'character' && match[2]) continue;
     if (!knownKeys.has(key)) continue;
     tokens.push({
       key,
@@ -90,6 +98,7 @@ function findPromptTokens(value: string, wildcards: PromptWildcardSummary[]): Pr
 }
 
 export default function PromptTemplateTextarea({
+  enableCharacterReferences = false, previewSeed, randomizeSeed, selectedVibeId,
   value,
   onChange,
   workspaceId,
@@ -104,11 +113,29 @@ export default function PromptTemplateTextarea({
 }: PromptTemplateTextareaProps) {
   const fetch = useWorkspaceFetch();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [characters, setCharacters] = useState<PromptCharacter[]>([]);
+  const [charactersLoading, setCharactersLoading] = useState(false);
+  const [charactersError, setCharactersError] = useState<string | null>(null);
+  const [includeOutfit, setIncludeOutfit] = useState(false);
+  const insertionRange = useRef({ start: 0, end: 0 });
   const [wildcards, setWildcards] = useState<PromptWildcardSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeQuery, setActiveQuery] = useState<ActiveQuery | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [activeToken, setActiveToken] = useState<PromptToken | null>(null);
+
+  useEffect(() => {
+    setCharacters([]); setCharactersError(null); setActiveQuery(null);
+    if (!enableCharacterReferences || !workspaceId) { setCharactersLoading(false); return; }
+    let cancelled = false;
+    setCharactersLoading(true);
+    fetch(`/api/characters?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' })
+      .then(response => readJson<{ success: true; characters: PromptCharacter[] }>(response))
+      .then(data => { if (!cancelled) setCharacters(data.characters || []); })
+      .catch(error => { if (!cancelled) setCharactersError(error instanceof Error ? error.message : 'Could not load characters.'); })
+      .finally(() => { if (!cancelled) setCharactersLoading(false); });
+    return () => { cancelled = true; };
+  }, [workspaceId, enableCharacterReferences]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -141,7 +168,7 @@ export default function PromptTemplateTextarea({
       const textarea = textareaRef.current;
       textarea?.focus();
       textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
-      setActiveQuery(getActiveQuery(textarea?.value || '', textarea?.selectionStart || 0));
+      setActiveQuery(getActiveQuery(textarea?.value || '', textarea?.selectionStart || 0, enableCharacterReferences));
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [autoFocus]);
@@ -157,7 +184,14 @@ export default function PromptTemplateTextarea({
       .slice(0, 8);
   }, [activeQuery, wildcards]);
 
-  const promptTokens = useMemo(() => findPromptTokens(value, wildcards), [value, wildcards]);
+  const matchingCharacters = useMemo(() => {
+    if (!enableCharacterReferences || !activeQuery) return [];
+    const query = activeQuery.query.replace(/^character:/, '').toLocaleLowerCase();
+    return characters.filter(character => character.name.toLocaleLowerCase().includes(query) || character.id.startsWith(query)).slice(0, 8);
+  }, [characters, activeQuery, enableCharacterReferences]);
+  const suggestionCount = matchingWildcards.length + matchingCharacters.length;
+
+  const promptTokens = useMemo(() => findPromptTokens(value, wildcards, enableCharacterReferences), [value, wildcards, enableCharacterReferences]);
   const activeTokenWildcard = useMemo(
     () => wildcards.find((wildcard) => wildcard.key === activeToken?.key) || null,
     [activeToken, wildcards],
@@ -177,7 +211,7 @@ export default function PromptTemplateTextarea({
       setActiveQuery(null);
       return;
     }
-    setActiveQuery(getActiveQuery(textarea.value, textarea.selectionStart));
+    setActiveQuery(getActiveQuery(textarea.value, textarea.selectionStart, enableCharacterReferences));
   };
 
   const replaceRange = (start: number, end: number, replacement: string) => {
@@ -197,6 +231,14 @@ export default function PromptTemplateTextarea({
     let end = activeQuery.end;
     if (value[end] === '}') end += 1;
     replaceRange(activeQuery.start, end, `{${wildcard.key}}`);
+  };
+
+  const insertCharacter = (character: PromptCharacter) => {
+    const textarea = textareaRef.current;
+    const start = activeQuery?.start ?? insertionRange.current.start;
+    let end = activeQuery?.end ?? insertionRange.current.end;
+    if (activeQuery && value[end] === '}') end += 1;
+    replaceRange(start, end, characterReferenceToken(character.id, includeOutfit));
   };
 
   const updateTokenSelection = (
@@ -256,20 +298,21 @@ export default function PromptTemplateTextarea({
   };
 
   const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (activeQuery && matchingWildcards.length > 0) {
+    if (activeQuery && suggestionCount > 0) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setHighlightedIndex((current) => (current + 1) % matchingWildcards.length);
+        setHighlightedIndex((current) => (current + 1) % suggestionCount);
         return;
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setHighlightedIndex((current) => (current - 1 + matchingWildcards.length) % matchingWildcards.length);
+        setHighlightedIndex((current) => (current - 1 + suggestionCount) % suggestionCount);
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        insertWildcard(matchingWildcards[highlightedIndex] || matchingWildcards[0]);
+        if (highlightedIndex < matchingWildcards.length) insertWildcard(matchingWildcards[highlightedIndex]);
+        else insertCharacter(matchingCharacters[highlightedIndex - matchingWildcards.length] || matchingCharacters[0]);
         return;
       }
       if (event.key === 'Escape') {
@@ -292,6 +335,7 @@ export default function PromptTemplateTextarea({
             onChange(event.target.value);
             window.setTimeout(updateActiveQueryFromTextarea, 0);
           }}
+          onSelect={(event) => { insertionRange.current = { start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd }; }}
           onClick={updateActiveQueryFromTextarea}
           onKeyDown={handleTextareaKeyDown}
           onKeyUp={updateActiveQueryFromTextarea}
@@ -302,13 +346,14 @@ export default function PromptTemplateTextarea({
         />
         {activeQuery && !disabled ? (
           <div className="absolute left-2 right-2 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg" data-testid="prompt-template-autocomplete">
-            {isLoading ? (
+            {enableCharacterReferences ? <label className="flex items-center gap-2 px-3 py-2 text-xs"><input type="checkbox" checked={includeOutfit} onChange={event => setIncludeOutfit(event.target.checked)} />Include outfit</label> : null}
+            {isLoading || charactersLoading ? (
               <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading templates
               </div>
-            ) : matchingWildcards.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">No templates found</div>
+            ) : suggestionCount === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">{charactersError || 'No templates or characters found'}</div>
             ) : matchingWildcards.map((wildcard, index) => (
               <button
                 key={wildcard.id}
@@ -326,9 +371,19 @@ export default function PromptTemplateTextarea({
                 ) : null}
               </button>
             ))}
+            {matchingCharacters.map((character, index) => <button key={character.id} type="button"
+              className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm ${index + matchingWildcards.length === highlightedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'}`}
+              onMouseDown={event => event.preventDefault()} onClick={() => insertCharacter(character)}>
+              <span className="truncate font-medium">{character.name}</span><span className="shrink-0 text-xs text-muted-foreground">Character</span>
+            </button>)}
           </div>
         ) : null}
       </div>
+
+      {enableCharacterReferences ? <CharacterPromptTools characters={characters} loading={charactersLoading} error={charactersError}
+        includeOutfit={includeOutfit} setIncludeOutfit={setIncludeOutfit} insertCharacter={insertCharacter}
+        prompt={value} workspaceId={workspaceId} disabled={disabled} seed={previewSeed} randomizeSeed={randomizeSeed}
+        selectedVibeId={selectedVibeId} selections={promptWildcardSelections} /> : null}
 
       {promptTokens.length > 0 ? (
         <div className="flex flex-wrap gap-2" data-testid="prompt-template-token-list">

@@ -21,6 +21,7 @@ export default function MobilePromptScreen() {
   const [zImageRewriteError, setZImageRewriteError] = useState<string | null>(null);
   const {
     currentModel,
+    parameterValues, randomizeSeed, selectedVibeId,
     prompt,
     setPrompt,
     promptWildcardSelections,
@@ -146,6 +147,10 @@ export default function MobilePromptScreen() {
                 </div>
               </div>
               <PromptTemplateTextarea
+                enableCharacterReferences
+                previewSeed={parameterValues?.seed}
+                randomizeSeed={randomizeSeed}
+                selectedVibeId={selectedVibeId}
                 value={prompt}
                 onChange={setPrompt}
                 workspaceId={activeWorkspaceId}

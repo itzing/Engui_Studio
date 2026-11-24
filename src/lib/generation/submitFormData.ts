@@ -1,3 +1,4 @@
+import { renderCreatePrompt } from '@/lib/generation/renderCreatePrompt';
 import { resolveImageVibe } from '@/lib/vibes/resolveImageVibe';
 import { WorkspaceError } from '@/lib/workspaces/context';
 import { generationErrorMessage } from '@/lib/generation/imageModelPolicy';
@@ -413,11 +414,14 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
 
         const promptTemplate = rawPrompt || '';
         const submittedPromptWildcardSelections = parsePromptWildcardSelections(formData.get('promptWildcardSelections'));
-        const wildcardExpansion = prepared ? { prompt: prepared.prompt, replacements: [], selections: {} } : await expandPromptWildcards(promptTemplate, resolvedWorkspaceId, {
+        const createPrompt = !prepared && formData.get('enableCharacterReferences') === 'true' && ['image', 'video'].includes(model.type)
+            ? await renderCreatePrompt({ prompt: promptTemplate, workspaceId: resolvedWorkspaceId, seed: parameters.seed, selections: submittedPromptWildcardSelections })
+            : null;
+        const wildcardExpansion = createPrompt || (prepared ? { prompt: prepared.prompt, replacements: [], selections: {} } : await expandPromptWildcards(promptTemplate, resolvedWorkspaceId, {
             selections: submittedPromptWildcardSelections,
-        });
-        const expandedPromptTemplate = wildcardExpansion.prompt;
-        const prompt = prepared ? prepared.prompt : resolvePromptVariants(expandedPromptTemplate, parameters.seed);
+        }));
+        const expandedPromptTemplate = createPrompt ? createPrompt.expandedPromptTemplate : wildcardExpansion.prompt;
+        const prompt = createPrompt ? createPrompt.prompt : prepared ? prepared.prompt : resolvePromptVariants(expandedPromptTemplate, parameters.seed);
         const hasWildcardExpansion = expandedPromptTemplate !== promptTemplate;
         const promptVariantMetadata = hasResolvedPromptVariants(expandedPromptTemplate, prompt) || hasWildcardExpansion
             ? {
@@ -426,6 +430,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                 resolvedPrompt: prompt,
                 resolvedPromptSeed: parameters.seed,
                 promptWildcardReplacements: wildcardExpansion.replacements,
+                ...(createPrompt?.characterReferences.length ? { characterReferences: createPrompt.characterReferences } : {}),
                 promptWildcardSelections: wildcardExpansion.selections,
             }
             : {};
@@ -1018,6 +1023,6 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
         console.error('Generation API error:', prepared ? { code: 'MCP_PREPARATION_ERROR' } : error);
         return NextResponse.json({
             error: error.message || 'Internal server error',
-        }, { status: 500 });
+        }, { status: error instanceof WorkspaceError ? error.status : 500 });
     }
 }
