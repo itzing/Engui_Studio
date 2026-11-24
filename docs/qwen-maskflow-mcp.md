@@ -41,14 +41,14 @@ Existing job outputs are also supported as media references. A mask image must b
 
 ## Secure deployment
 
-Prompt, authenticated generation settings, source, mask and output use Engui AES-256-GCM v1 with job/model/attempt/direction/role bindings. There is no plaintext fallback. Secrets are outside Git. Public model weights and runtime are cached separately; each worker runs one generation at a time.
+Prompt, authenticated generation settings, source, mask and output use Engui AES-256-GCM v1 with job/model/attempt/direction/role bindings. There is no plaintext fallback. Secrets are outside Git. Public model weights and runtime are baked into the endpoint image; each worker runs one generation at a time.
 
-Deployment uses a published CUDA/PyTorch image digest and pinned bootstrap, not a custom Docker build. The endpoint has 0 minimum and 2 maximum workers on 96 GB GPUs. A 100 GB persistent cache holds public weights/runtime; this storage is billed separately even when GPU workers are idle.
+The new deployment uses a self-contained Docker image with pinned weights and runtime. Startup is offline for model assets, with no network model-cache volume. The old 100 GB cache was deleted on owner request. Cold starts may still pull image layers and load weights into GPU memory. Desired endpoint allocation remains 0 minimum / 2 maximum 96 GB workers; MaskFlow is temporarily disabled during the image migration (ENGUI-607).
 
 ## Verified deployment (2026-11-24)
 
 - Endpoint `dnc6cjeffpqwfy`; handler revision `501930b4c36f7e1c641c420ab76cb8f3878adfaf`.
 - Krea2 maximum workers reduced from 8 to 6; other endpoint limits unchanged.
 - One real synthetic secure inference completed on the preceding handler revision `c6d5815`; the later change only strengthens transparent-mask validation. Runtime, model and engine are unchanged.
-- 512x512 output decrypted successfully; inference execution about 95 seconds after queue time. Far background more than 25 pixels outside the mask was pixel-identical. The model added an unwanted white shape inside the edit region, so this is an operational validation, not a quality guarantee.
+- 512x512 output decrypted successfully; total handler execution about 95 seconds after queue time, including lazy model initialization and inference. Far background more than 25 pixels outside the mask was pixel-identical. The model added an unwanted white shape inside the edit region, so this is an operational validation, not a quality guarantee.
 - 19 endpoint CPU tests; 191 application tests; 22 candidate HTTP checks and 10 public Showdown MCP checks. Public MCP validation created plans only, without another paid generation.
