@@ -1,4 +1,5 @@
 'use client';
+import { isUncertainJob, isLocallyStoppedJob, jobStatusLabel } from "@/lib/jobControl";
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -251,9 +252,9 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         : '';
     const isVideo = selectedOutput?.type === 'video';
     const isAudio = selectedOutput?.type === 'audio';
-    const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing') : false;
-    const isFinished = job ? (job.status === 'completed' || job.status === 'failed') : false;
-    const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job?.status;
+    const isRunning = job ? (job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing' || isUncertainJob(job)) : false;
+    const isFinished = job ? (job.status === 'completed' || job.status === 'failed' || isUncertainJob(job)) : false;
+    const statusLabel = job?.status === 'failed' && job.error === 'cancelled' ? 'cancelled' : job ? jobStatusLabel(job) : '';
     const canNavigateLeft = Boolean(onNavigate && totalCount > 1 && currentIndex > 1);
     const canNavigateRight = Boolean(onNavigate && totalCount > 1 && currentIndex > 0 && currentIndex < totalCount);
 
@@ -323,10 +324,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
         if (!job) return;
         const result = await cancelJob(job.id);
         if (!result.success) {
-            showToast('Failed to cancel job', 'error');
+            showToast(result.message || 'Failed to cancel job', 'error');
             return;
         }
-        showToast(result.removed ? 'Job deleted' : 'Job cancelled', 'success');
+        showToast(result.removed ? 'Job deleted' : result.message || 'Job cancelled', 'success');
         onOpenChange(false);
     };
 
@@ -548,7 +549,7 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                         ) : (
                             <div className="text-muted-foreground flex flex-col items-center gap-2">
                                 <div className={`w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin ${job.status === 'queueing_up' || job.status === 'processing' || job.status === 'queued' || job.status === 'finalizing' ? 'block' : 'hidden'}`} />
-                                <span>{job.status === 'failed' ? 'Generation Failed' : 'Processing...'}</span>
+                                <span>{isLocallyStoppedJob(job) || isUncertainJob(job) ? jobStatusLabel(job) : job.status === 'failed' ? 'Generation Failed' : 'Processing...'}</span>
                             </div>
                         )}
                     </div>
@@ -831,10 +832,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onNavigate, currentI
                                     resetKey={job.id}
                                     className="inline-flex h-10 w-10 items-center justify-center rounded-md text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
                                     confirmClassName="inline-flex h-10 w-10 items-center justify-center rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                                    title="Cancel"
-                                    confirmTitle="Confirm cancel"
-                                    ariaLabel="Cancel job"
-                                    confirmAriaLabel="Confirm cancel job"
+                                    title={isUncertainJob(job) ? "Stop locally (provider unknown)" : "Cancel"}
+                                    confirmTitle={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel"}
+                                    ariaLabel={isUncertainJob(job) ? "Stop job locally" : "Cancel job"}
+                                    confirmAriaLabel={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel job"}
                                     icon={<X className="w-4 h-4" />}
                                     iconClassName="w-4 h-4"
                                 />

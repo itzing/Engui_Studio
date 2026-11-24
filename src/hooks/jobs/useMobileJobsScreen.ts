@@ -4,6 +4,7 @@ import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useToast } from '@/components/ui/toast';
 import { useStudio } from '@/lib/context/StudioContext';
 import { writeMobileDetailsSnapshot } from '@/lib/mobile/detailsNavigation';
 
@@ -11,7 +12,7 @@ export type MobileJobsScreenItem = {
   id: string;
   modelId: string;
   type: 'image' | 'video' | 'audio' | 'tts' | 'music';
-  status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
+  status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed' | 'submission_unknown';
   prompt: string;
   createdAt: number;
   resultUrl?: string;
@@ -61,6 +62,7 @@ type MobileJobViewerItem = {
 const PAGE_SIZE = 24;
 
 export function useMobileJobsScreen() {
+  const { showToast } = useToast();
   const fetch = useWorkspaceFetch();
   const { activeWorkspaceId, workspaces, deleteJob, cancelJob, clearFinishedJobs, addJob, reuseJobInput } = useStudio();
   const effectiveWorkspaceId = activeWorkspaceId || workspaces[0]?.id || null;
@@ -425,14 +427,15 @@ export function useMobileJobsScreen() {
   }, [loadedViewerItems]);
 
   const removeJob = useCallback(async (jobId: string) => {
-    await deleteJob(jobId);
+    if (!(await deleteJob(jobId))) showToast("Failed to delete job", "error");
     await hydrateInitialState();
-  }, [deleteJob, hydrateInitialState]);
+  }, [deleteJob, hydrateInitialState, showToast]);
 
   const cancelActiveJob = useCallback(async (jobId: string) => {
-    await cancelJob(jobId);
+    const result = await cancelJob(jobId);
+    showToast(result.message || (result.success ? "Job cancelled" : "Failed to cancel job"), result.success ? "success" : "error");
     await hydrateInitialState();
-  }, [cancelJob, hydrateInitialState]);
+  }, [cancelJob, hydrateInitialState, showToast]);
 
   const reuseJob = useCallback(async (jobId: string) => {
     await reuseJobInput(jobId);

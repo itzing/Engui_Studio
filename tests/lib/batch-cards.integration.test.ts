@@ -5,6 +5,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 vi.mock('@/lib/mcp/catalog', () => ({ modelConfiguration: async () => ({configured:true}), selectedLoras: async () => [] }));
 vi.mock('@/lib/generation/submitFormData', () => ({ submitPreparedGeneration: vi.fn(async () => { throw Error('Real provider disabled'); }) }));
+import { deleteFinishedJob } from '@/lib/jobManagement';
 import { prisma } from '@/lib/prisma';
 import { workspaceContext } from '@/lib/workspaces/context';
 import { createBatch, readBatch, updateBatch, queueVariants, exportBatch, listBatches, deleteBatch } from '@/lib/batch-cards/server';
@@ -47,6 +48,20 @@ describe('durable batch service and worker (isolated database, fake provider)',(
  it('reimport during preparation stops the provider boundary',async()=>{const f=await fixture();let v=await scope(f.ws,()=>queueVariants(f.batch.id,0,['c1-A'],randomUUID()));beforeBoundary=async()=>{await updateBatch(f.batch.id,v.revision,{kind:'replace',cardNumber:1,rows:rows()});};await processCardBatchWorkspace(f.ws);const task=await scope(f.ws,()=>prisma.cardBatchTask.findFirstOrThrow({where:{batchId:f.batch.id}}));expect(task.boundaryAt).toBeNull();expect(task.providerJobId).toBeNull();expect(task.state).toBe('cancelled');});
  it('ambiguous acceptance is never automatically retried, including after restart',async()=>{const f=await fixture();let v=await scope(f.ws,()=>queueVariants(f.batch.id,0,['c1-A'],randomUUID()));failure='unknown';const count=submitted.length;await processCardBatchWorkspace(f.ws);await processCardBatchWorkspace(f.ws);v=await scope(f.ws,()=>readBatch(f.batch.id));expect(v.tasks[0].state).toBe('submission_unknown');expect(submitted.length).toBe(count+1);await scope(f.ws,()=>expect(queueVariants(f.batch.id,v.revision,['c1-A'],randomUUID())).rejects.toThrow('active'));
  await scope(f.ws,()=>prisma.cardBatchTask.update({where:{id:v.tasks[0].id},data:{state:'submitting',leaseUntil:new Date(0)}}));await processCardBatchWorkspace(f.ws);expect((await scope(f.ws,()=>readBatch(f.batch.id))).tasks[0].state).toBe('submission_unknown');expect(submitted.length).toBe(count+1);});
+ it('shared Job deletion fences an uncertain card task against a late provider receipt',async()=>{
+ const f=await fixture();const view=await scope(f.ws,()=>queueVariants(f.batch.id,0,['c1-A'],randomUUID()));const task=view.tasks[0];const count=submitted.length;
+ afterBoundary=async()=>{
+  await prisma.cardBatchTask.update({where:{id:task.id},data:{state:'submission_unknown',leaseUntil:new Date(0)}});
+  await prisma.job.update({where:{id:task.jobId},data:{status:'submission_unknown'}});
+  await deleteFinishedJob(await prisma.job.findFirstOrThrow({where:{id:task.jobId}}));
+ };
+ await processCardBatchWorkspace(f.ws);await processCardBatchWorkspace(f.ws);
+ expect(submitted.length).toBe(count+1);
+ await scope(f.ws,async()=>{
+  expect(await prisma.job.findFirst({where:{id:task.jobId}})).toBeNull();
+  expect(await prisma.cardBatchTask.findFirst({where:{id:task.id}})).toMatchObject({state:'abandoned',providerJobId:'remote-'+task.jobId});
+ });
+ });
  it('explicit provider rejection permits a new user-requested attempt',async()=>{const f=await fixture();let v=await scope(f.ws,()=>queueVariants(f.batch.id,0,['c1-A'],randomUUID()));failure='rejected';await processCardBatchWorkspace(f.ws);v=await scope(f.ws,()=>readBatch(f.batch.id));expect(v.tasks[0].state).toBe('failed');v=await scope(f.ws,()=>queueVariants(f.batch.id,v.revision,['c1-A'],randomUUID()));expect(v.tasks[0].state).toBe('queued');});
  it('whole-batch replacement invalidates all Picks and results, preserves settings and rejects late originals',async()=>{
  const f=await fixture();let v=await scope(f.ws,()=>updateBatch(f.batch.id,0,{kind:'settings',settings:{...f.batch.settings,parameters:{...f.batch.settings.parameters,width:768}}}));

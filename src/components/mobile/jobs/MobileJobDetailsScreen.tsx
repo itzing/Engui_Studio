@@ -1,4 +1,5 @@
 'use client';
+import { isUncertainJob, jobStatusLabel } from "@/lib/jobControl";
 import { ManagedVideo } from '@/components/media/ManagedVideo';
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
@@ -98,8 +99,8 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
   const generationSeed = useMemo(() => (
     shouldShowGenerationSeed(job?.type) ? getGenerationSeedFromOptions(job?.options) : null
   ), [job]);
-  const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status) : false;
-  const isFinished = job ? ['completed', 'failed'].includes(job.status) : false;
+  const isRunning = job ? ['queueing_up', 'queued', 'processing', 'finalizing', 'submission_unknown'].includes(job.status) : false;
+  const isFinished = job ? ['completed', 'failed', 'submission_unknown'].includes(job.status) : false;
   const hasSceneSnapshot = !!(job as any)?.sceneSnapshotJson;
   const promptVersions = useMemo(() => getPromptVersions({
     prompt: job?.prompt,
@@ -350,20 +351,20 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     const data = await response.json();
     if (response.ok && data.success) {
       router.push('/m/jobs');
-    }
+    } else showToast(data.error || 'Failed to delete job', 'error');
   };
 
   const cancelJob = async () => {
     if (!job) return;
     const response = await fetch(`/api/jobs/${job.id}/cancel`, { method: 'POST' });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) return;
+    if (!response.ok || !data.success) { showToast(data.error || "Failed to cancel job", "error"); return; }
     if (data.outcome === 'deleted' || data.deletedJobId) {
       showToast('Job deleted', 'success');
       router.push('/m/jobs');
       return;
     }
-    showToast('Job cancelled', 'success');
+    showToast(data.message || 'Job cancelled', 'success');
     await refresh();
   };
 
@@ -381,7 +382,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
     <MobileScreen>
       <MobileHeader
         title="Job details"
-        subtitle={job ? `${job.modelId} • ${job.status}` : 'Standalone mobile route for job inspection.'}
+        subtitle={job ? `${job.modelId} • ${jobStatusLabel(job)}` : 'Standalone mobile route for job inspection.'}
         backHref="/m/jobs"
         action={
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
@@ -449,7 +450,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 </CardHeader>
                 <CardContent className="space-y-3 pt-0 text-sm">
                   <div className="grid grid-cols-2 gap-3">
-                    <div><div className="text-muted-foreground">Status</div><div>{job.status}</div></div>
+                    <div><div className="text-muted-foreground">Status</div><div>{jobStatusLabel(job)}</div></div>
                     <div><div className="text-muted-foreground">Type</div><div>{job.type}</div></div>
                     <div><div className="text-muted-foreground">Created</div><div>{new Date(job.createdAt || Date.now()).toLocaleString()}</div></div>
                     <div><div className="text-muted-foreground">Execution</div><div>{typeof job.executionMs === 'number' ? `${(job.executionMs / 1000).toFixed(2)}s` : '—'}</div></div>
@@ -530,7 +531,7 @@ export default function MobileJobDetailsScreen({ jobId }: { jobId: string }) {
                 {job.type === 'video' ? <Button variant="outline" onClick={() => void openInCreate('txt2img')}><Type className="mr-2 h-4 w-4" />To txt2img</Button> : null}
                 {job.type === 'video' && job.modelId === 'wan22-t2v' ? <Button variant="outline" onClick={() => void openInCreate('txt2vid')}><Clapperboard className="mr-2 h-4 w-4" />To T2V</Button> : null}
                 {(job.type === 'image' || job.type === 'video') ? <Button variant="outline" onClick={() => void upscaleJob()} disabled={isUpscaling}><Sparkles className="mr-2 h-4 w-4" />{isUpscaling ? 'Starting...' : 'Upscale'}</Button> : null}
-                {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />Cancel job</Button> : null}
+                {isRunning ? <Button variant="outline" onClick={() => void cancelJob()}><X className="mr-2 h-4 w-4" />{isUncertainJob(job) ? "Stop locally (provider unknown)" : "Cancel job"}</Button> : null}
                 {isFinished ? (
                   <InlineConfirmDeleteButton
                     onConfirm={deleteJob}

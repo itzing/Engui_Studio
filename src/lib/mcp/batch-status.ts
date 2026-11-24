@@ -1,10 +1,10 @@
 // Public execution states are not the worker's durable dispatch lifecycle.
 export const variantStates = [
   "queued", "blocked", "submitting", "provider_queued", "running", "finalizing",
-  "awaiting_status", "submission_unknown", "cancel_requested", "succeeded", "failed", "cancelled",
+  "awaiting_status", "submission_unknown", "cancel_requested", "succeeded", "failed", "cancelled", "abandoned",
 ] as const;
 export type VariantState = (typeof variantStates)[number];
-export const terminalVariants = ["succeeded", "failed", "cancelled"];
+export const terminalVariants = ["succeeded", "failed", "cancelled", "abandoned"];
 export const batchStates = [...variantStates, "completed", "partial", "needs_attention"] as const;
 const messages: Record<string, string> = {
   queued: "Waiting in Engui's local dispatch queue; not executing at the provider.",
@@ -19,6 +19,7 @@ const messages: Record<string, string> = {
   succeeded: "Generation output is complete. Check preservationState for its gallery copy.",
   failed: "Generation failed; inspect each variant's errorCode.",
   cancelled: "Work was cancelled or fenced before dispatch.",
+  abandoned: "Stopped locally and released the active slot. Provider outcome remains unknown; this is NOT confirmed remote cancellation. Do not blindly regenerate.",
   completed: "All generation variants succeeded. Gallery preservation is reported separately.",
   partial: "All variants are terminal; some succeeded and others failed or were cancelled.",
   needs_attention: "At least one submission is uncertain; do not start a replacement batch or retry generation blindly.",
@@ -59,6 +60,7 @@ export function batchState(variants: { state: string }[], cancelled: boolean) {
   if (states.every((s) => terminalVariants.includes(s))) {
     if (states.every((s) => s === "succeeded")) return "completed";
     if (states.every((s) => s === "cancelled")) return "cancelled";
+    if (states.every((s) => ["cancelled", "abandoned"].includes(s))) return "abandoned";
     if (states.some((s) => s === "succeeded")) return "partial";
     return "failed";
   }
@@ -74,5 +76,5 @@ export function batchCounts(variants: { state: string }[]) {
     submitting: count("submitting"), providerQueued: count("provider_queued"), running: count("running"),
     finalizing: count("finalizing"), awaitingStatus: count("awaiting_status"),
     submissionUnknown: count("submission_unknown"), cancelRequested: count("cancel_requested"),
-    succeeded: count("succeeded"), failed: count("failed"), cancelled: count("cancelled") };
+    succeeded: count("succeeded"), failed: count("failed"), cancelled: count("cancelled"), abandoned: count("abandoned") };
 }

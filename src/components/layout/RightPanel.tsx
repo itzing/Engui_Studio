@@ -1,5 +1,6 @@
 'use client';
 import WorkspaceManager from '@/components/workspaces/WorkspaceManager';
+import { isUncertainJob, isLocallyStoppedJob, UNKNOWN_STOP_MESSAGE } from '@/lib/jobControl';
 import { workspaceStorage } from '@/lib/workspaces/client';
 
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
@@ -914,7 +915,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
     const handleCancelJob = async (jobId: string) => {
         const result = await cancelJob(jobId);
         if (!result.success) {
-            showToast('Failed to cancel job', 'error');
+            showToast(result.message || 'Failed to cancel job', 'error');
             return;
         }
 
@@ -930,10 +931,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
         setLoadedJobs(prev => prev.map(job => job.id === jobId ? {
             ...job,
-            status: 'failed',
-            error: 'cancelled',
+            status: result.job?.status || 'failed',
+            error: result.job?.error || 'cancelled',
         } : job));
-        showToast('Job cancelled', 'success');
+        showToast(result.message || 'Job cancelled', 'success');
     };
 
     const handleClearFinishedJobs = async () => {
@@ -962,21 +963,22 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                 return;
             }
 
+            const stoppedSet = new Set(result.stoppedLocally || []);
             const cancelledSet = new Set(result.cancelled || []);
             const deletedSet = new Set(result.deleted || []);
             setLoadedJobs(prev => prev
                 .filter(job => !deletedSet.has(job.id))
-                .map(job => cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
+                .map(job => stoppedSet.has(job.id) ? { ...job, status: 'failed', error: UNKNOWN_STOP_MESSAGE } : cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
 
             if (selectedJob && deletedSet.has(selectedJob.id)) {
                 setDetailsOpen(false);
                 setSelectedJob(null);
-            } else if (selectedJob && cancelledSet.has(selectedJob.id)) {
-                setSelectedJob({ ...selectedJob, status: 'failed', error: 'cancelled' });
+            } else if (selectedJob && (cancelledSet.has(selectedJob.id) || stoppedSet.has(selectedJob.id))) {
+                setSelectedJob({ ...selectedJob, status: 'failed', error: stoppedSet.has(selectedJob.id) ? UNKNOWN_STOP_MESSAGE : 'cancelled' });
             }
 
             const cancelledCount = (result.cancelled?.length || 0) + (result.deleted?.length || 0);
-            showToast(`Cancelled ${cancelledCount} active job${cancelledCount === 1 ? '' : 's'}`, 'success');
+            showToast(`Cancelled ${cancelledCount} job${cancelledCount === 1 ? '' : 's'}${stoppedSet.size ? `; stopped ${stoppedSet.size} locally (provider unknown)` : ''}`, 'success');
         } finally {
             setIsCancellingAllJobs(false);
         }
@@ -1001,7 +1003,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
 
     const filteredJobs = loadedJobs;
     const finishedJobsCount = filteredJobs.filter(job => job.status === 'completed' || job.status === 'failed').length;
-    const activeJobsCount = filteredJobs.filter(job => ['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status)).length;
+    const activeJobsCount = filteredJobs.filter(job => ['queueing_up', 'queued', 'processing', 'finalizing', 'submission_unknown'].includes(job.status)).length;
 
     const handleGalleryViewerIndexChange = useCallback((index: number) => {
         const asset = galleryViewerItems[index];
@@ -2200,11 +2202,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                             {job.status === 'processing' && (
                                                 <span className="text-[9px] text-blue-500 font-medium">Running</span>
                                             )}
+                                            {isUncertainJob(job) && <span className="text-[9px] text-amber-500 font-medium">Submission uncertain</span>}
                                             {job.status === 'finalizing' && (
                                                 <span className="text-[9px] text-sky-500 font-medium">Finalizing</span>
                                             )}
                                             {job.status === 'failed' && (
-                                                <span className="text-[9px] text-red-500 font-medium">{job.error === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
+                                                <span className="text-[9px] text-red-500 font-medium">{isLocallyStoppedJob(job) ? 'Stopped locally' : job.error === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
                                             )}
                                             {executionLabel && (
                                                 <span className="text-[9px] text-emerald-500 font-medium">⏱ {executionLabel}</span>
@@ -2342,10 +2345,10 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                         resetKey={job.id}
                                         className="absolute top-2 right-2 p-1.5 text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all"
                                         confirmClassName="absolute top-2 right-2 p-1.5 text-white bg-amber-600 hover:bg-amber-500 rounded-md opacity-100 transition-all"
-                                        title="Cancel"
-                                        confirmTitle="Confirm cancel"
-                                        ariaLabel="Cancel job"
-                                        confirmAriaLabel="Confirm cancel job"
+                                        title={isUncertainJob(job) ? "Stop locally (provider unknown)" : "Cancel"}
+                                        confirmTitle={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel"}
+                                        ariaLabel={isUncertainJob(job) ? "Stop job locally" : "Cancel job"}
+                                        confirmAriaLabel={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel job"}
                                         icon={<X className="w-3.5 h-3.5" />}
                                         iconClassName="w-3.5 h-3.5"
                                     />

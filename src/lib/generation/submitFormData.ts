@@ -871,6 +871,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                     message: getApiMessage('RUNPOD', 'JOB_STARTED', language),
                 });
             } catch (error: any) {
+                if (prepared && error?.code === 'LOCAL_SUBMISSION_STOPPED') return NextResponse.json({ error: 'Job stopped locally; late provider receipt retained.', code: 'LOCAL_SUBMISSION_STOPPED' }, { status: 409 });
                 console.error('RunPod submission failed', prepared ? { jobId: job.id, code: 'MCP_SUBMISSION_ERROR' } : error);
 
                 await prisma.job.update({

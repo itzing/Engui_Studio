@@ -1,4 +1,5 @@
 'use client';
+import { UNKNOWN_STOP_MESSAGE } from "@/lib/jobControl";
 import { reconcileDeletedWorkspaces } from '@/lib/workspaces/client';
 
 import { chooseBrowserWorkspace, currentBrowserWorkspaceId, hasSavedWorkspaceChoice, initializeBrowserWorkspaces, isWorkspaceAbort, savedWorkspaceId, workspaceFetchFor } from '@/lib/workspaces/client';
@@ -82,7 +83,7 @@ export interface Job {
     id: string;
     modelId: string;
     type: 'image' | 'video' | 'audio' | 'tts' | 'music';
-    status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
+    status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed' | 'submission_unknown';
     prompt: string;
     createdAt: number;
     executionMs?: number;
@@ -178,9 +179,9 @@ interface StudioContextType {
     addCompletedJob: (job: Job) => void;
     updateJobStatus: (id: string, status: Job['status'], resultUrl?: string, error?: string, cost?: number, executionMs?: number) => void;
     deleteJob: (id: string) => Promise<boolean>;
-    cancelJob: (id: string) => Promise<{ success: boolean; removed?: boolean }>;
+    cancelJob: (id: string) => Promise<{ success: boolean; removed?: boolean; message?: string; job?: Job }>;
     clearFinishedJobs: (workspaceId: string | null) => Promise<{ success: boolean; deleted?: number; deletedFiles?: number; error?: string }>;
-    cancelActiveJobs: (workspaceId: string | null) => Promise<{ success: boolean; totalActive?: number; cancelled?: string[]; deleted?: string[]; failed?: Array<{ id: string; error: string }>; error?: string }>;
+    cancelActiveJobs: (workspaceId: string | null) => Promise<{ success: boolean; totalActive?: number; cancelled?: string[]; stoppedLocally?: string[]; deleted?: string[]; failed?: Array<{ id: string; error: string }>; error?: string }>;
     reuseJobInput: (jobId: string) => void;
 
     // Workspaces
@@ -579,13 +580,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
             setJobs(prev => prev.map(job => job.id === id ? {
                 ...job,
-                status: 'failed',
-                error: 'cancelled',
+                status: data.job?.status || 'failed',
+                error: data.job?.error || 'cancelled',
             } : job));
-            return { success: true, removed: false };
+            return { success: true, removed: false, message: data.message, job: data.job };
         } catch (error) {
             console.error('Failed to cancel job:', error);
-            return { success: false };
+            return { success: false, message: error instanceof Error ? error.message : 'Failed to cancel job' };
         }
     };
 
@@ -624,6 +625,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 }
             }
 
+            const stoppedLocally = Array.isArray(data.stoppedLocally) ? data.stoppedLocally : [];
+            const stoppedSet = new Set(stoppedLocally);
             const cancelledIds = Array.isArray(data.cancelled) ? data.cancelled : [];
             const deletedIds = Array.isArray(data.deleted) ? data.deleted : [];
             const deletedSet = new Set(deletedIds);
@@ -631,12 +634,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
             setJobs(prev => prev
                 .filter(job => !deletedSet.has(job.id))
-                .map(job => cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
+                .map(job => stoppedSet.has(job.id) ? { ...job, status: 'failed', error: UNKNOWN_STOP_MESSAGE } : cancelledSet.has(job.id) ? { ...job, status: 'failed', error: 'cancelled' } : job));
 
             return {
                 success: data.success !== false,
                 totalActive: data.totalActive,
                 cancelled: cancelledIds,
+                stoppedLocally,
                 deleted: deletedIds,
                 failed: Array.isArray(data.failed) ? data.failed : [],
             };

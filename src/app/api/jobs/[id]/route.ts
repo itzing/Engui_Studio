@@ -266,7 +266,7 @@ async function DELETEImpl(
     } catch (error: any) {
         console.error('Error deleting job:', error);
         const message = error.message || 'Internal server error';
-        const status = message.includes('cancel it first') || message.includes('materialization finishes') ? 409 : 500;
+        const status = error?.status === 409 || message.includes('cancel it first') || message.includes('materialization finishes') ? 409 : 500;
         return NextResponse.json({
             success: false,
             error: message

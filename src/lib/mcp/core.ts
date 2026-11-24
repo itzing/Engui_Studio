@@ -152,6 +152,7 @@ export const inputSchemas = {
     .strict(),
   engui_get_batch: z.object({ batchId: id }).strict(),
   engui_cancel_batch: z.object({ batchId: id, requestKey }).strict(),
+  engui_delete_job: z.object({ jobId: id, requestKey }).strict(),
   engui_save_output: z
     .object({
       source: mediaRef,
@@ -177,7 +178,7 @@ export function scopeFor(name: ToolName): string {
   return name === "engui_prepare_generation" ||
     name === "engui_start_generation"
     ? "generate"
-    : name === "engui_cancel_batch"
+    : name === "engui_cancel_batch" || name === "engui_delete_job"
       ? "cancel"
       : name === "engui_save_output" || name === "engui_record_concept_review" ||
         ["engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)

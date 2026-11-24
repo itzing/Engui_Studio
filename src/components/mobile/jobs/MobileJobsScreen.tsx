@@ -1,4 +1,5 @@
 'use client';
+import { isUncertainJob, isLocallyStoppedJob, jobStatusLabel } from "@/lib/jobControl";
 import { workspaceFetch as fetch } from '@/lib/workspaces/client';
 import { useWorkspaceFetch } from '@/lib/workspaces/useWorkspaceFetch';
 
@@ -123,17 +124,17 @@ function SelectedJobActions({
           <Wand2 className="h-4 w-4" />
         </button>
       ) : null}
-      {job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing' ? (
+      {job.status === 'queueing_up' || job.status === 'queued' || job.status === 'processing' || job.status === 'finalizing' || isUncertainJob(job) ? (
         <InlineConfirmDeleteButton
           onConfirm={() => onCancel(job)}
           stopPropagation
           resetKey={job.id}
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-sm"
           confirmClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/30 bg-amber-600 text-white backdrop-blur-sm"
-          title="Cancel"
-          confirmTitle="Confirm cancel"
-          ariaLabel="Cancel job"
-          confirmAriaLabel="Confirm cancel job"
+          title={isUncertainJob(job) ? "Stop locally (provider unknown)" : "Cancel"}
+          confirmTitle={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel"}
+          ariaLabel={isUncertainJob(job) ? "Stop job locally" : "Cancel job"}
+          confirmAriaLabel={isUncertainJob(job) ? "Confirm local stop" : "Confirm cancel job"}
           icon={<Ban className="h-4 w-4" />}
           iconClassName="h-4 w-4"
         />
@@ -195,7 +196,7 @@ const JobRow = React.memo(function JobRow({
             </div>
           </div>
           <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300' : job.status === 'failed' ? 'bg-red-500/10 text-red-300' : 'bg-blue-500/10 text-blue-300'}`}>
-            {formatJobStatus(job.status)}
+            {isUncertainJob(job) || isLocallyStoppedJob(job) ? jobStatusLabel(job) : formatJobStatus(job.status)}
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">

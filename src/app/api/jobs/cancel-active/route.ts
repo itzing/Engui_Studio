@@ -24,6 +24,7 @@ async function POSTImpl(request: Request) {
 
     const cancelled: string[] = [];
     const deleted: string[] = [];
+    const stoppedLocally: string[] = [];
     const failed: Array<{ id: string; error: string }> = [];
 
     for (const job of jobs) {
@@ -31,6 +32,8 @@ async function POSTImpl(request: Request) {
         const result = await cancelJobExecution(job);
         if (result.outcome === 'deleted') {
           deleted.push(job.id);
+        } else if (result.outcome === 'stopped_locally') {
+          stoppedLocally.push(job.id);
         } else {
           cancelled.push(job.id);
         }
@@ -43,6 +46,7 @@ async function POSTImpl(request: Request) {
       success: failed.length === 0,
       totalActive: jobs.length,
       cancelled,
+      stoppedLocally,
       deleted,
       failed,
     }, { status: failed.length === 0 ? 200 : 207 });

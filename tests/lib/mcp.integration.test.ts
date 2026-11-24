@@ -44,6 +44,10 @@ import { effectiveSettings } from "@/lib/mcp/catalog";
 import { processMcpWorkspace, providerAdapter } from "@/lib/mcp/worker";
 import RunPodService from "@/lib/runpodService";
 import { submitPreparedGeneration } from "@/lib/generation/submitFormData";
+import { POST as cancelActiveRoute } from "@/app/api/jobs/cancel-active/route";
+import { POST as cancelJobRoute } from "@/app/api/jobs/[id]/cancel/route";
+import { DELETE as deleteJobRoute } from "@/app/api/jobs/[id]/route";
+import { UNKNOWN_STOP_MESSAGE } from "@/lib/jobControl";
 import { batchState } from "@/lib/mcp/batches";
 const directories: string[] = [];
 let bytes: Buffer;
@@ -149,11 +153,23 @@ afterAll(async () => {
     await fs.rm(d, { recursive: true, force: true });
 });
 
+async function uncertainBatch(f: Awaited<ReturnType<typeof fixture>>, leaseUntil: Date | null = null) {
+  const p=await plan(f,{variantCount:1}), b=await start(f,p), jobId=b.variants[0].jobId;
+  await scope(f.ws.id,async()=>{
+    await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"submission_unknown",boundaryAt:new Date(),leaseUntil,errorCode:"SUBMISSION_UNKNOWN"}});
+    await prisma.job.create({data:{id:jobId,workspaceId:f.ws.id,userId:"user-with-settings",type:"image",modelId:"qwen-image-edit",status:"submission_unknown",error:"SUBMISSION_UNKNOWN"}});
+  });
+  return {p,b,jobId};
+}
+async function jobRoute(f: Awaited<ReturnType<typeof fixture>>, jobId:string, action:"cancel"|"delete") {
+  const response=await (action==="cancel"?cancelJobRoute:deleteJobRoute)(new Request("http://localhost/api/jobs/"+jobId+(action==="cancel"?"/cancel":""),{method:action==="cancel"?"POST":"DELETE",headers:{"X-Workspace-Id":f.ws.id}}),{params:Promise.resolve({id:jobId})});
+  return {status:response.status,body:await response.json()};
+}
 describe("workspace-bound MCP integration", () => {
-  it("official SDK initializes and discovers 25 strict typed tools without an agent connection", async () => {
+  it("official SDK initializes and discovers 26 strict typed tools without an agent connection", async () => {
     const f = await fixture();
     const list = await f.client.listTools();
-    expect(list.tools).toHaveLength(25);
+    expect(list.tools).toHaveLength(26);
     expect(
       list.tools.every(
         (t) => t.inputSchema.additionalProperties === false && t.outputSchema,
@@ -161,7 +177,7 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
     const c = await f.call("engui_get_context");
     expect(c.limits.maxVariants).toBe(3);
-    expect(c.operations).toHaveLength(25);
+    expect(c.operations).toHaveLength(26);
     await f.client.close();
   });
   it("rejects invalid, missing, revoked and swapped-scope credentials and wrong hosts", async () => {
@@ -778,6 +794,97 @@ describe("workspace-bound MCP integration", () => {
     expect((await read()).variants[0]).toMatchObject({state:"awaiting_status",jobStatus:null});
     await expect(other.call("engui_get_batch",{batchId:b.batchId})).rejects.toMatchObject({code:"NOT_FOUND"});
     await f.client.close();await other.client.close();
+  });
+  it("SDK cancellation retires uncertain work, frees its slot, and deletion preserves start idempotency",async()=>{
+    const f=await fixture();await f.client.listTools();
+    const old=await uncertainBatch(f),second=await start(f,await plan(f,{variantCount:1})),third=await plan(f,{variantCount:1});
+    await expect(start(f,third)).rejects.toMatchObject({code:"RATE_LIMITED"});
+    const key=randomUUID();
+    const cancelled=await f.call("engui_cancel_batch",{batchId:old.b.batchId,requestKey:key});
+    expect(cancelled).toMatchObject({providerOutcomeUnknown:true,locallyStoppedJobIds:[old.jobId]});
+    expect(await f.call("engui_cancel_batch",{batchId:old.b.batchId,requestKey:key})).toEqual(cancelled);
+    expect(await f.call("engui_get_batch",{batchId:old.b.batchId})).toMatchObject({state:"abandoned",isTerminal:true,counts:{abandoned:1}});
+    const next=await start(f,third);expect(next.accepted).toBe(true);
+    const deletion={jobId:old.jobId,requestKey:randomUUID()};
+    expect(await f.call("engui_delete_job",deletion)).toMatchObject({deletedJobId:old.jobId,alreadyAbsent:false});
+    expect(await f.call("engui_delete_job",deletion)).toMatchObject({deletedJobId:old.jobId,alreadyAbsent:false});
+    expect((await start(f,old.p)).batchId).toBe(old.b.batchId);
+    await scope(f.ws.id,async()=>{
+      expect(await prisma.job.findFirst({where:{id:old.jobId}})).toBeNull();
+      expect((await prisma.mcpGenerationVariant.findFirst({where:{id:old.b.variants[0].variantId}}))?.state).toBe("abandoned");
+    });
+    for(const b of [second,next]) await f.call("engui_cancel_batch",{batchId:b.batchId,requestKey:randomUUID()});
+    const submit=vi.spyOn(providerAdapter,"submit");await processMcpWorkspace(f.ws.id);expect(submit).not.toHaveBeenCalled();
+    await f.client.close();
+  });
+  it("UI cancel and delete share explicit local stopping, and a worker restart cannot resurrect the Job",async()=>{
+    const f=await fixture(),old=await uncertainBatch(f);
+    const cancelled=await jobRoute(f,old.jobId,"cancel");
+    expect(cancelled).toMatchObject({status:200,body:{outcome:"stopped_locally",message:UNKNOWN_STOP_MESSAGE,job:{status:"failed",error:UNKNOWN_STOP_MESSAGE}}});
+    expect(await jobRoute(f,old.jobId,"delete")).toMatchObject({status:200,body:{deletedJobId:old.jobId}});
+    const submit=vi.spyOn(providerAdapter,"submit");await processMcpWorkspace(f.ws.id);expect(submit).not.toHaveBeenCalled();
+    expect(await f.call("engui_get_batch",{batchId:old.b.batchId})).toMatchObject({state:"abandoned",isTerminal:true});
+    await f.client.close();
+  });
+  it("UI can directly delete a settled uncertain Job while preserving its tombstone",async()=>{
+    const f=await fixture(),old=await uncertainBatch(f);
+    expect(await jobRoute(f,old.jobId,"delete")).toMatchObject({status:200,body:{deletedJobId:old.jobId}});
+    expect((await f.call("engui_get_batch",{batchId:old.b.batchId})).variants[0]).toMatchObject({state:"abandoned",jobStatus:null,errorCode:"SUBMISSION_UNKNOWN_STOPPED"});
+    await f.client.close();
+  });
+  it("active leases block local deletion; old cancellation intent resolves when dispatch settles",async()=>{
+    const f=await fixture();await f.client.listTools();const old=await uncertainBatch(f,new Date(Date.now()+60000));
+    expect((await jobRoute(f,old.jobId,"cancel")).status).toBe(409);
+    expect((await jobRoute(f,old.jobId,"delete")).status).toBe(409);
+    await expect(f.call("engui_delete_job",{jobId:old.jobId,requestKey:randomUUID()})).rejects.toMatchObject({code:"JOB_BUSY"});
+    expect(await f.call("engui_cancel_batch",{batchId:old.b.batchId,requestKey:randomUUID()})).toMatchObject({locallyStoppedJobIds:[]});
+    await scope(f.ws.id,async()=>await prisma.mcpGenerationVariant.update({where:{id:old.b.variants[0].variantId},data:{leaseUntil:new Date(0)}}));
+    const submit=vi.spyOn(providerAdapter,"submit");await processMcpWorkspace(f.ws.id);expect(submit).not.toHaveBeenCalled();
+    expect(await f.call("engui_get_batch",{batchId:old.b.batchId})).toMatchObject({state:"abandoned",counts:{abandoned:1}});
+    await f.client.close();
+  });
+  it("bulk UI cancellation reports local stops separately from confirmed cancellations",async()=>{
+    const f=await fixture(),old=await uncertainBatch(f);
+    const response=await cancelActiveRoute(new Request("http://localhost/api/jobs/cancel-active",{method:"POST",headers:{"Content-Type":"application/json","X-Workspace-Id":f.ws.id},body:JSON.stringify({workspaceId:f.ws.id})}));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({cancelled:[],stoppedLocally:[old.jobId],failed:[]});
+    expect((await f.call("engui_get_batch",{batchId:old.b.batchId})).state).toBe("abandoned");
+    await f.client.close();
+  });
+  it("known-provider active work cannot be silently deleted; deletion is workspace-scoped and cancel-authorized",async()=>{
+    const f=await fixture(),other=await fixture(["read"]);await f.client.listTools();
+    expect((await other.client.listTools()).tools.map(t=>t.name)).not.toContain("engui_delete_job");
+    const old=await uncertainBatch(f);
+    await scope(f.ws.id,async()=>{
+      await prisma.job.update({where:{id:old.jobId},data:{status:"queued",runpodJobId:"known"}});
+      await prisma.mcpGenerationVariant.update({where:{id:old.b.variants[0].variantId},data:{state:"running",providerJobId:"known"}});
+    });
+    await expect(f.call("engui_delete_job",{jobId:old.jobId,requestKey:randomUUID()})).rejects.toMatchObject({code:"JOB_BUSY"});
+    expect((await jobRoute(other,old.jobId,"delete")).status).toBe(404);
+    expect(await scope(f.ws.id,async()=>await prisma.job.count({where:{id:old.jobId}}))).toBe(1);
+    await f.client.close();await other.client.close();
+  });
+  it("late provider acceptance after local deletion is retained and cancelled, never resurrected or resubmitted",async()=>{
+    const f=await fixture(),p=await plan(f,{variantCount:1}),b=await start(f,p),id=b.variants[0].jobId;
+    await f.client.listTools();
+    const original=providerAdapter.submit;providerAdapter.submit=submitPreparedGeneration;
+    const cancel=vi.spyOn(providerAdapter,"cancel").mockResolvedValue(undefined);
+    const submit=vi.spyOn(RunPodService.prototype,"submitJob").mockImplementation(async()=>{
+      await prisma.mcpGenerationVariant.update({where:{id:b.variants[0].variantId},data:{state:"submission_unknown",leaseUntil:new Date(0)}});
+      await prisma.job.update({where:{id},data:{status:"submission_unknown"}});
+      await f.call("engui_cancel_batch",{batchId:b.batchId,requestKey:randomUUID()});
+      await f.call("engui_delete_job",{jobId:id,requestKey:randomUUID()});
+      return "late-receipt";
+    });
+    try{
+      await processMcpWorkspace(f.ws.id);await processMcpWorkspace(f.ws.id);
+      expect(submit).toHaveBeenCalledTimes(1);expect(cancel).toHaveBeenCalledTimes(1);
+      await scope(f.ws.id,async()=>{
+        expect(await prisma.job.findFirst({where:{id}})).toBeNull();
+        expect(await prisma.mcpGenerationVariant.findFirst({where:{id:b.variants[0].variantId}})).toMatchObject({state:"abandoned",providerJobId:"late-receipt"});
+      });
+      expect((await start(f,p)).batchId).toBe(b.batchId);
+    }finally{providerAdapter.submit=original;await f.client.close();}
   });
   it("a deleting workspace rejects tool traffic and cannot dispatch queued work", async () => {
     const f = await fixture(),

@@ -18,6 +18,7 @@ import { imagePreview } from "./media";
 import { visibleParts } from "./authoring-schemas";
 import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
+import { deleteJob } from "./jobs";
 import { cancelBatch, getBatch, startGeneration } from "./batches";
 import { getReference, recordReview, saveOutput } from "./curation";
 import { MCP_VERSION, MCP_INSTRUCTIONS, PROMPT_GUIDE, PROMPT_GUIDE_URI } from "./guide";
@@ -117,7 +118,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     counts: z.object({
       total: z.number(), queued: z.number(), blocked: z.number(), submitting: z.number(),
       providerQueued: z.number(), running: z.number(), finalizing: z.number(), awaitingStatus: z.number(),
-      submissionUnknown: z.number(), cancelRequested: z.number(), succeeded: z.number(), failed: z.number(), cancelled: z.number(),
+      submissionUnknown: z.number(), cancelRequested: z.number(), succeeded: z.number(), failed: z.number(), cancelled: z.number(), abandoned: z.number(),
     }),
     variants: z.array(z.object({
       variantId: z.string(), label: z.string(), jobId: z.string(), state: z.enum(variantStates), phase: z.enum(variantStates),
@@ -130,7 +131,9 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   engui_cancel_batch: z.object({
     batchId: z.string(),
     cancellationRequested: z.boolean(),
+    locallyStoppedJobIds: z.array(z.string()), providerOutcomeUnknown: z.boolean(),
   }),
+  engui_delete_job: z.object({deletedJobId:z.string(),alreadyAbsent:z.boolean()}),
   engui_save_output: z.object({
     assetId: z.string(),
     sha256: z.string(),
@@ -179,7 +182,8 @@ const descriptions: Record<ToolName, string> = {
   engui_get_batch:
     "Read detailed Job-derived batch/variant status and phase. queued=local queue; provider_queued=accepted but NOT executing; running=confirmed execution; finalizing=output recovery. Inspect counts, statusMessage, isTerminal and cancellationRequested. lifecycleState is internal dispatch bookkeeping, NOT execution status. Stop normal execution polling when isTerminal=true; otherwise wait pollAfterSeconds. Unknown acceptance must never be blindly retried. Read-only; no provider calls.",
   engui_cancel_batch:
-    "Fence queued variants and request cancellation of accepted jobs; cancellation is not proof of remote completion.",
+    "Cancel unwanted batch work. Fence queued variants; request cancellation of known provider jobs. Settled submission_unknown with no provider ID is stopped locally as abandoned, releasing the active slot while explicitly retaining unknown provider outcome. Active dispatch leases must settle first. Never retries inference. Poll engui_get_batch; locallyStoppedJobIds identifies local stops.",
+  engui_delete_job: "Delete a finished Job or locally stop/delete settled submission_unknown work. Requires cancel scope. Active known-provider work must be cancelled first. Does not delete Gallery copies, immutable plans, variant tombstones or idempotency receipts; never generates. Retry with the same requestKey. Local deletion is not proof of remote cancellation.",
   engui_save_output:
     "Preserve original image bytes in the workspace gallery without generation.",
   engui_record_concept_review:
@@ -240,6 +244,8 @@ async function execute(
       return { result: await getBatch(args.batchId) };
     case "engui_cancel_batch":
       return { result: await cancelBatch(args) };
+    case "engui_delete_job":
+      return { result: await deleteJob(args) };
     case "engui_save_output":
       return { result: await saveOutput(args) };
     case "engui_record_concept_review":

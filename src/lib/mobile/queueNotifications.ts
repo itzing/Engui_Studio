@@ -1,4 +1,4 @@
-export type QueueJobStatus = 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
+export type QueueJobStatus = 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed' | 'submission_unknown';
 type Outcome = QueueJobStatus | 'cancelled' | 'removed';
 export type QueueJob = { id: string; status: QueueJobStatus; error?: string | null };
 export type QueueNotice = { kind: 'started' | 'finished'; message: string; tone: 'info' | 'success' | 'error' };

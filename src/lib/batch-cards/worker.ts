@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { requestJobCancellation } from '@/lib/jobManagement';
 import { readMedia } from '@/lib/mcp/media';
 import { registerWorkspaceFile } from '@/lib/workspaces/files';
 import { randomUUID } from 'node:crypto';
@@ -87,11 +88,21 @@ async function dispatch(t: NonNullable<Awaited<ReturnType<typeof claim>>>) {
           });
         },
         afterProviderAccepted: async remote => {
-          await prisma.$transaction(async tx => {
+          const lateStop = await prisma.$transaction(async tx => {
+            const current = await tx.cardBatchTask.findFirst({where:{id:t.id}});
+            if (current && ['abandoned', 'cancelled'].includes(current.state)) {
+              await tx.cardBatchTask.update({where:{id:t.id},data:{providerJobId:remote}});
+              return true;
+            }
             const job = await tx.job.findFirst({ where: { id: t.jobId } }), secure = parsed(job?.secureState);
             await tx.cardBatchTask.update({ where: { id: t.id }, data: { state: 'running', providerJobId: remote, error: null } });
             await tx.job.update({ where: { id: t.jobId }, data: { runpodJobId: remote, status: 'queued', secureState: JSON.stringify({ ...secure, phase: 'runpod_queued', activeAttempt: { ...secure.activeAttempt, runpodJobId: remote } }) } });
+            return false;
           });
+          if (lateStop) {
+            try { await requestJobCancellation({modelId:settings.modelId,runpodJobId:remote}); } catch { /* Retain the receipt without claiming remote cancellation. */ }
+            throw Object.assign(Error('Job was stopped locally.'),{code:'LOCAL_SUBMISSION_STOPPED'});
+          }
         },
       });
       if (!response.ok) {
@@ -101,12 +112,12 @@ async function dispatch(t: NonNullable<Awaited<ReturnType<typeof claim>>>) {
     });
   } catch (error: any) {
     const current = await prisma.cardBatchTask.findFirst({ where: { id: t.id } });
-    if (!current || current.providerJobId) return; // Accepted requests are reconciled, never resubmitted.
+    if (!current || current.providerJobId || current.state === 'abandoned') return; // Accepted requests are reconciled, never resubmitted.
     if (current.state === 'cancelled') { await prisma.job.updateMany({ where: { id: t.jobId, runpodJobId: null }, data: { status: 'failed', error: 'cancelled' } }); return; }
     const unknown = !!current.boundaryAt && error?.code !== 'PROVIDER_REJECTED';
     const state = unknown ? 'submission_unknown' : 'failed';
     const message = unknown ? 'Submission acceptance unknown. Check the provider before retrying.' : 'Generation could not start. Check model settings and selected LoRAs, then regenerate.';
-    await prisma.cardBatchTask.update({ where: { id: t.id }, data: { state, error: message } });
+    await prisma.cardBatchTask.update({ where: { id: t.id }, data: { state, error: message, leaseUntil: null } });
     await prisma.job.updateMany({ where: { id: t.jobId }, data: { status: state, error: message } });
   } finally { if (timer) clearInterval(timer); }
 }

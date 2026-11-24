@@ -3,8 +3,9 @@ import path from 'path';
 import { prisma } from '@/lib/prisma';
 import RunPodService from '@/lib/runpodService';
 import SettingsService from '@/lib/settingsService';
+import { stopUnknownJob, JobControlError } from '@/lib/uncertainJobs';
 
-export const RUNNING_JOB_STATUSES = new Set(['queueing_up', 'processing', 'queued', 'in_queue', 'in_progress']);
+export const RUNNING_JOB_STATUSES = new Set(['queueing_up', 'processing', 'queued', 'in_queue', 'in_progress', 'submission_unknown']);
 export const FINISHED_JOB_STATUSES = new Set(['completed', 'failed']);
 
 function parseJobOptions(rawOptions: unknown): Record<string, unknown> {
@@ -184,7 +185,7 @@ async function resolveRunPodDeletionContext(job: any) {
   const endpoints = settings.runpod?.endpoints as Record<string, string | undefined> | undefined;
   const endpointFromModelMap = endpoints?.[String(job.modelId || '')];
   const endpointId = job.endpointId || endpointFromModelMap;
-  const runpodJobId = job.runpodJobId || (() => {
+  let runpodJobId = job.runpodJobId || (() => {
     try {
       if (!job.options) return undefined;
       const options = typeof job.options === 'string' ? JSON.parse(job.options) : job.options;
@@ -194,10 +195,17 @@ async function resolveRunPodDeletionContext(job: any) {
     }
   })();
 
+  if (!runpodJobId) {
+    const variant = await prisma.mcpGenerationVariant.findFirst({where:{jobId:job.id},select:{providerJobId:true}});
+    const card = variant ? null : await prisma.cardBatchTask.findFirst({where:{jobId:job.id},select:{providerJobId:true}});
+    runpodJobId = variant?.providerJobId || card?.providerJobId || undefined;
+  }
   return { runpodApiKey, endpointId, runpodJobId };
 }
 
-export async function cancelJobExecution(job: any): Promise<{ outcome: 'cancelled' | 'deleted'; job?: any; deletedJobId?: string }> {
+export async function cancelJobExecution(job: any): Promise<{ outcome: 'cancelled' | 'deleted' | 'stopped_locally'; job?: any; deletedJobId?: string }> {
+  const stopped = await stopUnknownJob(job.id);
+  if (stopped) return { outcome: 'stopped_locally', job: stopped.job };
   const status = String(job.status || '').toLowerCase();
   if (!RUNNING_JOB_STATUSES.has(status)) {
     throw new Error('Only active jobs can be cancelled');
@@ -252,13 +260,15 @@ export async function cancelJobExecution(job: any): Promise<{ outcome: 'cancelle
 }
 
 export async function deleteFinishedJob(job: any) {
+  const stopped = await stopUnknownJob(job.id);
+  if (stopped?.job) job = stopped.job;
   const status = String(job.status || '').toLowerCase();
   if (!FINISHED_JOB_STATUSES.has(status)) {
-    throw new Error('Cannot delete active job, cancel it first');
+    throw new JobControlError('Cannot delete active job, cancel it first');
   }
 
   const mcp = await prisma.mcpGenerationVariant.findFirst({ where: { jobId: job.id } });
-  if (mcp && (!['succeeded', 'failed', 'cancelled'].includes(mcp.state) || (mcp.state === 'succeeded' && !mcp.assetId))) {
+  if (mcp && (!['succeeded', 'failed', 'cancelled', 'abandoned'].includes(mcp.state) || (mcp.state === 'succeeded' && !mcp.assetId))) {
     throw new Error('Cannot delete MCP job before acceptance reconciliation and original preservation finish');
   }
   const cardTask = await prisma.cardBatchTask.findFirst({ where: { jobId: job.id } });

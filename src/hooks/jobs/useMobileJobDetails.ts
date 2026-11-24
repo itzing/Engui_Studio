@@ -20,7 +20,7 @@ export type MobileJobDetailOutput = {
 export type MobileJobDetail = {
   id: string;
   workspaceId?: string | null;
-  status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed';
+  status: 'queueing_up' | 'queued' | 'processing' | 'finalizing' | 'completed' | 'failed' | 'submission_unknown';
   type: 'image' | 'video' | 'audio' | 'tts' | 'music';
   modelId: string;
   prompt: string;
@@ -63,7 +63,7 @@ export function useMobileJobDetails(jobId: string) {
   }, [fetchJob]);
 
   useEffect(() => {
-    if (!job || !['queueing_up', 'queued', 'processing', 'finalizing'].includes(job.status)) {
+    if (!job || !['queueing_up', 'queued', 'processing', 'finalizing', 'submission_unknown'].includes(job.status)) {
       return;
     }
 

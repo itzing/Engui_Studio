@@ -6,6 +6,7 @@ import {
   submitPreparedGeneration,
   type PreparedSubmission,
 } from "@/lib/generation/submitFormData";
+import { settleCancelledUnknownBatch } from "@/lib/uncertainJobs";
 import { requestJobCancellation } from "@/lib/jobManagement";
 import { assertCredential } from "./auth";
 import { loadPlan, validatePlan } from "./plans";
@@ -22,6 +23,8 @@ export const providerAdapter: {
   cancel: requestJobCancellation,
 };
 async function reconcile(workspaceId: string) {
+  const cancelled = await prisma.mcpGenerationBatch.findMany({where:{workspaceId,cancelledAt:{not:null},variants:{some:{state:"submission_unknown"}}},select:{id:true}});
+  for (const b of cancelled) await settleCancelledUnknownBatch(b.id);
   const rows = await prisma.mcpGenerationVariant.findMany({
     where: {
       workspaceId,
@@ -48,6 +51,11 @@ async function reconcile(workspaceId: string) {
       await prisma.mcpGenerationVariant.update({
         where: { id: v.id },
         data: { state: "succeeded", errorCode: null },
+      });
+    else if (job && ["failed", "cancelled", "canceled"].includes(job.status))
+      await prisma.mcpGenerationVariant.updateMany({
+        where: { id:v.id, state:v.state },
+        data: {state:job.status !== "failed" || job.error === "cancelled" ? "cancelled" : "failed",errorCode:job.error === "cancelled" ? null : "PROVIDER_REJECTED"},
       });
     else if (remote) {
       if (job && ["submission_unknown", "queueing_up"].includes(job.status))
@@ -273,8 +281,13 @@ async function dispatch(v: any) {
           });
         },
         afterProviderAccepted: async (remote) => {
-          await prisma.$transaction(async (tx) => {
+          const lateStop = await prisma.$transaction(async (tx) => {
+            const current = await tx.mcpGenerationVariant.findFirst({where:{id:v.id}});
             const job = await tx.job.findFirst({ where: { id: v.jobId } });
+            if (current?.state === "abandoned" || current?.state === "cancelled") {
+              await tx.mcpGenerationVariant.update({where:{id:v.id},data:{providerJobId:remote}});
+              return true;
+            }
             const secure = parse(job?.secureState);
             await tx.mcpGenerationVariant.update({
               where: { id: v.id },
@@ -299,7 +312,12 @@ async function dispatch(v: any) {
                 }),
               },
             });
+            return false;
           });
+          if (lateStop) {
+            try { await providerAdapter.cancel({modelId:d.modelId,runpodJobId:remote}); } catch { /* Keep uncertain evidence; never resubmit. */ }
+            throw Object.assign(Error("Job was stopped locally before the receipt arrived."),{code:"LOCAL_SUBMISSION_STOPPED"});
+          }
         },
       });
       if (!response.ok) {
@@ -313,7 +331,7 @@ async function dispatch(v: any) {
     const current = await prisma.mcpGenerationVariant.findFirst({
       where: { id: v.id },
     });
-    if (!current) return;
+    if (!current || ["abandoned", "cancelled"].includes(current.state)) return;
     if (current.providerJobId) {
       await prisma.job.updateMany({
         where: { id: v.jobId },
@@ -344,6 +362,7 @@ async function dispatch(v: any) {
             ? "cancelled"
             : "failed",
         errorCode: code,
+        leaseUntil: null,
       },
     });
     await prisma.job.updateMany({

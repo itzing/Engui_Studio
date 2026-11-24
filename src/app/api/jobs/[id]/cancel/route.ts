@@ -1,6 +1,7 @@
 import { withWorkspaceRoute } from '@/lib/workspaces/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { UNKNOWN_STOP_MESSAGE } from '@/lib/jobControl';
 import { cancelJobExecution } from '@/lib/jobManagement';
 
 async function POSTImpl(
@@ -22,12 +23,12 @@ async function POSTImpl(
       outcome: result.outcome,
       job: result.job ?? null,
       deletedJobId: result.deletedJobId ?? null,
-      message: result.outcome === 'deleted' ? 'Job deleted locally because it no longer exists on the server' : 'Job cancelled',
+      message: result.outcome === 'deleted' ? 'Job deleted locally because it no longer exists on the server' : result.outcome === 'stopped_locally' ? UNKNOWN_STOP_MESSAGE : 'Job cancelled',
     });
   } catch (error: any) {
     console.error('Error cancelling job:', error);
     const message = error?.message || 'Failed to cancel job';
-    const status = message.includes('Only active jobs') ? 409 : 500;
+    const status = error?.status === 409 || message.includes('Only active jobs') ? 409 : 500;
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }

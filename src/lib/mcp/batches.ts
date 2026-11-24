@@ -9,6 +9,7 @@ import {
   parse,
   receipt,
 } from "./core";
+import { settleCancelledUnknownBatch } from "@/lib/uncertainJobs";
 import { assertCredential } from "./auth";
 import { loadPlan, validatePlan } from "./plans";
 import { terminalVariants, batchState, variantStatus, batchCounts, statusMessage } from "./batch-status";
@@ -43,7 +44,7 @@ export async function startGeneration(
           where: { variants: { some: { state: { notIn: terminalVariants } } } },
         })) >= limits().activeBatches
       )
-        fail("RATE_LIMITED", "Maximum active workspace batches reached.");
+        fail("RATE_LIMITED", `Workspace limit of ${limits().activeBatches} active batches reached. This is an Engui concurrency limit, not a provider limit. Use engui_get_batch; cancel unwanted batches with engui_cancel_batch. Uncertain cancelled work can be stopped locally without retrying inference.`);
       if (p.expiresAt.getTime() <= Date.now())
         fail("PLAN_EXPIRED", "Prepare a new plan.");
       const created = await tx.mcpGenerationBatch.create({
@@ -84,7 +85,7 @@ export async function cancelBatch(args: {
   batchId: string;
   requestKey: string;
 }) {
-  return receipt("cancel", args.requestKey, args, async (tx) => {
+  const result = await receipt("cancel", args.requestKey, args, async (tx) => {
     const batch = await tx.mcpGenerationBatch.findFirst({
       where: { id: args.batchId },
     });
@@ -99,6 +100,10 @@ export async function cancelBatch(args: {
     });
     return { batchId: batch.id, cancellationRequested: true };
   });
+  // Also reconcile old cancellation receipts; replay never re-submits inference.
+  await settleCancelledUnknownBatch(args.batchId);
+  const stopped = await prisma.mcpGenerationVariant.findMany({where:{batchId:args.batchId,state:"abandoned"},select:{jobId:true}});
+  return {...result, locallyStoppedJobIds:stopped.map(v=>v.jobId), providerOutcomeUnknown:stopped.length>0};
 }
 export async function getBatch(batchId: string) {
   const b = await prisma.mcpGenerationBatch.findFirst({
