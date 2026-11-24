@@ -55,3 +55,6 @@ The original source is snapshot.draft.prompt. snapshot.stages.expandedPrompt is 
 Character substitutions are recorded separately in snapshot.characterReferences, snapshot.stages.characterReferences and each variant.characterReferences, including token, Character version, optional outfit revision and resolved text. wildcardReplacements is ONLY the ordinary wildcard log; an empty list does not mean Character resolution failed.
 Plans are immutable. Edited/deleted referenced characters or changed default outfits invalidate an unstarted plan with PLAN_STALE; prepare again using a NEW requestKey. Historical plans and already-generated images are never rewritten. Legacy unresolved-tag plans must be prepared again. Do not start a plan containing an unintended literal tag.
 This syntax works in MCP and Create Image/Create Video. Prompts/Prompt Constructor has no tag expansion; its existing Characters workflow remains separate. MCP currently exposes image generation, not Create Video's full API.
+
+## MaskFlow masked editing
+MCP 2.1 adds `qwen-image-edit-maskflow` / `masked_image_edit`, one source and a separate owned grayscale mask or normalized rectangles. See [Qwen MaskFlow MCP](qwen-maskflow-mcp.md) and `engui_get_prompt_guide` for exact schema. No UI rollout or change to ordinary Qwen.

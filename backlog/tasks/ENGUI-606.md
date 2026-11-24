@@ -1,22 +1,37 @@
-# ENGUI-606 — Secure Qwen2511 MaskFlow endpoint and MCP
+# ENGUI-606 — Secure Qwen 2511 MaskFlow endpoint and MCP
 
 ## Status
-In Progress
+
+Done — deployed 2026-11-24, MCP 2.1.0.
 
 ## Scope
-Owner14809 authorizes separate endpoint repo and two worker slots reallocated Krea2 max8->6/Qwen0->2,min0. Follow-up scope: MCP + endpoint ONLY, no desktop/mobile changes. Preserve no custom Docker build: ready CUDA/PyTorch base plus pinned bootstrap. Dedicated MCP model qwen-image-edit-maskflow, explicit source and mask (owned image or normalized rectangles), no primary Character. Existing regular Qwen, UI and historical plans remain unchanged.
 
-## Acceptance
-Authenticated/encrypted prompt,source,mask,result; strict job/attempt/model/role bindings and scoped paths; no plaintext transport. Official pinned MaskFlow pipeline and latest scenes adapter, no Lightning mixing. Validate mask alignment/content and workspace ownership, freeze mask snapshot/hash and recheck atstart/dispatch. MCP model/guide describes required masks,50-step baseline and no automatic segmentation. Separate GitHub repo with reproducible startup and CPU regression tests; live synthetic secure proof on RunPod, no user media. Persist full rollback before resource mutations; no activeKrea jobs interrupted. min0,max2; standby0.
+Owner 14809 authorized a separate endpoint repository and two worker slots reallocated from Krea2. Follow-up explicitly selected MCP + endpoint ONLY. No desktop/mobile changes. No custom Docker image build: published CUDA/PyTorch base plus pinned bootstrap. Dedicated `qwen-image-edit-maskflow` model, explicit source and mask (owned image or normalized rectangles), no primary Character. Ordinary Qwen, UI and historical plans are unchanged.
 
-## Validation
-Endpoint secure Python tests + cross-language AES fixture, MCP plan/discovery/dispatch/staleness tests, production build and candidateHTTP proof. LiveGPU synthetic edit and background check bounded to one baseline validation request; report real status, no claim success until verified.
+## Implementation
 
-## Candidate checks
-- Endpoint16CPU contract tests passed. NewMCP18integration tests passed, including realTSenvelopes consumed by Pythonhandler and encryptedresult verified by TS.
-- Full regression191tests/9files passed after increasing the newfile's timeout under concurrentbuild/SQLitecontention; no codefailure remained.
-- Productionbuildpassed;125TypeScriptdiagnostics baseline andcandidate, noadded diagnosticlocations.
-- CandidateHTTP22SDKchecks passed: maskedmodeldiscovery/schema,50stepCFG4defaults, frozenmaskreadback, plain/taggedlegacyflows, strictremovedCharacterselectors. NoUI model-list exposure.
-- Endpointrepo https://github.com/itzing/qwen_image_edit_maskflow . ReadyPyTorchCUDAimage, noDockerbuild. Sharedmodelcache100GBcreatedUS-NC-2; transportusesexistingencryptedS3EU-CZ.
-- Quotaallocation verified Krea2max6/QwenMaskFlowmax2,min0both. ExistingQwenendpointdnc6cjeffpqwfy reused with rollback snapshot.
-- Liveone-synthetic-jobacceptedafteranexplicit409rejectionwithzerojobcount andcompletedrollout; id18e625b4-68a6-466f-b733-4431a542b108-e2. CurrentlyverifyingGPUresult. No user media.
+- Repository: https://github.com/itzing/qwen_image_edit_maskflow ; live handler revision `501930b4c36f7e1c641c420ab76cb8f3878adfaf`.
+- Application implementation: `801feee`; production build `kMyr5ZT_dQBL6Mr96rzTZ`, previous build `aPQyza0XUGBg1YIvszSZq` retained.
+- Authenticated/encrypted prompt, generation settings, source, mask and result; strict job/attempt/model/role bindings and scoped paths, no plaintext transport.
+- Official pinned MaskFlow engine and latest scene adapter, 50 steps / CFG 4, no Lightning mixing. Mask geometry, hashes and ownership validated and rechecked before dispatch.
+- Endpoint `dnc6cjeffpqwfy`, 96 GB GPU, 0 minimum / 2 maximum workers. Krea2 maximum reduced from 8 to 6; other limits unchanged. No active Krea job interrupted.
+- 100 GB persistent model cache `ttw2b90u62` in US-NC-2. Existing encrypted S3 transport retained. Credentials remain outside Git.
+- New setting only: `endpoints.qwen-image-edit-maskflow`; ordinary Qwen setting untouched. No database migration.
+
+## Verification
+
+- 19 endpoint CPU contract tests passed, including transparency and encrypted roundtrip.
+- 191 application tests across 9 files passed, including 18 new MaskFlow integration checks and real TS-to-Python / Python-to-TS AES fixtures.
+- Production build passed. Baseline and candidate have the same 125 existing TypeScript diagnostic locations; no new diagnostic locations.
+- 22 candidate HTTP SDK checks and 10 public Showdown checks passed: discovery, required masks, frozen plan readback, defaults, plain/tag compatibility and removed Character selectors.
+- One real synthetic secure GPU job completed: `18e625b4-68a6-466f-b733-4431a542b108-e2`. No user media. 512x512 encrypted output successfully decrypted; about 95 seconds execution plus 53 seconds queue delay. Far background was pixel-identical; an unwanted white shape appeared inside the editable region. Operational proof, not a quality guarantee.
+- Synthetic GPU proof used handler `c6d5815`; later `501930b` only adds pre-inference transparent-mask rejection. Runtime/model/engine unchanged.
+- Public MCP checks prepared two plans only; no extra paid job. Desktop/mobile model lists exclude MaskFlow.
+
+## Evidence and rollback
+
+Private application evidence: `/home/engui/engui-runs/engui-606-20261124`.
+Private endpoint evidence: `/home/engui/engui-runs/qwen-maskflow-20261124`.
+Application `previous.next`, `rollback.py` and `endpoint-setting.py rollback` preserve restoration of the previous build and newly added setting. Restart the service after restoring a build. Endpoint/Krea original configuration snapshots are private and contain credentials; never print or commit them. Restore quota in safe order (MaskFlow max 0 before Krea max 8) if rolling back.
+
+Agent usage: `docs/qwen-maskflow-mcp.md` and discoverable `engui_get_prompt_guide`. Reconnect MCP to refresh tool schema; source and explicit mask are mandatory.
