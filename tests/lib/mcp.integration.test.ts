@@ -150,10 +150,10 @@ afterAll(async () => {
 });
 
 describe("workspace-bound MCP integration", () => {
-  it("official SDK initializes and discovers 23 strict typed tools without an agent connection", async () => {
+  it("official SDK initializes and discovers 25 strict typed tools without an agent connection", async () => {
     const f = await fixture();
     const list = await f.client.listTools();
-    expect(list.tools).toHaveLength(23);
+    expect(list.tools).toHaveLength(25);
     expect(
       list.tools.every(
         (t) => t.inputSchema.additionalProperties === false && t.outputSchema,
@@ -161,7 +161,7 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
     const c = await f.call("engui_get_context");
     expect(c.limits.maxVariants).toBe(3);
-    expect(c.operations).toHaveLength(23);
+    expect(c.operations).toHaveLength(25);
     await f.client.close();
   });
   it("rejects invalid, missing, revoked and swapped-scope credentials and wrong hosts", async () => {
@@ -213,7 +213,7 @@ describe("workspace-bound MCP integration", () => {
   });
   it("read-only discovery excludes mutations and direct calls cannot escalate", async () => {
     const f = await fixture(["read"]);
-    expect((await f.client.listTools()).tools).toHaveLength(13);
+    expect((await f.client.listTools()).tools).toHaveLength(15);
     await expect(plan(f)).rejects.toThrow();
   });
   it("bounds requests, enforces strict nested inputs and rejects query selectors", async () => {

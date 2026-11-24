@@ -82,3 +82,7 @@ If no work has been submitted, restoring the prior build is safe after disabling
 The server is now v1.1.0 with 23 tools; the owner has confirmed Claude connection on the isolated standard-HTTPS ingress. Authoring uses the existing curate scope and token. Read [the authoring guide](engui-mcp-character-authoring.md) for partial edits, optimistic revisions, history and wardrobe semantics.
 
 71 focused tests and production build passed. Copied-database HTTP SDK authoring checks passed; public production validation performed only discovery and context reads, with 23 tools and the expected Fairy Tale workspace. No production characters, versions or generation batches were created during validation. Additive migration002 preserved existing rows; backup and previous build are retained in /home/engui/engui-runs/engui-mcp-authoring-20261111/.
+
+## MCP 1.2.0 prompt capabilities (ENGUI-602)
+
+25 tools (15 for read-only credentials). Startup instructions point to `engui_get_prompt_guide` and the equivalent `engui://guides/prompts` resource; `engui_list_wildcards` provides active workspace keys without writes. See [prompt guide](engui-mcp-prompt-guide.md). Character tags use the same resolver as Create, with frozen provenance and stale-source checks. Explicit-tag mode does not prepend primary identity/outfit. Historical unresolved-tag plans require fresh preparation; untagged plans retain compatibility. No schema or token changes. Reconnect clients to refresh discovery.

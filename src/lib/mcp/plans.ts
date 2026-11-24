@@ -2,8 +2,7 @@ import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { resolveImageVibe } from "@/lib/vibes/resolveImageVibe";
-import { expandPromptWildcards } from "@/lib/prompt-wildcards/server";
-import { resolvePromptVariants } from "@/lib/generation/promptVariants";
+import { expandMcpPrompt, hasExplicitCharacterReferences, characterReferencesFor, renderMcpVariant } from "./prompt";
 import {
   type GenerationDraft,
   type Authority,
@@ -15,18 +14,19 @@ import {
 } from "./core";
 import {
   characterSnapshot,
-  composePrompt,
   effectiveSettings,
   modelConfiguration,
   selectedLoras,
 } from "./catalog";
 import { readMedia } from "./media";
 import { assertCredential } from "./auth";
-export async function currentDependencies(d: GenerationDraft) {
+export async function currentDependencies(d: GenerationDraft, explicitCharacters = false) {
   const character = await characterSnapshot(
     d.characterId,
     d.characterVersionId,
     d.outfitId,
+    prisma,
+    explicitCharacters,
   );
   const loras = await selectedLoras(d.loras, d.modelId);
   const config = await modelConfiguration(d.modelId);
@@ -72,17 +72,10 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
   const existing = await findReceipt("prepare", d.requestKey, d);
   if (existing) return existing;
   const settings = effectiveSettings(d);
-  const dep = await currentDependencies(d);
-  const composition = composePrompt(dep.character, d);
-  const vibe = await resolveImageVibe(
-    composition.prompt,
-    d.vibeId || "",
-    requireWorkspaceId(),
-  );
-  const expanded = await expandPromptWildcards(
-    vibe.prompt,
-    requireWorkspaceId(),
-  );
+  const explicitCharacters = await hasExplicitCharacterReferences(d);
+  const dep = await currentDependencies(d, explicitCharacters);
+  const rendering = await expandMcpPrompt(d, dep.character, explicitCharacters);
+  const { composition, vibe, expanded, characterReferences } = rendering;
   const seeds = d.seeds ? [...d.seeds] : [];
   while (seeds.length < d.variantCount) {
     const seed = randomInt(0, 2147483647);
@@ -92,7 +85,7 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
     index,
     label: ["A", "B", "C"][index],
     seed,
-    prompt: resolvePromptVariants(expanded.prompt, seed),
+    ...renderMcpVariant(rendering.protectedText, characterReferences, seed),
     negativePrompt: d.negativePrompt || "",
     settings: { ...settings, seed },
   }));
@@ -102,11 +95,14 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
     schemaVersion: 1,
     draft: d,
     ...dep,
+    characterReferences,
     stages: {
       basePrompt: d.prompt,
       identityPrompt: composition.prompt,
       vibePrompt: vibe.prompt,
       expandedPrompt: expanded.prompt,
+      characterMode: rendering.explicitCharacters ? "inline" : "structured",
+      characterReferences,
       wildcardReplacements: expanded.replacements,
       wildcardSelections: expanded.selections,
     },
@@ -167,7 +163,22 @@ export async function validatePlan(p: any, checkExpiry = true) {
     fail("PLAN_EXPIRED", "Prepare a new plan before generating.");
   if (digest(p.snapshot) !== p.digest)
     fail("PLAN_STALE", "Plan integrity check failed.");
-  const current = await currentDependencies(p.snapshot.draft);
+  if (!Array.isArray(p.snapshot.characterReferences) &&
+      p.snapshot.variants.some((v: any) => v.prompt.includes("{character:")))
+    fail("PLAN_STALE", "This legacy plan contains unresolved character tags. Prepare a new plan; old plans are never rewritten.");
+  if (Array.isArray(p.snapshot.characterReferences) && p.snapshot.characterReferences.length) {
+    let references;
+    try {
+      references = await characterReferencesFor(p.snapshot.characterReferences.map((ref: any) => ref.token).join("\n"));
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "INVALID_CHARACTER_REFERENCE")
+        fail("PLAN_STALE", "A referenced character or default outfit is no longer available. Prepare a new plan.");
+      throw error;
+    }
+    if (digest(references) !== digest(p.snapshot.characterReferences))
+      fail("PLAN_STALE", "A referenced character or default outfit changed. Prepare a new plan.");
+  }
+  const current = await currentDependencies(p.snapshot.draft, p.snapshot.stages?.characterMode === "inline" && Array.isArray(p.snapshot.characterReferences));
   for (const k of [
     "characterDigest",
     "loras",

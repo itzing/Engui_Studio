@@ -9,6 +9,7 @@ import { filterLorasForModel } from "@/lib/lora/modelFilters";
 import { resolveCharacterLook, outfitSummary } from "@/lib/outfits/server";
 import { composeCharacterLook } from "@/lib/outfits/compose";
 import { toCharacterSummary } from "@/lib/characters/utils";
+import { FRAMING_TEXT } from "@/lib/looks/parts";
 import { compileVisibleLook } from "@/lib/looks/compiler";
 import {
   type GenerationDraft,
@@ -154,6 +155,7 @@ export async function characterSnapshot(
   versionId?: string,
   outfitId?: string,
   db: any = prisma,
+  identityOnly = false,
 ) {
   const row = await db.character.findFirst({
     where: {
@@ -180,10 +182,14 @@ export async function characterSnapshot(
       currentVersionId: v.id,
     };
   }
-  const selection = outfitId
+  const selection = identityOnly
+    ? { mode: "custom" as const, customText: "" }
+    : outfitId
     ? { mode: "outfit" as const, outfitId }
     : { mode: "default" as const };
-  let look = await resolveCharacterLook(characterId, selection, db);
+  let look = identityOnly
+    ? composeCharacterLook(toCharacterSummary(selected), selection, null)
+    : await resolveCharacterLook(characterId, selection, db);
   if (versionId) {
     const outfit = look.outfitId
       ? await db.outfit.findFirst({
@@ -207,8 +213,11 @@ export async function characterSnapshot(
   };
   return { snapshot, digest: digest(snapshot) };
 }
-export function composePrompt(snapshot: any, d: GenerationDraft) {
-  const composition = compileVisibleLook(
+export function composePrompt(snapshot: any, d: GenerationDraft, explicitCharacters = false) {
+  const composition = explicitCharacters ? {
+    identity: "", outfit: "", warnings: [] as string[],
+    framingPrompt: FRAMING_TEXT[d.framing === "portrait" ? "portrait" : "full_body"],
+  } : compileVisibleLook(
     snapshot.look,
     d.framing === "portrait" ? "portrait" : "full_body",
   );
@@ -355,6 +364,13 @@ export async function listRecords(kind: string, args: any) {
       select: { id: true, name: true, description: true, revision: true },
     });
   }
+  if (kind === "wildcards")
+    rows = await prisma.promptWildcard.findMany({
+      where: { ...after, workspaceId: requireWorkspaceId(), status: "active",
+        ...(q ? { OR: [{ key: q }, { name: q }] } : {}) },
+      orderBy: { id: "asc" }, take: args.limit + 1,
+      select: { id: true, key: true, name: true, value: true },
+    });
   if (kind === "vibes")
     rows = await prisma.vibePreset.findMany({
       where: { ...after, status: "active", ...(q ? { name: q } : {}) },

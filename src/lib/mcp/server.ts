@@ -20,6 +20,7 @@ import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, cre
 import { getPlan, prepareGeneration } from "./plans";
 import { cancelBatch, getBatch, startGeneration } from "./batches";
 import { getReference, recordReview, saveOutput } from "./curation";
+import { MCP_VERSION, MCP_INSTRUCTIONS, PROMPT_GUIDE, PROMPT_GUIDE_URI } from "./guide";
 
 const nullable = z.string().nullable(),
   json = z.record(z.unknown());
@@ -41,6 +42,8 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     limits: json,
     operations: z.array(z.string()),
   }),
+  engui_get_prompt_guide: z.object({ version: z.string(), uri: z.string(), markdown: z.string() }),
+  engui_list_wildcards: list,
   engui_list_models: z.object({
     models: z.array(
       z.object({
@@ -151,6 +154,8 @@ const descriptions: Record<ToolName, string> = {
   engui_update_outfit: "Partially update an outfit using expectedRevision from engui_get_outfit. Omitted fields stay unchanged. Changed clothing text clears outdated classification unless visibleParts are supplied. Shared workspace outfits affect every character using them. No generation.",
   engui_get_wardrobe: "Read available outfits with linked/default flags and current character editRevision. Follow nextCursor for further outfits.",
   engui_update_wardrobe: "Link, select default, unlink or clear a character's default outfit using current editRevision as expectedRevision. clearDefault omits outfitId; other actions require it. Unlinking the default clears that selection, never deletes the outfit. No generation.",
+  engui_get_prompt_guide: "Read the complete workflow and prompt syntax: Character tags, wildcards, seeded choices, immutable plans and paid-start rules. Call before preparing your first generation.",
+  engui_list_wildcards: "List active wildcard keys and values in this workspace, with query/cursor/limit. Use returned keys in {key} prompts; never invent keys. No writes or default creation.",
   engui_get_context:
     "Inspect the fixed workspace, permissions and limits. No generation.",
   engui_list_models:
@@ -162,7 +167,7 @@ const descriptions: Record<ToolName, string> = {
   engui_search_gallery: "Search active workspace images without enrichment.",
   engui_get_image: "Inspect actual bounded image bytes, not just an image URL.",
   engui_prepare_generation:
-    "Freeze exact prompts, references, settings and three seeds by default. Local write only; never runs inference.",
+    "Freeze exact prompts, Character references, settings and three seeds by default. Supports {character:UUID} and {character:UUID:withOutfit}; tag mode omits implicit identity/outfit and rejects characterVersionId/outfitId. Inspect snapshot.variants[].prompt and characterReferences (separate from wildcardReplacements). Read engui_get_prompt_guide. Local write only; never runs inference.",
   engui_get_plan: "Read an immutable plan and its existing batch.",
   engui_start_generation:
     "Start this exact prepared batch. Paid external operation: requires conversation authorization for this generation. Retry using the same requestKey.",
@@ -191,11 +196,15 @@ async function execute(
     case "engui_update_outfit": return { result: await updateOutfit(auth, args) };
     case "engui_get_wardrobe": return { result: await getWardrobe(args) };
     case "engui_update_wardrobe": return { result: await updateWardrobe(auth, args) };
+    case "engui_get_prompt_guide":
+      return { result: { version: MCP_VERSION, uri: PROMPT_GUIDE_URI, markdown: PROMPT_GUIDE } };
+    case "engui_list_wildcards":
+      return { result: await listRecords("wildcards", args) };
     case "engui_get_context":
       return {
         result: {
           scopes: auth.scopes,
-          serverVersion: "1.1.0",
+          serverVersion: MCP_VERSION,
           limits: limits(),
           operations: Object.keys(inputSchemas).filter((n) =>
             auth.scopes.includes(scopeFor(n as ToolName)),
@@ -236,9 +245,10 @@ async function execute(
 }
 export function createMcpServer(auth: Authority) {
   const server = new McpServer(
-    { name: "engui", version: "1.1.0" },
-    { capabilities: { tools: {} } },
+    { name: "engui", version: MCP_VERSION },
+    { capabilities: { tools: {}, resources: {} }, instructions: MCP_INSTRUCTIONS },
   );
+  server.registerResource("prompt-guide", PROMPT_GUIDE_URI, { mimeType: "text/markdown", description: "Engui workflows, Character tags and wildcard syntax." }, async uri => ({ contents: [{ uri: uri.href, mimeType: "text/markdown", text: PROMPT_GUIDE }] }));
   for (const name of Object.keys(inputSchemas) as ToolName[]) {
     const scope = scopeFor(name);
     if (!auth.scopes.includes(scope)) continue;
@@ -328,7 +338,6 @@ export function createMcpServer(auth: Authority) {
           return {
             isError: true,
             content: [{ type: "text" as const, text: JSON.stringify(safe) }],
-            structuredContent: safe,
           };
         } finally {
           console.info(

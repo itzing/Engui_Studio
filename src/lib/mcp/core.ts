@@ -60,12 +60,12 @@ export const page = {
 };
 export const draftSchema = z
   .object({
-    characterId: id,
+    characterId: id.describe("Primary Character for batch/review tracking. With inline tags, tag every visible person; no implicit identity is prepended."),
     characterVersionId: id.optional(),
     parentBatchId: id.optional(),
     mode: z.enum(["text_to_image", "image_to_image", "image_edit"]),
     modelId,
-    prompt: z.string().min(1).max(16000),
+    prompt: z.string().min(1).max(16000).describe("Scene text. Supports {character:UUID}, {character:UUID:withOutfit}, stored {key} wildcards and seeded {a|b} choices. Read engui_get_prompt_guide. Inline tags replace automatic identity/outfit composition."),
     negativePrompt: z.string().max(16000).optional(),
     framing: z.enum(["full_body", "portrait", "custom"]).default("full_body"),
     view: z.enum(["front", "three_quarter", "side", "custom"]).optional(),
@@ -119,6 +119,8 @@ function boundedEnv(key: string, fallback: number, min: number, max: number) {
 export const inputSchemas = {
   ...authoringInputSchemas,
   engui_get_context: z.object({}).strict(),
+  engui_get_prompt_guide: z.object({}).strict(),
+  engui_list_wildcards: z.object(page).strict(),
   engui_list_models: z.object({}).strict(),
   engui_list_characters: z.object(page).strict(),
   engui_get_character: z.object({ characterId: id, characterVersionId: id.optional() }).strict(),
