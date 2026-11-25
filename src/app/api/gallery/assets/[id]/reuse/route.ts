@@ -162,10 +162,8 @@ function buildReusePayload(
     delete txt2imgOptions.image_path;
     delete txt2imgOptions.image_path_2;
 
-    if (sourceModelId === 'z-image') {
-      txt2imgOptions.use_controlnet = false;
-      txt2imgOptions.task_type = '';
-    }
+    if (sourceModelId === 'z-image') txt2imgOptions.use_controlnet = false;
+    if (sourceModelId === 'z-image' || sourceModelId === 'krea2-turbo') txt2imgOptions.task_type = '';
 
     return {
       action,
@@ -186,6 +184,7 @@ function buildReusePayload(
       options: {
         ...baseOptions,
         ...(modelId === 'z-image' ? { use_controlnet: true } : {}),
+        ...(modelId === 'krea2-turbo' ? { task_type: 'image_to_image' } : {}),
         image_path: asset.originalUrl,
       },
     };

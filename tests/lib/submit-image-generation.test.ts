@@ -32,3 +32,25 @@ describe('image submission Randomize preference', () => {
     },
   );
 });
+
+
+describe('Krea2 desktop i2i submission',()=>{
+ beforeEach(()=>{mockFetch.mockReset();mockFetch.mockResolvedValue(new Response(JSON.stringify({success:true,jobId:'fixture',seed:42}),{status:200}));});
+ const base=()=>({currentModel:getModelById('krea2-turbo')!,prompt:'Red cube',parameterValues:{task_type:'image_to_image',denoise:0,seed:42,width:768,height:512,lora8:'/runpod-volume/loras/style.safetensors',loraWeight8:-.5},randomizeSeed:false,activeWorkspaceId:'ws',settings:{apiKeys:{},runpod:{endpoints:{}}} as any,imageFile:new File(['image'],'source.png',{type:'image/png'}),imageFile2:null});
+ it('sends an init image, zero denoise, seed and eighth LoRA weight',async()=>{
+  expect((await submitImageGeneration(base())).success).toBe(true);
+  const body=mockFetch.mock.calls[0][1].body;
+  expect(body.get('modelId')).toBe('krea2-turbo');expect(body.get('task_type')).toBe('image_to_image');
+  expect(body.get('denoise')).toBe('0');expect(body.get('seed')).toBe('42');expect(body.get('image').name).toBe('source.png');
+  expect(body.get('loraWeight8')).toBe('-0.5');
+ });
+ it('requires a source only in i2i',async()=>{
+  expect((await submitImageGeneration({...base(),imageFile:null})).success).toBe(false);expect(mockFetch).not.toHaveBeenCalled();
+  expect((await submitImageGeneration({...base(),imageFile:null,parameterValues:{seed:42}})).success).toBe(true);
+  expect(mockFetch.mock.calls[0][1].body.has('image')).toBe(false);
+ });
+ it('does not leak an old source into text mode',async()=>{
+  expect((await submitImageGeneration({...base(),parameterValues:{task_type:''}})).success).toBe(true);
+  expect(mockFetch.mock.calls[0][1].body.has('image')).toBe(false);
+ });
+});

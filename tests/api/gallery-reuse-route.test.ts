@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
+    workspace: { findUnique: vi.fn(async()=>({id:"fixture-ws",userId:"user-with-settings",lifecycle:"active",revision:1})) },
     galleryAsset: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -15,6 +16,11 @@ const { mockPrisma } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: mockPrisma,
 }));
+
+// These tests exercise payload composition inside a real validated workspace route.
+// Activity lease persistence is unrelated to the payload and is tested separately.
+vi.mock('@/lib/workspaces/activity',()=>({withWorkspaceActivity:(_ws:any,_label:any,work:any)=>work()}));
+const scopedRequest=(url:string,init:RequestInit={})=>new Request(url,{...init,headers:{...(init.headers||{}),'X-Workspace-Id':'fixture-ws'}});
 
 import { GET, POST } from '@/app/api/gallery/assets/[id]/reuse/route';
 
@@ -31,7 +37,7 @@ describe('gallery reuse route', () => {
       originKind: 'job_output',
     });
 
-    const response = await GET(new Request('http://localhost/api/gallery/assets/asset-1/reuse') as any, {
+    const response = await GET(scopedRequest('http://localhost/api/gallery/assets/asset-1/reuse') as any, {
       params: Promise.resolve({ id: 'asset-1' }),
     });
     const json = await response.json();
@@ -49,7 +55,7 @@ describe('gallery reuse route', () => {
       generationSnapshot: JSON.stringify({ prompt: 'forest temple', modelId: 'z-image', width: 1024 }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'img2img' }),
@@ -79,7 +85,7 @@ describe('gallery reuse route', () => {
       generationSnapshot: JSON.stringify({ prompt: 'forest temple', modelId: 'z-image', width: 1024, seed: 44 }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'img2vid' }),
@@ -114,7 +120,7 @@ describe('gallery reuse route', () => {
       generationSnapshot: JSON.stringify({ prompt: 'camera push in', modelId: 'wan22', width: 768, height: 512 }),
     });
 
-    const response = await GET(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse') as any, {
+    const response = await GET(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse') as any, {
       params: Promise.resolve({ id: 'asset-video-1' }),
     });
     const json = await response.json();
@@ -133,7 +139,7 @@ describe('gallery reuse route', () => {
       generationSnapshot: JSON.stringify({ prompt: 'wide dolly shot', modelId: 'wan22-t2v', width: 832, height: 480 }),
     });
 
-    const response = await GET(new Request('http://localhost/api/gallery/assets/asset-t2v-1/reuse') as any, {
+    const response = await GET(scopedRequest('http://localhost/api/gallery/assets/asset-t2v-1/reuse') as any, {
       params: Promise.resolve({ id: 'asset-t2v-1' }),
     });
     const json = await response.json();
@@ -160,7 +166,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-t2v-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-t2v-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img' }),
@@ -202,7 +208,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-t2v-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-t2v-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2vid' }),
@@ -255,7 +261,7 @@ describe('gallery reuse route', () => {
     });
     mockPrisma.job.findUnique.mockResolvedValue({ imageInputPath: null });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'img2vid' }),
@@ -311,7 +317,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img' }),
@@ -370,7 +376,7 @@ describe('gallery reuse route', () => {
         }),
       });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img' }),
@@ -426,7 +432,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img' }),
@@ -479,7 +485,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-video-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-video-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img', promptOverride: 'video prompt should not win' }),
@@ -506,7 +512,7 @@ describe('gallery reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/gallery/assets/asset-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/gallery/assets/asset-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img', promptOverride: 'portrait, blonde hair' }),
@@ -528,4 +534,15 @@ describe('gallery reuse route', () => {
       },
     });
   });
+});
+
+
+it.each(['img2img','txt2img'])('Krea2 %s reuse explicitly selects mode and preserves denoise/LoRA',async(action)=>{
+ const snapshot={prompt:'A cube',modelId:'krea2-turbo',task_type:'image_to_image',denoise:.45,seed:42,lora:[['style.safetensors',.8]]};
+ mockPrisma.galleryAsset.findUnique.mockResolvedValue({id:'krea-asset',type:'image',originKind:'job_output',originalUrl:'/generations/krea.png',generationSnapshot:JSON.stringify(snapshot)});
+ const response=await POST(scopedRequest('http://localhost/api/gallery/assets/krea-asset/reuse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}) as any,{params:Promise.resolve({id:'krea-asset'})});
+ expect(response.status).toBe(200);const {payload}=await response.json();
+ expect(payload.modelId).toBe('krea2-turbo');expect(payload.options).toMatchObject({denoise:.45,seed:42,lora:[['style.safetensors',.8]],task_type:action==='img2img'?'image_to_image':''});
+ expect(payload.options).not.toHaveProperty('use_controlnet');
+ if(action==='img2img')expect(payload.imageInputPath).toBe('/generations/krea.png');else expect(payload.options).not.toHaveProperty('image_path');
 });

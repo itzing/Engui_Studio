@@ -485,8 +485,8 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             if (isZImageI2IRequest) {
                 if (!primaryImageFile) {
                     return NextResponse.json({
-                        error: 'Z-Image image-to-image requires an uploaded init image file.',
-                        code: 'ZIMAGE_I2I_INIT_IMAGE_REQUIRED',
+                        error: `${modelId === 'krea2-turbo' ? 'Krea2 Turbo' : 'Z-Image'} image-to-image requires an uploaded init image file.`,
+                        code: modelId === 'krea2-turbo' ? 'KREA2_I2I_INIT_IMAGE_REQUIRED' : 'ZIMAGE_I2I_INIT_IMAGE_REQUIRED',
                     }, { status: 400 });
                 }
                 inputData.mode = 'i2i';
@@ -692,11 +692,9 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                 });
 
                 const mediaInputs: any[] = [];
-                const isZImageI2I = modelId === 'z-image'
+                const isZImageI2I = (modelId === 'z-image' || modelId === 'krea2-turbo')
                     && (runpodInput.task_type === 'image_to_image' || runpodInput.task === 'i2i' || runpodInput.mode === 'i2i');
-                const imageRole = modelId === 'z-image'
-                    ? (isZImageI2I ? 'init_image' : 'condition_image')
-                    : 'source_image';
+                const imageRole = isZImageI2I ? 'init_image' : modelId === 'z-image' ? 'condition_image' : 'source_image';
                 if (primaryImageFile) {
                     mediaInputs.push(await uploadEncryptedMediaInput({
                         s3: s3Service,

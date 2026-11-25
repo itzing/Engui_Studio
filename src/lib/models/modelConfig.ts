@@ -415,13 +415,19 @@ export const MODELS: ModelConfig[] = [
         name: 'Krea2 Turbo',
         provider: 'Krea',
         type: 'image',
-        inputs: ['text'],
+        inputs: ['text', 'image'],
         api: {
             type: 'runpod',
             endpoint: 'krea2-turbo'
         },
         capabilities: {},
+        imageInputKey: 'init_image',
+        conditionalInputs: [
+            { type: 'image', dependsOn: { parameter: 'task_type', value: 'image_to_image' } }
+        ],
         parameters: [
+            { name: 'task_type', label: 'Task Type', type: 'string', default: '', group: 'hidden' },
+            { name: 'denoise', label: 'Denoise', type: 'number', default: 0.35, min: 0, max: 1, step: 0.01, group: 'advanced', dependsOn: { parameter: 'task_type', value: 'image_to_image' }, description: 'Image-to-image change strength. Lower values preserve more of the source.' },
             { name: 'width', label: 'Width', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'height', label: 'Height', type: 'number', default: 1024, min: 512, max: 2048, step: 64, group: 'basic', validation: { multipleOf: 64 } },
             { name: 'negativePrompt', label: 'Negative Prompt', type: 'string', default: '', group: 'advanced' },

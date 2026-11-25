@@ -110,10 +110,8 @@ function buildImageTxt2ImgPayload(action: 'txt2img', snapshot: Record<string, an
   delete txt2imgOptions.image_path;
   delete txt2imgOptions.image_path_2;
 
-  if (modelId === 'z-image') {
-    txt2imgOptions.use_controlnet = false;
-    txt2imgOptions.task_type = '';
-  }
+  if (modelId === 'z-image') txt2imgOptions.use_controlnet = false;
+  if (modelId === 'z-image' || modelId === 'krea2-turbo') txt2imgOptions.task_type = '';
 
   return {
     action,
@@ -171,6 +169,7 @@ function buildReusePayload(action: ReuseAction, output: NormalizedJobOutput, sna
       options: {
         ...baseOptions,
         ...(modelId === 'z-image' ? { use_controlnet: true, task_type: 'image_to_image' } : {}),
+        ...(modelId === 'krea2-turbo' ? { task_type: 'image_to_image' } : {}),
         image_path: output.url,
       },
     };

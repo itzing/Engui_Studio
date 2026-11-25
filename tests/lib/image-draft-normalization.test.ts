@@ -38,3 +38,11 @@ describe('normalizeImageDraftForModel', () => {
     expect(snapshot.previewUrl).toBe('https://example.com/control.png');
   });
 });
+
+
+it('preserves Krea2 i2i source and denoise through draft/reuse normalization, without ControlNet',()=>{
+ const snapshot=normalizeImageDraftForModel('krea2-turbo',{prompt:'Keep composition',parameterValues:{task_type:'image_to_image',denoise:0,lora8:'style.safetensors',loraWeight8:-.5,use_controlnet:true},previewUrl:'/uploads/source.png'});
+ expect(snapshot.parameterValues).toMatchObject({task_type:'image_to_image',denoise:0,lora8:'style.safetensors',loraWeight8:-.5});
+ expect(snapshot.parameterValues).not.toHaveProperty('use_controlnet');expect(snapshot.previewUrl).toBe('/uploads/source.png');
+ expect(normalizeImageDraftForModel('krea2-turbo',{...snapshot,parameterValues:{task_type:''}}).previewUrl).toBe('');
+});

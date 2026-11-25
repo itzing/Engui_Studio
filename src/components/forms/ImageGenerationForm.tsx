@@ -27,6 +27,8 @@ import {
 } from '@/lib/create/imageDraft';
 import { requestImagePromptImprovement, requestZImagePromptRewrite, extractImagePromptFromDataUrl } from '@/lib/create/imagePromptHelper';
 import { sanitizeHydratedLoraParameterValues } from '@/lib/create/loraDraftSanitizer';
+import type { CreateMediaRef } from '@/lib/create/createDraftSchema';
+import { resolveCreateMediaRefToFile, storeCreateFile } from '@/lib/create/createMediaStore';
 import { submitImageGeneration } from '@/lib/create/submitImageGeneration';
 import { getLoraWeightInputError, getLoraWeightNumber } from '@/lib/lora/loraWeightInput';
 import { filterLorasForModel, getLoraSearchText } from '@/lib/lora/modelFilters';
@@ -47,6 +49,10 @@ export default function ImageGenerationForm() {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [primaryInputRef, setPrimaryInputRef] = useState<CreateMediaRef | null>(null);
+    const primaryMediaRevision = useRef(0);
+    const primaryMediaOwner = useRef(activeWorkspaceId);
+    primaryMediaOwner.current = activeWorkspaceId;
     const [previewUrl, setPreviewUrl] = useState<string>('');
     const [imageFile2, setImageFile2] = useState<File | null>(null);
     const [previewUrl2, setPreviewUrl2] = useState<string>('');
@@ -133,9 +139,13 @@ export default function ImageGenerationForm() {
         sceneSnapshot,
         sourcePromptDocumentId: selectedPromptDocumentId,
         sourcePromptDocumentTitle: selectedPromptDocumentTitle,
-    }), [parameterValues, previewUrl, previewUrl2, prompt, selectedVibeId, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
+        inputs: { primary: primaryInputRef },
+    }), [parameterValues, previewUrl, previewUrl2, primaryInputRef, prompt, selectedVibeId, randomizeSeed, sceneSnapshot, selectedPromptDocumentId, selectedPromptDocumentTitle, showAdvanced]);
 
     const applySnapshot = React.useCallback(async (modelId: string, snapshot?: ImageCreateDraftSnapshot | null) => {
+        const revision = ++primaryMediaRevision.current;
+        const owner = primaryMediaOwner.current;
+        const isCurrent = () => primaryMediaRevision.current === revision && primaryMediaOwner.current === owner;
         const mergedParameterValues = mergeImageDraftParameterValues(modelId, snapshot?.parameterValues);
 
         setPrompt(typeof snapshot?.prompt === 'string' ? snapshot.prompt : '');
@@ -154,9 +164,23 @@ export default function ImageGenerationForm() {
         setPreviewUrl2(nextPreviewUrl2);
         setImageFile(null);
         setImageFile2(null);
-
-        if (nextPreviewUrl.startsWith('data:')) {
-            setImageFile(await dataUrlToFile(nextPreviewUrl, 'image-input'));
+        setPrimaryInputRef(snapshot?.inputs?.primary || null);
+        const primaryRef = snapshot?.inputs?.primary;
+        setIsLoadingMedia(primaryRef?.kind === 'idb-media');
+        try {
+            if (primaryRef?.kind === 'idb-media') {
+                const file = await resolveCreateMediaRefToFile(primaryRef);
+                if (!isCurrent()) return;
+                setImageFile(file);
+                setPreviewUrl(file ? URL.createObjectURL(file) : '');
+                if (!file) setMessage({ type: 'error', text: 'The saved source image is unavailable. Please upload it again.' });
+            } else if (nextPreviewUrl.startsWith('data:')) {
+                const file = await dataUrlToFile(nextPreviewUrl, 'image-input');
+                if (!isCurrent()) return;
+                setImageFile(file);
+            }
+        } finally {
+            if (isCurrent()) setIsLoadingMedia(false);
         }
         if (nextPreviewUrl2.startsWith('data:')) {
             setImageFile2(await dataUrlToFile(nextPreviewUrl2, 'image-input-2'));
@@ -195,7 +219,7 @@ export default function ImageGenerationForm() {
     }, []);
     const isZImageModel = currentModel?.id === 'z-image';
     const isImageMultiLoraModel = currentModel?.id === 'z-image' || currentModel?.id === 'krea2-turbo';
-    const zImageMode = isZImageModel && parameterValues.task_type === 'image_to_image'
+    const zImageMode = isImageMultiLoraModel && parameterValues.task_type === 'image_to_image'
         ? 'i2i'
         : isZImageModel && parameterValues.use_controlnet === true
             ? 'control'
@@ -870,34 +894,44 @@ export default function ImageGenerationForm() {
     const setZImageMode = (mode: 'text' | 'control' | 'i2i') => {
         setParameterValues(prev => ({
             ...prev,
-            use_controlnet: mode === 'control' || mode === 'i2i',
+            ...(isZImageModel ? { use_controlnet: mode === 'control' || mode === 'i2i' } : {}),
             task_type: mode === 'i2i' ? 'image_to_image' : '',
             denoise: mode === 'i2i' ? (prev.denoise ?? 0.35) : prev.denoise,
         }));
     };
 
     const applyPrimaryImageFile = useCallback((file: File, previewOverride?: string) => {
+        const revision = ++primaryMediaRevision.current;
+        const owner = primaryMediaOwner.current;
+        const isCurrent = () => primaryMediaRevision.current === revision && primaryMediaOwner.current === owner;
+        setPrimaryInputRef(null);
         setImageFile(file);
+        void storeCreateFile(file, owner).then((ref) => {
+            if (isCurrent()) setPrimaryInputRef(ref);
+        }).catch(() => {
+            if (isCurrent()) setMessage({ type: 'error', text: 'The source is available for this session, but could not be saved for reopening.' });
+        });
         const url = previewOverride || URL.createObjectURL(file);
         setPreviewUrl(url);
 
-        if (isZImageModel && zImageMode === 'i2i') {
-            setPrompt('');
+        if (isImageMultiLoraModel && zImageMode === 'i2i') {
+            if (isZImageModel) setPrompt('');
             replaceImagePromptFile(file);
         }
 
         // Auto-set dimensions in React state so draft persistence sees them
         const img = new Image();
         img.onload = () => {
+            if (!isCurrent()) return;
             setParameterValues(prev => ({
                 ...prev,
-                width: img.width,
-                height: img.height,
+                width: currentModel?.id === 'krea2-turbo' ? Math.min(2048, Math.max(512, Math.round(img.width / 64) * 64)) : img.width,
+                height: currentModel?.id === 'krea2-turbo' ? Math.min(2048, Math.max(512, Math.round(img.height / 64) * 64)) : img.height,
             }));
             console.log('✅ Auto-set image dimensions:', img.width, 'x', img.height);
         };
         img.src = url;
-    }, [isZImageModel, zImageMode]);
+    }, [currentModel?.id, isZImageModel, isImageMultiLoraModel, zImageMode]);
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -934,7 +968,7 @@ export default function ImageGenerationForm() {
     };
 
     const handlePrimaryImagePaste = useCallback((event: React.ClipboardEvent<HTMLElement> | ClipboardEvent) => {
-        if (!isZImageModel || zImageMode !== 'i2i' || !isInputVisible(currentModel, 'image', parameterValues)) {
+        if (!isImageMultiLoraModel || zImageMode !== 'i2i' || !isInputVisible(currentModel, 'image', parameterValues)) {
             return;
         }
 
@@ -947,10 +981,10 @@ export default function ImageGenerationForm() {
         event.preventDefault();
         applyPrimaryImageFile(file);
         setMessage({ type: 'success', text: 'Init image pasted from clipboard.' });
-    }, [applyPrimaryImageFile, currentModel, isZImageModel, parameterValues, zImageMode]);
+    }, [applyPrimaryImageFile, currentModel, isImageMultiLoraModel, parameterValues, zImageMode]);
 
     useEffect(() => {
-        if (!isZImageModel || zImageMode !== 'i2i') return;
+        if (!isImageMultiLoraModel || zImageMode !== 'i2i') return;
 
         const isEditableTarget = (target: EventTarget | null) => {
             if (!(target instanceof HTMLElement)) return false;
@@ -966,7 +1000,7 @@ export default function ImageGenerationForm() {
 
         window.addEventListener('paste', onPaste);
         return () => window.removeEventListener('paste', onPaste);
-    }, [handlePrimaryImagePaste, isZImageModel, zImageMode]);
+    }, [handlePrimaryImagePaste, isImageMultiLoraModel, zImageMode]);
 
     const handleImageUpload2 = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1177,13 +1211,13 @@ export default function ImageGenerationForm() {
             </div>
 
             <form ref={formElementRef} onSubmit={handleSubmit} className="space-y-4">
-                {isZImageModel && !isPhoneLayout && (
+                {isImageMultiLoraModel && !isPhoneLayout && (
                     <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Generation mode</Label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className={`grid ${isZImageModel ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
                             {[
                                 { value: 'text', label: 'Text' },
-                                { value: 'control', label: 'Control' },
+                                ...(isZImageModel ? [{ value: 'control', label: 'Control' }] : []),
                                 { value: 'i2i', label: 'I2I' },
                             ].map((mode) => (
                                 <button
@@ -1213,7 +1247,7 @@ export default function ImageGenerationForm() {
                 {isInputVisible(currentModel, 'image', parameterValues) && (
                     <div className="space-y-2">
                         <Label className="text-xs">
-                            {isZImageModel && zImageMode === 'i2i' ? 'Init Image' : isZImageModel && zImageMode === 'control' ? 'Control Image' : 'Input Image'} {currentModel.optionalInputs?.includes('image') ? '(Optional)' : '(Required)'}
+                            {isImageMultiLoraModel && zImageMode === 'i2i' ? 'Init Image' : isZImageModel && zImageMode === 'control' ? 'Control Image' : 'Input Image'} {currentModel.optionalInputs?.includes('image') ? '(Optional)' : '(Required)'}
                         </Label>
                         <input
                             ref={fileInputRef}
@@ -1253,7 +1287,7 @@ export default function ImageGenerationForm() {
                                         />
                                     </button>
                                     <div className="flex flex-wrap items-center justify-center gap-3">
-                                        {isZImageModel && zImageMode === 'i2i' && imagePromptFile ? (
+                                        {isImageMultiLoraModel && zImageMode === 'i2i' && imagePromptFile ? (
                                             <button
                                                 type="button"
                                                 onClick={(e) => {
@@ -1273,6 +1307,8 @@ export default function ImageGenerationForm() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setPreviewUrl('');
+                                                ++primaryMediaRevision.current;
+                                                setPrimaryInputRef(null);
                                                 setImageFile(null);
                                             }}
                                             className="text-xs text-red-400 hover:text-red-300"
@@ -1285,7 +1321,7 @@ export default function ImageGenerationForm() {
                                 <div className="text-center text-muted-foreground">
                                     <PhotoIcon className="w-8 h-8 mx-auto mb-2" />
                                     <p className="text-xs">Click to upload image</p>
-                                    {isZImageModel && zImageMode === 'i2i' ? <p className="mt-1 text-[11px]">or press Ctrl+V to paste init image</p> : null}
+                                    {isImageMultiLoraModel && zImageMode === 'i2i' ? <p className="mt-1 text-[11px]">or press Ctrl+V to paste init image</p> : null}
                                 </div>
                             )}
                         </div>

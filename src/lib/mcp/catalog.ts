@@ -26,11 +26,9 @@ export const supportedModels = [
 ] as const;
 export function modes(model: string) {
   if (model === "qwen-image-edit-maskflow") return ["masked_image_edit"];
-  return model === "krea2-turbo"
-    ? ["text_to_image"]
-    : model === "z-image"
-      ? ["text_to_image", "image_to_image"]
-      : ["image_edit"];
+  return ["krea2-turbo", "z-image"].includes(model)
+    ? ["text_to_image", "image_to_image"]
+    : ["image_edit"];
 }
 export function parameterNames(model: string, mode?: string) {
   return model.startsWith("qwen-image-edit")
@@ -38,7 +36,7 @@ export function parameterNames(model: string, mode?: string) {
     : [
         "steps",
         "cfg",
-        ...(model === "z-image" && (!mode || mode === "image_to_image")
+        ...(["krea2-turbo", "z-image"].includes(model) && (!mode || mode === "image_to_image")
           ? ["denoise"]
           : []),
       ];
@@ -99,7 +97,7 @@ export async function listModels() {
             multipleOf: p.validation?.multipleOf ?? null,
           })),
         maxReferences:
-          modelId === "qwen-image-edit" ? 2 : ["z-image", "qwen-image-edit-maskflow"].includes(modelId) ? 1 : 0,
+          modelId === "qwen-image-edit" ? 2 : ["krea2-turbo", "z-image", "qwen-image-edit-maskflow"].includes(modelId) ? 1 : 0,
         maxLoras: modelId.startsWith("qwen-image-edit") ? 0 : 8,
         ...(modelId === "qwen-image-edit-maskflow" ? { mask: { required: true, kinds: ["image", "rectangles"], white: "edit", black: "preserve", coordinateSystem: "normalized_source", maxPixels: 1048576, recommendedSteps: 50, automaticSegmentation: false } } : {}),
       };

@@ -213,6 +213,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
         return jsonResponse({ success: true, wildcards: [] });
       }
+      if (url.includes('/api/characters')) return jsonResponse({ success: true, characters: [] });
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     vi.stubGlobal('URL', {
@@ -254,6 +255,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
         return jsonResponse({ success: true, wildcards: [] });
       }
+      if (url.includes('/api/characters')) return jsonResponse({ success: true, characters: [] });
       throw new Error(`Unexpected fetch: ${url}`);
     }));
 
@@ -285,6 +287,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
         return jsonResponse({ success: true, wildcards: [] });
       }
+      if (url.includes('/api/characters')) return jsonResponse({ success: true, characters: [] });
       throw new Error(`Unexpected fetch: ${url}`);
     }));
 
@@ -335,6 +338,7 @@ describe('ImageGenerationForm prompt draft selector', () => {
       if (url.includes('/api/prompt-wildcards?workspaceId=ws-1')) {
         return jsonResponse({ success: true, wildcards: [] });
       }
+      if (url.includes('/api/characters')) return jsonResponse({ success: true, characters: [] });
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);

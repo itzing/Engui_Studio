@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
+    workspace: { findUnique: vi.fn(async()=>({id:"fixture-ws",userId:"user-with-settings",lifecycle:"active",revision:1})) },
     job: {
       findUnique: vi.fn(),
     },
@@ -11,6 +12,11 @@ const { mockPrisma } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: mockPrisma,
 }));
+
+// These tests exercise payload composition inside a real validated workspace route.
+// Activity lease persistence is unrelated to the payload and is tested separately.
+vi.mock('@/lib/workspaces/activity',()=>({withWorkspaceActivity:(_ws:any,_label:any,work:any)=>work()}));
+const scopedRequest=(url:string,init:RequestInit={})=>new Request(url,{...init,headers:{...(init.headers||{}),'X-Workspace-Id':'fixture-ws'}});
 
 import { POST } from '@/app/api/jobs/[id]/reuse/route';
 
@@ -37,7 +43,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/job-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/job-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'img2vid', outputId: 'output-1' }),
@@ -92,7 +98,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/video-job-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/video-job-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img', outputId: 'output-1' }),
@@ -142,7 +148,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/t2v-job-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/t2v-job-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2vid', outputId: 'output-1' }),
@@ -190,7 +196,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/video-job-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/video-job-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -224,7 +230,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/job-1/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/job-1/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img', outputId: 'output-1', promptOverride: 'portrait, blonde hair' }),
@@ -266,7 +272,7 @@ describe('job reuse route', () => {
       }),
     });
 
-    const response = await POST(new Request('http://localhost/api/jobs/job-random/reuse', {
+    const response = await POST(scopedRequest('http://localhost/api/jobs/job-random/reuse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'txt2img', outputId: 'output-1' }),
@@ -288,4 +294,15 @@ describe('job reuse route', () => {
       },
     });
   });
+});
+
+
+it.each(['img2img','txt2img'])('Krea2 %s reuse explicitly selects mode and preserves denoise/LoRA',async(action)=>{
+ const snapshot={prompt:'A cube',modelId:'krea2-turbo',task_type:'image_to_image',denoise:.45,seed:42,lora:[['style.safetensors',.8]]};
+ mockPrisma.job.findUnique.mockResolvedValue({id:'krea-job',type:'image',status:'completed',modelId:'krea2-turbo',prompt:'A cube',resultUrl:'/generations/krea.png',options:JSON.stringify(snapshot)});
+ const response=await POST(scopedRequest('http://localhost/api/jobs/krea-job/reuse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,outputId:'output-1'})}) as any,{params:Promise.resolve({id:'krea-job'})});
+ expect(response.status).toBe(200);const {payload}=await response.json();
+ expect(payload.modelId).toBe('krea2-turbo');expect(payload.options).toMatchObject({denoise:.45,seed:42,lora:[['style.safetensors',.8]],task_type:action==='img2img'?'image_to_image':''});
+ expect(payload.options).not.toHaveProperty('use_controlnet');
+ if(action==='img2img')expect(payload.imageInputPath).toBe('/generations/krea.png');else expect(payload.options).not.toHaveProperty('image_path');
 });
