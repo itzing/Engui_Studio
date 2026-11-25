@@ -107,3 +107,7 @@ Public proxy requires the bundled PUT-upload allowlist update; MCP JSON remains1
 Desktop and MCP now support Krea2 i2i on the existing endpoint. Discover `image_to_image` in `engui_list_models`, supply exactly one uploaded/Gallery/Job source, denoise0..1 (default0.35), steps8/CFG1 defaults and explicit dimensions. Compatible LoRAs remain available. The worker uses a dedicated Krea2 init-image graph and resizes the entire source to the requested dimensions before VAE encoding; no ControlNet, masked edit or identity-preservation guarantee. No additional weights or model cache are used. Mobile has no new mode switch.
 
 Desktop uploaded primary images now persist as workspace-owned IndexedDB draft-media references rather than relying on ephemeral blob URLs; no server import occurs until the existing submission/upload flow requires one. The MCP upload path still imports exact originals into Draft Gallery.
+
+## MCP 2.5 Vibe authoring
+
+Added workspace-bound list/get/create/update/delete/restore Vibe tools. Reads use read scope; writes use existing curate scope, requestKey receipts and fresh expectedRevision. No new credential, schema migration, UI or endpoint changes. Delete is reversible trash, matching UI. Existing vibeId generation remains compatible; description/name changes or deletion invalidate unstarted plans. See the prompt guide for workflow and limits. Reconnect clients to refresh tool discovery.

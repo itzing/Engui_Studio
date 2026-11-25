@@ -165,10 +165,10 @@ async function jobRoute(f: Awaited<ReturnType<typeof fixture>>, jobId:string, ac
   return {status:response.status,body:await response.json()};
 }
 describe("workspace-bound MCP integration", () => {
-  it("official SDK initializes and discovers 29 strict typed tools without an agent connection", async () => {
+  it("official SDK initializes and discovers 35 strict typed tools without an agent connection", async () => {
     const f = await fixture();
     const list = await f.client.listTools();
-    expect(list.tools).toHaveLength(29);
+    expect(list.tools).toHaveLength(35);
     expect(
       list.tools.every(
         (t) => t.inputSchema.additionalProperties === false && t.outputSchema,
@@ -176,7 +176,7 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
     const c = await f.call("engui_get_context");
     expect(c.limits.maxVariants).toBe(3);
-    expect(c.operations).toHaveLength(29);
+    expect(c.operations).toHaveLength(35);
     await f.client.close();
   });
   it("rejects invalid, missing, revoked and swapped-scope credentials and wrong hosts", async () => {
@@ -228,7 +228,7 @@ describe("workspace-bound MCP integration", () => {
   });
   it("read-only discovery excludes mutations and direct calls cannot escalate", async () => {
     const f = await fixture(["read"]);
-    expect((await f.client.listTools()).tools).toHaveLength(17);
+    expect((await f.client.listTools()).tools).toHaveLength(19);
     await expect(plan(f)).rejects.toThrow();
   });
   it("bounds requests, enforces strict nested inputs and rejects query selectors", async () => {

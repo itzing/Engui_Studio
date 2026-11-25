@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { authoringInputSchemas } from "./authoring-schemas";
+import { vibeInputSchemas } from "./vibe-schemas";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 
@@ -75,7 +76,7 @@ export const draftSchema = z
     negativePrompt: z.string().max(16000).optional(),
     framing: z.enum(["full_body", "portrait", "custom"]).default("custom"),
     view: z.enum(["front", "three_quarter", "side", "custom"]).optional(),
-    vibeId: id.optional(),
+    vibeId: id.optional().describe("Optional active Vibe ID from engui_list_vibes / engui_create_vibe. Its description is prepended exactly once before wildcard/Character expansion. Omit for no Vibe; do not copy its text into prompt."),
     references: z.array(mediaRef).max(2).default([]),
     mask: maskInput.optional().describe("Required only for qwen-image-edit-maskflow. Grayscale aligned mask image (white edits, black preserves), or normalized rectangles in source coordinates. Not a second reference image."),
     width: z.number().int().default(1024),
@@ -134,6 +135,7 @@ export const uploadInput = z.object({
 }).strict();
 export const inputSchemas = {
   ...authoringInputSchemas,
+  ...vibeInputSchemas,
   engui_get_context: z.object({}).strict(),
   engui_get_prompt_guide: z.object({}).strict(),
   engui_list_wildcards: z.object(page).strict(),
@@ -200,7 +202,7 @@ export function scopeFor(name: ToolName): string {
     : name === "engui_cancel_batch" || name === "engui_delete_job"
       ? "cancel"
       : name === "engui_save_output" || name === "engui_record_concept_review" ||
-        ["engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
+        ["engui_create_vibe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe", "engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
         ? "curate"
         : "read";
 }

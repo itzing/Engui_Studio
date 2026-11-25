@@ -1,4 +1,4 @@
-import { resolveImageVibe } from "@/lib/vibes/resolveImageVibe";
+import { prependImageVibe, type ImageVibeSource } from "@/lib/vibes/imageVibe";
 import { expandPromptWildcards } from "@/lib/prompt-wildcards/server";
 import { protectCharacterReferences } from "@/lib/character-references/tokens";
 import { resolveCharacterReferences, type CharacterReferenceSnapshot } from "@/lib/character-references/server";
@@ -20,13 +20,16 @@ function protect(template: string) {
   try { return protectCharacterReferences(template); }
   catch (error) { fail("INVALID_CHARACTER_REFERENCE", (error as Error).message); }
 }
-export async function expandMcpPrompt(d: GenerationDraft) {
+export async function expandMcpPrompt(d: GenerationDraft, frozenVibe: ImageVibeSource | null) {
   if (d.negativePrompt?.includes("{character:"))
     fail("INVALID_CHARACTER_REFERENCE", "Character tags are supported only in the positive prompt, not negativePrompt.");
   const workspaceId = requireWorkspaceId();
   const composition = composePrompt(d);
   // Only explicit framing/view, Vibe, wildcards and Character tags change the input text.
-  const vibe = await resolveImageVibe(composition.prompt, d.vibeId || "", workspaceId);
+  const vibe = {
+    prompt: prependImageVibe(composition.prompt, frozenVibe?.baseDescription || ""),
+    sourceVibe: frozenVibe ? { ...frozenVibe, basePrompt: composition.prompt } : undefined,
+  };
   const expanded = await expandPromptWildcards(vibe.prompt, workspaceId, { preserveCharacterReferences: true });
   const protectedText = protect(expanded.prompt);
   const explicitCharacters = protectedText.references.length > 0;

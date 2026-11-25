@@ -1,11 +1,12 @@
 import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
-import { resolveImageVibe } from "@/lib/vibes/resolveImageVibe";
+import { generationVibe } from "./vibes";
 import { expandMcpPrompt, characterReferencesFor, renderMcpVariant } from "./prompt";
 import {
   type GenerationDraft,
   type Authority,
+  McpError,
   digest,
   fail,
   findReceipt,
@@ -26,9 +27,7 @@ export async function currentDependencies(d: GenerationDraft) {
   const config = await modelConfiguration(d.modelId);
   if (!config.configured)
     fail("MODEL_NOT_CONFIGURED", "The selected model is not configured.");
-  const vibe = d.vibeId
-    ? await resolveImageVibe("", d.vibeId, requireWorkspaceId())
-    : null;
+  const vibe = await generationVibe(d.vibeId);
   const references = [];
   for (const ref of d.references) {
     const image = await readMedia(ref);
@@ -58,7 +57,7 @@ export async function currentDependencies(d: GenerationDraft) {
     references,
     ...(d.mask ? { mask: (await readMask(d.mask, references[0].width, references[0].height)).snapshot } : {}),
     modelFingerprint: config.fingerprint,
-    vibe: vibe?.sourceVibe || null,
+    vibe,
     wildcardsDigest: digest(wildcards),
   };
 }
@@ -67,7 +66,7 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
   if (existing) return existing;
   const settings = effectiveSettings(d);
   const dep = await currentDependencies(d);
-  const rendering = await expandMcpPrompt(d);
+  const rendering = await expandMcpPrompt(d, dep.vibe);
   const { composition, vibe, expanded, characterReferences } = rendering;
   const seeds = d.seeds ? [...d.seeds] : [];
   while (seeds.length < d.variantCount) {
@@ -180,7 +179,13 @@ export async function validatePlan(p: any, checkExpiry = true) {
     if (character.digest !== p.snapshot.characterDigest)
       fail("PLAN_STALE", "A legacy Character source changed. Prepare a new plan using Character tags.");
   }
-  const current = await currentDependencies(p.snapshot.draft);
+  let current;
+  try { current = await currentDependencies(p.snapshot.draft); }
+  catch (error) {
+    if (error instanceof McpError && error.code === "VIBE_UNAVAILABLE")
+      fail("PLAN_STALE", "The prepared Vibe is unavailable. Prepare a new plan without it or select another active Vibe.");
+    throw error;
+  }
   for (const k of [
     "loras",
     "references",

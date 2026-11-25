@@ -17,6 +17,7 @@ import { characterDetail, listModels, listRecords } from "./catalog";
 import { imagePreview } from "./media";
 import { downloadArtifact } from "./artifacts";
 import { createUpload, getUpload } from "./uploads";
+import { createVibe, changeVibe, getVibe, listVibes } from "./vibes";
 import { visibleParts } from "./authoring-schemas";
 import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
@@ -33,7 +34,15 @@ const list = z.object({ items: z.array(json), nextCursor: nullable });
 const characterWrite = z.object({ characterId: z.string(), characterVersionId: nullable, editRevision: z.string(), changed: z.boolean() });
 const outfitRead = z.object({ outfitId: z.string(), ownerCharacterId: nullable, name: z.string(), description: z.string(), constraints: z.string(), coversFace: z.boolean(), revision: z.number(), visibleParts: visibleParts.nullable() });
 const uploadResult = z.object({ uploadId: z.string(), status: z.enum(["pending", "ready"]), filename: z.string(), mimeType: z.string(), byteLength: z.number(), sha256: z.string(), source: json.nullable(), width: z.number().nullable(), height: z.number().nullable() });
+const vibeRead = z.object({ id: z.string(), name: z.string(), baseDescription: z.string(), tags: z.array(z.string()), compatibleSceneTypes: z.array(z.string()), status: z.enum(["active", "trash"]), createdAt: z.string(), updatedAt: z.string(), editRevision: z.string() });
+const vibeWrite = vibeRead.extend({ changed: z.boolean() });
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
+  engui_list_vibes: z.object({ items: z.array(vibeRead), nextCursor: nullable }),
+  engui_get_vibe: vibeRead,
+  engui_create_vibe: vibeWrite,
+  engui_update_vibe: vibeWrite,
+  engui_delete_vibe: vibeWrite,
+  engui_restore_vibe: vibeWrite,
   engui_create_upload: uploadResult.extend({ uploadUrl: z.string().url().nullable(), expiresAt: nullable, method: z.literal("PUT"), contentType: z.string() }),
   engui_get_upload: uploadResult,
   engui_create_character: characterWrite,
@@ -161,6 +170,12 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
 };
 const descriptions: Record<ToolName, string> = {
+  engui_list_vibes: "List full workspace Vibe presets with tags, compatibleSceneTypes and editRevision. Active by default; status=trash lists deleted presets for restoration. query matches names/tags. Use returned id as vibeId in engui_prepare_generation; no inference.",
+  engui_get_vibe: "Read a workspace Vibe, including trash, with exact baseDescription and editRevision. Read before editing/deleting/restoring. IDs from another workspace are unavailable.",
+  engui_create_vibe: "Create an ordinary workspace Vibe (name, reusable baseDescription, optional tags/compatibleSceneTypes). Returns id for generation vibeId and editRevision. Tags are normalized like UI; scene types are advisory metadata. Requires curate; no inference. Retry the same requestKey/payload.",
+  engui_update_vibe: "Partially edit an active Vibe. Supply expectedRevision from fresh engui_get_vibe and changes. Omitted fields stay unchanged; [] clears tags/compatibleSceneTypes. Existing scenes/plans/jobs are never rewritten. Changed description/name invalidates unstarted plans; prepare anew. Requires curate; retry same requestKey/payload.",
+  engui_delete_vibe: "Move a Vibe to trash, as in UI; not permanent erasure. Requires expectedRevision and curate scope. Hidden from active lists; unavailable to new generation and invalidates pending plans. Historical plans/results stay intact. Retry same requestKey/payload; restore with engui_restore_vibe.",
+  engui_restore_vibe: "Restore a trashed workspace Vibe to active using fresh expectedRevision and UUID requestKey. No generation or plan rewrite. Read current Vibe and prepare a new plan when needed. Requires curate.",
   engui_create_upload: "Upload a local source/mask image: supply filename (not path), actual MIME, byteLength, lowercase SHA-256 and UUID requestKey. Returns a private temporary uploadUrl: PUT raw file bytes with contentType using a local-file HTTP client; no MCP headers needed. Do not send base64 or URLs to this tool. PUT returns a reusable Gallery source; engui_get_upload recovers lost responses. Static PNG/JPEG/WebP,25MiB/40MP; exact original is stored in workspace Draft. Same key/payload renews an expired link or returns the existing source. Requires generate scope; upload never starts inference. Read engui_get_prompt_guide for Z-Image i2i.",
   engui_get_upload: "Read upload status and reusable source after HTTP PUT, including after an uncertain upload response. uploadId comes from engui_create_upload. pending means no validated file yet; ready contains source for references or image mask. Bound to the creating credential/workspace; no upload or inference. Deleted/trashed files are not restored by retries.",
   engui_create_character: "Create an ordinary workspace Character and its first identity version. Optional identityParts classify visible details by body region. Local write only; no generation. Reuse requestKey for retries.",
@@ -180,7 +195,7 @@ const descriptions: Record<ToolName, string> = {
   engui_list_characters: "List active workspace characters.",
   engui_get_character:
     "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
-  engui_list_presets: "List visible outfits, Vibes or model-compatible LoRAs.",
+  engui_list_presets: "List visible outfits, active Vibes or model-compatible LoRAs. For full Vibe metadata, trash and revisions use engui_list_vibes / engui_get_vibe; author with Vibe tools.",
   engui_search_gallery: "Search active workspace images without enrichment.",
   engui_get_image: "Inspect a bounded, resized WebP preview (512/1024px). NOT the full original; use engui_download_artifact to download original bytes.",
   engui_download_artifact: "Download the full original Job output or Gallery artifact, not a preview. Returns an HTTPS downloadUrl (GET, no additional headers required), filename, MIME, byteLength and SHA-256. Link expires in at most10minutes and is private bearer access to this exact file; do not publish it. Download with a file-capable HTTP client, preserve original bytes; never regenerate to get a download. Call again for a fresh expired link. Workspace read scope; no generation or Gallery write.",
@@ -208,6 +223,12 @@ async function execute(
   origin: string,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
+    case "engui_list_vibes": return { result: await listVibes(args) };
+    case "engui_get_vibe": return { result: await getVibe(args.vibeId) };
+    case "engui_create_vibe": return { result: await createVibe(auth, args) };
+    case "engui_update_vibe": return { result: await changeVibe(auth, args, "update") };
+    case "engui_delete_vibe": return { result: await changeVibe(auth, args, "delete") };
+    case "engui_restore_vibe": return { result: await changeVibe(auth, args, "restore") };
     case "engui_create_upload": return { result: await createUpload(auth, args, origin) };
     case "engui_get_upload": return { result: await getUpload(auth, args.uploadId) };
     case "engui_create_character": return { result: await createCharacter(auth, args) };
@@ -290,7 +311,7 @@ export function createMcpServer(auth: Authority, origin = "http://localhost") {
         }),
         annotations: {
           readOnlyHint: scope === "read",
-          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_update_character", "engui_update_outfit", "engui_update_wardrobe"].includes(name),
+          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_update_character", "engui_update_outfit", "engui_update_wardrobe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe"].includes(name),
           idempotentHint: true,
           openWorldHint:
             name === "engui_start_generation" || name === "engui_cancel_batch",
@@ -300,7 +321,7 @@ export function createMcpServer(auth: Authority, origin = "http://localhost") {
         const started = Date.now();
         let status = "ok";
         const auditIds: Record<string, string> = {};
-        for (const key of ["requestKey", "planId", "batchId"])
+        for (const key of ["requestKey", "planId", "batchId", "vibeId"])
           if (typeof raw[key] === "string") auditIds[key] = raw[key];
         try {
           // Repeat strict parsing so SDK coercion cannot silently drop unknown selectors.
