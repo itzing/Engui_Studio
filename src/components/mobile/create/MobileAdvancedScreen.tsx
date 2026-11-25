@@ -20,14 +20,14 @@ import { useMobileCreate } from '@/components/mobile/create/MobileCreateProvider
 
 export default function MobileAdvancedScreen() {
   const router = useRouter();
-  const { settings, updateSettings } = useStudio();
+  const { settings, updateSettings, activeWorkspaceId } = useStudio();
   const { showToast } = useToast();
   const {
     currentModel,
     editableParameters,
     parameterValues,
-    handleParameterChange,
-    handleNumericParameterInput,
+    handleParameterChange: updateParameter,
+    handleNumericParameterInput: updateNumericParameter,
     availableLoras,
     isLoadingLoras,
   } = useMobileCreate();
@@ -36,7 +36,7 @@ export default function MobileAdvancedScreen() {
   const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
   const [weightToast, setWeightToast] = useState<string | null>(null);
   const initialEndpointDraftsRef = useRef<Record<string, string>>({});
-  const initialParameterValuesRef = useRef<Record<string, any>>({});
+  const parameterUndoRef = useRef(new Map<string, any>());
   const latestEndpointDraftsRef = useRef<Record<string, string>>({});
   const latestSettingsRef = useRef(settings);
   const weightToastTimerRef = useRef<number | null>(null);
@@ -61,10 +61,26 @@ export default function MobileAdvancedScreen() {
   }, [settings]);
 
   useEffect(() => {
-    initialParameterValuesRef.current = Object.fromEntries(
-      editableParameters.map((param) => [param.name, parameterValues[param.name]])
-    );
-  }, []);
+    parameterUndoRef.current.clear();
+  }, [activeWorkspaceId, currentModel?.id]);
+
+  // Draft hydration happens after mount. Capture each value at its first edit,
+  // not before hydration, and never roll back parameters this screen did not edit.
+  const rememberParameter = (name: string) => {
+    if (!parameterUndoRef.current.has(name)) {
+      parameterUndoRef.current.set(name, parameterValues[name]);
+    }
+  };
+
+  const handleParameterChange = (name: string, value: any) => {
+    rememberParameter(name);
+    updateParameter(name, value);
+  };
+
+  const handleNumericParameterInput = (name: string, value: string) => {
+    rememberParameter(name);
+    updateNumericParameter(name, value);
+  };
 
   useEffect(() => {
     return () => {
@@ -206,10 +222,10 @@ export default function MobileAdvancedScreen() {
   };
 
   const handleCancel = () => {
-    editableParameters.forEach((param) => {
-      const initialValue = initialParameterValuesRef.current[param.name];
-      handleParameterChange(param.name, initialValue ?? param.default ?? '');
+    parameterUndoRef.current.forEach((value, name) => {
+      updateParameter(name, value);
     });
+    parameterUndoRef.current.clear();
 
     updateSettings({
       runpod: {
