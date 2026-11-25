@@ -1,7 +1,7 @@
 ---
 id: ENGUI-614
 title: Manage Vibes through MCP and verify frozen generation use
-status: In Progress
+status: Done
 created_date: '2026-11-25'
 labels: [mcp, vibes]
 ---
@@ -20,3 +20,6 @@ Restore retained previous.next and restart engui-studio.service. Existing Vibe r
 
 ## Validation before rollout
 203 focused/regression checks passed (including24 new Vibe tests), plus25 actual HTTP SDK checks on isolated production candidate. All four model adapters receive the exact Vibe prefix in their encrypted request, using fake providers only. Build passed; baseline whole-project typecheck is not clean, with zero added diagnostics. Initial stale discovery-count assertions and test-only unscoped count queries were corrected and rerun. No real generation.
+
+## Deployment
+Feature commit b99de65 pushed to origin/main. MCP2.5.0 installed as build aqjqB7puBzsb9XatletZv; previous build t4Z8bh5vDpajt1uNsj6aW retained in /home/engui/engui-runs/engui-614-20261125/previous.next. Restart guarded by zero active Jobs, MCP variants, uploads and workspace activities. Public Showdown connection passed15 read-only checks: all six tools, permissions, schemas, instructions/resources, active/trash lists. No production Vibe/plan/job writes or paid generation for validation. Candidate server stopped after PID/cwd verification. Evidence directory: /home/engui/engui-runs/engui-614-20261125.
