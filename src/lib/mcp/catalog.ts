@@ -1,3 +1,4 @@
+import { galleryState } from "./gallery";
 import { readOperatorPolicy, modelAvailability, preferredVibeId, preferredVibeMarker } from "./operator-policy";
 import { prisma } from "@/lib/prisma";
 import { readVersionIdentity } from "@/lib/characters/versionIdentity";
@@ -291,6 +292,7 @@ export async function listRecords(kind: string, args: any) {
     characterId: args.characterId || null,
     modelId: args.modelId || null,
     favoritesOnly: args.favoritesOnly || false,
+    ...(kind === "gallery" ? { bucket: args.bucket || null, status: args.status || "active" } : {}),
   };
   const cursor = pageCursor(args.cursor, filter);
   const after = cursor ? { id: { gt: cursor } } : {};
@@ -315,7 +317,8 @@ export async function listRecords(kind: string, args: any) {
         where: {
           ...after,
           type: "image",
-          trashed: false,
+          trashed: args.status === "trash",
+          ...(args.bucket ? { bucket: args.bucket } : {}),
           ...(args.favoritesOnly ? { favorited: true } : {}),
           ...(q
             ? {
@@ -330,14 +333,7 @@ export async function listRecords(kind: string, args: any) {
         orderBy: { id: "asc" },
         take: args.limit + 1,
       })
-    ).map((a) => ({
-      id: a.id,
-      bucket: a.bucket,
-      sha256: a.contentHash,
-      favorited: a.favorited,
-      source: { kind: "gallery_asset", assetId: a.id },
-      addedAt: a.addedToGalleryAt.toISOString(),
-    }));
+    ).map((a) => ({ id: a.id, ...galleryState(a) }));
   if (kind === "outfits") {
     if (args.characterId) await characterSnapshot(args.characterId);
     rows = await prisma.outfit.findMany({

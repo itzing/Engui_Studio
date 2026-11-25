@@ -122,10 +122,11 @@ export async function getBatch(batchId: string) {
   for (const v of b.variants) {
     const asset = v.assetId
       ? await prisma.galleryAsset.findFirst({
-          where: { id: v.assetId, trashed: false },
-          select: { id: true },
+          where: { id: v.assetId },
+          select: { id: true, bucket: true, trashed: true },
         })
       : null;
+    const activeAsset = asset && !asset.trashed ? asset : null;
     const status = variantStatus(v, jobsById.get(v.jobId), !!b.cancelledAt, blocked);
     variants.push({
       variantId: v.id,
@@ -136,11 +137,12 @@ export async function getBatch(batchId: string) {
       modelId: snapshot.draft.modelId,
       errorCode: ["succeeded", "cancelled"].includes(status.state) ? null : v.errorCode || (status.phase === "failed" ? "PROVIDER_REJECTED" : status.phase === "submission_unknown" ? "SUBMISSION_UNKNOWN" : null),
       outputId: status.phase === "succeeded" ? "output-1" : null,
-      assetId: asset?.id || null,
+      assetId: activeAsset?.id || null,
+      gallery: asset ? { assetId: asset.id, bucket: asset.bucket, status: asset.trashed ? "trash" : "active" } : null,
       preservationState:
-        v.assetId && !asset ? "unavailable" : v.preservationState,
-      source: asset
-        ? { kind: "gallery_asset", assetId: asset.id }
+        asset?.trashed ? "trashed" : v.assetId && !asset ? "unavailable" : v.preservationState,
+      source: activeAsset
+        ? { kind: "gallery_asset", assetId: activeAsset.id }
         : status.phase === "succeeded"
           ? { kind: "job_output", jobId: v.jobId, outputId: "output-1" }
           : null,

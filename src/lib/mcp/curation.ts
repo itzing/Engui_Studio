@@ -5,6 +5,9 @@ import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { registerWorkspaceFile } from "@/lib/workspaces/files";
 import { createGalleryMembership } from "@/lib/gallery/saveOutput";
 import { type MediaRef, digest, fail, findReceipt, parse, receipt } from "./core";
+import { assertCredential } from "./auth";
+import { type Authority } from "./core";
+import { galleryRow, galleryState, moveGalleryImage } from "./gallery";
 import { readMedia } from "./media";
 import { characterSnapshot } from "./catalog";
 import { loadPlan, validatePlan } from "./plans";
@@ -62,39 +65,26 @@ export async function prepareSavedImage(source: MediaRef, bucket: string) {
     enrichmentStatus: "skipped",
   };
 }
-export async function saveOutput(args: {
-  source: MediaRef;
-  bucket: string;
-  requestKey: string;
-}) {
+async function savedImageFor(source: MediaRef, bucket: string, db: any) {
+  if (source.kind === "gallery_asset") return galleryRow(source.assetId, db);
+  const where = { workspaceId: requireWorkspaceId(), sourceJobId: source.jobId, sourceOutputId: source.outputId, type: "image", trashed: false };
+  return await db.galleryAsset.findFirst({ where: { ...where, bucket }, orderBy: { addedToGalleryAt: "asc" } }) ||
+    await db.galleryAsset.findFirst({ where: { ...where, bucket: bucket === "common" ? "draft" : "common" }, orderBy: { addedToGalleryAt: "asc" } });
+}
+export async function saveOutput(auth: Authority, args: { source: MediaRef; bucket: string; requestKey: string }) {
   const prior = await findReceipt("save", args.requestKey, args);
   if (prior) return prior;
-  if (args.source.kind === "gallery_asset") {
-    const existing = await prisma.galleryAsset.findFirst({
-      where: {
-        id: args.source.assetId,
-        bucket: args.bucket,
-        trashed: false,
-        type: "image",
-      },
-    });
-    if (existing)
-      return receipt("save", args.requestKey, args, async () => ({
-        assetId: existing.id,
-        sha256: existing.contentHash,
-        bucket: existing.bucket,
-        alreadySaved: true,
-      }));
-  }
-  const data = await prepareSavedImage(args.source, args.bucket);
-  return receipt("save", args.requestKey, args, async (tx) => {
+  // Existing Gallery originals only change membership; retain ID, file, tags and provenance.
+  // Resolve again inside the transaction so concurrent preservation/saves cannot create copies.
+  const existing = await savedImageFor(args.source, args.bucket, prisma);
+  const data = existing ? null : await prepareSavedImage(args.source, args.bucket);
+  return receipt("save", args.requestKey, args, async tx => {
+    await assertCredential(auth.credentialId, auth.workspace.id, "curate", tx);
+    const row = await savedImageFor(args.source, args.bucket, tx);
+    if (row) return moveGalleryImage(row, args.bucket, tx);
+    if (!data) fail("NOT_FOUND", "Gallery image is unavailable. Read its current state before retrying.");
     const result = await createGalleryMembership(data, tx);
-    return {
-      assetId: result.asset.id,
-      sha256: result.asset.contentHash,
-      bucket: result.asset.bucket,
-      alreadySaved: result.alreadySaved,
-    };
+    return { ...galleryState(result.asset), alreadySaved: result.alreadySaved, action: result.alreadySaved ? "unchanged" : "created", previousBucket: result.alreadySaved ? result.asset.bucket : null };
   });
 }
 export async function preserveVariant(variant: any) {
@@ -106,9 +96,11 @@ export async function preserveVariant(variant: any) {
   };
   const data = await prepareSavedImage(source, "draft");
   await prisma.$transaction(async (tx) => {
-    const result = await createGalleryMembership(data, tx, {
-      respectTrash: true,
-    });
+    // A manually promoted result is already preserved. Never recreate its old Draft.
+    const promoted = await tx.galleryAsset.findFirst({ where: {
+      workspaceId: requireWorkspaceId(), sourceJobId: variant.jobId, sourceOutputId: "output-1", bucket: "common",
+    }, orderBy: { addedToGalleryAt: "asc" } });
+    const result = promoted ? { asset: promoted } : await createGalleryMembership(data, tx, { respectTrash: true });
     await tx.mcpGenerationVariant.update({
       where: { id: variant.id },
       data: {

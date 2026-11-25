@@ -350,3 +350,7 @@ The transport and workspace-binding decisions are settled for this specification
 ## Implemented authoring extension
 
 ENGUI-589 extends the initial 15-tool scope to 23 tools, adding character creation/partial editing, version reads and outfit/wardrobe authoring. See [the authoring contract](engui-mcp-character-authoring.md). This closes the create/generate/review/edit/regenerate loop without adding a concept UI entity.
+
+
+## MCP2.7 Gallery curation
+See [current prompt guide](engui-mcp-prompt-guide.md#gallery-curation-and-draft-promotion-mcp-27). Added metadata read, reversible revision-checked Gallery trash/restore; save_output now moves an existing Gallery membership rather than copying it. Full stable asset IDs, current bucket/status, action and previousBucket make transitions explicit. Batch gallery state is live, generation provenance immutable. Legacy receipts remain replayable; existing duplicate records are not automatically removed.

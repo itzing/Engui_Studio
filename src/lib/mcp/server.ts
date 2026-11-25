@@ -23,6 +23,7 @@ import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, cre
 import { getPlan, prepareGeneration } from "./plans";
 import { deleteJob } from "./jobs";
 import { cancelBatch, getBatch, startGeneration } from "./batches";
+import { getGalleryAsset, changeGalleryTrash } from "./gallery";
 import { getReference, recordReview, saveOutput } from "./curation";
 import { MCP_VERSION, MCP_INSTRUCTIONS, PROMPT_GUIDE, PROMPT_GUIDE_URI } from "./guide";
 
@@ -35,6 +36,7 @@ const characterWrite = z.object({ characterId: z.string(), characterVersionId: n
 const outfitRead = z.object({ outfitId: z.string(), ownerCharacterId: nullable, name: z.string(), description: z.string(), constraints: z.string(), coversFace: z.boolean(), revision: z.number(), visibleParts: visibleParts.nullable() });
 const uploadResult = z.object({ uploadId: z.string(), status: z.enum(["pending", "ready"]), filename: z.string(), mimeType: z.string(), byteLength: z.number(), sha256: z.string(), source: json.nullable(), width: z.number().nullable(), height: z.number().nullable() });
 const vibeRead = z.object({ id: z.string(), name: z.string(), baseDescription: z.string(), tags: z.array(z.string()), compatibleSceneTypes: z.array(z.string()), status: z.enum(["active", "trash"]), createdAt: z.string(), updatedAt: z.string(), editRevision: z.string(), preferred: z.literal(true).optional() });
+const galleryRead = z.object({ assetId: z.string(), bucket: z.string(), status: z.enum(["active", "trash"]), sha256: z.string(), favorited: z.boolean(), source: json, sourceJobId: nullable, sourceOutputId: nullable, addedAt: z.string(), updatedAt: z.string(), editRevision: z.string() });
 const vibeWrite = vibeRead.extend({ changed: z.boolean() });
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   engui_list_vibes: z.object({ items: z.array(vibeRead), nextCursor: nullable }),
@@ -98,6 +100,9 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
   engui_list_presets: list,
   engui_search_gallery: list,
+  engui_get_gallery_asset: galleryRead,
+  engui_delete_gallery_asset: galleryRead.extend({ changed: z.boolean() }),
+  engui_restore_gallery_asset: galleryRead.extend({ changed: z.boolean() }),
   engui_get_image: z.object({
     source: json,
     originalWidth: z.number(),
@@ -143,7 +148,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
       variantId: z.string(), label: z.string(), jobId: z.string(), state: z.enum(variantStates), phase: z.enum(variantStates),
       lifecycleState: z.string(), jobStatus: nullable, providerAccepted: z.boolean(), cancellationRequested: z.boolean(),
       blockedReason: nullable, isTerminal: z.boolean(), statusMessage: z.string(), seed: z.number(), modelId: z.string(),
-      errorCode: nullable, outputId: nullable, assetId: nullable, preservationState: z.string(), source: json.nullable(),
+      errorCode: nullable, outputId: nullable, assetId: nullable, preservationState: z.string(), source: json.nullable(), gallery: json.nullable(),
     })),
     provenance: json, pollAfterSeconds: z.number(),
   }),
@@ -153,12 +158,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     locallyStoppedJobIds: z.array(z.string()), providerOutcomeUnknown: z.boolean(),
   }),
   engui_delete_job: z.object({deletedJobId:z.string(),alreadyAbsent:z.boolean()}),
-  engui_save_output: z.object({
-    assetId: z.string(),
-    sha256: z.string(),
-    bucket: z.string(),
-    alreadySaved: z.boolean(),
-  }),
+  engui_save_output: galleryRead.partial().extend({ assetId: z.string(), sha256: z.string(), bucket: z.string(), alreadySaved: z.boolean(), action: z.enum(["created", "moved", "unchanged"]).optional(), previousBucket: nullable.optional() }),
   engui_record_concept_review: z.object({
     reviewId: z.string(),
     characterId: z.string(),
@@ -199,7 +199,10 @@ const descriptions: Record<ToolName, string> = {
   engui_get_character:
     "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
   engui_list_presets: "List visible outfits, active Vibes or model-compatible LoRAs. For full Vibe metadata, trash and revisions use engui_list_vibes / engui_get_vibe; author with Vibe tools. For Vibes, preferred=true marks an explicit workspace recommendation; otherwise the field is omitted. Nothing is automatically applied.",
-  engui_search_gallery: "Search active workspace images without enrichment.",
+  engui_search_gallery: "Search workspace Gallery images without enrichment. Filter bucket=draft/common/upscale and status=active (default) or trash. Returns full asset IDs, current bucket/status, source and editRevision. Read detail before deleting/restoring.",
+  engui_get_gallery_asset: "Read current Gallery image metadata including trash, bucket (common means Added), original SHA-256, source and editRevision. No pixels or inference. Use after a move or receipt replay to observe current state; full assetId required.",
+  engui_delete_gallery_asset: "Move an unwanted Gallery image to Trash, not permanent erasure. Requires curate, full assetId, fresh expectedRevision from engui_get_gallery_asset and UUID requestKey. Original file, Job, plan and provenance remain; the trashed Gallery source becomes unavailable for new generation/download. Retry same key/payload; restore explicitly with engui_restore_gallery_asset.",
+  engui_restore_gallery_asset: "Restore a trashed Gallery image using its full assetId, fresh expectedRevision and UUID requestKey. Requires curate; no generation. Destination conflicts return GALLERY_DUPLICATE without deleting/merging records.",
   engui_get_image: "Inspect a bounded, resized WebP preview (512/1024px). NOT the full original; use engui_download_artifact to download original bytes.",
   engui_download_artifact: "Download the full original Job output or Gallery artifact, not a preview. Returns an HTTPS downloadUrl (GET, no additional headers required), filename, MIME, byteLength and SHA-256. Link expires in at most10minutes and is private bearer access to this exact file; do not publish it. Download with a file-capable HTTP client, preserve original bytes; never regenerate to get a download. Call again for a fresh expired link. Workspace read scope; no generation or Gallery write.",
   engui_prepare_generation:
@@ -213,7 +216,7 @@ const descriptions: Record<ToolName, string> = {
     "Cancel unwanted batch work. Fence queued variants; request cancellation of known provider jobs. Settled submission_unknown with no provider ID is stopped locally as abandoned, releasing the active slot while explicitly retaining unknown provider outcome. Active dispatch leases must settle first. Never retries inference. Poll engui_get_batch; locallyStoppedJobIds identifies local stops.",
   engui_delete_job: "Delete a finished Job or locally stop/delete settled submission_unknown work. Requires cancel scope. Active known-provider work must be cancelled first. Does not delete Gallery copies, immutable plans, variant tombstones or idempotency receipts; never generates. Retry with the same requestKey. Local deletion is not proof of remote cancellation.",
   engui_save_output:
-    "Preserve original image bytes in the workspace gallery without generation.",
+    "Save original image bytes or move an existing saved image between draft and common (Added), retaining assetId, original bytes and provenance. Saving an already preserved Job output reuses its asset. Returns action created/moved/unchanged, previousBucket, current bucket/status and editRevision; no implicit copy or deletion of legacy duplicates. GALLERY_DUPLICATE identifies the existing destination; inspect before explicit cleanup. Requires curate; retry same requestKey/payload. Receipts are historical: read engui_get_gallery_asset for current state.",
   engui_record_concept_review:
     "Record shortlist/rejection or an explicitly owner-approved reference. Do not infer owner approval from an agent recommendation.",
   engui_get_concept_reference:
@@ -226,6 +229,9 @@ async function execute(
   origin: string,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
+    case "engui_get_gallery_asset": return { result: await getGalleryAsset(args.assetId) };
+    case "engui_delete_gallery_asset": return { result: await changeGalleryTrash(auth, args, true) };
+    case "engui_restore_gallery_asset": return { result: await changeGalleryTrash(auth, args, false) };
     case "engui_list_vibes": return { result: await listVibes(args) };
     case "engui_get_vibe": return { result: await getVibe(args.vibeId) };
     case "engui_create_vibe": return { result: await createVibe(auth, args) };
@@ -286,7 +292,7 @@ async function execute(
     case "engui_delete_job":
       return { result: await deleteJob(args) };
     case "engui_save_output":
-      return { result: await saveOutput(args) };
+      return { result: await saveOutput(auth, args) };
     case "engui_record_concept_review":
       return { result: await recordReview(args) };
     case "engui_get_concept_reference":
@@ -314,7 +320,7 @@ export function createMcpServer(auth: Authority, origin = "http://localhost") {
         }),
         annotations: {
           readOnlyHint: scope === "read",
-          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_update_character", "engui_update_outfit", "engui_update_wardrobe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe"].includes(name),
+          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_save_output", "engui_delete_gallery_asset", "engui_restore_gallery_asset", "engui_update_character", "engui_update_outfit", "engui_update_wardrobe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe"].includes(name),
           idempotentHint: true,
           openWorldHint:
             name === "engui_start_generation" || name === "engui_cancel_batch",
@@ -324,7 +330,7 @@ export function createMcpServer(auth: Authority, origin = "http://localhost") {
         const started = Date.now();
         let status = "ok";
         const auditIds: Record<string, string> = {};
-        for (const key of ["requestKey", "planId", "batchId", "vibeId"])
+        for (const key of ["requestKey", "planId", "batchId", "vibeId", "assetId"])
           if (typeof raw[key] === "string") auditIds[key] = raw[key];
         try {
           // Repeat strict parsing so SDK coercion cannot silently drop unknown selectors.

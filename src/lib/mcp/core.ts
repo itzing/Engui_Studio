@@ -151,8 +151,11 @@ export const inputSchemas = {
     })
     .strict(),
   engui_search_gallery: z
-    .object({ ...page, favoritesOnly: z.boolean().default(false) })
+    .object({ ...page, favoritesOnly: z.boolean().default(false), bucket: z.enum(["common", "draft", "upscale"]).optional(), status: z.enum(["active", "trash"]).default("active") })
     .strict(),
+  engui_get_gallery_asset: z.object({ assetId: id }).strict(),
+  engui_delete_gallery_asset: z.object({ assetId: id, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestKey }).strict(),
+  engui_restore_gallery_asset: z.object({ assetId: id, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestKey }).strict(),
   engui_get_image: z
     .object({
       source: mediaRef,
@@ -202,7 +205,7 @@ export function scopeFor(name: ToolName): string {
     : name === "engui_cancel_batch" || name === "engui_delete_job"
       ? "cancel"
       : name === "engui_save_output" || name === "engui_record_concept_review" ||
-        ["engui_create_vibe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe", "engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
+        ["engui_delete_gallery_asset", "engui_restore_gallery_asset", "engui_create_vibe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe", "engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
         ? "curate"
         : "read";
 }
