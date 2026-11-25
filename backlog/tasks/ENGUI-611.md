@@ -1,7 +1,7 @@
 # ENGUI-611 — MCP image upload and complete Z-Image i2i workflow
 
 ## Status
-In progress.
+Done.
 
 ## Authorization and scope
 Owner14877 requests local file upload for an agent to use as Z-Image i2i input, after ENGUI-610. MCP only; no UI or endpoint changes. Verify discoverable inputs, parameters, preparation, immutable source checks and encrypted dispatch. No paid inference needed.
@@ -18,3 +18,6 @@ Isolated MCP-client integration tests for actual uploads, auth/revocation/worksp
 -Production build passed;0 new TypeScript diagnostics against baseline.21 candidate HTTP checks through streaming ingress passed with788425-byte synthetic PNG (larger than JSON cap), exact-original download and an immutable Z-Image i2i plan. No provider inference performed.
 -Initial test fixtures corrected: explicit workspace count filters, supported512px output minimum, fixture LoRA storage fingerprint, and required isolated database naming. No production changes made for these fixture errors.
 -Evidence: /home/engui/engui-runs/engui-611-20261125. Rollout includes application and exact PUT proxy allowlist; previous files retained. No UI, endpoints, quotas or database schema changes.
+
+## Delivered
+Featurefeaaf3a pushed and production build4-MV95yAU4xDD_aVA4bEC installed. Previous buildLOnpV1tu1VzphrS0EyK3E and previous public proxy retained in this run for rollback. Installed public Showdown MCP2.3 passed21checks including raw788425-byte PNG upload, deduplicated retries, source recovery, exact-original download and immutable Z-Image i2i preparation. Synthetic live import/plan and bytes cleaned up; no paid inference. Active generations/uploads were absent at rollout. UI and endpoints unchanged. Reconnect MCP to discover29tools; agent instructions include upload and i2i workflow.
