@@ -1,7 +1,7 @@
 # ENGUI-610 — Preserve hydrated LoRAs when cancelling mobile Advanced
 
 ## Status
-In progress.
+Done.
 
 ## Authorization and scope
 Owner14872 reports A→B→A workspace switch, selected LoRAs visible, Cancel Advanced, reopen: selected LoRAs disappear. Fix mobile image Advanced Cancel; inspect shared desktop state for collateral regressions. No MCP/endpoint/model changes, no generation.
@@ -17,3 +17,6 @@ Reproduce before change with component tests; cover delayed hydration, no-edit C
 -71 related tests passed across9files. Production build LOnpV1tu1VzphrS0EyK3E passed; no new TypeScript diagnostics relative to existing baseline.
 - Browser regression covers Krea2 and Z-Image, phone/tablet, Chromium/WebKit:15checks per combination (120total), including no-edit Cancel, path/weight rollback, dynamic add, Save, workspace isolation and reload persistence. Only mocked APIs/local synthetic browser drafts; no generation.
 - Rollout will preserve six already-submitted Z-Image provider Job IDs; these durable remote queued jobs are polled from database on process restart. No resubmission/cancellation, no endpoint changes. Restart guard rejects uploads, finalizations, unknown/in-flight submissions or local/MCP active operations.
+
+## Delivered
+Feature526f7d6 pushed, buildLOnpV1tu1VzphrS0EyK3E deployed. Installed build passed the same120 Chromium/WebKit phone/tablet checks. Previous build7xz-oF-napPc_mnj6XQPe retained under run/previous.next. All six existing Z-Image provider Job IDs unchanged across restart; no generation submitted/cancelled, no endpoint/MCP changes. Evidence: /home/engui/engui-runs/engui-610-20261125 and workspace runs/engui-610-20261125.
