@@ -1,7 +1,7 @@
 ---
 id: ENGUI-616
 title: Desktop central preview loading progress and stale-image isolation
-status: In Progress
+status: Done
 created_date: '2026-11-25'
 labels: [desktop, jobs, media]
 ---
@@ -23,3 +23,19 @@ Focused component tests for delayed switching, rapid races, progress with/withou
 
 ## Rollback
 Keep the serving .next build before promotion. Revert feature commit or restore prior build and restart only engui-studio.service; no database migration or content rollback.
+
+## Installed visual correction
+Initial build passed behavior checks, but screenshot inspection found invalid generated alpha syntax: theme RGB variables contain commas while slash-opacity utilities compile to `rgb(var(--primary-rgb)/alpha)`. Corrected only the Desktop selected-row classes to `rgba(var(--primary-rgb),alpha)` (background/hover/outline); mobile theme unchanged. Added computed background and outline color assertions. The new check fails on the initial build as expected. Follow-up commit `25f4022`; feature `51bb2f0`.
+
+## Delivered
+- Commits: `51bb2f0` (loader and selection), `25f4022` (valid Desktop alpha colors), pushed to main.
+- Installed build: `kd30Uz1NKx9LJ9GsJRqzw`; service active.
+- Final corrected candidate and installed Desktop each pass 40 browser assertions (20 Chromium +20 WebKit), including computed background/outline colors. Initial 31 focused tests remain passing; no added TypeScript diagnostics.
+- Download progress, immediate previous-image removal, request cancellation, Retry and current Job marker verified under delayed/unknown-length responses, rapid navigation, hover, Gallery return and selected Job deletion.
+- All browser API writes blocked; no generation or production content changes. MCP policy, mobile UI and provider configuration unchanged.
+- Restart guard confirmed zero active Jobs, MCP variants, uploads and workspace activities. Old Next.js did not finish graceful shutdown; after rechecking quiescence, terminated only the old service process to complete the requested restart.
+- Corrected-build evidence: `/home/engui/engui-runs/engui-616-20261125-highlight`; browser evidence: workspace `runs/engui-616-20261125`.
+- Pre-feature build `1DodNnbnRNU46RepbCQOM` retained in initial run `previous.next`; initial feature build `CMuszCAf_WpR3cwKSsreN` retained in corrected run `previous.next`. Isolated preview stopped after live proof.
+
+## Build workflow lesson
+Freeze uncommitted source changes before any slow baseline checks. The initial corrected candidate missed an already committed file because the build script enumerated modified files after the baseline check. Source/hash verification and actual-color assertions caught this; final candidate was rebuilt from the explicitly verified file. Stale completion files must not be treated as results of a still-running retry.
