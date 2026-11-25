@@ -117,7 +117,7 @@ function GalleryTileStatusBadges({ favorited, bucket, mobile = false }: { favori
     );
 }
 
-export default function RightPanel({ mobile = false, mobileMode }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery' }) {
+export default function RightPanel({ mobile = false, mobileMode, previewJobId }: { mobile?: boolean; mobileMode?: 'jobs' | 'gallery'; previewJobId?: string | null }) {
   const fetch = useWorkspaceFetch();
     const { jobs, workspaces, activeWorkspaceId, selectWorkspace, createWorkspace, deleteJob, cancelJob, clearFinishedJobs, cancelActiveJobs, reuseJobInput, addJob } = useStudio();
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -2088,9 +2088,12 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                     filteredJobs.map(job => {
                         const model = getModelById(job.modelId);
                         const executionLabel = formatExecution(getExecutionMs(job));
+                        const isCurrentPreview = !mobile && previewJobId === job.id;
                         return (
                             <div
                                 key={job.id}
+                                data-job-id={job.id}
+                                aria-current={isCurrentPreview ? 'true' : undefined}
                                 onClick={() => {
                                     if (mobile && mobileTouchHandledRef.current?.kind === 'job' && mobileTouchHandledRef.current?.id === job.id) {
                                         mobileTouchHandledRef.current = null;
@@ -2105,7 +2108,7 @@ export default function RightPanel({ mobile = false, mobileMode }: { mobile?: bo
                                 }}
                                 onMouseEnter={() => { if (!mobile) emitHoverPreview(job); }}
                                 onMouseLeave={() => { if (!mobile) emitHoverPreview(null); }}
-                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${mobile && mobileSelectedJobId === job.id ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
+                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${isCurrentPreview || (mobile && mobileSelectedJobId === job.id) ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
                                     if (job.status === 'completed' && job.resultUrl) {

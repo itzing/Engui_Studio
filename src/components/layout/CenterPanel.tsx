@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ArrowUpCircle, Braces, FolderPlus, Images, Info, MessageSquareText, Waypoints, Wrench } from 'lucide-react';
+import { DesktopPreviewImage } from '@/components/layout/DesktopPreviewImage';
 import { DesktopGalleryOverlay } from '@/components/layout/DesktopGalleryOverlay';
 import PromptWildcardsDialog from '@/components/prompt-wildcards/PromptWildcardsDialog';
 import LocalModelAskDialog from '@/components/local-model/LocalModelAskDialog';
@@ -47,7 +48,7 @@ type RightPanelMode = 'jobs' | 'gallery';
 type ReuseAction = 'txt2img' | 'img2img' | 'img2vid';
 type GalleryBucket = 'common' | 'draft';
 
-export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
+export default function CenterPanel({ mobile = false, onPreviewJobChange }: { mobile?: boolean; onPreviewJobChange?: (jobId: string | null) => void }) {
   const fetch = useWorkspaceFetch();
   const { activeArtifactId, activeTool, jobs, activeWorkspaceId, addJob } = useStudio();
   const { showToast } = useToast();
@@ -315,6 +316,10 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
 
   const isGalleryPreview = !mobile && previewJob?.modelId === 'gallery';
   const shouldShowGallerySaveActions = !!previewJob && !isGalleryPreview;
+
+  useEffect(() => {
+    if (!mobile) onPreviewJobChange?.(mode === 'image' && !isGalleryPreview ? previewJob?.id ?? null : null);
+  }, [mobile, mode, isGalleryPreview, previewJob?.id, onPreviewJobChange]);
 
   useEffect(() => {
     if (!previewJob || isGalleryPreview) {
@@ -588,14 +593,24 @@ export default function CenterPanel({ mobile = false }: { mobile?: boolean }) {
         {previewJob && previewJob.url ? (
           <div className="relative w-full h-full min-h-0">
             <div className={`absolute inset-0 ${mobile ? '' : 'p-2'} ${imageViewMode === 'fit' ? 'overflow-hidden flex items-center justify-center' : 'overflow-auto'}`}>
-              <img
-                src={previewJob.url}
-                alt={previewJob.prompt || 'Preview'}
-                className={imageViewMode === 'fit'
-                  ? `${mobile ? 'w-full h-full object-contain' : 'max-w-full max-h-full object-contain rounded-md border border-border/40 shadow-2xl'}`
-                  : `${mobile ? 'block max-w-none max-h-none' : 'block max-w-none max-h-none rounded-md border border-border/40 shadow-2xl'}`}
-                draggable={false}
-              />
+              {mobile ? (
+                <img
+                  src={previewJob.url}
+                  alt={previewJob.prompt || 'Preview'}
+                  className={imageViewMode === 'fit' ? 'w-full h-full object-contain' : 'block max-w-none max-h-none'}
+                  draggable={false}
+                />
+              ) : (
+                <DesktopPreviewImage
+                  key={`${activeWorkspaceId}:${previewJob.id}:${previewJob.url}`}
+                  src={previewJob.url}
+                  alt={previewJob.prompt || 'Preview'}
+                  workspaceId={previewJob.workspaceId || activeWorkspaceId}
+                  className={imageViewMode === 'fit'
+                    ? 'max-w-full max-h-full object-contain rounded-md border border-border/40 shadow-2xl'
+                    : 'block max-w-none max-h-none rounded-md border border-border/40 shadow-2xl'}
+                />
+              )}
             </div>
             <div className={`absolute ${mobile ? 'top-3 left-3 right-3 overflow-x-auto no-scrollbar' : 'top-3 right-3'} ${mobile ? '' : 'max-w-[calc(100%-1.5rem)]'}`}>
               <div className={`flex gap-2 ${mobile ? 'w-max flex-nowrap pr-3' : 'flex-wrap justify-end'}`}>

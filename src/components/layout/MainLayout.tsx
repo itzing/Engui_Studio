@@ -8,6 +8,7 @@ import MobileStudioLayout from './MobileStudioLayout';
 
 export default function MainLayout() {
     const [isPhoneLayout, setIsPhoneLayout] = useState(false);
+    const [previewJobId, setPreviewJobId] = useState<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -32,8 +33,8 @@ export default function MainLayout() {
             ) : (
                 <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
                     <LeftPanel />
-                    <CenterPanel />
-                    <RightPanel />
+                    <CenterPanel onPreviewJobChange={setPreviewJobId} />
+                    <RightPanel previewJobId={previewJobId} />
                 </div>
             )}
         </>
