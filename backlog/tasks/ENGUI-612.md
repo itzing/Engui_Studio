@@ -1,7 +1,7 @@
 ---
 id: ENGUI-612
 title: Krea2 Turbo image-to-image on desktop and MCP
-status: In Progress
+status: Done
 created_date: 2026-11-25
 labels: [desktop, mcp, runpod, krea2]
 ---
@@ -19,9 +19,11 @@ Owner14897: desktop + MCP only. Implement Krea2 latent i2i with one source image
 ## Rollback
 Retain prior app build and endpoint template/image settings; restore both if validation fails.
 
-## Validation progress
-- Worker485632a pushed to the existing krea2 branch; managed RunPod build1bf810a9-3961-40f5-acad-b5178b10169f passed build and is uploading. Current installed image retained for rollback.
-- 238 app tests pass (175 MCP,18 desktop/client,45 reuse) and7worker graph/LoRA tests pass.
-- Chromium/WebKit52 checks pass, including source persistence/reload, Text/I2I, zero denoise, seed and LoRA. WebKit uses a persistent profile because ephemeral Playwright WebKit cannot store Blob in IndexedDB.
-- Candidate HTTP21 checks pass; production build passes; no added normalized TypeScript diagnostics versus existing baseline.
-- No paid GPU test submitted yet.
+## Completed validation and deployment — 2026-11-25
+- App implementation ee27807; worker b066b2a32da8ab0419967b1f4dab6bdbf42a6635 on the existing krea2 branch.
+- 238 app checks and 10 worker checks passed. Production build t4Z8bh5vDpajt1uNsj6aW installed; previous build retained for rollback.
+- Installed Chromium/WebKit: 52 checks passed across Krea2 and Z-Image. Public Showdown MCP 2.4: 21 HTTP checks passed, including upload → source → frozen i2i plan and original download, without additional generation.
+- Real encrypted GPU test 8e2a01df-f076-4f36-b220-675554785c0d-e2 completed: synthetic 512×512, requested8steps, CFG1, denoise0.35, seed42, no LoRAs. Encrypted result decrypted successfully; pixels differ from source. Provider reported1261ms execution and443530ms queue delay. This is a transport/graph smoke test, not an instruction-following or quality benchmark.
+- First test failed before inference due to a source path outside ComfyUI's allowed input root. Fixed by staging under the private RAM input directory with the image extension preserved; verified against the actual upstream validator. Second test was dispatched to a stale worker and failed before inference. With no Krea jobs active, the old fleet was drained and original0–5limits restored before the successful third test. No accepted user jobs cancelled or replayed.
+- No model weights, persistent model disks or mobile mode UI added. Existing LoRA/transport mount retained. Deployment occurred with no active jobs/uploads.
+- Local evidence: /home/engui/engui-runs/engui-612-20261125 and workspace/runs/engui-612-20261125. Synthetic ciphertext cleanup is recorded separately in cleanup-proof.json; local test receipts/results retained.

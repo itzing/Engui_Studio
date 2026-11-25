@@ -15,3 +15,7 @@ The i2i graph uses the existing baked Krea2 Turbo UNet, Qwen3VL encoder and Qwen
 
 ## Rollout and rollback
 Keep the previous app build and RunPod image reference. Validate the graph/LoRA topology, encrypted upload→plan→dispatch, desktop interactions and a small synthetic GPU job. Preserve quota/worker settings and durable in-flight provider IDs. Restore previous image and app build together if needed.
+
+
+## Installed release (2026-11-25)
+MCP2.4 and desktop i2i are live. App implementation commit ee27807; worker b066b2a on the existing krea2 branch. The worker stores each decrypted source under its private RAM ComfyUI input directory and cleans it after processing. Limits remain0–5; no additional model volume or weight downloads were introduced. Public HTTP, installed-browser and encrypted GPU checks passed. The synthetic GPU smoke used512×512,8requestedsteps,CFG1,denoise0.35; it verifies the i2i graph and encrypted round trip, not editing quality. At low denoise, the source may remain visually very similar and an instruction such as changing an object's color is not guaranteed.
