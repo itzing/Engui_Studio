@@ -1,7 +1,7 @@
 ---
 id: ENGUI-617
 title: MCP Gallery trash, restore and identity-preserving Draft promotion
-status: In Progress
+status: Done
 created_date: '2026-11-25'
 labels: [mcp, gallery]
 ---
@@ -27,3 +27,11 @@ Isolated DB/in-process and HTTP MCP checks for idempotency, races, permissions, 
 - Legacy pre2.7 save receipts remain readable; optional new save-result fields are omitted on historical receipts. Fresh get_gallery_asset reports current state.
 - Named K6 C records checked read-only: same original hash/source output; neither altered.
 - Evidence `/home/engui/engui-runs/engui-617-20261125`.
+
+## Delivered
+- Feature `fb9cbd3` pushed; MCP2.7 installed build `G15gV2nU2co2JKQ-0TE_H`.
+- Public Showdown connection passed14 read-only checks: three new tools, schemas/revision requirements, updated guide, exact existing K6 C Draft/common state and unchanged owner model policy. No user Gallery mutations or paid test generation.
+- 238 isolated regression tests and27 candidate HTTP checks passed; existing original-byte/download and model policy suites included.
+- Rollout race: six UI Krea2 Jobs arrived between the two restart guards. The second guard rejected their transient unsaved-provider state. The initial helper restored the old build but unnecessarily initiated its rollback restart; corrected the helper so guard-only rollback never restarts an untouched service.
+- Recovery verified all six Jobs had durable, distinct provider IDs with no active MCP variants/uploads/workspace activities. Installed the already-verified candidate for that pending restart, stopped only the old graceful-shutdown process, and confirmed every provider ID unchanged. No cancellation/resubmission. Proof: rollforward-jobs-before/after.json and rollforward.log.
+- Previous Desktop build `kd30Uz1NKx9LJ9GsJRqzw` retained in run previous.next. Isolated candidate stopped; service active. No schema migration, UI change or endpoint/config change.
