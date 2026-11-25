@@ -111,3 +111,11 @@ Desktop uploaded primary images now persist as workspace-owned IndexedDB draft-m
 ## MCP 2.5 Vibe authoring
 
 Added workspace-bound list/get/create/update/delete/restore Vibe tools. Reads use read scope; writes use existing curate scope, requestKey receipts and fresh expectedRevision. No new credential, schema migration, UI or endpoint changes. Delete is reversible trash, matching UI. Existing vibeId generation remains compatible; description/name changes or deletion invalidate unstarted plans. See the prompt guide for workflow and limits. Reconnect clients to refresh tool discovery.
+
+
+## MCP 2.6 owner policy (ENGUI-615)
+Only owner-approved models can be prepared, started or newly dispatched through MCP. The initial allowlist is z-image/krea2-turbo; Qwen and MaskFlow remain supported adapters but unavailable until explicitly enabled by the owner. Discovery separates enabledByOwner, configured and available, with availabilityReason; health remains unknown (no live GPU probe). Already accepted jobs continue reconciliation and cancellation. No endpoint/UI changes or database migration.
+
+Operator policy is a private JSON file at ~/.config/engui-mcp/operator-policy.json under the service account, optionally overridden by ENGUI_MCP_POLICY_PATH. Shape: {"enabledModels":["z-image","krea2-turbo"],"workspacePreferences":{"<workspace-id>":{"preferredVibeId":"<vibe-id>"}}}. Write atomically. No MCP tool can change this file. Missing default file uses the initial allowlist and no preferences; unreadable/invalid files or missing explicit override fail closed. Policy is reread at preparation/start/dispatch and discovery; updating it requires no restart. A model being configured or an idle worker does not change approval.
+
+Only an exact active designated Vibe gets preferred=true in list/detail. Other records and workspaces omit the field (not false/null/empty recommendation). No fallback to a different Vibe on deletion, no LoRA recommendations, no automatic prompt prefix and no change to frozen snapshots or Vibe editRevision. IDs and deployment-specific preferences stay outside Git. Tests explicitly install isolated operator policies when exercising disabled adapters.

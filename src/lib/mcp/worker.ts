@@ -1,3 +1,4 @@
+import { assertModelAllowed } from "./operator-policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { workspaceContext } from "@/lib/workspaces/context";
@@ -175,6 +176,7 @@ async function claim(workspaceId: string) {
 async function dispatch(v: any) {
   const workspaceId = v.workspaceId;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let boundaryPolicyFailure: unknown;
   try {
     await assertCredential(v.batch.credentialId, workspaceId);
     const plan = await loadPlan(v.batch.planId);
@@ -249,6 +251,8 @@ async function dispatch(v: any) {
           snapshot: plan.snapshot,
         },
         beforeProviderSubmit: async (evidence) => {
+          try { await assertModelAllowed(d.modelId); }
+          catch (error) { boundaryPolicyFailure = error; throw error; }
           await prisma.$transaction(async (tx) => {
             await assertCredential(
               v.batch.credentialId,
@@ -328,6 +332,7 @@ async function dispatch(v: any) {
         },
       });
       if (!response.ok) {
+        if (boundaryPolicyFailure) throw boundaryPolicyFailure;
         const body = await response.json().catch(() => ({}));
         if (body.code === "PROVIDER_REJECTED")
           fail("PROVIDER_REJECTED", "Provider rejected the request.");
@@ -355,6 +360,8 @@ async function dispatch(v: any) {
         : [
               "PLAN_STALE",
               "MODEL_NOT_CONFIGURED",
+              "MODEL_UNAVAILABLE",
+              "MODEL_POLICY_UNAVAILABLE",
               "WORKSPACE_UNAVAILABLE",
               "PROVIDER_REJECTED",
             ].includes(error?.code)

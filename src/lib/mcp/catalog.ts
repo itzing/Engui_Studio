@@ -1,3 +1,4 @@
+import { readOperatorPolicy, modelAvailability, preferredVibeId, preferredVibeMarker } from "./operator-policy";
 import { prisma } from "@/lib/prisma";
 import { readVersionIdentity } from "@/lib/characters/versionIdentity";
 import { readPartDocument } from "@/lib/looks/parts";
@@ -67,6 +68,7 @@ export async function modelConfiguration(modelId: string) {
   };
 }
 export async function listModels() {
+  const policy = await readOperatorPolicy();
   return Promise.all(
     supportedModels.map(async (modelId) => {
       const m = getModelById(modelId)!;
@@ -76,6 +78,7 @@ export async function listModels() {
         name: m.name,
         modes: modes(modelId),
         configured: config.configured,
+        ...modelAvailability(modelId, config.configured, policy),
         health: null,
         parameters: m.parameters
           .filter((p) =>
@@ -359,13 +362,15 @@ export async function listRecords(kind: string, args: any) {
       orderBy: { id: "asc" }, take: args.limit + 1,
       select: { id: true, key: true, name: true, value: true },
     });
-  if (kind === "vibes")
-    rows = await prisma.vibePreset.findMany({
+  if (kind === "vibes") {
+    const preferredId = await preferredVibeId();
+    rows = (await prisma.vibePreset.findMany({
       where: { ...after, status: "active", ...(q ? { name: q } : {}) },
       orderBy: { id: "asc" },
       take: args.limit + 1,
       select: { id: true, name: true, baseDescription: true },
-    });
+    })).map(row => ({ ...row, ...preferredVibeMarker(row.id, "active", preferredId) }));
+  }
   if (kind === "loras") {
     if (!args.modelId)
       fail("INVALID_ARGUMENT", "Select modelId to list compatible LoRAs.");

@@ -34,7 +34,7 @@ const list = z.object({ items: z.array(json), nextCursor: nullable });
 const characterWrite = z.object({ characterId: z.string(), characterVersionId: nullable, editRevision: z.string(), changed: z.boolean() });
 const outfitRead = z.object({ outfitId: z.string(), ownerCharacterId: nullable, name: z.string(), description: z.string(), constraints: z.string(), coversFace: z.boolean(), revision: z.number(), visibleParts: visibleParts.nullable() });
 const uploadResult = z.object({ uploadId: z.string(), status: z.enum(["pending", "ready"]), filename: z.string(), mimeType: z.string(), byteLength: z.number(), sha256: z.string(), source: json.nullable(), width: z.number().nullable(), height: z.number().nullable() });
-const vibeRead = z.object({ id: z.string(), name: z.string(), baseDescription: z.string(), tags: z.array(z.string()), compatibleSceneTypes: z.array(z.string()), status: z.enum(["active", "trash"]), createdAt: z.string(), updatedAt: z.string(), editRevision: z.string() });
+const vibeRead = z.object({ id: z.string(), name: z.string(), baseDescription: z.string(), tags: z.array(z.string()), compatibleSceneTypes: z.array(z.string()), status: z.enum(["active", "trash"]), createdAt: z.string(), updatedAt: z.string(), editRevision: z.string(), preferred: z.literal(true).optional() });
 const vibeWrite = vibeRead.extend({ changed: z.boolean() });
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   engui_list_vibes: z.object({ items: z.array(vibeRead), nextCursor: nullable }),
@@ -68,6 +68,9 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
         name: z.string(),
         modes: z.array(z.string()),
         configured: z.boolean(),
+        enabledByOwner: z.boolean(),
+        available: z.boolean(),
+        availabilityReason: nullable,
         health: z.null(),
         parameters: z.array(json),
         maxReferences: z.number(),
@@ -170,8 +173,8 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
 };
 const descriptions: Record<ToolName, string> = {
-  engui_list_vibes: "List full workspace Vibe presets with tags, compatibleSceneTypes and editRevision. Active by default; status=trash lists deleted presets for restoration. query matches names/tags. Use returned id as vibeId in engui_prepare_generation; no inference.",
-  engui_get_vibe: "Read a workspace Vibe, including trash, with exact baseDescription and editRevision. Read before editing/deleting/restoring. IDs from another workspace are unavailable.",
+  engui_list_vibes: "List full workspace Vibe presets with tags, compatibleSceneTypes and editRevision. preferred=true marks the owner-recommended Vibe, informational only: pass vibeId explicitly. The field is omitted for all other presets/workspaces. Active by default; status=trash lists deleted presets for restoration. query matches names/tags. Use returned id as vibeId in engui_prepare_generation; no inference.",
+  engui_get_vibe: "Read a workspace Vibe, including trash, with exact baseDescription and editRevision. preferred=true is an optional owner recommendation, never automatic selection. Read before editing/deleting/restoring. IDs from another workspace are unavailable.",
   engui_create_vibe: "Create an ordinary workspace Vibe (name, reusable baseDescription, optional tags/compatibleSceneTypes). Returns id for generation vibeId and editRevision. Tags are normalized like UI; scene types are advisory metadata. Requires curate; no inference. Retry the same requestKey/payload.",
   engui_update_vibe: "Partially edit an active Vibe. Supply expectedRevision from fresh engui_get_vibe and changes. Omitted fields stay unchanged; [] clears tags/compatibleSceneTypes. Existing scenes/plans/jobs are never rewritten. Changed description/name invalidates unstarted plans; prepare anew. Requires curate; retry same requestKey/payload.",
   engui_delete_vibe: "Move a Vibe to trash, as in UI; not permanent erasure. Requires expectedRevision and curate scope. Hidden from active lists; unavailable to new generation and invalidates pending plans. Historical plans/results stay intact. Retry same requestKey/payload; restore with engui_restore_vibe.",
@@ -191,11 +194,11 @@ const descriptions: Record<ToolName, string> = {
   engui_get_context:
     "Inspect the fixed workspace, permissions and limits. No generation.",
   engui_list_models:
-    "List supported image models and configured capabilities. Configured is not a health or quality guarantee.",
+    "List supported image models and configured capabilities. Configured is not a health or quality guarantee. Only available=true models may be prepared/started. enabledByOwner is operator approval, configured is local setup, health=null is not a live GPU check. Only the owner can enable additional models.",
   engui_list_characters: "List active workspace characters.",
   engui_get_character:
     "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
-  engui_list_presets: "List visible outfits, active Vibes or model-compatible LoRAs. For full Vibe metadata, trash and revisions use engui_list_vibes / engui_get_vibe; author with Vibe tools.",
+  engui_list_presets: "List visible outfits, active Vibes or model-compatible LoRAs. For full Vibe metadata, trash and revisions use engui_list_vibes / engui_get_vibe; author with Vibe tools. For Vibes, preferred=true marks an explicit workspace recommendation; otherwise the field is omitted. Nothing is automatically applied.",
   engui_search_gallery: "Search active workspace images without enrichment.",
   engui_get_image: "Inspect a bounded, resized WebP preview (512/1024px). NOT the full original; use engui_download_artifact to download original bytes.",
   engui_download_artifact: "Download the full original Job output or Gallery artifact, not a preview. Returns an HTTPS downloadUrl (GET, no additional headers required), filename, MIME, byteLength and SHA-256. Link expires in at most10minutes and is private bearer access to this exact file; do not publish it. Download with a file-capable HTTP client, preserve original bytes; never regenerate to get a download. Call again for a fresh expired link. Workspace read scope; no generation or Gallery write.",

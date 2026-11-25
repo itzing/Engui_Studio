@@ -1,3 +1,4 @@
+import { assertModelAllowed } from "./operator-policy";
 import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
@@ -23,6 +24,7 @@ import { readMedia } from "./media";
 import { readMask } from "./masks";
 import { assertCredential } from "./auth";
 export async function currentDependencies(d: GenerationDraft) {
+  await assertModelAllowed(d.modelId);
   const loras = await selectedLoras(d.loras, d.modelId);
   const config = await modelConfiguration(d.modelId);
   if (!config.configured)
@@ -62,6 +64,7 @@ export async function currentDependencies(d: GenerationDraft) {
   };
 }
 export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
+  await assertModelAllowed(d.modelId);
   const existing = await findReceipt("prepare", d.requestKey, d);
   if (existing) return existing;
   const settings = effectiveSettings(d);

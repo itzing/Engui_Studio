@@ -1,3 +1,4 @@
+import { preferredVibeId, preferredVibeMarker } from "./operator-policy";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { serializeChipArray, toVibeSummary } from "@/lib/vibes/utils";
@@ -13,7 +14,10 @@ async function vibeRow(vibeId: string, db: any = prisma) {
   if (!row) fail("NOT_FOUND", "Vibe not found.");
   return row;
 }
-export async function getVibe(vibeId: string) { return vibeResult(await vibeRow(vibeId)); }
+export async function getVibe(vibeId: string) {
+  const row = await vibeRow(vibeId);
+  return { ...vibeResult(row), ...preferredVibeMarker(row.id, row.status, await preferredVibeId()) };
+}
 export async function listVibes(args: any) {
   const filter = { kind: "vibes", query: args.query || "", status: args.status };
   const after = pageCursor(args.cursor, filter);
@@ -22,7 +26,8 @@ export async function listVibes(args: any) {
     ...(after ? { id: { gt: after } } : {}),
     ...(args.query ? { OR: [{ name: { contains: args.query } }, { tags: { contains: args.query } }] } : {}),
   }, orderBy: { id: "asc" }, take: args.limit + 1 });
-  const items = rows.slice(0, args.limit).map(vibeResult);
+  const preferredId = await preferredVibeId();
+  const items = rows.slice(0, args.limit).map(row => ({ ...vibeResult(row), ...preferredVibeMarker(row.id, row.status, preferredId) }));
   return { items, nextCursor: rows.length > args.limit ? nextCursor(items[items.length - 1].id, filter) : null };
 }
 export async function createVibe(auth: Authority, args: any) {

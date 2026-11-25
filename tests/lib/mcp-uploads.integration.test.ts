@@ -1,3 +1,5 @@
+import { installMcpTestPolicy } from "../helpers/mcp-operator-policy";
+installMcpTestPolicy();
 import { beforeAll, beforeEach, afterAll, it, expect, vi } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
 import fs from "node:fs/promises";

@@ -1,3 +1,5 @@
+import { installMcpTestPolicy } from "../helpers/mcp-operator-policy";
+installMcpTestPolicy();
 import { beforeAll, beforeEach, afterAll, describe, it, expect, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
