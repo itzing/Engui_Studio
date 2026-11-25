@@ -14,6 +14,7 @@ const upstream = http.createServer(async (request, response) => {
     response.writeHead(200, { "Content-Type": "image/png", "Content-Disposition": 'attachment; filename="original.png"', "Content-Length": "4", "ETag": '"hash"', "Referrer-Policy": "no-referrer", "Set-Cookie": "must-not-escape=1" });
     return response.end(request.method === "HEAD" ? undefined : Buffer.from([1,2,3,4]));
   }
+  if (request.url.startsWith("/api/mcp/uploads/")) { response.writeHead(200, { "Content-Type": "application/json" }); return response.end(JSON.stringify({ size: Buffer.concat(chunks).length })); }
   if (!request.headers.authorization) {
     response.writeHead(401, { "WWW-Authenticate": 'Bearer realm="engui-mcp"' });
     return response.end("Unauthorized");
@@ -127,6 +128,17 @@ try {
     assert.equal((await send(route, { method: "HEAD", body: "" })).body.length, 0);
     assert.equal((await send(route)).status, 405);
     for (const target of [route+"?x=1", route+"/", "/api/mcp/artifacts/../private", "/api/mcp/artifacts/"+"a".repeat(2049)+"."+"A".repeat(43)]) assert.equal((await send(target, { method: "GET", body: "" })).status,404);
+  });
+  await test("bounded upload PUT streams raw bytes without widening MCP JSON routes", async () => {
+    const route = "/api/mcp/uploads/abc." + "A".repeat(43), bytes=Buffer.alloc(256*1024, 123);
+    const r=await send(route,{method:"PUT",body:bytes,headers:{authorization:"","x-workspace-id":"","content-type":"image/png","content-length":String(bytes.length)}});
+    assert.equal(r.status,200); assert.equal(JSON.parse(r.body.toString()).size,bytes.length); assert.deepEqual(received.at(-1).body,bytes);
+    assert.equal((await send(route,{method:"PUT",headers:{"content-length":String(25*1024*1024+1)},body:"x"})).status,413);
+    assert.equal((await send(route,{method:"PUT",headers:{"transfer-encoding":"chunked"},body:"x"})).status,411);
+    assert.equal((await send(route,{method:"PUT",headers:{"content-length":"1","content-encoding":"gzip"},body:"x"})).status,415);
+    assert.equal((await send(route,{method:"GET",body:""})).status,405);
+    for(const target of [route+"?x=1",route+"/","/api/mcp/uploads/%2e%2e/private"]) assert.equal((await send(target,{method:"PUT"})).status,404);
+    assert.equal((await send("/api/mcp",{body:bytes})).status,413);
   });
   await test("unavailable application fails closed", async () => {
     upstream.closeAllConnections();

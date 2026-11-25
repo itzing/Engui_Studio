@@ -114,6 +114,8 @@ export const limits = () => ({
   maxImagePixels: 40_000_000,
   maxPreviewBytes: 1024 * 1024,
   artifactLinkTtlSeconds: 600,
+  uploadLinkTtlSeconds: 600,
+  uploadsPerMinute: 10,
   maxPageSize: 50,
   activeBatches: boundedEnv("ENGUI_MCP_MAX_BATCHES", 2, 1, 10),
   preparePerMinute: boundedEnv("ENGUI_MCP_PREPARE_PER_MINUTE", 10, 1, 120),
@@ -123,6 +125,13 @@ function boundedEnv(key: string, fallback: number, min: number, max: number) {
   const n = Number(process.env[key] || fallback);
   return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
 }
+export const uploadInput = z.object({
+  filename: z.string().min(1).max(200).regex(/^[^\\/\x00-\x1f\x7f]+$/).refine(s => s !== "." && s !== "..", "Supply a filename, not a path"),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  byteLength: z.number().int().positive().max(25 * 1024 * 1024),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  requestKey,
+}).strict();
 export const inputSchemas = {
   ...authoringInputSchemas,
   engui_get_context: z.object({}).strict(),
@@ -149,6 +158,8 @@ export const inputSchemas = {
     })
     .strict(),
   engui_download_artifact: z.object({ source: mediaRef }).strict(),
+  engui_create_upload: uploadInput,
+  engui_get_upload: z.object({ uploadId: requestKey }).strict(),
   engui_prepare_generation: draftSchema,
   engui_get_plan: z.object({ planId: id }).strict(),
   engui_start_generation: z
@@ -183,7 +194,7 @@ export const inputSchemas = {
 };
 export type ToolName = keyof typeof inputSchemas;
 export function scopeFor(name: ToolName): string {
-  return name === "engui_prepare_generation" ||
+  return name === "engui_create_upload" || name === "engui_prepare_generation" ||
     name === "engui_start_generation"
     ? "generate"
     : name === "engui_cancel_batch" || name === "engui_delete_job"
@@ -258,13 +269,13 @@ export async function receipt<T>(
   );
 }
 export async function rateLimit(auth: Authority, name: ToolName) {
-  const bucket = [
+  const bucket = name === "engui_create_upload" ? "uploads" : [
     "engui_prepare_generation",
     "engui_start_generation",
   ].includes(name)
     ? "generation"
     : "tools";
-  const max =
+  const max = bucket === "uploads" ? limits().uploadsPerMinute :
     bucket === "generation"
       ? limits().preparePerMinute
       : limits().callsPerMinute;

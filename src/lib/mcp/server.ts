@@ -16,6 +16,7 @@ import {
 import { characterDetail, listModels, listRecords } from "./catalog";
 import { imagePreview } from "./media";
 import { downloadArtifact } from "./artifacts";
+import { createUpload, getUpload } from "./uploads";
 import { visibleParts } from "./authoring-schemas";
 import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
@@ -31,7 +32,10 @@ const nullable = z.string().nullable(),
 const list = z.object({ items: z.array(json), nextCursor: nullable });
 const characterWrite = z.object({ characterId: z.string(), characterVersionId: nullable, editRevision: z.string(), changed: z.boolean() });
 const outfitRead = z.object({ outfitId: z.string(), ownerCharacterId: nullable, name: z.string(), description: z.string(), constraints: z.string(), coversFace: z.boolean(), revision: z.number(), visibleParts: visibleParts.nullable() });
+const uploadResult = z.object({ uploadId: z.string(), status: z.enum(["pending", "ready"]), filename: z.string(), mimeType: z.string(), byteLength: z.number(), sha256: z.string(), source: json.nullable(), width: z.number().nullable(), height: z.number().nullable() });
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
+  engui_create_upload: uploadResult.extend({ uploadUrl: z.string().url().nullable(), expiresAt: nullable, method: z.literal("PUT"), contentType: z.string() }),
+  engui_get_upload: uploadResult,
   engui_create_character: characterWrite,
   engui_update_character: characterWrite,
   engui_list_character_versions: z.object({ characterId: z.string(), currentVersionId: nullable, items: z.array(json), nextCursor: nullable }),
@@ -157,6 +161,8 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
 };
 const descriptions: Record<ToolName, string> = {
+  engui_create_upload: "Upload a local source/mask image: supply filename (not path), actual MIME, byteLength, lowercase SHA-256 and UUID requestKey. Returns a private temporary uploadUrl: PUT raw file bytes with contentType using a local-file HTTP client; no MCP headers needed. Do not send base64 or URLs to this tool. PUT returns a reusable Gallery source; engui_get_upload recovers lost responses. Static PNG/JPEG/WebP,25MiB/40MP; exact original is stored in workspace Draft. Same key/payload renews an expired link or returns the existing source. Requires generate scope; upload never starts inference. Read engui_get_prompt_guide for Z-Image i2i.",
+  engui_get_upload: "Read upload status and reusable source after HTTP PUT, including after an uncertain upload response. uploadId comes from engui_create_upload. pending means no validated file yet; ready contains source for references or image mask. Bound to the creating credential/workspace; no upload or inference. Deleted/trashed files are not restored by retries.",
   engui_create_character: "Create an ordinary workspace Character and its first identity version. Optional identityParts classify visible details by body region. Local write only; no generation. Reuse requestKey for retries.",
   engui_update_character: "Partially edit a character and append an identity version. Use editRevision from a fresh engui_get_character as expectedRevision. changes.traits merges keys; null deletes a key; omitted values/UI state are preserved. Identity changes clear old classification unless identityParts are supplied. Never generates; prepare a new plan after editing. Retry with the same requestKey.",
   engui_list_character_versions: "List immutable identity versions and traits, paginated by opaque cursor. identityComplete=false means historical name/gender were not captured; never invent them. Read a captured version with engui_get_character(characterVersionId).",
@@ -202,6 +208,8 @@ async function execute(
   origin: string,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
+    case "engui_create_upload": return { result: await createUpload(auth, args, origin) };
+    case "engui_get_upload": return { result: await getUpload(auth, args.uploadId) };
     case "engui_create_character": return { result: await createCharacter(auth, args) };
     case "engui_update_character": return { result: await updateCharacter(auth, args) };
     case "engui_list_character_versions": return { result: await listCharacterVersions(args) };
