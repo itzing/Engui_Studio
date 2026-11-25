@@ -2108,7 +2108,7 @@ export default function RightPanel({ mobile = false, mobileMode, previewJobId }:
                                 }}
                                 onMouseEnter={() => { if (!mobile) emitHoverPreview(job); }}
                                 onMouseLeave={() => { if (!mobile) emitHoverPreview(null); }}
-                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${isCurrentPreview || (mobile && mobileSelectedJobId === job.id) ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
+                                className={`group flex gap-3 cursor-pointer transition-all hover:bg-muted/5 border-b border-white/5 last:border-0 relative ${mobile ? 'p-2.5' : 'p-3'} ${isCurrentPreview ? 'bg-[rgba(var(--primary-rgb),0.18)] hover:bg-[rgba(var(--primary-rgb),0.22)] ring-1 ring-inset ring-[rgba(var(--primary-rgb),0.7)]' : mobile && mobileSelectedJobId === job.id ? 'bg-primary/10 ring-1 ring-inset ring-primary/40' : ''}`}
                                 draggable={job.status === 'completed' && !!job.resultUrl}
                                 onDragStart={(e) => {
                                     if (job.status === 'completed' && job.resultUrl) {
