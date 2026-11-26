@@ -1,7 +1,7 @@
 ---
 id: ENGUI-618
 title: MCP bulk deletion for Jobs and Gallery assets
-status: In Progress
+status: Done
 assignee: [OpenClaw]
 created_date: '2026-11-26 16:16'
 labels: [mcp, gallery, jobs]
@@ -27,3 +27,12 @@ Restore retained previous .next and restart only if deployment had requested a r
 - All252 isolated MCP/image-Vibe regression tests passed; the14 bulk tests also passed on the final source-locked candidate. Cross-workspace, scopes, partial outcomes, replay after restore, retry after busy Job, input validation and simulated interruption covered.
 - Production build ZOETafub-1IukNQ4kTune passed; no new TypeScript diagnostics relative to baseline.
 - Candidate/live HTTP proof and deployment recorded below when complete. Evidence /home/engui/engui-runs/engui-618-20261126.
+
+## Delivered
+- Implementation dcf68c3 pushed to main; MCP2.8.0 installed build ZOETafub-1IukNQ4kTune. Previous build G15gV2nU2co2JKQ-0TE_H retained under the run directory.
+- Candidate SDK/HTTP proof passed31 checks, including a real100-image batch in8024ms using revisions from two search pages. Replaying after restoring one image leaves it active; mixed busy/completed Jobs report partial results and do not cancel provider work.
+- Public Showdown connector passed17 read-only checks: new tools, input/output schemas, scopes/annotations, advertised bounds and guide. Model policy remains Krea2 Turbo/Z-Image. No user content was deleted or generated in validation.
+- All252 regression tests passed; final source-locked14 bulk tests also passed. Production build and TypeScript-delta validation passed. Initial HTTP harness assumed every SDK validation error was JSON; adjusted the harness for standard MCP input-validation text, without application changes.
+- Two pre-restart guards correctly blocked new dispatches before touching the service/build. The final guard permits only running MCP variants with matching durable provider receipts and queued/processing Jobs; submitting/unknown/finalizing work, uploads and active workspace operations still block. claim() only submits queued variants; already accepted work resumes polling.
+- Eight active provider IDs (2 MCP +6 UI) verified unchanged across successful restart; no cancellation or resubmission. Rollback was not needed.
+- Only pre-existing untracked public/uploads and tmp remain in the worktree. No UI, endpoint, schema or model-availability changes.
