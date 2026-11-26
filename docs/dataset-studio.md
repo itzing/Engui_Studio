@@ -17,3 +17,10 @@ Each candidate gets one existing internal generation plan/batch/variant and one 
 Prompts arrive already composed by Studio and are passed literally, without a second Character, Vibe or wildcard expansion. Identity controls are carried inside the encrypted structured envelope; the encrypted reference uses `source_image`. Original output bytes, dimensions, length and SHA-256 are returned, never a resized preview. Existing text-to-image and image-to-image paths are unchanged.
 
 This initial lane supports one active reference and the Krea identity controls. Studio-local extra-LoRA presets, reference editing, caption models and training are not automatically transferred to Engui. Dataset generation is not LoRA training. A technical smoke test does not establish character consistency; the owner reviews candidate images before exporting the final 25 image-caption pairs.
+
+
+## Internal reference storage
+
+Dataset Studio uploads use a separate credential/workspace-scoped receipt namespace and registered files under `uploads/dataset-studio`. They never create Gallery or Draft assets. The bridge returns an internal `dataset_upload` source, accepted only by the private Dataset Studio contract; public MCP media schemas and ordinary MCP imports are unchanged. Signed upload links bind the lane and honor bridge disablement. Workspace deletion collects registered files through the existing lifecycle.
+
+A new private upload may reuse an old upload UUID without touching the old Gallery item or its Trash state. Accepted historical Gallery-backed plans remain immutable. Studio downloads original job output into its own dataset directory; this bridge does not save generation output into Gallery. Failed candidates require the user's explicit Retry; deployment never submits them automatically.

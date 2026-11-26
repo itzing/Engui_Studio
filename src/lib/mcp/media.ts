@@ -5,11 +5,22 @@ import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspaceId } from "@/lib/workspaces/context";
 import { localContentPath } from "@/lib/workspaces/files";
-import { type MediaRef, limits, fail, parse } from "./core";
+import { type MediaRef, type InternalMediaRef, limits, fail, parse } from "./core";
 import { buildNormalizedOutputs } from "@/lib/gallery/saveOutput";
 
-export async function resolveMedia(source: MediaRef, original = false) {
+export async function resolveMedia(source: InternalMediaRef, original = false) {
   const workspaceId = requireWorkspaceId();
+  if (source.kind === "dataset_upload") {
+    const row = await prisma.mcpOperationReceipt.findFirst({ where: {
+      workspaceId, operation: "dataset-upload-file", requestKey: source.uploadId,
+    } });
+    const saved = parse(row?.resultJson);
+    if (!row || row.retiredAt || saved.source?.kind !== "dataset_upload" ||
+        saved.source.uploadId !== source.uploadId || typeof saved.url !== "string" ||
+        !/^[a-f0-9]{64}$/.test(saved.sha256 || "")) fail("NOT_FOUND", "Dataset input not found.");
+    const url: string = saved.url, expectedHash: string = saved.sha256;
+    return { url, expectedHash, provenance: {}, asset: null, job: null };
+  }
   if (source.kind === "gallery_asset") {
     const row = await prisma.galleryAsset.findFirst({
       where: { id: source.assetId, workspaceId, trashed: false, type: original ? { in: ["image", "video", "audio"] } : "image" },
@@ -44,7 +55,7 @@ export async function resolveMedia(source: MediaRef, original = false) {
     job,
   };
 }
-export async function readMedia(source: MediaRef) {
+export async function readMedia(source: InternalMediaRef) {
   const resolved = await resolveMedia(source),
     workspaceId = requireWorkspaceId();
   // URLs come only from owned records. No outbound URL fetch or caller path is allowed.

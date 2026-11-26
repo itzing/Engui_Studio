@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { type Authority,digest,draftSchema,fail,findReceipt,parse,receipt } from "@/lib/mcp/core";
+import { type Authority,digest,fail,findReceipt,parse,receipt } from "@/lib/mcp/core";
 import { assertCredential } from "@/lib/mcp/auth";
 import { assertModelAllowed } from "@/lib/mcp/operator-policy";
 import { currentDependencies } from "@/lib/mcp/plans";
 import { effectiveSettings,modelConfiguration } from "@/lib/mcp/catalog";
 import { startGeneration,getBatch,cancelBatch } from "@/lib/mcp/batches";
 import { downloadArtifact } from "@/lib/mcp/artifacts";
-import { studioSubmit } from "./schema";
+import { studioSubmit, studioDraft } from "./schema";
+import { getUpload } from "@/lib/mcp/uploads";
 import type { z } from "zod";
 export function bridgeEnabled() {
   return process.env.ENGUI_MCP_ENABLED==="1"&&process.env.ENGUI_DATASET_STUDIO_ENABLED==="1";
@@ -27,7 +28,10 @@ export async function submit(auth:Authority,input:z.infer<typeof studioSubmit>) 
   const request={...input,credentialId:auth.credentialId};
   let prepared:any=await findReceipt("dataset-studio-prepare",input.requestKey,request);
   if(!prepared) {
-    const draft=draftSchema.parse({modelId:"krea2-turbo",mode:"image_to_image",
+    // Keep legacy Gallery-backed snapshots immutable; new internal inputs are
+    // owned by this credential and cannot be supplied through public MCP schemas.
+    if(input.source.kind==="dataset_upload") await getUpload(auth,input.source.uploadId,"dataset-studio");
+    const draft=studioDraft.parse({modelId:"krea2-turbo",mode:"image_to_image",
       prompt:input.prompt,references:[input.source],width:input.width,height:input.height,
       variantCount:1,seeds:[input.seed],parameters:{steps:input.steps,cfg:1,denoise:1},
       loras:input.loras,requestKey:input.requestKey});

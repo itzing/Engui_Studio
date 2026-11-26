@@ -13,8 +13,10 @@ import { type Authority, fail, limits, McpError, parse, rateLimit, receipt, uplo
 import { readMedia } from "./media";
 
 type UploadInput = z.infer<typeof uploadInput>;
+type UploadLane = "mcp" | "dataset-studio";
+const operation = (lane: UploadLane, step: "create" | "file") => `${lane === "mcp" ? "upload" : "dataset-upload"}-${step}`;
 const tokenPattern = /^[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{43}$/;
-const payloadSchema = z.object({ v: z.literal(1), credentialId: z.string().uuid(), workspaceId: z.string().uuid(), uploadId: z.string().uuid(), expires: z.number().int().positive() }).strict();
+const payloadSchema = z.object({ v: z.literal(1), credentialId: z.string().uuid(), workspaceId: z.string().uuid(), uploadId: z.string().uuid(), expires: z.number().int().positive(), lane: z.literal("dataset-studio").optional() }).strict();
 const signature = (encoded: string, secret: string) => createHmac("sha256", Buffer.from(secret, "hex")).update("engui-upload-v1:" + encoded).digest();
 let activeUploads = 0;
 
@@ -26,15 +28,15 @@ async function authority(credentialId: string, workspaceId: string) {
   if (!ws || ws.userId !== c.ownerId || ws.lifecycle !== "active") throw new HttpError(409, "Workspace is unavailable.");
   return { credential: c, auth: { credentialId: c.id, ownerId: c.ownerId, workspace: { id: ws.id, name: ws.name, revision: ws.revision }, scopes: JSON.parse(c.scopesJson) } as Authority };
 }
-async function ticket(auth: Authority, uploadId: string) {
-  const row = await prisma.mcpOperationReceipt.findFirst({ where: { workspaceId: auth.workspace.id, operation: "upload-create", requestKey: uploadId } });
+async function ticket(auth: Authority, uploadId: string, lane: UploadLane = "mcp") {
+  const row = await prisma.mcpOperationReceipt.findFirst({ where: { workspaceId: auth.workspace.id, operation: operation(lane, "create"), requestKey: uploadId } });
   const value = parse(row?.resultJson);
   if (!row || row.retiredAt || value.credentialId !== auth.credentialId) fail("NOT_FOUND", "Upload not found.");
   return uploadInput.parse(value.descriptor);
 }
-export async function getUpload(auth: Authority, uploadId: string) {
-  const descriptor = await ticket(auth, uploadId);
-  const row = await prisma.mcpOperationReceipt.findFirst({ where: { workspaceId: auth.workspace.id, operation: "upload-file", requestKey: uploadId } });
+export async function getUpload(auth: Authority, uploadId: string, lane: UploadLane = "mcp") {
+  const descriptor = await ticket(auth, uploadId, lane);
+  const row = await prisma.mcpOperationReceipt.findFirst({ where: { workspaceId: auth.workspace.id, operation: operation(lane, "file"), requestKey: uploadId } });
   const base = { uploadId, filename: descriptor.filename, mimeType: descriptor.mimeType, byteLength: descriptor.byteLength, sha256: descriptor.sha256 };
   if (!row) return { ...base, status: "pending", source: null, width: null, height: null };
   if (row.retiredAt) fail("OPERATION_RETIRED", "Upload has been removed.");
@@ -44,13 +46,13 @@ export async function getUpload(auth: Authority, uploadId: string) {
   if (image.hash !== descriptor.sha256) fail("MEDIA_UNAVAILABLE", "Uploaded image has changed.");
   return { ...base, status: "ready", source: result.source, width: image.width, height: image.height };
 }
-export async function createUpload(auth: Authority, args: UploadInput, origin: string) {
+export async function createUpload(auth: Authority, args: UploadInput, origin: string, lane: UploadLane = "mcp") {
   const { credential } = await authority(auth.credentialId, auth.workspace.id);
-  await receipt("upload-create", args.requestKey, { ...args, credentialId: auth.credentialId }, async () => ({ credentialId: auth.credentialId, descriptor: args }));
-  const result = await getUpload(auth, args.requestKey);
+  await receipt(operation(lane, "create"), args.requestKey, { ...args, credentialId: auth.credentialId }, async () => ({ credentialId: auth.credentialId, descriptor: args }));
+  const result = await getUpload(auth, args.requestKey, lane);
   if (result.status === "ready") return { ...result, uploadUrl: null, expiresAt: null, method: "PUT", contentType: args.mimeType };
   const expires = Math.floor(Math.min(Date.now() + limits().uploadLinkTtlSeconds * 1000, credential.expiresAt.getTime()) / 1000);
-  const encoded = Buffer.from(JSON.stringify({ v: 1, credentialId: auth.credentialId, workspaceId: auth.workspace.id, uploadId: args.requestKey, expires })).toString("base64url");
+  const encoded = Buffer.from(JSON.stringify({ v: 1, credentialId: auth.credentialId, workspaceId: auth.workspace.id, uploadId: args.requestKey, expires, ...(lane === "dataset-studio" ? { lane } : {}) })).toString("base64url");
   const token = encoded + "." + signature(encoded, credential.secretHash).toString("base64url");
   return { ...result, uploadUrl: new URL("/api/mcp/uploads/" + token, origin).href, expiresAt: new Date(expires * 1000).toISOString(), method: "PUT", contentType: args.mimeType };
 }
@@ -89,9 +91,9 @@ async function validateImage(bytes: Buffer, descriptor: UploadInput) {
     return { width: meta.width, height: meta.height };
   } catch { throw new HttpError(415, "Upload must be a decodable static PNG, JPEG or WebP matching its MIME type, at most 40 megapixels."); }
 }
-async function storeImage(auth: Authority, descriptor: UploadInput, bytes: Buffer) {
+async function storeImage(auth: Authority, descriptor: UploadInput, bytes: Buffer, lane: UploadLane = "mcp") {
   const ext = descriptor.mimeType === "image/jpeg" ? "jpg" : descriptor.mimeType === "image/webp" ? "webp" : "png";
-  const url = `/uploads/mcp/${auth.workspace.id}/${descriptor.requestKey}.${ext}`;
+  const url = `/uploads/${lane}/${auth.workspace.id}/${descriptor.requestKey}.${ext}`;
   const file = path.join(process.cwd(), "public", url), dir = path.dirname(file);
   await fs.mkdir(dir, { recursive: true });
   const root = await fs.realpath(path.join(process.cwd(), "public"));
@@ -115,8 +117,12 @@ async function storeImage(auth: Authority, descriptor: UploadInput, bytes: Buffe
     await fs.unlink(temp).catch(error => { if (error.code !== "ENOENT") throw error; });
     await prisma.workspaceFile.deleteMany({ where: { workspaceId: auth.workspace.id, location: "/" + path.relative(path.join(process.cwd(), "public"), temp).split(path.sep).join("/"), storageTarget: "local" } });
   }
-  await receipt("upload-file", descriptor.requestKey, { ...descriptor, credentialId: auth.credentialId }, async tx => {
+  await receipt(operation(lane, "file"), descriptor.requestKey, { ...descriptor, credentialId: auth.credentialId }, async tx => {
     await assertCredential(auth.credentialId, auth.workspace.id, "generate", tx);
+    if (lane === "dataset-studio") return {
+      source: { kind: "dataset_upload", uploadId: descriptor.requestKey },
+      url, sha256: descriptor.sha256,
+    };
     const asset = await tx.galleryAsset.create({ data: {
       workspaceId: auth.workspace.id, type: "image", bucket: "draft", originKind: "import",
       membershipKey: "mcp-upload:" + descriptor.requestKey, contentHash: descriptor.sha256,
@@ -137,6 +143,9 @@ export async function handleUploadRequest(request: Request, token: string): Prom
     let payload: z.infer<typeof payloadSchema>;
     try { payload = payloadSchema.parse(JSON.parse(Buffer.from(encoded, "base64url").toString())); }
     catch { throw new HttpError(401, "Upload link is invalid or expired."); }
+    const lane = payload.lane || "mcp";
+    if (lane === "dataset-studio" && process.env.ENGUI_DATASET_STUDIO_ENABLED !== "1")
+      throw new HttpError(404, "Dataset inputs are unavailable.");
     const { credential, auth } = await authority(payload.credentialId, payload.workspaceId);
     if (payload.expires * 1000 <= Date.now() || payload.expires * 1000 > Date.now() + limits().uploadLinkTtlSeconds * 1000 || !timingSafeEqual(signature(encoded, credential.secretHash), Buffer.from(mac, "base64url"))) throw new HttpError(401, "Upload link is invalid or expired.");
     if (request.headers.has("authorization") || request.headers.has("x-workspace-id")) {
@@ -149,13 +158,13 @@ export async function handleUploadRequest(request: Request, token: string): Prom
       activeUploads++;
       try {
         return await withWorkspaceActivity(auth.workspace.id, "mcp-upload", async () => {
-          const descriptor = await ticket(auth, payload.uploadId);
+          const descriptor = await ticket(auth, payload.uploadId, lane);
           const bytes = await readBody(request, descriptor);
           await validateImage(bytes, descriptor);
           await assertCredential(auth.credentialId, auth.workspace.id);
-          const existing = await getUpload(auth, payload.uploadId);
-          if (existing.status !== "ready") await storeImage(auth, descriptor, bytes);
-          return Response.json(await getUpload(auth, payload.uploadId), { headers });
+          const existing = await getUpload(auth, payload.uploadId, lane);
+          if (existing.status !== "ready") await storeImage(auth, descriptor, bytes, lane);
+          return Response.json(await getUpload(auth, payload.uploadId, lane), { headers });
         });
       } finally { activeUploads--; }
     });

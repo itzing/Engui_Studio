@@ -41,8 +41,8 @@ export async function POST(request:Request) {
       let data;
       switch(args.action) {
         case "capabilities":data=await studio.capabilities();break;
-        case "create_upload":data=await createUpload(auth,args.input,origin);break;
-        case "get_upload":data=await getUpload(auth,args.uploadId);break;
+        case "create_upload":data=await createUpload(auth,args.input,origin,"dataset-studio");break;
+        case "get_upload":data=await getUpload(auth,args.uploadId,"dataset-studio");break;
         case "submit":data=await studio.submit(auth,args.input);break;
         case "status":data=await studio.status(auth,args.requestKey);break;
         case "cancel":data=await studio.cancel(auth,args.requestKey,args.cancelKey);break;

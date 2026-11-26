@@ -6,6 +6,7 @@ import { generationVibe } from "./vibes";
 import { expandMcpPrompt, characterReferencesFor, renderMcpVariant } from "./prompt";
 import {
   type GenerationDraft,
+  type InternalGenerationDraft,
   type Authority,
   McpError,
   digest,
@@ -23,7 +24,7 @@ import {
 import { readMedia } from "./media";
 import { readMask } from "./masks";
 import { assertCredential } from "./auth";
-export async function currentDependencies(d: GenerationDraft) {
+export async function currentDependencies(d: InternalGenerationDraft) {
   await assertModelAllowed(d.modelId);
   const loras = await selectedLoras(d.loras, d.modelId);
   const config = await modelConfiguration(d.modelId);

@@ -56,6 +56,8 @@ export const mediaRef = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("job_output"), jobId: id, outputId: id }).strict(),
 ]);
 export type MediaRef = z.infer<typeof mediaRef>;
+// Internal bridge only; deliberately absent from public MCP input schemas.
+export type InternalMediaRef = MediaRef | { kind: "dataset_upload"; uploadId: string };
 export const maskInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("image"), source: mediaRef }).strict(),
   z.object({ kind: z.literal("rectangles"), regions: z.array(z.object({
@@ -111,6 +113,7 @@ export const draftSchema = z
   })
   .strict();
 export type GenerationDraft = z.infer<typeof draftSchema>;
+export type InternalGenerationDraft = Omit<GenerationDraft, "references"> & { references: InternalMediaRef[] };
 export const limits = () => ({
   maxVariants: 3,
   maxReferenceImages: 2,

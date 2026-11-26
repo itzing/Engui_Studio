@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { mediaRef, uploadInput, draftSchema } from "@/lib/mcp/core";
+export const studioSource = z.union([mediaRef,
+  z.object({kind:z.literal("dataset_upload"),uploadId:z.string().uuid()}).strict()]);
+export const studioDraft = draftSchema.extend({references:z.array(studioSource).max(2).default([])});
 export const identityControls = z.object({
   ref_boost:z.number().finite().min(0).max(10).default(0.25),
   grounding_px:z.number().int().min(512).max(1536).default(512),
@@ -12,7 +15,7 @@ const provenance=z.object({
   upstreamVersion:z.string().max(64).optional(),
 }).strict();
 export const studioSubmit=z.object({
-  requestKey:z.string().uuid(),source:mediaRef,prompt:z.string().min(1).max(16000),
+  requestKey:z.string().uuid(),source:studioSource,prompt:z.string().min(1).max(16000),
   seed:z.number().int().min(0).max(2147483647),
   width:z.number().int().min(512).max(2048).multipleOf(64),
   height:z.number().int().min(512).max(2048).multipleOf(64),

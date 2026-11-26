@@ -33,6 +33,7 @@ afterAll(async()=>{vi.useRealTimers();await Promise.all(clients.map(c=>c.close()
 async function fixture(scopes=["read","generate","cancel"]) {
  const ws=await prisma.workspace.create({data:{id:randomUUID(),userId:"user-with-settings",name:"upload-test-"+randomUUID()}});
  dirs.push(path.join(process.cwd(),"public","uploads","mcp",ws.id));
+ dirs.push(path.join(process.cwd(),"public","uploads","dataset-studio",ws.id));
  const credential=await provisionCredential(ws.id,scopes,1),headers={Authorization:"Bearer "+credential.token,"X-Workspace-Id":ws.id};
  const client=new Client({name:"upload-test",version:"1"});clients.push(client);
  await client.connect(new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"),{requestInit:{headers},fetch:async(i:any,n:any)=>handleMcpRequest(new Request(i,n))}));
@@ -52,9 +53,17 @@ async function request(f:any,action:string,extra:any={}) {
   headers:{...f.headers,"Content-Type":"application/json"},body:JSON.stringify({action,...extra})}));
  return {status:response.status,data:await response.json()};
 }
+async function studioUpload(f:any,requestKey=randomUUID()) {
+ const input={filename:"reference.png",mimeType:"image/png",byteLength:bytes.length,sha256:hash(bytes),requestKey};
+ const created=await request(f,"create_upload",{input});expect(created.status,JSON.stringify(created.data)).toBe(200);
+ if(created.data.status==="ready") return {link:created.data,result:created.data,input};
+ const response=await put(created.data.uploadUrl,bytes);
+ expect(response.status,JSON.stringify(await response.clone().json())).toBe(200);
+ return {link:created.data,result:await response.json(),input};
+}
 async function studioFixture() {
  process.env.ENGUI_DATASET_STUDIO_ENABLED="1";
- const f=await fixture(),{result}=await f.upload();
+ const f=await fixture(),{result}=await studioUpload(f);
  const input={requestKey:randomUUID(),source:result.source,prompt:"Keep {literal} and {character:unresolved} exactly.",
   seed:42,width:512,height:512,steps:8,identity:{ref_boost:1,grounding_px:512,identity_strength:1},
   loras:[],provenance:{datasetId:"1",candidateId:"1"}};
@@ -75,11 +84,21 @@ it("uses literal upstream prompts and idempotent ordinary encrypted identity job
  const plain=decryptStructuredEnvelope<any>(Buffer.alloc(32),input._secure,input._secure.binding);
  expect(plain.prompt).toBe(f.input.prompt);expect(plain.identity_edit).toEqual(f.input.identity);
  expect(input.prompt).toBeUndefined();
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(0);
  await processMcpWorkspace(f.ws.id);expect(remote.submit).toHaveBeenCalledOnce();
  const status=await request(f,"status",{requestKey:f.input.requestKey});
  expect(status.status).toBe(200);expect(JSON.stringify(status.data).length).toBeLessThan(2000);
  const other=await fixture();
  expect((await request(other,"status",{requestKey:f.input.requestKey})).status).toBe(404);
+ const directory=path.join(process.cwd(),"public","generations","dataset-tests-"+f.ws.id);
+ dirs.push(directory);await fs.mkdir(directory,{recursive:true});await fs.writeFile(path.join(directory,"result.png"),bytes);
+ await scope(f.ws.id,()=>prisma.job.update({where:{id:first.data.jobId},data:{status:"completed",resultUrl:"/generations/dataset-tests-"+f.ws.id+"/result.png"}}));
+ const artifact=await request(f,"artifact",{requestKey:f.input.requestKey});
+ expect(artifact.status,JSON.stringify(artifact.data)).toBe(200);
+ const downloadUrl=artifact.data.downloadUrl;
+ const download=await handleArtifactRequest(new Request(downloadUrl),new URL(downloadUrl).pathname.split("/").at(-1)!);
+ expect(download.status).toBe(200);expect(Buffer.from(await download.arrayBuffer()).equals(bytes)).toBe(true);
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(0);
 });
 it("rejects changed idempotent input and read-only credentials without paid submission",async()=>{
  const f=await studioFixture();expect((await request(f,"submit",{input:f.input})).status).toBe(200);
@@ -126,4 +145,62 @@ it.each([
   if(previous===undefined)delete process.env.ENGUI_MCP_ALLOWED_HOSTS;
   else process.env.ENGUI_MCP_ALLOWED_HOSTS=previous;
  }
+});
+
+
+it("keeps Studio inputs independent of Gallery and namespaces old upload keys",async()=>{
+ process.env.ENGUI_DATASET_STUDIO_ENABLED="1";
+ const f=await fixture(),old=await f.upload();
+ await scope(f.ws.id,()=>prisma.galleryAsset.update({where:{id:old.result.source.assetId},data:{trashed:true}}));
+ const before=await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}));
+ const current=await studioUpload(f,old.link.uploadId);
+ expect(current.result.source).toEqual({kind:"dataset_upload",uploadId:old.link.uploadId});
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(before);
+ const again=await request(f,"create_upload",{input:current.input});
+ expect(again.data.status).toBe("ready");expect(again.data.source).toEqual(current.result.source);
+ expect((await request(f,"get_upload",{uploadId:old.link.uploadId})).data.status).toBe("ready");
+ const oldAsset=await scope(f.ws.id,()=>prisma.galleryAsset.findUnique({where:{id:old.result.source.assetId}}));
+ expect(oldAsset?.trashed).toBe(true);
+ const files=await scope(f.ws.id,()=>prisma.workspaceFile.findMany({where:{workspaceId:f.ws.id}}));
+ expect(files.some(x=>x.location.includes("/uploads/dataset-studio/"))).toBe(true);
+ expect(remote.submit).not.toHaveBeenCalled();
+});
+
+it("scopes internal uploads to the creating credential and excludes them from public MCP",async()=>{
+ const f=await studioFixture(),uploadId=f.input.source.uploadId;
+ const other=await fixture();
+ expect((await request(other,"get_upload",{uploadId})).status).toBe(404);
+ const second=await provisionCredential(f.ws.id,["read","generate","cancel"],1);
+ const sameWorkspace={headers:{Authorization:"Bearer "+second.token,"X-Workspace-Id":f.ws.id}};
+ expect((await request(sameWorkspace,"get_upload",{uploadId})).status).toBe(404);
+ expect((await request(sameWorkspace,"submit",{input:f.input})).status).toBe(404);
+ await expect(f.call("engui_get_upload",{uploadId})).rejects.toThrow();
+ await expect(f.plan(f.input.source)).rejects.toThrow();
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(0);
+ expect(remote.submit).not.toHaveBeenCalled();
+});
+
+it("binds the internal lane in signed links and respects bridge disablement",async()=>{
+ process.env.ENGUI_DATASET_STUDIO_ENABLED="1";
+ const f=await fixture();
+ const c=await request(f,"create_upload",{input:{filename:"reference.png",mimeType:"image/png",byteLength:bytes.length,sha256:hash(bytes),requestKey:randomUUID()}});
+ const url=new URL(c.data.uploadUrl),token=url.pathname.split("/").at(-1)!;
+ const [encoded,mac]=token.split("."),payload=JSON.parse(Buffer.from(encoded,"base64url").toString());
+ delete payload.lane;
+ const changed=Buffer.from(JSON.stringify(payload)).toString("base64url")+"."+mac;
+ url.pathname=url.pathname.replace(token,changed);
+ expect((await put(url.href,bytes)).status).toBe(401);
+ process.env.ENGUI_DATASET_STUDIO_ENABLED="0";
+ try {expect((await put(c.data.uploadUrl,bytes)).status).toBe(404);}
+ finally {process.env.ENGUI_DATASET_STUDIO_ENABLED="1";}
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(0);
+});
+
+it("retains legacy source support without rewriting accepted snapshots",async()=>{
+ const f=await studioFixture(),legacy=await f.upload();
+ f.input.source=legacy.result.source;
+ const submitted=await request(f,"submit",{input:f.input});expect(submitted.status).toBe(200);
+ expect((await request(f,"submit",{input:f.input})).data).toEqual(submitted.data);
+ await processMcpWorkspace(f.ws.id);expect(remote.submit).toHaveBeenCalledOnce();
+ expect(await scope(f.ws.id,()=>prisma.galleryAsset.count({where:{workspaceId:f.ws.id}}))).toBe(1);
 });

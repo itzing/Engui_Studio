@@ -14,6 +14,7 @@ import { toCharacterSummary } from "@/lib/characters/utils";
 import { FRAMING_TEXT } from "@/lib/looks/parts";
 import {
   type GenerationDraft,
+  type InternalGenerationDraft,
   digest,
   fail,
   nextCursor,
@@ -108,7 +109,7 @@ export async function listModels() {
     }),
   );
 }
-export function effectiveSettings(d: GenerationDraft) {
+export function effectiveSettings(d: InternalGenerationDraft) {
   if (d.modelId === "qwen-image-edit-maskflow") {
     if (!d.mask || d.references.length !== 1) fail("INVALID_ARGUMENT", "MaskFlow requires one source reference and a separate mask.");
     if (d.width * d.height > 1048576) fail("INVALID_ARGUMENT", "MaskFlow supports at most 1 megapixel per output.");
