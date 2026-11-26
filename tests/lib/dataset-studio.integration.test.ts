@@ -104,3 +104,26 @@ it("rejects unsupported payloads and stays disabled by default",async()=>{
  process.env.ENGUI_DATASET_STUDIO_ENABLED="1";
  expect(remote.submit).not.toHaveBeenCalled();
 });
+
+
+it.each([
+ {host:"127.0.0.1:3010",forwarded:"",origin:"http://127.0.0.1:3010"},
+ {host:"bridge.example.test",forwarded:"https",origin:"https://bridge.example.test"},
+])("keeps signed uploads on the authenticated request origin: $origin",async({host,forwarded,origin})=>{
+ process.env.ENGUI_DATASET_STUDIO_ENABLED="1";
+ const previous=process.env.ENGUI_MCP_ALLOWED_HOSTS;
+ process.env.ENGUI_MCP_ALLOWED_HOSTS="bridge.example.test";
+ try {
+  const f=await fixture();
+  const response=await bridge(new Request("http://localhost:3010/api/dataset-studio",{
+   method:"POST",headers:{...f.headers,Host:host,"X-Forwarded-Proto":forwarded,"Content-Type":"application/json"},
+   body:JSON.stringify({action:"create_upload",input:{filename:"reference.png",mimeType:"image/png",byteLength:bytes.length,sha256:hash(bytes),requestKey:randomUUID()}})
+  }));
+  expect(response.status).toBe(200);
+  expect(new URL((await response.json()).uploadUrl).origin).toBe(origin);
+  expect(remote.submit).not.toHaveBeenCalled();
+ } finally {
+  if(previous===undefined)delete process.env.ENGUI_MCP_ALLOWED_HOSTS;
+  else process.env.ENGUI_MCP_ALLOWED_HOSTS=previous;
+ }
+});

@@ -35,7 +35,9 @@ export async function POST(request:Request) {
     if(!auth.scopes.includes(scope)) throw new HttpError(403,"Credential scope is required: "+scope);
     return await inAuthority(auth,async()=>{
       await rateLimit(auth,args.action==="submit"?"engui_prepare_generation":args.action==="cancel"?"engui_cancel_batch":"engui_get_context");
-      const origin=new URL(request.url).origin;
+      const url=new URL(request.url);
+      // authenticate() has already validated Host/TLS; match the MCP signed-link origin.
+      const origin=`${request.headers.get("x-forwarded-proto")==="https"?"https:":url.protocol}//${request.headers.get("host")||url.host}`;
       let data;
       switch(args.action) {
         case "capabilities":data=await studio.capabilities();break;
