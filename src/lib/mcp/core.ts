@@ -48,6 +48,9 @@ export const id = z
   .max(128)
   .regex(/^[a-zA-Z0-9_-]+$/);
 export const requestKey = z.string().uuid();
+export const maxDeleteBatchItems = 100;
+const galleryDeleteItem = z.object({ assetId: id, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
+const uniqueIds = (items: string[]) => new Set(items).size === items.length;
 export const mediaRef = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("gallery_asset"), assetId: id }).strict(),
   z.object({ kind: z.literal("job_output"), jobId: id, outputId: id }).strict(),
@@ -118,6 +121,7 @@ export const limits = () => ({
   uploadLinkTtlSeconds: 600,
   uploadsPerMinute: 10,
   maxPageSize: 50,
+  maxDeleteBatchItems,
   activeBatches: boundedEnv("ENGUI_MCP_MAX_BATCHES", 2, 1, 10),
   preparePerMinute: boundedEnv("ENGUI_MCP_PREPARE_PER_MINUTE", 10, 1, 120),
   callsPerMinute: boundedEnv("ENGUI_MCP_CALLS_PER_MINUTE", 120, 1, 1000),
@@ -155,6 +159,7 @@ export const inputSchemas = {
     .strict(),
   engui_get_gallery_asset: z.object({ assetId: id }).strict(),
   engui_delete_gallery_asset: z.object({ assetId: id, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestKey }).strict(),
+  engui_delete_gallery_assets: z.object({ items: z.array(galleryDeleteItem).min(1).max(maxDeleteBatchItems).refine(items => uniqueIds(items.map(item => item.assetId)), "Duplicate assetIds are not allowed"), requestKey }).strict(),
   engui_restore_gallery_asset: z.object({ assetId: id, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestKey }).strict(),
   engui_get_image: z
     .object({
@@ -177,6 +182,7 @@ export const inputSchemas = {
   engui_get_batch: z.object({ batchId: id }).strict(),
   engui_cancel_batch: z.object({ batchId: id, requestKey }).strict(),
   engui_delete_job: z.object({ jobId: id, requestKey }).strict(),
+  engui_delete_jobs: z.object({ jobIds: z.array(id).min(1).max(maxDeleteBatchItems).refine(uniqueIds, "Duplicate jobIds are not allowed"), requestKey }).strict(),
   engui_save_output: z
     .object({
       source: mediaRef,
@@ -202,10 +208,10 @@ export function scopeFor(name: ToolName): string {
   return name === "engui_create_upload" || name === "engui_prepare_generation" ||
     name === "engui_start_generation"
     ? "generate"
-    : name === "engui_cancel_batch" || name === "engui_delete_job"
+    : name === "engui_cancel_batch" || name === "engui_delete_job" || name === "engui_delete_jobs"
       ? "cancel"
       : name === "engui_save_output" || name === "engui_record_concept_review" ||
-        ["engui_delete_gallery_asset", "engui_restore_gallery_asset", "engui_create_vibe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe", "engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
+        ["engui_delete_gallery_asset", "engui_delete_gallery_assets", "engui_restore_gallery_asset", "engui_create_vibe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe", "engui_create_character", "engui_update_character", "engui_create_outfit", "engui_update_outfit", "engui_update_wardrobe"].includes(name)
         ? "curate"
         : "read";
 }

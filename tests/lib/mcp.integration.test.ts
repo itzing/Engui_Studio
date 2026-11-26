@@ -170,7 +170,7 @@ describe("workspace-bound MCP integration", () => {
   it("official SDK initializes and discovers 38 strict typed tools without an agent connection", async () => {
     const f = await fixture();
     const list = await f.client.listTools();
-    expect(list.tools).toHaveLength(38);
+    expect(list.tools).toHaveLength(40);
     expect(
       list.tools.every(
         (t) => t.inputSchema.additionalProperties === false && t.outputSchema,
@@ -178,7 +178,7 @@ describe("workspace-bound MCP integration", () => {
     ).toBe(true);
     const c = await f.call("engui_get_context");
     expect(c.limits.maxVariants).toBe(3);
-    expect(c.operations).toHaveLength(38);
+    expect(c.operations).toHaveLength(40);
     await f.client.close();
   });
   it("rejects invalid, missing, revoked and swapped-scope credentials and wrong hosts", async () => {

@@ -22,6 +22,7 @@ import { visibleParts } from "./authoring-schemas";
 import { createCharacter, updateCharacter, listCharacterVersions, getOutfit, createOutfit, updateOutfit, getWardrobe, updateWardrobe } from "./authoring";
 import { getPlan, prepareGeneration } from "./plans";
 import { deleteJob } from "./jobs";
+import { deleteJobs, deleteGalleryAssets } from "./bulk-delete";
 import { cancelBatch, getBatch, startGeneration } from "./batches";
 import { getGalleryAsset, changeGalleryTrash } from "./gallery";
 import { getReference, recordReview, saveOutput } from "./curation";
@@ -38,6 +39,18 @@ const uploadResult = z.object({ uploadId: z.string(), status: z.enum(["pending",
 const vibeRead = z.object({ id: z.string(), name: z.string(), baseDescription: z.string(), tags: z.array(z.string()), compatibleSceneTypes: z.array(z.string()), status: z.enum(["active", "trash"]), createdAt: z.string(), updatedAt: z.string(), editRevision: z.string(), preferred: z.literal(true).optional() });
 const galleryRead = z.object({ assetId: z.string(), bucket: z.string(), status: z.enum(["active", "trash"]), sha256: z.string(), favorited: z.boolean(), source: json, sourceJobId: nullable, sourceOutputId: nullable, addedAt: z.string(), updatedAt: z.string(), editRevision: z.string() });
 const vibeWrite = vibeRead.extend({ changed: z.boolean() });
+const itemError = z.object({ code: z.string(), message: z.string(), retryable: z.boolean() });
+const bulkResult = (item: z.ZodTypeAny) => z.object({
+  requestKey: z.string().uuid(), total: z.number().int(), succeeded: z.number().int(), failed: z.number().int(), results: z.array(item),
+});
+const jobDeleteResult = z.discriminatedUnion("ok", [
+  z.object({ jobId: z.string(), ok: z.literal(true), alreadyAbsent: z.boolean() }),
+  z.object({ jobId: z.string(), ok: z.literal(false), error: itemError }),
+]);
+const galleryDeleteResult = z.discriminatedUnion("ok", [
+  z.object({ assetId: z.string(), ok: z.literal(true), status: z.literal("trash"), bucket: z.string(), changed: z.boolean(), editRevision: z.string() }),
+  z.object({ assetId: z.string(), ok: z.literal(false), error: itemError }),
+]);
 export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   engui_list_vibes: z.object({ items: z.array(vibeRead), nextCursor: nullable }),
   engui_get_vibe: vibeRead,
@@ -102,6 +115,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   engui_search_gallery: list,
   engui_get_gallery_asset: galleryRead,
   engui_delete_gallery_asset: galleryRead.extend({ changed: z.boolean() }),
+  engui_delete_gallery_assets: bulkResult(galleryDeleteResult),
   engui_restore_gallery_asset: galleryRead.extend({ changed: z.boolean() }),
   engui_get_image: z.object({
     source: json,
@@ -158,6 +172,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
     locallyStoppedJobIds: z.array(z.string()), providerOutcomeUnknown: z.boolean(),
   }),
   engui_delete_job: z.object({deletedJobId:z.string(),alreadyAbsent:z.boolean()}),
+  engui_delete_jobs: bulkResult(jobDeleteResult),
   engui_save_output: galleryRead.partial().extend({ assetId: z.string(), sha256: z.string(), bucket: z.string(), alreadySaved: z.boolean(), action: z.enum(["created", "moved", "unchanged"]).optional(), previousBucket: nullable.optional() }),
   engui_record_concept_review: z.object({
     reviewId: z.string(),
@@ -173,6 +188,8 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
   }),
 };
 const descriptions: Record<ToolName, string> = {
+  engui_delete_jobs: "Delete 1–100 unique full jobIds in one call with cancel scope and one UUID requestKey. Same safeguards as engui_delete_job: no automatic cancellation; busy/unpreserved Jobs return per-item errors. Gallery copies and generation evidence remain. Returns total/succeeded/failed and ordered results with jobId, ok, alreadyAbsent or error. Partial success is not rolled back. Retry interrupted calls with identical key/payload; reported failures are frozen too, so re-read them and use a NEW key for an intentional retry. No provider calls.",
+  engui_delete_gallery_assets: "Move 1–100 Gallery images to reversible Trash in one call. Requires curate, items:[{assetId,expectedRevision}] and one UUID requestKey. Take full IDs and editRevision from engui_search_gallery (no per-item read needed) or get_gallery_asset. No duplicates. Per-item ok/status/changed/editRevision or error, plus counts; stale/missing items do not stop other items. Retry identical key/payload to resume/replay, never re-trash restored items; reported failures need refreshed revisions and a NEW key to retry. Does not delete Jobs or original files. Receipts are historical, not current Gallery state.",
   engui_list_vibes: "List full workspace Vibe presets with tags, compatibleSceneTypes and editRevision. preferred=true marks the owner-recommended Vibe, informational only: pass vibeId explicitly. The field is omitted for all other presets/workspaces. Active by default; status=trash lists deleted presets for restoration. query matches names/tags. Use returned id as vibeId in engui_prepare_generation; no inference.",
   engui_get_vibe: "Read a workspace Vibe, including trash, with exact baseDescription and editRevision. preferred=true is an optional owner recommendation, never automatic selection. Read before editing/deleting/restoring. IDs from another workspace are unavailable.",
   engui_create_vibe: "Create an ordinary workspace Vibe (name, reusable baseDescription, optional tags/compatibleSceneTypes). Returns id for generation vibeId and editRevision. Tags are normalized like UI; scene types are advisory metadata. Requires curate; no inference. Retry the same requestKey/payload.",
@@ -199,7 +216,7 @@ const descriptions: Record<ToolName, string> = {
   engui_get_character:
     "Read character identity, editable traits/identityParts, editRevision, outfit options and reference summary. Optional characterVersionId reads a captured historical identity; historical reads have no editRevision. Outfit selection remains current; exact old generation settings are in the immutable plan.",
   engui_list_presets: "List visible outfits, active Vibes or model-compatible LoRAs. For full Vibe metadata, trash and revisions use engui_list_vibes / engui_get_vibe; author with Vibe tools. For Vibes, preferred=true marks an explicit workspace recommendation; otherwise the field is omitted. Nothing is automatically applied.",
-  engui_search_gallery: "Search workspace Gallery images without enrichment. Filter bucket=draft/common/upscale and status=active (default) or trash. Returns full asset IDs, current bucket/status, source and editRevision. Read detail before deleting/restoring.",
+  engui_search_gallery: "Search workspace Gallery images without enrichment. Filter bucket=draft/common/upscale and status=active (default) or trash. Returns full asset IDs, current bucket/status, source and editRevision. Use these revisions directly in engui_delete_gallery_assets; refresh after revision conflicts.",
   engui_get_gallery_asset: "Read current Gallery image metadata including trash, bucket (common means Added), original SHA-256, source and editRevision. No pixels or inference. Use after a move or receipt replay to observe current state; full assetId required.",
   engui_delete_gallery_asset: "Move an unwanted Gallery image to Trash, not permanent erasure. Requires curate, full assetId, fresh expectedRevision from engui_get_gallery_asset and UUID requestKey. Original file, Job, plan and provenance remain; the trashed Gallery source becomes unavailable for new generation/download. Retry same key/payload; restore explicitly with engui_restore_gallery_asset.",
   engui_restore_gallery_asset: "Restore a trashed Gallery image using its full assetId, fresh expectedRevision and UUID requestKey. Requires curate; no generation. Destination conflicts return GALLERY_DUPLICATE without deleting/merging records.",
@@ -229,6 +246,8 @@ async function execute(
   origin: string,
 ): Promise<{ result: any; image?: any }> {
   switch (name) {
+    case "engui_delete_jobs": return { result: await deleteJobs(auth, args) };
+    case "engui_delete_gallery_assets": return { result: await deleteGalleryAssets(auth, args) };
     case "engui_get_gallery_asset": return { result: await getGalleryAsset(args.assetId) };
     case "engui_delete_gallery_asset": return { result: await changeGalleryTrash(auth, args, true) };
     case "engui_restore_gallery_asset": return { result: await changeGalleryTrash(auth, args, false) };
@@ -320,7 +339,7 @@ export function createMcpServer(auth: Authority, origin = "http://localhost") {
         }),
         annotations: {
           readOnlyHint: scope === "read",
-          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_save_output", "engui_delete_gallery_asset", "engui_restore_gallery_asset", "engui_update_character", "engui_update_outfit", "engui_update_wardrobe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe"].includes(name),
+          destructiveHint: scope === "generate" || scope === "cancel" || ["engui_save_output", "engui_delete_gallery_asset", "engui_delete_gallery_assets", "engui_restore_gallery_asset", "engui_update_character", "engui_update_outfit", "engui_update_wardrobe", "engui_update_vibe", "engui_delete_vibe", "engui_restore_vibe"].includes(name),
           idempotentHint: true,
           openWorldHint:
             name === "engui_start_generation" || name === "engui_cancel_batch",
