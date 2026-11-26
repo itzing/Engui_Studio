@@ -1,3 +1,4 @@
+import { identitySnapshot } from "@/lib/datasetStudio/schema";
 import { assertModelAllowed } from "./operator-policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -183,6 +184,10 @@ async function dispatch(v: any) {
     await validatePlan(plan, false);
     const d = plan.snapshot.draft,
       p = plan.snapshot.variants[v.index];
+    const identity = plan.snapshot.datasetStudio ? identitySnapshot.parse(plan.snapshot.datasetStudio) : null;
+    if (identity && (process.env.ENGUI_DATASET_STUDIO_ENABLED !== "1"
+        || d.modelId !== "krea2-turbo" || d.references.length !== 1 || p.settings.cfg !== 1
+        || d.negativePrompt)) fail("MODEL_UNAVAILABLE", "Dataset Identity Edit is not available for this plan.");
     const form = new FormData();
     for (const [key, value] of Object.entries({
       userId: "user-with-settings",
@@ -243,6 +248,7 @@ async function dispatch(v: any) {
     await withWorkspaceActivity(workspaceId, "mcp-dispatch", async () => {
       const response = await providerAdapter.submit(form, {
         prompt: p.prompt,
+        ...(identity ? { identityEdit: identity.controls } : {}),
         metadata: {
           planId: plan.id,
           batchId: v.batchId,

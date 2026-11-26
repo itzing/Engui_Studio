@@ -194,7 +194,7 @@ export async function validatePlan(p: any, checkExpiry = true) {
     "references",
     "modelFingerprint",
     "vibe",
-    "wildcardsDigest",
+    ...(p.snapshot.datasetStudio ? [] : ["wildcardsDigest"]),
     ...(p.snapshot.draft.mask ? ["mask"] : []),
   ])
     if (digest(current[k as keyof typeof current]) !== digest(p.snapshot[k]))

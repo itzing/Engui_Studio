@@ -1,3 +1,4 @@
+import { identityControls, type IdentityControls } from "@/lib/datasetStudio/schema";
 import { renderCreatePrompt } from '@/lib/generation/renderCreatePrompt';
 import { resolveImageVibe } from '@/lib/vibes/resolveImageVibe';
 import { WorkspaceError } from '@/lib/workspaces/context';
@@ -108,6 +109,7 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
 
 // Internal-only hooks: never populated from public form fields.
 export type PreparedSubmission = {
+  identityEdit?: IdentityControls;
   prompt: string;
   metadata: Record<string, unknown>;
   beforeProviderSubmit: (evidence: { endpointId: string; secureState: unknown }) => Promise<void>;
@@ -136,6 +138,13 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
         // Extract basic info
         const userId = formData.get('userId') as string || 'user-with-settings';
         const modelId = formData.get('modelId') as string;
+        if (prepared?.identityEdit) {
+            identityControls.parse(prepared.identityEdit);
+            if (modelId !== 'krea2-turbo' || process.env.ENGUI_DATASET_STUDIO_ENABLED !== '1')
+                return NextResponse.json({error:'Dataset Identity Edit is not enabled.'},{status:409});
+        } else if (formData.get('task_type') === 'identity_edit') {
+            return NextResponse.json({error:'Use the authenticated Dataset Studio bridge for Identity Edit.'},{status:400});
+        }
         const language = formData.get('language') as 'ko' | 'en' || 'ko';
         const workspaceId = formData.get('workspaceId') as string;
         const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
@@ -559,6 +568,14 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             }
         }
 
+        if (prepared?.identityEdit) {
+            if (!primaryImageFile || Number(parameters.cfg) !== 1 || Number(parameters.width) * Number(parameters.height) > 2097152)
+                return NextResponse.json({error:'Identity Edit requires one image, CFG 1 and at most 2 MP.'},{status:400});
+            parameters.task_type = 'identity_edit';
+            inputData.mode = 'identity_edit';
+            inputData.task = 'identity_edit';
+        }
+
         // Add prompt if model accepts text
         if (model.inputs.includes('text') && prompt) {
             inputData.prompt = prompt;
@@ -749,6 +766,7 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                     }));
                 }
                 const securePayload: Record<string, any> = {};
+                if (prepared?.identityEdit) securePayload.identity_edit = prepared.identityEdit;
                 if (modelId === 'qwen-image-edit-maskflow') {
                     securePayload.generation = Object.fromEntries(['width', 'height', 'seed', 'steps', 'guidance'].map(key => [key, Number(runpodInput[key])]));
                 }
