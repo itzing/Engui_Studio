@@ -104,12 +104,32 @@ export async function listModels() {
         maxReferences:
           modelId === "qwen-image-edit" ? 2 : ["krea2-turbo", "z-image", "qwen-image-edit-maskflow"].includes(modelId) ? 1 : 0,
         maxLoras: modelId.startsWith("qwen-image-edit") ? 0 : 8,
+        ...(modelId === "krea2-turbo" ? { regional: {
+          modes:["text_to_image"],maxRegions:4,maxTotalLoras:8,maxPixels:2097152,cfg:1,
+          maskKinds:["rectangles","polygon","image"],maxPolygonPoints:64,
+          coordinateSystem:"normalized_output",imageMaskDimensions:"match_output",
+          white:"LoRA influence",black:"no regional LoRA influence",overlap:"strongest mask wins; ties use region order",
+          automaticSegmentation:false,
+        }} : {}),
         ...(modelId === "qwen-image-edit-maskflow" ? { mask: { required: true, kinds: ["image", "rectangles"], white: "edit", black: "preserve", coordinateSystem: "normalized_source", maxPixels: 1048576, recommendedSteps: 50, automaticSegmentation: false } } : {}),
       };
     }),
   );
 }
 export function effectiveSettings(d: InternalGenerationDraft) {
+  if (d.regions) {
+    if (d.modelId !== "krea2-turbo" || d.mode !== "text_to_image" || d.references.length || d.mask)
+      fail("INVALID_ARGUMENT", "Regions are supported only for Krea2 Turbo text_to_image without reference/edit masks.");
+    if ((d.parameters.cfg ?? 1) !== 1 || d.negativePrompt)
+      fail("INVALID_ARGUMENT", "Krea2 Turbo regional generation requires CFG 1 and no negativePrompt.");
+    if (d.width * d.height > 2097152)
+      fail("INVALID_ARGUMENT", "Regional generation supports at most 2 megapixels.");
+    if (d.loras.length + d.regions.reduce((n,r) => n+r.loras.length,0) > 8)
+      fail("INVALID_ARGUMENT", "At most eight LoRA slots across global and regional selections.");
+    for (const region of d.regions)
+      if (new Set(region.loras.map(l=>l.id)).size !== region.loras.length)
+        fail("INVALID_ARGUMENT", "Duplicate LoRA within a region.");
+  }
   if (d.modelId === "qwen-image-edit-maskflow") {
     if (!d.mask || d.references.length !== 1) fail("INVALID_ARGUMENT", "MaskFlow requires one source reference and a separate mask.");
     if (d.width * d.height > 1048576) fail("INVALID_ARGUMENT", "MaskFlow supports at most 1 megapixel per output.");

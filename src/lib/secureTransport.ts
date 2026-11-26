@@ -3,7 +3,7 @@ import S3Service from './s3Service';
 
 export type SecureDirection = 'engui_to_endpoint' | 'endpoint_to_engui';
 export type SecureMediaKind = 'image' | 'video';
-export type SecureMediaRole = 'source_image' | 'secondary_image' | 'edit_mask' | 'init_image' | 'condition_image' | 'end_image' | 'source_video' | 'result' | 'continuation_frame';
+export type SecureMediaRole = 'source_image' | 'secondary_image' | 'edit_mask' | 'init_image' | 'condition_image' | 'end_image' | 'source_video' | 'result' | 'continuation_frame' | 'region_mask_0' | 'region_mask_1' | 'region_mask_2' | 'region_mask_3';
 
 export interface StructuredBinding {
   job_id: string;

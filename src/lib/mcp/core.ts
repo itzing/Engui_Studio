@@ -66,6 +66,18 @@ export const maskInput = z.discriminatedUnion("kind", [
   }).strict().refine(r => r.x + r.width <= 1 && r.y + r.height <= 1, "Mask region exceeds source bounds")).min(1).max(32) }).strict(),
 ]);
 export type MaskInput = z.infer<typeof maskInput>;
+export const regionalMaskInput = z.union([
+  maskInput,
+  z.object({ kind: z.literal("polygon"), points: z.array(z.object({
+    x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1),
+  }).strict()).min(3).max(64) }).strict(),
+]);
+export type RegionalMaskInput = z.infer<typeof regionalMaskInput>;
+export const regionInput = z.object({
+  prompt: z.string().trim().min(1).max(16000).describe("This region's subject/action. Supports Character tags and seeded alternatives. Keep permanent identity in Character cards."),
+  loras: z.array(z.object({ id, weight: z.number().finite().min(-10).max(10) }).strict()).min(1).max(8),
+  mask: regionalMaskInput.describe("Region of LoRA influence in output-canvas coordinates, not a pose or an edit mask."),
+}).strict();
 export const modelId = z.enum(["krea2-turbo", "z-image", "qwen-image-edit", "qwen-image-edit-maskflow"]);
 export const page = {
   query: z.string().max(256).optional(),
@@ -84,6 +96,7 @@ export const draftSchema = z
     vibeId: id.optional().describe("Optional active Vibe ID from engui_list_vibes / engui_create_vibe. Its description is prepended exactly once before wildcard/Character expansion. Omit for no Vibe; do not copy its text into prompt."),
     references: z.array(mediaRef).max(2).default([]),
     mask: maskInput.optional().describe("Required only for qwen-image-edit-maskflow. Grayscale aligned mask image (white edits, black preserves), or normalized rectangles in source coordinates. Not a second reference image."),
+    regions: z.array(regionInput).min(1).max(4).optional().describe("Krea2 Turbo text_to_image only: per-region prompts and LoRAs. Rectangles/polygon coordinates are normalized 0..1; grayscale image masks must match output dimensions. Eight total LoRA slots including global loras."),
     width: z.number().int().default(1024),
     height: z.number().int().default(1024),
     variantCount: z

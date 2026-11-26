@@ -23,6 +23,7 @@ import {
 } from "./catalog";
 import { readMedia } from "./media";
 import { readMask } from "./masks";
+import { readRegionalMask } from "./regional";
 import { assertCredential } from "./auth";
 export async function currentDependencies(d: InternalGenerationDraft) {
   await assertModelAllowed(d.modelId);
@@ -59,6 +60,10 @@ export async function currentDependencies(d: InternalGenerationDraft) {
     loras,
     references,
     ...(d.mask ? { mask: (await readMask(d.mask, references[0].width, references[0].height)).snapshot } : {}),
+    ...(d.regions ? { regions: await Promise.all(d.regions.map(async region => ({
+      loras: await selectedLoras(region.loras, d.modelId),
+      mask: (await readRegionalMask(region.mask, d.width, d.height)).snapshot,
+    }))) } : {}),
     modelFingerprint: config.fingerprint,
     vibe,
     wildcardsDigest: digest(wildcards),
@@ -71,7 +76,12 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
   const settings = effectiveSettings(d);
   const dep = await currentDependencies(d);
   const rendering = await expandMcpPrompt(d, dep.vibe);
-  const { composition, vibe, expanded, characterReferences } = rendering;
+  const regionRendering = await Promise.all((d.regions || []).map(region =>
+    expandMcpPrompt({ ...d, prompt:region.prompt, framing:"custom",view:undefined,vibeId:undefined }, null)));
+  const { composition, vibe, expanded } = rendering;
+  const characterReferences = [...new Map(
+    [rendering, ...regionRendering].flatMap(r=>r.characterReferences).map(ref=>[ref.token,ref]),
+  ).values()];
   const seeds = d.seeds ? [...d.seeds] : [];
   while (seeds.length < d.variantCount) {
     const seed = randomInt(0, 2147483647);
@@ -81,11 +91,12 @@ export async function prepareGeneration(auth: Authority, d: GenerationDraft) {
     index,
     label: ["A", "B", "C"][index],
     seed,
-    ...renderMcpVariant(rendering.protectedText, characterReferences, seed),
+    ...renderMcpVariant(rendering.protectedText, rendering.characterReferences, seed),
+    ...(d.regions ? { regions: regionRendering.map(r => renderMcpVariant(r.protectedText, r.characterReferences, seed)) } : {}),
     negativePrompt: d.negativePrompt || "",
     settings: { ...settings, seed },
   }));
-  if (variants.some((v) => v.prompt.length > 64000))
+  if (variants.some((v) => v.prompt.length + (v.regions || []).reduce((n,r)=>n+r.prompt.length,0) > 64000))
     fail("INVALID_ARGUMENT", "Composed prompt is too large.");
   const snapshot = {
     schemaVersion: 2,
@@ -197,6 +208,7 @@ export async function validatePlan(p: any, checkExpiry = true) {
     "vibe",
     ...(p.snapshot.datasetStudio ? [] : ["wildcardsDigest"]),
     ...(p.snapshot.draft.mask ? ["mask"] : []),
+    ...(p.snapshot.draft.regions ? ["regions"] : []),
   ])
     if (digest(current[k as keyof typeof current]) !== digest(p.snapshot[k]))
       fail(

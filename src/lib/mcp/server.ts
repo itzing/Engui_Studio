@@ -91,6 +91,7 @@ export const outputSchemas: Record<ToolName, z.ZodTypeAny> = {
         maxReferences: z.number(),
         maxLoras: z.number(),
         mask: json.optional(),
+        regional: json.optional(),
       }),
     ),
   }),

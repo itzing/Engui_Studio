@@ -14,6 +14,7 @@ import { assertCredential } from "./auth";
 import { loadPlan, validatePlan } from "./plans";
 import { readMedia } from "./media";
 import { readMask } from "./masks";
+import { readRegionalMask } from "./regional";
 import { preserveVariant } from "./curation";
 import { fail, parse } from "./core";
 
@@ -221,15 +222,30 @@ async function dispatch(v: any) {
         fail("PLAN_STALE", "Mask bytes changed.");
       form.set("editMask", new File([new Uint8Array(mask.bytes)], "edit-mask.png", { type: "image/png" }));
     }
-    for (let i = 0; i < d.loras.length; i++) {
+    let regional: PreparedSubmission["regional"];
+    if (d.regions) {
+      if (identity || !p.regions || p.regions.length !== d.regions.length)
+        fail("PLAN_STALE", "Missing frozen region prompts.");
+      const regions = [];
+      for (let i=0;i<d.regions.length;i++) {
+        const mask=await readRegionalMask(d.regions[i].mask,d.width,d.height);
+        if (mask.snapshot.sha256 !== plan.snapshot.regions[i].mask.sha256 ||
+            mask.snapshot.sourceSha256 !== plan.snapshot.regions[i].mask.sourceSha256)
+          fail("PLAN_STALE","A regional mask changed.");
+        regions.push({prompt:p.regions[i].prompt,loraCount:d.regions[i].loras.length,maskBytes:mask.bytes,maskSha256:mask.snapshot.sha256});
+      }
+      regional={globalLoraCount:d.loras.length,regions};
+    }
+    const allLoras = [...d.loras, ...(d.regions || []).flatMap((r: any)=>r.loras)];
+    for (let i = 0; i < allLoras.length; i++) {
       const l = await prisma.loRA.findFirst({
-        where: { id: d.loras[i].id, lifecycle: "active" },
+        where: { id: allLoras[i].id, lifecycle: "active" },
       });
       if (!l?.sourceKey) fail("PLAN_STALE", "LoRA changed.");
       form.set(i ? `lora${i + 1}` : "lora", l.sourceKey);
       form.set(
         i ? `loraWeight${i + 1}` : "loraWeight",
-        String(d.loras[i].weight),
+        String(allLoras[i].weight),
       );
     }
     heartbeat = setInterval(() => {
@@ -249,6 +265,7 @@ async function dispatch(v: any) {
       const response = await providerAdapter.submit(form, {
         prompt: p.prompt,
         ...(identity ? { identityEdit: identity.controls } : {}),
+        ...(regional ? { regional } : {}),
         metadata: {
           planId: plan.id,
           batchId: v.batchId,

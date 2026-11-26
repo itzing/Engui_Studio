@@ -110,6 +110,10 @@ function createUploadToS3(userId: string, language: 'ko' | 'en' = 'ko') {
 // Internal-only hooks: never populated from public form fields.
 export type PreparedSubmission = {
   identityEdit?: IdentityControls;
+  regional?: {
+    globalLoraCount:number;
+    regions:Array<{prompt:string;loraCount:number;maskBytes:Buffer;maskSha256:string}>;
+  };
   prompt: string;
   metadata: Record<string, unknown>;
   beforeProviderSubmit: (evidence: { endpointId: string; secureState: unknown }) => Promise<void>;
@@ -145,6 +149,10 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
         } else if (formData.get('task_type') === 'identity_edit') {
             return NextResponse.json({error:'Use the authenticated Dataset Studio bridge for Identity Edit.'},{status:400});
         }
+        if (prepared?.regional && (modelId !== 'krea2-turbo' || prepared.identityEdit))
+            return NextResponse.json({error:'Regional generation requires a Krea2 MCP text plan.'},{status:400});
+        if (!prepared?.regional && (formData.has('regions') || formData.has('regional') || formData.get('task_type') === 'regional'))
+            return NextResponse.json({error:'Use an MCP prepared plan for regional generation.'},{status:400});
         const language = formData.get('language') as 'ko' | 'en' || 'ko';
         const workspaceId = formData.get('workspaceId') as string;
         const resolvedWorkspaceId = await resolveJobWorkspaceId(userId, workspaceId);
@@ -576,6 +584,26 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
             inputData.task = 'identity_edit';
         }
 
+        let regionalPayload: {regions:Array<{prompt:string;loras:unknown[];mask_role:string;mask_sha256:string}>} | undefined;
+        if (prepared?.regional) {
+            const regional=prepared.regional, all=inputData.lora || [];
+            if (primaryImageFile || Number(parameters.cfg)!==1 || regional.regions.length<1 || regional.regions.length>4 ||
+                !Number.isInteger(regional.globalLoraCount) || regional.globalLoraCount<0 ||
+                regional.globalLoraCount+regional.regions.reduce((n,r)=>n+r.loraCount,0)!==all.length || all.length>8)
+                return NextResponse.json({error:'Invalid prepared regional configuration.'},{status:400});
+            let offset=regional.globalLoraCount;
+            regionalPayload={regions:regional.regions.map((r,i)=>{
+                if (!Number.isInteger(r.loraCount) || r.loraCount<1 || !r.prompt.trim() ||
+                    !Buffer.isBuffer(r.maskBytes) || !r.maskBytes.length || !/^[a-f0-9]{64}$/.test(r.maskSha256))
+                    throw new Error('Invalid prepared region.');
+                const loras=all.slice(offset,offset+r.loraCount);offset+=r.loraCount;
+                return {prompt:r.prompt,loras,mask_role:'region_mask_'+i,mask_sha256:r.maskSha256};
+            })};
+            inputData.lora=all.slice(0,regional.globalLoraCount);
+            parameters.task_type='regional';
+            inputData.mode='regional';
+        }
+
         // Add prompt if model accepts text
         if (model.inputs.includes('text') && prompt) {
             inputData.prompt = prompt;
@@ -765,7 +793,18 @@ async function submitOwnedGenerationFormData(formData: FormData, prepared?: Prep
                         plaintext: Buffer.from(await editMask.arrayBuffer()), fileName: 'edit_mask.bin',
                     }));
                 }
+                if (prepared?.regional) {
+                    for (let i=0;i<prepared.regional.regions.length;i++) {
+                        const role=(['region_mask_0','region_mask_1','region_mask_2','region_mask_3'] as const)[i];
+                        mediaInputs.push(await uploadEncryptedMediaInput({
+                            s3:s3Service,masterKey,jobId:job.id,modelId,attemptId,
+                            role,kind:'image',mime:'image/png',
+                            plaintext:prepared.regional.regions[i].maskBytes,fileName:role+'.bin',
+                        }));
+                    }
+                }
                 const securePayload: Record<string, any> = {};
+                if (regionalPayload) securePayload.regional=regionalPayload;
                 if (prepared?.identityEdit) securePayload.identity_edit = prepared.identityEdit;
                 if (modelId === 'qwen-image-edit-maskflow') {
                     securePayload.generation = Object.fromEntries(['width', 'height', 'seed', 'steps', 'guidance'].map(key => [key, Number(runpodInput[key])]));
