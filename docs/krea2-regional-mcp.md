@@ -26,3 +26,9 @@ Pinned upstream: januspluto/ComfyUI-Krea2-Regional e88207aea47ccefc47605def2dc4f
 The worker image must be installed and technically verified before the application advertises the capability. Keep existing endpoint workers/GPU/scaling/mounts/env untouched. App deployment uses an isolated build, checks durable active provider handles, and retains the previous .next build. Rollback both previous endpoint image and app build if required.
 
 Owner postponed testing the two real character LoRAs because the second is still training. Technical tests are not a claim of verified likeness on that pair.
+
+
+## Installed release: 2026-11-27 UTC
+Application35f4efe, worker497d38f6121919a357ffbac74d0764dbb1c26d0c, MCP2.9.0. Reconnect an existing MCP client to refresh tool schemas. The existing Krea2 endpoint is updated; desktop/mobile surfaces and model availability are unchanged.
+
+Verification:23 worker checks,15 new MCP integration checks and97 regressions passed, plus upstream native small-Krea2 CPU tests through24b. Production build passed; no additional TypeScript errors versus the repository baseline. A live encrypted single-adapter polygon job and an ordinary job both returned valid512x512 images (different workers); model patch/unpatch isolation was validated by native CPU tests. Installed HTTP discovery, rectangle/polygon preparation and Dataset Identity capability checks passed. Pair likeness remains untested at the owner's request.
