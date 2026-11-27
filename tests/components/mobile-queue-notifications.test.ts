@@ -77,7 +77,7 @@ describe('global mobile queue UI', () => {
     advanceTime(QUEUE_SETTLE_MS);
     expect(banner()?.textContent).toContain('All 2 jobs completed');
     expect(screen.getByLabelText('New queue outcome')).toBeTruthy();
-    advanceTime(7000); expect(banner()).toBeNull();
+    advanceTime(1000); expect(banner()).toBeNull();
     expect(screen.getByLabelText('New queue outcome')).toBeTruthy();
     fixture.pathname = '/m/jobs'; view.rerender(tree());
     expect(screen.queryByLabelText('New queue outcome')).toBeNull();

@@ -95,7 +95,7 @@ export default function MobileQueueNotifications({ children }: { children: React
 
   useEffect(() => {
     if (!banner) return;
-    const timer = window.setTimeout(() => setBanner(null), 7000);
+    const timer = window.setTimeout(() => setBanner(null), 1000);
     return () => window.clearTimeout(timer);
   }, [banner]);
 
