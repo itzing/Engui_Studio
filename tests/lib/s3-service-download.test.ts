@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { describe, expect, it, vi } from 'vitest';
 
 const { mockExecFile } = vi.hoisted(() => ({
@@ -63,5 +63,36 @@ describe('S3Service.downloadFile', () => {
 
     const outputPath = mockExecFile.mock.calls[0][1][6];
     expect(existsSync(outputPath)).toBe(false);
+  });
+});
+
+
+describe('S3Service.uploadFile', () => {
+  it('preserves secure delimiters through uploads and collision renaming while sanitizing unsafe characters', async () => {
+    const objects = new Map<string, Buffer>();
+    mockExecFile.mockImplementation((_command, args, _options, callback) => {
+      if (args[0] === 's3api' && args[1] === 'head-object') {
+        if (objects.has(args[args.indexOf('--key') + 1])) callback(null, '{}', '');
+        else callback(Object.assign(new Error('404 Not Found'), { code: 1 }), '', '404 Not Found');
+      } else if (args[0] === 's3' && args[1] === 'cp') {
+        objects.set(args[3].replace('s3://fixture/', ''), readFileSync(args[2]));
+        callback(null, '', '');
+      } else throw new Error('Unexpected AWS call');
+    });
+    const service = new S3Service({ endpointUrl: 'https://fixture.invalid', accessKeyId: 'fixture',
+      secretAccessKey: 'fixture', bucketName: 'fixture', region: 'us-east-1' });
+    const name = 'job__attempt__input__source_image.bin';
+    const first = await service.uploadFile(Buffer.from('first'), name, 'application/octet-stream', 'secure-jobs');
+    const second = await service.uploadFile(Buffer.from('second'), name, 'application/octet-stream', 'secure-jobs');
+    expect(first.filePath).toBe('/runpod-volume/secure-jobs/' + name);
+    expect(second.filePath).toBe('/runpod-volume/secure-jobs/job__attempt__input__source_image_1.bin');
+    expect(objects.get('secure-jobs/' + name)?.toString()).toBe('first');
+    expect(objects.get(second.filePath.replace('/runpod-volume/', ''))?.toString()).toBe('second');
+    const ordinary = await service.uploadFile(Buffer.from('ordinary'), 'portrait [draft] (v1)!.png', 'image/png', 'uploads');
+    expect(ordinary.filePath).toMatch(/^\/runpod-volume\/uploads\/[a-zA-Z0-9_.-]+\.png$/);
+    expect(objects.get(ordinary.filePath.replace('/runpod-volume/', ''))?.toString()).toBe('ordinary');
+    for (const call of mockExecFile.mock.calls.filter(call => call[1][0] === 's3')) {
+      expect(existsSync(call[1][2])).toBe(false);
+    }
   });
 });

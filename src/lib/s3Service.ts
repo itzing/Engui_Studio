@@ -740,10 +740,10 @@ class S3Service {
 
   // 파일명 안전화
   private sanitizeFileName(fileName: string): string {
+    // Repeated underscores are secure transport binding delimiters; preserve them.
     return fileName
       .replace(/[()\[\]{}]/g, '')
       .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .replace(/_+/g, '_')
       .replace(/^_|_$/g, '');
   }
 

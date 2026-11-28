@@ -10,10 +10,26 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 const remote = vi.hoisted(() => ({ submit: vi.fn(), objects: new Map<string, Buffer>() }));
 vi.mock("@/lib/runpodService", () => ({ default: class { submitJob(...args: any[]) { return remote.submit(...args); } } }));
-vi.mock("@/lib/s3Service", () => ({ default: class { async uploadFile(data: Buffer, file: string, mime: string, dir: string) {
-  if (mime !== "application/octet-stream") throw Error("Plaintext upload forbidden");
-  remote.objects.set(dir + "/" + file, Buffer.from(data)); return { filePath: "/runpod-volume/" + dir + "/" + file };
-} } }));
+// Keep the production S3 uploader (including filename handling); replace only AWS I/O.
+vi.mock("child_process", async importOriginal => {
+  const actual = await importOriginal<typeof import("child_process")>();
+  return { ...actual, execFile: vi.fn((command: string, args: string[], _options: unknown, callback: Function) => {
+    void (async () => {
+      if (command !== "aws") throw Error("Unexpected external command");
+      if (args[0] === "s3api" && args[1] === "head-object") {
+        if (!remote.objects.has(args[args.indexOf("--key") + 1])) throw Error("404 Not Found");
+        return callback(null, "{}", "");
+      }
+      if (args[0] === "s3" && args[1] === "cp") {
+        const key = args[3].replace(/^s3:\/\/fixture\//, "");
+        if (key === args[3]) throw Error("Unexpected fixture bucket");
+        remote.objects.set(key, await fs.readFile(args[2]));
+        return callback(null, "", "");
+      }
+      throw Error("Unexpected AWS operation");
+    })().catch(error => callback(Object.assign(error, { code: 1 }), "", error.message));
+  }) };
+});
 vi.mock("@/lib/settingsService", () => ({ default: class { async getSettings() { return { settings: {
   runpod: { apiKey: "fixture", fieldEncKeyB64: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", endpoints: { "qwen-image-edit-maskflow": "fixture-maskflow", "krea2-turbo": "fixture-krea" } },
   s3: { endpointUrl: "https://fixture.invalid", accessKeyId: "fixture", secretAccessKey: "fixture", bucketName: "fixture" },
@@ -59,7 +75,7 @@ describe("MCP MaskFlow secure masked editing",()=>{
  it("rejects foreign and misaligned masks",async()=>{const f=await fixture(),other=await fixture(),m=await other.asset("white");await expect(f.plan({mask:{kind:"image",source:m.ref}})).rejects.toMatchObject({code:"NOT_FOUND"});const small=await f.asset("white",128,128);await expect(f.plan({mask:{kind:"image",source:small.ref}})).rejects.toMatchObject({code:"INVALID_MASK"});});
  it("does not dispatch after an image mask is changed or trashed",async()=>{const f=await fixture(),m=await f.asset("white"),p=await f.plan({mask:{kind:"image",source:m.ref}});await scope(f.ws.id,()=>prisma.galleryAsset.update({where:{id:m.row.id},data:{trashed:true}}));await expect(f.start(p)).rejects.toThrow();expect(remote.submit).not.toHaveBeenCalled();});
  it("prevents public form submission of the MCP-only model",async()=>{const f=await fixture();const form=new FormData();form.set("modelId","qwen-image-edit-maskflow");form.set("workspaceId",f.ws.id);const response=await scope(f.ws.id,()=>submitGenerationFormData(form));expect(response.status).toBe(400);expect(remote.submit).not.toHaveBeenCalled();});
- it("sends encrypted prompt/source/mask and interoperates with the real Python handler",async()=>{
+ it("uploads encrypted prompt/source/mask through the real S3 uploader and Python handler",async()=>{
   const f=await fixture(),p=await f.plan();await f.start(p);await processMcpWorkspace(f.ws.id);expect(remote.submit).toHaveBeenCalledOnce();
   const input=remote.submit.mock.calls[0][0];expect(input.prompt).toBeUndefined();expect(input.media_inputs.map((m:any)=>m.role)).toEqual(["source_image","edit_mask"]);
   const payload=decryptStructuredEnvelope<any>(Buffer.alloc(32),input._secure,input._secure.binding);expect(payload).toMatchObject({prompt:p.snapshot.variants[0].prompt,generation:{width:256,height:256,seed:42,steps:50,guidance:4}});
